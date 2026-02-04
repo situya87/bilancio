@@ -50,7 +50,7 @@ def test_compile_ring_explorer_basic(tmp_path):
     L0 = _sum_amounts(scenario["initial_actions"], "mint_cash")
 
     assert S1 == Decimal("400")
-    assert L0 == Decimal("200")  # kappa = S1 / L0 -> 2
+    assert L0 == Decimal("800")  # kappa = L0 / S1 -> 2
 
     due_days = [action["create_payable"]["due_day"] for action in scenario["initial_actions"] if "create_payable" in action]
     assert set(due_days) == {1}

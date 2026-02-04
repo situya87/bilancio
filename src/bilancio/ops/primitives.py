@@ -24,6 +24,16 @@ def split(system, instr_id: str, amount: int) -> str:
     instr.amount -= amount
     # create twin
     twin_id = new_id("C")
+    extra_fields = {}
+    for field_name in (
+        "due_day",
+        "maturity_distance",
+        "remuneration_rate",
+        "issuance_day",
+        "last_interest_day",
+    ):
+        if hasattr(instr, field_name):
+            extra_fields[field_name] = getattr(instr, field_name)
     twin = type(instr)(
         id=twin_id,
         kind=instr.kind,
@@ -31,7 +41,7 @@ def split(system, instr_id: str, amount: int) -> str:
         denom=instr.denom,
         asset_holder_id=instr.asset_holder_id,
         liability_issuer_id=instr.liability_issuer_id,
-        **{k: getattr(instr, k) for k in ("due_day",) if hasattr(instr, k)}
+        **extra_fields
     )
     system.add_contract(twin)  # attaches to holder/issuer lists too
     return twin_id

@@ -206,3 +206,28 @@ class TestApplyToSystem:
         
         # System should pass invariants
         system.assert_invariants()
+
+    def test_apply_transfer_claim(self):
+        """Test transfer_claim action updates asset holder."""
+        config = ScenarioConfig(
+            name="Transfer Claim",
+            agents=[
+                {"id": "F1", "kind": "firm", "name": "Firm 1"},
+                {"id": "F2", "kind": "firm", "name": "Firm 2"},
+            ],
+            initial_actions=[
+                {"create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 1, "alias": "P1"}},
+                {"transfer_claim": {"contract_alias": "P1", "to_agent": "F1"}},
+            ],
+        )
+
+        system = System()
+        apply_to_system(config, system)
+
+        contract_id = system.state.aliases["P1"]
+        contract = system.state.contracts[contract_id]
+        assert contract.asset_holder_id == "F1"
+        assert contract_id in system.state.agents["F1"].asset_ids
+        assert contract_id not in system.state.agents["F2"].asset_ids
+
+        system.assert_invariants()
