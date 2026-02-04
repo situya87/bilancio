@@ -188,6 +188,16 @@ def run_day(system, enable_dealer: bool = False):
     system.log("PhaseC")  # optional: helps timeline
     settle_intraday_nets(system, current_day)
 
+    # Phase D: CB corridor maintenance (interest + loan repayment)
+    has_cb = any(agent.kind == "central_bank" for agent in system.state.agents.values())
+    if has_cb:
+        system.credit_reserve_interest(current_day)
+        for loan_id in system.get_cb_loans_due(current_day):
+            loan = system.state.contracts.get(loan_id)
+            if loan is None:
+                continue
+            system.cb_repay_loan(loan_id, loan.liability_issuer_id)
+
     # Increment system day
     system.state.day += 1
 

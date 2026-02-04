@@ -45,6 +45,11 @@ def _get_default_mode(system) -> str:
     return getattr(system, "default_mode", DEFAULT_MODE_FAIL_FAST)
 
 
+def _get_risk_assessor(system):
+    subsystem = getattr(system.state, "dealer_subsystem", None)
+    return getattr(subsystem, "risk_assessor", None)
+
+
 def due_payables(system, day: int):
     """Scan contracts for payables with due_day == day."""
     for c in system.state.contracts.values():
@@ -470,6 +475,7 @@ def settle_due(system, day: int, *, rollover_enabled: bool = False):
         List of settled payable info for rollover: [(debtor_id, creditor_id, amount, maturity_distance)]
     """
     settled_for_rollover = []
+    risk_assessor = _get_risk_assessor(system)
 
     for payable in list(due_payables(system, day)):
         if payable.id not in system.state.contracts:
@@ -559,6 +565,12 @@ def settle_due(system, day: int, *, rollover_enabled: bool = False):
                     cancelled_contract_ids=cancelled_contract_ids,
                     cancelled_aliases=cancelled_aliases,
                 )
+                if risk_assessor:
+                    risk_assessor.update_history(
+                        day=day,
+                        issuer_id=debtor.id,
+                        defaulted=True,
+                    )
                 # Defaulted - no rollover
                 continue
 
@@ -573,6 +585,12 @@ def settle_due(system, day: int, *, rollover_enabled: bool = False):
                 creditor=creditor.id,
                 amount=payable_amount,
             )
+            if risk_assessor:
+                risk_assessor.update_history(
+                    day=day,
+                    issuer_id=debtor.id,
+                    defaulted=False,
+                )
 
             # Plan 024: Track for rollover (only if successfully settled AND rollover enabled)
             if rollover_enabled and payable_maturity_distance is not None:
