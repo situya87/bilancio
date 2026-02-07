@@ -25,6 +25,8 @@ from bilancio.analysis.metrics import (
     start_of_day_money,
     liquidity_gap,
     alpha as alpha_fn,
+    count_defaults,
+    cascade_fraction,
 )
 
 
@@ -137,6 +139,22 @@ def infer_day_list(events: Sequence[Dict[str, Any]]) -> List[int]:
     settled_days = sorted({int(e["day"]) for e in events if e.get("kind") == "PayableSettled" and e.get("day") is not None})
     day_list = due_days or settled_days
     return day_list
+
+
+def compute_run_level_metrics(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compute run-level metrics that span the entire simulation.
+
+    These metrics complement the day-by-day metrics and provide systemic
+    risk indicators.
+
+    Returns dict with:
+        n_defaults: int - count of distinct defaulted agents
+        cascade_fraction: Optional[Decimal] - fraction of defaults from contagion
+    """
+    return {
+        "n_defaults": count_defaults(events),
+        "cascade_fraction": cascade_fraction(events),
+    }
 
 
 def compute_day_metrics(
@@ -301,6 +319,7 @@ def write_metrics_html(
     intraday: List[Dict[str, Any]],
     title: Optional[str] = None,
     subtitle: Optional[str] = None,
+    run_level_metrics: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Write a single, self-contained HTML report for analytics.
 
@@ -452,6 +471,10 @@ def write_metrics_html(
   <dd>Concentration of net creditor positions among those with n_i > 0.</dd>
   <dt>Debtor shortfall shares DS_t(i)</dt>
   <dd>Each net debtor's share of \u0305M_t, indicating who needs liquidity.</dd>
+  <dt>Defaults (agents)</dt>
+  <dd>Number of distinct agents that defaulted during the simulation. Complements the value-weighted \u03B4_total.</dd>
+  <dt>Cascade fraction</dt>
+  <dd>Fraction of defaults caused by upstream contagion: a secondary default occurs when an agent's debtor defaulted before it, meaning the agent lost expected inflows. Ranges 0-1; \u2014 if no defaults.</dd>
 </dl>
 """
 
@@ -498,6 +521,8 @@ def write_metrics_html(
       <div class=\"card\"><div class=\"muted\">Max operational peak</div><div><strong>{_fmt_num(Mpeak_max)}</strong></div></div>
       <div class=\"card\"><div class=\"muted\">Avg velocity</div><div><strong>{_fmt_num(v_avg)}</strong></div></div>
       <div class=\"card\"><div class=\"muted\">Weighted on-time \u03C6</div><div><strong>{_fmt_num(phi_weighted)}</strong></div></div>
+      <div class=\"card\"><div class=\"muted\">Defaults (agents)</div><div><strong>{run_level_metrics.get('n_defaults', '—') if run_level_metrics else '—'}</strong></div></div>
+      <div class=\"card\"><div class=\"muted\">Cascade fraction</div><div><strong>{_fmt_num(run_level_metrics.get('cascade_fraction')) if run_level_metrics else '—'}</strong></div></div>
     </div>
   </section>
 
@@ -587,6 +612,9 @@ def aggregate_runs(
 
         summary = summarize_day_metrics(metrics)
 
+        n_defaults_val = entry.get("n_defaults", "")
+        cascade_fraction_val = entry.get("cascade_fraction", "")
+
         rows.append({
             "run_id": entry.get("run_id"),
             "phase": entry.get("phase"),
@@ -605,6 +633,8 @@ def aggregate_runs(
             "Mpeak_1": summary.get("Mpeak_1"),
             "v_1": summary.get("v_1"),
             "HHIplus_1": summary.get("HHIplus_1"),
+            "n_defaults": n_defaults_val,
+            "cascade_fraction": cascade_fraction_val,
             "time_to_stability": entry.get("time_to_stability") or str(summary.get("max_day", "")),
             "metrics_csv": metrics_rel,
         })
@@ -627,6 +657,8 @@ def aggregate_runs(
         "Mpeak_1",
         "v_1",
         "HHIplus_1",
+        "n_defaults",
+        "cascade_fraction",
         "time_to_stability",
         "metrics_csv",
     ]

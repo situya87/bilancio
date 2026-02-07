@@ -7,7 +7,7 @@ simulation ran (local or remote).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +15,7 @@ from bilancio.storage.artifact_loaders import ArtifactLoader
 from bilancio.analysis.loaders import read_events_jsonl, read_balances_csv
 from bilancio.analysis.report import (
     compute_day_metrics,
+    compute_run_level_metrics,
     summarize_day_metrics,
     write_day_metrics_csv,
     write_day_metrics_json,
@@ -43,6 +44,9 @@ class MetricsBundle:
 
     summary: Dict[str, Any]
     """Aggregate summary from summarize_day_metrics (phi_total, delta_total, etc.)."""
+
+    run_level_metrics: Dict[str, Any] = field(default_factory=dict)
+    """Run-level metrics (cascade, contagion, etc.)."""
 
 
 class MetricsComputer:
@@ -119,11 +123,18 @@ class MetricsComputer:
         # Compute summary
         summary = summarize_day_metrics(result["day_metrics"])
 
+        # Compute run-level metrics (cascade, contagion)
+        run_level = compute_run_level_metrics(events)
+        # Merge into summary for downstream consumers
+        summary["n_defaults"] = run_level["n_defaults"]
+        summary["cascade_fraction"] = run_level["cascade_fraction"]
+
         return MetricsBundle(
             day_metrics=result["day_metrics"],
             debtor_shares=result["debtor_shares"],
             intraday=result["intraday"],
             summary=summary,
+            run_level_metrics=run_level,
         )
 
     def write_outputs(
@@ -183,6 +194,7 @@ class MetricsComputer:
             intraday=bundle.intraday,
             title=title,
             subtitle=subtitle,
+            run_level_metrics=bundle.run_level_metrics,
         )
         paths["metrics_html"] = metrics_html_path
 
