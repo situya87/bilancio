@@ -58,6 +58,12 @@ class BalancedComparisonResult:
     active_run_id: str
     active_status: str
 
+    # Cascade/contagion metrics
+    n_defaults_passive: int = 0
+    n_defaults_active: int = 0
+    cascade_fraction_passive: Optional[Decimal] = None
+    cascade_fraction_active: Optional[Decimal] = None
+
     # Balanced mode parameters with defaults (Plan 024)
     vbt_share_per_bucket: Decimal = Decimal("0.25")
     dealer_share_per_bucket: Decimal = Decimal("0.125")
@@ -93,6 +99,16 @@ class BalancedComparisonResult:
         if self.delta_passive == 0:
             return Decimal("0")  # No defaults to reduce
         return self.trading_effect / self.delta_passive
+
+    @property
+    def cascade_effect(self) -> Optional[Decimal]:
+        """Effect of trading on cascade fraction = passive - active.
+
+        Positive means trading reduced cascading defaults.
+        """
+        if self.cascade_fraction_passive is None or self.cascade_fraction_active is None:
+            return None
+        return self.cascade_fraction_passive - self.cascade_fraction_active
 
 
 class BalancedComparisonConfig(BaseModel):
@@ -209,6 +225,11 @@ class BalancedComparisonRunner:
         "dealer_total_pnl",
         "dealer_total_return",
         "total_trades",
+        "n_defaults_passive",
+        "n_defaults_active",
+        "cascade_fraction_passive",
+        "cascade_fraction_active",
+        "cascade_effect",
     ]
 
     def __init__(
@@ -561,6 +582,10 @@ class BalancedComparisonRunner:
                 dealer_total_pnl=dm.get("dealer_total_pnl"),
                 dealer_total_return=dm.get("dealer_total_return"),
                 total_trades=dm.get("total_trades"),
+                n_defaults_passive=passive_summary.n_defaults,
+                n_defaults_active=active_summary.n_defaults,
+                cascade_fraction_passive=passive_summary.cascade_fraction,
+                cascade_fraction_active=active_summary.cascade_fraction,
                 passive_modal_call_id=passive_summary.modal_call_id,
                 active_modal_call_id=active_summary.modal_call_id,
             )
@@ -766,6 +791,10 @@ class BalancedComparisonRunner:
             dealer_total_pnl=dm.get("dealer_total_pnl"),
             dealer_total_return=dm.get("dealer_total_return"),
             total_trades=dm.get("total_trades"),
+            n_defaults_passive=passive_result.n_defaults,
+            n_defaults_active=active_result.n_defaults,
+            cascade_fraction_passive=passive_result.cascade_fraction,
+            cascade_fraction_active=active_result.cascade_fraction,
             passive_modal_call_id=passive_result.modal_call_id,
             active_modal_call_id=active_result.modal_call_id,
         )
@@ -898,6 +927,11 @@ class BalancedComparisonRunner:
                     "dealer_total_pnl": str(result.dealer_total_pnl) if result.dealer_total_pnl is not None else "",
                     "dealer_total_return": str(result.dealer_total_return) if result.dealer_total_return is not None else "",
                     "total_trades": str(result.total_trades) if result.total_trades is not None else "",
+                    "n_defaults_passive": str(result.n_defaults_passive),
+                    "n_defaults_active": str(result.n_defaults_active),
+                    "cascade_fraction_passive": str(result.cascade_fraction_passive) if result.cascade_fraction_passive is not None else "",
+                    "cascade_fraction_active": str(result.cascade_fraction_active) if result.cascade_fraction_active is not None else "",
+                    "cascade_effect": str(result.cascade_effect) if result.cascade_effect is not None else "",
                 }
                 writer.writerow(row)
 
@@ -918,6 +952,17 @@ class BalancedComparisonRunner:
             mean_trading_effect = sum(trading_effects) / len(trading_effects) if trading_effects else None
             mean_relief_ratio = sum(relief_ratios) / len(relief_ratios) if relief_ratios else None
 
+            # Cascade metrics
+            n_defaults_passive_vals = [r.n_defaults_passive for r in completed]
+            n_defaults_active_vals = [r.n_defaults_active for r in completed]
+            mean_n_defaults_passive = sum(n_defaults_passive_vals) / len(n_defaults_passive_vals) if n_defaults_passive_vals else None
+            mean_n_defaults_active = sum(n_defaults_active_vals) / len(n_defaults_active_vals) if n_defaults_active_vals else None
+
+            cascade_passive_vals = [float(r.cascade_fraction_passive) for r in completed if r.cascade_fraction_passive is not None]
+            cascade_active_vals = [float(r.cascade_fraction_active) for r in completed if r.cascade_fraction_active is not None]
+            mean_cascade_passive = sum(cascade_passive_vals) / len(cascade_passive_vals) if cascade_passive_vals else None
+            mean_cascade_active = sum(cascade_active_vals) / len(cascade_active_vals) if cascade_active_vals else None
+
             improved = sum(1 for r in completed if r.trading_effect and r.trading_effect > 0)
             unchanged = sum(1 for r in completed if r.trading_effect == 0)
             worsened = sum(1 for r in completed if r.trading_effect and r.trading_effect < 0)
@@ -926,6 +971,10 @@ class BalancedComparisonRunner:
             mean_delta_active = None
             mean_trading_effect = None
             mean_relief_ratio = None
+            mean_n_defaults_passive = None
+            mean_n_defaults_active = None
+            mean_cascade_passive = None
+            mean_cascade_active = None
             improved = 0
             unchanged = 0
             worsened = 0
@@ -940,6 +989,10 @@ class BalancedComparisonRunner:
             "pairs_with_improvement": improved,
             "pairs_unchanged": unchanged,
             "pairs_worsened": worsened,
+            "mean_n_defaults_passive": mean_n_defaults_passive,
+            "mean_n_defaults_active": mean_n_defaults_active,
+            "mean_cascade_fraction_passive": mean_cascade_passive,
+            "mean_cascade_fraction_active": mean_cascade_active,
             "config": {
                 "n_agents": self.config.n_agents,
                 "maturity_days": self.config.maturity_days,

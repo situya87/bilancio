@@ -311,3 +311,90 @@ def microstructure_gain_lower_bound(
     if not Mpeak_rtgs:
         return None
     return Decimal("1") - (Mbar_t / Mpeak_rtgs)
+
+
+# ---------------------------------------------------------------------------
+# Cascade / contagion metrics
+# ---------------------------------------------------------------------------
+
+
+def _agent_from_event(e: Event) -> Optional[str]:
+    """Extract agent ID from an AgentDefaulted event.
+
+    Checks ``agent`` first, falls back to ``frm``.  Skips empty strings
+    and ``None`` so that ``{"agent": ""}`` is not treated as a valid ID.
+    """
+    for key in ("agent", "frm"):
+        val = e.get(key)
+        if val is not None and str(val) != "":
+            return str(val)
+    return None
+
+
+def count_defaults(events: Iterable[Event]) -> int:
+    """Count distinct agents that defaulted.
+
+    Returns the number of unique agent IDs that appear in AgentDefaulted events.
+    """
+    defaulted: set[str] = set()
+    for e in events:
+        if e.get("kind") == "AgentDefaulted":
+            agent = _agent_from_event(e)
+            if agent:
+                defaulted.add(agent)
+    return len(defaulted)
+
+
+def cascade_fraction(events: Iterable[Event]) -> Optional[Decimal]:
+    """Fraction of defaults caused by upstream contagion.
+
+    For each defaulted agent, checks if any of their debtors (agents that owe
+    them money) also defaulted *before* them. If so, the agent lost expected
+    inflows and the default is classified as secondary (contagion).
+
+    Precondition:
+        Events must be in chronological order (as produced by the simulation
+        engine). Out-of-order events could misclassify primary/secondary.
+
+    Returns:
+        cascade_fraction = secondary_defaults / total_defaults.
+        Ranges 0-1. Returns None if there are 0 defaults.
+    """
+    # Materialise once — Iterable may only be consumed once.
+    events_list = list(events)
+
+    # 1. Build obligation graph: creditor -> set of debtors
+    #    (who owes money to whom)
+    creditor_to_debtors: Dict[str, set] = defaultdict(set)
+    for e in events_list:
+        if e.get("kind") == "PayableCreated":
+            debtor = e.get("debtor") or e.get("from")
+            creditor = e.get("creditor") or e.get("to")
+            if debtor and creditor:
+                creditor_to_debtors[str(creditor)].add(str(debtor))
+
+    # 2. Process AgentDefaulted events in order, tracking default sequence
+    defaulted_so_far: set[str] = set()
+    default_order: list[str] = []  # preserve order, deduplicate
+    for e in events_list:
+        if e.get("kind") == "AgentDefaulted":
+            agent = _agent_from_event(e)
+            if agent and agent not in defaulted_so_far:
+                default_order.append(agent)
+                defaulted_so_far.add(agent)
+
+    total = len(default_order)
+    if total == 0:
+        return None
+
+    # 3. Classify each default as primary or secondary
+    secondary = 0
+    seen: set[str] = set()
+    for agent in default_order:
+        # Check if any debtor of this agent defaulted before it
+        debtors = creditor_to_debtors.get(agent, set())
+        if debtors & seen:
+            secondary += 1
+        seen.add(agent)
+
+    return Decimal(str(secondary)) / Decimal(str(total))

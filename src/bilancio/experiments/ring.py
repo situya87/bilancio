@@ -42,6 +42,9 @@ class RingRunSummary:
     delta_total: Optional[Decimal]
     phi_total: Optional[Decimal]
     time_to_stability: int
+    # Cascade/contagion metrics
+    n_defaults: int = 0
+    cascade_fraction: Optional[Decimal] = None
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: Optional[Dict[str, Any]] = None
     # Modal call ID for cloud execution debugging
@@ -620,8 +623,10 @@ class RingSweepRunner:
                 error=result.error,
             )
             return RingRunSummary(
-                run_id, phase, kappa, concentration, mu, monotonicity, None, None, 0,
-                modal_call_id=result.modal_call_id
+                run_id=run_id, phase=phase, kappa=kappa, concentration=concentration,
+                mu=mu, monotonicity=monotonicity, delta_total=None, phi_total=None,
+                time_to_stability=0,
+                modal_call_id=result.modal_call_id,
             )
 
         # Use MetricsComputer for analytics (Plan 027)
@@ -643,6 +648,8 @@ class RingSweepRunner:
         delta_total = bundle.summary.get("delta_total")
         phi_total = bundle.summary.get("phi_total")
         time_to_stability = int(bundle.summary.get("max_day") or 0)
+        n_defaults = int(bundle.summary.get("n_defaults", 0))
+        cascade_fraction_val = bundle.summary.get("cascade_fraction")
 
         # Read dealer metrics if available (treatment runs with dealer enabled)
         dealer_metrics: Optional[Dict[str, Any]] = None
@@ -658,6 +665,8 @@ class RingSweepRunner:
             "time_to_stability": time_to_stability,
             "phi_total": str(phi_total) if phi_total is not None else "",
             "delta_total": str(delta_total) if delta_total is not None else "",
+            "n_defaults": str(n_defaults),
+            "cascade_fraction": str(cascade_fraction_val) if cascade_fraction_val is not None else "",
         }
         self._upsert_registry(
             run_id=run_id,
@@ -676,9 +685,13 @@ class RingSweepRunner:
         )
 
         return RingRunSummary(
-            run_id, phase, kappa, concentration, mu, monotonicity,
-            delta_total, phi_total, time_to_stability, dealer_metrics,
-            modal_call_id=result.modal_call_id
+            run_id=run_id, phase=phase, kappa=kappa, concentration=concentration,
+            mu=mu, monotonicity=monotonicity,
+            delta_total=delta_total, phi_total=phi_total,
+            time_to_stability=time_to_stability,
+            n_defaults=n_defaults, cascade_fraction=cascade_fraction_val,
+            dealer_metrics=dealer_metrics,
+            modal_call_id=result.modal_call_id,
         )
 
     def _prepare_run(
@@ -883,9 +896,11 @@ class RingSweepRunner:
                     error=result.error,
                 )
             return RingRunSummary(
-                prepared.run_id, prepared.phase, prepared.kappa, prepared.concentration,
-                prepared.mu, prepared.monotonicity, None, None, 0,
-                modal_call_id=result.modal_call_id
+                run_id=prepared.run_id, phase=prepared.phase, kappa=prepared.kappa,
+                concentration=prepared.concentration, mu=prepared.mu,
+                monotonicity=prepared.monotonicity, delta_total=None, phi_total=None,
+                time_to_stability=0,
+                modal_call_id=result.modal_call_id,
             )
 
         # Cloud-only path: use pre-computed metrics from Modal, skip local processing
@@ -893,19 +908,26 @@ class RingSweepRunner:
             delta_total = result.metrics.get("delta_total")
             phi_total = result.metrics.get("phi_total")
             time_to_stability = int(result.metrics.get("max_day") or 0)
+            n_defaults = int(result.metrics.get("n_defaults", 0))
+            cascade_fraction_val = result.metrics.get("cascade_fraction")
 
             # Convert to Decimal for consistency
             if delta_total is not None:
                 delta_total = Decimal(str(delta_total))
             if phi_total is not None:
                 phi_total = Decimal(str(phi_total))
+            if cascade_fraction_val is not None:
+                cascade_fraction_val = Decimal(str(cascade_fraction_val))
 
             return RingRunSummary(
-                prepared.run_id, prepared.phase, prepared.kappa, prepared.concentration,
-                prepared.mu, prepared.monotonicity,
-                delta_total, phi_total, time_to_stability,
+                run_id=prepared.run_id, phase=prepared.phase, kappa=prepared.kappa,
+                concentration=prepared.concentration, mu=prepared.mu,
+                monotonicity=prepared.monotonicity,
+                delta_total=delta_total, phi_total=phi_total,
+                time_to_stability=time_to_stability,
+                n_defaults=n_defaults, cascade_fraction=cascade_fraction_val,
                 dealer_metrics=None,  # Dealer metrics not available in cloud path
-                modal_call_id=result.modal_call_id
+                modal_call_id=result.modal_call_id,
             )
 
         # Local path: load artifacts, compute metrics, update registry
@@ -928,6 +950,8 @@ class RingSweepRunner:
         delta_total = bundle.summary.get("delta_total")
         phi_total = bundle.summary.get("phi_total")
         time_to_stability = int(bundle.summary.get("max_day") or 0)
+        n_defaults = int(bundle.summary.get("n_defaults", 0))
+        cascade_fraction_val = bundle.summary.get("cascade_fraction")
 
         dealer_metrics: Optional[Dict[str, Any]] = None
         dealer_metrics_path = prepared.out_dir / "dealer_metrics.json"
@@ -941,6 +965,8 @@ class RingSweepRunner:
             "time_to_stability": time_to_stability,
             "phi_total": str(phi_total) if phi_total is not None else "",
             "delta_total": str(delta_total) if delta_total is not None else "",
+            "n_defaults": str(n_defaults),
+            "cascade_fraction": str(cascade_fraction_val) if cascade_fraction_val is not None else "",
         }
         self._upsert_registry(
             run_id=prepared.run_id,
@@ -959,10 +985,14 @@ class RingSweepRunner:
         )
 
         return RingRunSummary(
-            prepared.run_id, prepared.phase, prepared.kappa, prepared.concentration,
-            prepared.mu, prepared.monotonicity,
-            delta_total, phi_total, time_to_stability, dealer_metrics,
-            modal_call_id=result.modal_call_id
+            run_id=prepared.run_id, phase=prepared.phase, kappa=prepared.kappa,
+            concentration=prepared.concentration, mu=prepared.mu,
+            monotonicity=prepared.monotonicity,
+            delta_total=delta_total, phi_total=phi_total,
+            time_to_stability=time_to_stability,
+            n_defaults=n_defaults, cascade_fraction=cascade_fraction_val,
+            dealer_metrics=dealer_metrics,
+            modal_call_id=result.modal_call_id,
         )
 
     def _rel_path(self, absolute: Path) -> str:
