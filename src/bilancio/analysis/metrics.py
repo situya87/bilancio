@@ -318,6 +318,19 @@ def microstructure_gain_lower_bound(
 # ---------------------------------------------------------------------------
 
 
+def _agent_from_event(e: Event) -> Optional[str]:
+    """Extract agent ID from an AgentDefaulted event.
+
+    Checks ``agent`` first, falls back to ``frm``.  Skips empty strings
+    and ``None`` so that ``{"agent": ""}`` is not treated as a valid ID.
+    """
+    for key in ("agent", "frm"):
+        val = e.get(key)
+        if val is not None and str(val) != "":
+            return str(val)
+    return None
+
+
 def count_defaults(events: Iterable[Event]) -> int:
     """Count distinct agents that defaulted.
 
@@ -326,9 +339,9 @@ def count_defaults(events: Iterable[Event]) -> int:
     defaulted: set[str] = set()
     for e in events:
         if e.get("kind") == "AgentDefaulted":
-            agent = e.get("agent") or e.get("frm")
+            agent = _agent_from_event(e)
             if agent:
-                defaulted.add(str(agent))
+                defaulted.add(agent)
     return len(defaulted)
 
 
@@ -339,10 +352,15 @@ def cascade_fraction(events: Iterable[Event]) -> Optional[Decimal]:
     them money) also defaulted *before* them. If so, the agent lost expected
     inflows and the default is classified as secondary (contagion).
 
+    Precondition:
+        Events must be in chronological order (as produced by the simulation
+        engine). Out-of-order events could misclassify primary/secondary.
+
     Returns:
         cascade_fraction = secondary_defaults / total_defaults.
         Ranges 0-1. Returns None if there are 0 defaults.
     """
+    # Materialise once — Iterable may only be consumed once.
     events_list = list(events)
 
     # 1. Build obligation graph: creditor -> set of debtors
@@ -360,10 +378,10 @@ def cascade_fraction(events: Iterable[Event]) -> Optional[Decimal]:
     default_order: list[str] = []  # preserve order, deduplicate
     for e in events_list:
         if e.get("kind") == "AgentDefaulted":
-            agent = e.get("agent") or e.get("frm")
-            if agent and str(agent) not in defaulted_so_far:
-                default_order.append(str(agent))
-                defaulted_so_far.add(str(agent))
+            agent = _agent_from_event(e)
+            if agent and agent not in defaulted_so_far:
+                default_order.append(agent)
+                defaulted_so_far.add(agent)
 
     total = len(default_order)
     if total == 0:

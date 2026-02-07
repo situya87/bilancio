@@ -50,6 +50,37 @@ class TestCountDefaults:
         ]
         assert count_defaults(events) == 2
 
+    def test_missing_agent_field(self):
+        """AgentDefaulted with no agent or frm field should be skipped."""
+        events = [
+            {"kind": "AgentDefaulted"},
+            {"kind": "AgentDefaulted", "agent": "firm_1"},
+        ]
+        assert count_defaults(events) == 1
+
+    def test_empty_string_agent(self):
+        """Empty-string agent should be skipped, fall through to frm."""
+        events = [
+            {"kind": "AgentDefaulted", "agent": "", "frm": "firm_1"},
+        ]
+        assert count_defaults(events) == 1
+
+    def test_none_agent(self):
+        """None agent should be skipped, fall through to frm."""
+        events = [
+            {"kind": "AgentDefaulted", "agent": None, "frm": "firm_1"},
+        ]
+        assert count_defaults(events) == 1
+
+    def test_both_fields_missing(self):
+        """Both agent and frm missing/empty should be skipped entirely."""
+        events = [
+            {"kind": "AgentDefaulted", "agent": "", "frm": ""},
+            {"kind": "AgentDefaulted", "agent": None, "frm": None},
+            {"kind": "AgentDefaulted"},
+        ]
+        assert count_defaults(events) == 0
+
 
 class TestCascadeFraction:
     def test_none_for_zero_defaults(self):
@@ -146,3 +177,14 @@ class TestCascadeFraction:
         # C: B owes C, B already defaulted -> secondary
         result = cascade_fraction(events)
         assert result == Decimal("2") / Decimal("3")
+
+    def test_malformed_default_events_skipped(self):
+        """AgentDefaulted events with missing/empty agent fields are ignored."""
+        events = [
+            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
+            {"kind": "AgentDefaulted"},  # no agent field
+            {"kind": "AgentDefaulted", "agent": "", "frm": ""},  # empty
+            {"kind": "AgentDefaulted", "agent": "A", "frm": "A"},
+        ]
+        # Only A is counted; single default -> cascade_fraction = 0
+        assert cascade_fraction(events) == Decimal("0")
