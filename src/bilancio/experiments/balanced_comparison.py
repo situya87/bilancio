@@ -613,14 +613,15 @@ class BalancedComparisonRunner:
                 if result.active_run_id:
                     all_run_ids.append(result.active_run_id)
             if all_run_ids:
-                self.executor.compute_aggregate_metrics(all_run_ids)
+                try:
+                    self.executor.compute_aggregate_metrics(all_run_ids)
+                except Exception as e:
+                    print(f"\nWarning: Aggregate metrics computation failed: {e}", flush=True)
+                    print("Local comparison.csv is still available.", flush=True)
 
         total_time = time.time() - self._start_time
         print(f"\nSweep complete! {len(prepared_runs)} pairs in {self._format_time(total_time)}", flush=True)
-        if self.skip_local_processing:
-            print(f"Results saved to Supabase. Query with: bilancio jobs get {self.job_id} --cloud", flush=True)
-        else:
-            print(f"Results at: {self.aggregate_dir}", flush=True)
+        print(f"Results at: {self.aggregate_dir}", flush=True)
 
         return self.comparison_results
 
@@ -898,9 +899,9 @@ class BalancedComparisonRunner:
             logger.warning(f"Failed to persist run to Supabase: {e}")
 
     def _write_comparison_csv(self) -> None:
-        """Write comparison results to CSV (skipped in cloud-only mode)."""
-        if self.skip_local_processing:
-            return  # Cloud-only mode: no local files
+        """Write comparison results to CSV."""
+        # Always write locally - even in cloud mode we want the aggregate CSV
+        self.aggregate_dir.mkdir(parents=True, exist_ok=True)
         with self.comparison_path.open("w", newline="") as fh:
             writer = csv.DictWriter(fh, fieldnames=self.COMPARISON_FIELDS)
             writer.writeheader()

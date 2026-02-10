@@ -9,12 +9,12 @@ from bilancio.dealer.models import Ticket
 
 
 def test_no_history_uses_prior():
-    """With no history, should return prior default rate (5%)."""
+    """With no history, should return prior default rate (25%)."""
     params = RiskAssessmentParams()
     assessor = RiskAssessor(params)
 
     p_default = assessor.estimate_default_prob(issuer_id="issuer_1", current_day=10)
-    assert p_default == Decimal("0.05")
+    assert p_default == Decimal("0.25")
 
 
 def test_all_successes_low_default_prob():

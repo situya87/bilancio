@@ -110,8 +110,10 @@ class RiskAssessor:
             ]
 
         if not recent:
-            # No recent data: assume moderate default rate as prior
-            return Decimal("0.05")
+            # No recent data: assume uncertain default rate as prior
+            # 25% reflects genuine uncertainty with zero observations,
+            # allowing initial trades at market prices before data arrives
+            return Decimal("0.25")
 
         # Count defaults and total payments
         defaults = sum(1 for _, defaulted in recent if defaulted)

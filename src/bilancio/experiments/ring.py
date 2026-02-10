@@ -904,7 +904,7 @@ class RingSweepRunner:
             )
 
         # Cloud-only path: use pre-computed metrics from Modal, skip local processing
-        if self.skip_local_processing and result.metrics:
+        if self.skip_local_processing and result.metrics is not None:
             delta_total = result.metrics.get("delta_total")
             phi_total = result.metrics.get("phi_total")
             time_to_stability = int(result.metrics.get("max_day") or 0)

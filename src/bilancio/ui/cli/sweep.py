@@ -491,6 +491,11 @@ def sweep_comparison(
     help='Suppress verbose console output during sweeps (default: quiet)',
 )
 @click.option(
+    '--rollover/--no-rollover',
+    default=True,
+    help='Enable continuous rollover of matured claims (default: enabled)',
+)
+@click.option(
     '--risk-assessment/--no-risk-assessment',
     default=True,
     help='Enable risk-based trader decision making (default: enabled)',
@@ -524,6 +529,7 @@ def sweep_balanced(
     cloud: bool,
     job_id: Optional[str],
     quiet: bool,
+    rollover: bool,
     risk_assessment: bool,
     risk_premium: Decimal,
     risk_urgency: Decimal,
@@ -622,6 +628,7 @@ def sweep_balanced(
         default_handling=default_handling,
         detailed_logging=detailed_logging,
         quiet=quiet,  # Plan 030
+        rollover_enabled=rollover,
         risk_assessment_enabled=risk_assessment,
         risk_assessment_config=risk_config,
     )

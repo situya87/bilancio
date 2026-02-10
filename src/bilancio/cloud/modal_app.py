@@ -21,14 +21,12 @@ results_volume = modal.Volume.from_name(
     create_if_missing=True,
 )
 
-# Supabase secrets for direct database writes from Modal
-# Set these using: modal secret create bilancio-supabase \
+# Supabase secrets for direct database writes from Modal (optional)
+# If the secret exists, it will be injected; otherwise Supabase saves are skipped.
+# Create with: modal secret create supabase \
 #   BILANCIO_SUPABASE_URL=https://xxx.supabase.co \
 #   BILANCIO_SUPABASE_ANON_KEY=eyJ...
-supabase_secret = modal.Secret.from_name("supabase", required_keys=[
-    "BILANCIO_SUPABASE_URL",
-    "BILANCIO_SUPABASE_ANON_KEY",
-])
+_secrets = []
 
 # Define the container image with all bilancio dependencies
 # We add the local source code to the image
@@ -45,6 +43,7 @@ image = (
         "jinja2>=3.0",
         "click>=8.0",
         "xkcdpass>=1.19.0",
+        "plotly>=5.0.0",  # Required by HTML export in run_scenario
         "supabase>=2.0.0",  # For direct Supabase writes
     )
     .add_local_python_source("bilancio")
@@ -239,8 +238,9 @@ def save_run_to_supabase(
         return True
 
     except SupabaseCredentialsError:
-        # Re-raise credentials errors - these are configuration issues that must be fixed
-        raise
+        # Log but don't fail - Supabase is optional
+        print(f"Supabase not configured, skipping save for run {run_id}")
+        return False
     except Exception as e:
         # Log other errors but don't fail the run - Supabase save is secondary
         print(f"WARNING: Failed to save to Supabase: {e}")
@@ -251,8 +251,8 @@ def save_run_to_supabase(
 @app.function(
     image=image,
     volumes={RESULTS_MOUNT_PATH: results_volume},
-    secrets=[supabase_secret],
-    timeout=1800,  # 30 minutes max per simulation
+    secrets=_secrets,
+    timeout=3600,  # 60 minutes max per simulation
     memory=2048,  # 2GB RAM
 )
 def run_simulation(
@@ -420,7 +420,7 @@ def run_simulation(
 
 @app.function(
     image=image,
-    secrets=[supabase_secret],
+    secrets=_secrets,
     timeout=300,  # 5 minutes for aggregate computation
     memory=1024,
 )
