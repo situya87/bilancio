@@ -967,6 +967,115 @@ class TestTicketIngestion:
         assert ticket.owner_id == "vbt_short"  # Stays with short VBT
 
 
+class TestPhase1BucketTransition:
+    """Test Phase 1 maturity updates: tickets moving between buckets."""
+
+    def test_dealer_ticket_moves_to_new_bucket_on_maturity_update(self):
+        """Dealer_mid ticket ages into short bucket → moves to dealer_short inventory."""
+        system, trader_ids, dealer_config, _ = _dealer_ring_system(n_agents=3, maturity_days=5)
+        subsystem = initialize_balanced_dealer_subsystem(system, dealer_config, current_day=0)
+
+        # Manually place a ticket in dealer_mid with maturity_day=5
+        # At current_day=0: remaining_tau=5 → "mid" (tau 4-8)
+        test_payable = Payable(
+            id=system.new_contract_id("PAY"),
+            kind="payable",
+            amount=12,
+            denom="X",
+            asset_holder_id="dealer_mid",
+            liability_issuer_id="H1",
+            due_day=5,
+            maturity_distance=5,
+        )
+        system.add_contract(test_payable)
+        _ingest_new_payables(subsystem, system, current_day=0)
+
+        ticket_id = f"TKT_{test_payable.id}"
+        assert subsystem.tickets[ticket_id].bucket_id == "mid"
+        assert subsystem.tickets[ticket_id].owner_id == "dealer_mid"
+
+        short_inv_before = len(subsystem.dealers["short"].inventory)
+
+        # Run trading phase at day=3: remaining_tau = 5-3 = 2 → "short" (tau 1-3)
+        run_dealer_trading_phase(subsystem, system, current_day=3)
+
+        ticket = subsystem.tickets.get(ticket_id)
+        if ticket:  # Might have been removed if matured
+            assert ticket.bucket_id == "short"
+            assert ticket.owner_id == "dealer_short"
+            assert ticket in subsystem.dealers["short"].inventory
+
+            # Main system payable should also be reassigned
+            payable = system.state.contracts[test_payable.id]
+            assert payable.asset_holder_id == "dealer_short"
+
+    def test_vbt_ticket_moves_to_new_bucket_on_maturity_update(self):
+        """VBT_long ticket ages into mid bucket → moves to vbt_mid inventory."""
+        system, trader_ids, dealer_config, _ = _dealer_ring_system(n_agents=3, maturity_days=10)
+        subsystem = initialize_balanced_dealer_subsystem(system, dealer_config, current_day=0)
+
+        # At current_day=0: remaining_tau=10 → "long" (tau >= 9)
+        test_payable = Payable(
+            id=system.new_contract_id("PAY"),
+            kind="payable",
+            amount=25,
+            denom="X",
+            asset_holder_id="vbt_long",
+            liability_issuer_id="H1",
+            due_day=10,
+            maturity_distance=10,
+        )
+        system.add_contract(test_payable)
+        _ingest_new_payables(subsystem, system, current_day=0)
+
+        ticket_id = f"TKT_{test_payable.id}"
+        assert subsystem.tickets[ticket_id].bucket_id == "long"
+        assert subsystem.tickets[ticket_id].owner_id == "vbt_long"
+
+        # Run trading phase at day=4: remaining_tau = 10-4 = 6 → "mid" (tau 4-8)
+        run_dealer_trading_phase(subsystem, system, current_day=4)
+
+        ticket = subsystem.tickets.get(ticket_id)
+        if ticket:
+            assert ticket.bucket_id == "mid"
+            assert ticket.owner_id == "vbt_mid"
+            assert ticket in subsystem.vbts["mid"].inventory
+
+            payable = system.state.contracts[test_payable.id]
+            assert payable.asset_holder_id == "vbt_mid"
+
+    def test_trader_ticket_bucket_changes_without_owner_change(self):
+        """Trader-owned ticket changes bucket but owner stays the same."""
+        system, trader_ids, dealer_config, _ = _dealer_ring_system(n_agents=3, maturity_days=5)
+        subsystem = initialize_balanced_dealer_subsystem(system, dealer_config, current_day=0)
+
+        # Create mid-bucket trader ticket: remaining_tau=5 → "mid"
+        test_payable = Payable(
+            id=system.new_contract_id("PAY"),
+            kind="payable",
+            amount=100,
+            denom="X",
+            asset_holder_id="H1",
+            liability_issuer_id="H2",
+            due_day=5,
+            maturity_distance=5,
+        )
+        system.add_contract(test_payable)
+        _ingest_new_payables(subsystem, system, current_day=0)
+
+        ticket_id = f"TKT_{test_payable.id}"
+        assert subsystem.tickets[ticket_id].owner_id == "H1"
+
+        # Run trading phase at day=3: remaining_tau=2 → "short"
+        run_dealer_trading_phase(subsystem, system, current_day=3)
+
+        ticket = subsystem.tickets.get(ticket_id)
+        if ticket:
+            assert ticket.bucket_id == "short"
+            assert ticket.owner_id == "H1"  # Stays with trader
+            assert ticket in subsystem.traders["H1"].tickets_owned
+
+
 class TestFullCycle:
     """End-to-end: init → settle → rollover → ingest → verify continuous trading."""
 

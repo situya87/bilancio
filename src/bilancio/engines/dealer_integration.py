@@ -1239,13 +1239,27 @@ def run_dealer_trading_phase(
             new_dealer = subsystem.dealers.get(new_bucket)
             new_vbt = subsystem.vbts.get(new_bucket)
 
-            # Assign to dealer or VBT based on current owner
-            if new_dealer and ticket.owner_id == f"dealer_{old_bucket}":
-                ticket.owner_id = f"dealer_{new_bucket}"
+            # Reassign dealer/VBT-owned tickets to the new bucket's entity
+            if ticket.owner_id.startswith("dealer_") and new_dealer:
+                old_owner = ticket.owner_id
+                new_owner = f"dealer_{new_bucket}"
+                ticket.owner_id = new_owner
                 new_dealer.inventory.append(ticket)
-            elif new_vbt and ticket.owner_id == f"vbt_{old_bucket}":
-                ticket.owner_id = f"vbt_{new_bucket}"
+                if old_owner != new_owner:
+                    payable_id = subsystem.ticket_to_payable.get(ticket.id)
+                    if payable_id:
+                        _reassign_payable_owner(system, payable_id, old_owner, new_owner)
+            elif ticket.owner_id.startswith("vbt_") and new_vbt:
+                old_owner = ticket.owner_id
+                new_owner = f"vbt_{new_bucket}"
+                ticket.owner_id = new_owner
                 new_vbt.inventory.append(ticket)
+                if old_owner != new_owner:
+                    payable_id = subsystem.ticket_to_payable.get(ticket.id)
+                    if payable_id:
+                        _reassign_payable_owner(system, payable_id, old_owner, new_owner)
+            # Trader-owned tickets: bucket_id updated above, ticket stays
+            # in trader.tickets_owned (no inventory move needed)
 
     # Clean up matured tickets to prevent unbounded memory growth
     for ticket_id in matured_ticket_ids:
