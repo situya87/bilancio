@@ -107,6 +107,9 @@ class DealerSubsystem:
     enabled: bool = True
     rng: random.Random = field(default_factory=lambda: random.Random(42))
 
+    # Face value for scaling eligibility thresholds
+    face_value: Decimal = Decimal(1)
+
     # Section 8 Metrics (functional dealer analysis)
     metrics: RunMetrics = field(default_factory=RunMetrics)
 
@@ -415,6 +418,7 @@ def initialize_balanced_dealer_subsystem(
         params=KernelParams(S=Decimal(1)),  # Per-unit-of-face: kernel prices are fractions of face
         rng=random.Random(dealer_config.seed),
         enabled=(mode == "active"),  # Disable trading for passive mode
+        face_value=face_value,
     )
 
     # Initialize risk assessor if params provided
@@ -628,6 +632,344 @@ def _get_agent_cash(system, agent_id: str) -> Decimal:
     return total_cash
 
 
+def _execute_sell_trade(
+    subsystem: DealerSubsystem,
+    trader_id: str,
+    current_day: int,
+    events: List[dict],
+    dealer_budgets: Dict[str, Decimal] | None = None,
+) -> Decimal:
+    """Process a single sell trade attempt for a trader. Returns cash injected into ring."""
+    trader = subsystem.traders[trader_id]
+    if not trader.tickets_owned:
+        return Decimal(0)
+
+    # Select ticket to sell (first in list for simplicity)
+    ticket = trader.tickets_owned[0]
+    bucket_id = ticket.bucket_id
+    dealer = subsystem.dealers[bucket_id]
+    vbt = subsystem.vbts[bucket_id]
+
+    # Pre-trade solvency check: estimate cost and verify payer can afford it
+    # For a customer sell, the dealer (or VBT) is the buyer/payer
+    if dealer_budgets is not None:
+        from bilancio.dealer.kernel import can_interior_buy
+        is_interior = can_interior_buy(dealer, subsystem.params)
+        payer_id = dealer.agent_id if is_interior else vbt.agent_id
+        estimated_cost = Decimal(str(dealer.bid if is_interior else vbt.B)) * ticket.face
+        if dealer_budgets.get(payer_id, Decimal(0)) < estimated_cost:
+            return Decimal(0)  # Skip: payer can't afford this trade
+
+    # Capture pre-trade state for metrics (Section 8.1, 8.4)
+    pre_dealer_inventory = dealer.a
+    pre_dealer_cash = dealer.cash
+    pre_dealer_bid = dealer.bid
+    pre_dealer_ask = dealer.ask
+    pre_trader_cash = trader.cash
+    pre_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
+
+    # Check if liquidity-driven (Section 8.3)
+    is_liquidity_driven = trader.shortfall(current_day) > 0
+
+    # Risk assessment check (Plan 032)
+    if subsystem.risk_assessor:
+        # Compute asset value as sum of EVs of owned tickets
+        asset_value = sum(
+            subsystem.risk_assessor.expected_value(t, current_day)
+            for t in trader.tickets_owned
+        )
+        if not subsystem.risk_assessor.should_sell(
+            ticket=ticket,
+            dealer_bid=dealer.bid,
+            current_day=current_day,
+            trader_cash=trader.cash,
+            trader_shortfall=trader.shortfall(current_day),
+            trader_asset_value=asset_value,
+        ):
+            # Trader rejects price - log event and skip
+            events.append({
+                "kind": "sell_rejected",
+                "day": current_day,
+                "phase": "simulation",
+                "trader_id": trader_id,
+                "ticket_id": ticket.id,
+                "bucket": bucket_id,
+                "offered_price": float(dealer.bid),
+                "expected_value": float(subsystem.risk_assessor.expected_value(ticket, current_day)),
+                "threshold": float(subsystem.risk_assessor.params.base_risk_premium),
+                "reason": "price_below_ev_threshold",
+            })
+            return Decimal(0)
+
+    # Execute customer sell
+    result = subsystem.executor.execute_customer_sell(
+        dealer, vbt, ticket, check_assertions=False
+    )
+
+    if result.executed:
+        # Scale price by ticket face value
+        # The dealer module returns unit price (per S=1), but our tickets have actual face values
+        scaled_price = result.price * ticket.face
+
+        # Update trader state
+        trader.tickets_owned.remove(ticket)
+        trader.cash += scaled_price
+
+        # Capture post-trade state
+        post_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
+
+        # Create detailed trade record for metrics (Section 8)
+        trade_record = TradeRecord(
+            day=current_day,
+            bucket=bucket_id,
+            side="SELL",
+            trader_id=trader_id,
+            ticket_id=ticket.id,
+            issuer_id=ticket.issuer_id,
+            maturity_day=ticket.maturity_day,
+            face_value=ticket.face,
+            price=scaled_price,
+            unit_price=result.price,
+            is_passthrough=result.is_passthrough,
+            dealer_inventory_before=pre_dealer_inventory,
+            dealer_cash_before=pre_dealer_cash,
+            dealer_bid_before=pre_dealer_bid,
+            dealer_ask_before=pre_dealer_ask,
+            vbt_mid_before=vbt.M,
+            trader_cash_before=pre_trader_cash,
+            trader_safety_margin_before=pre_safety_margin,
+            dealer_inventory_after=dealer.a,
+            dealer_cash_after=dealer.cash,
+            dealer_bid_after=dealer.bid,
+            dealer_ask_after=dealer.ask,
+            trader_cash_after=trader.cash,
+            trader_safety_margin_after=post_safety_margin,
+            is_liquidity_driven=is_liquidity_driven,
+            reduces_margin_below_zero=False,  # Only for BUYs
+        )
+        subsystem.metrics.trades.append(trade_record)
+
+        # Update ticket outcome for return tracking (Section 8.3)
+        if ticket.id not in subsystem.metrics.ticket_outcomes:
+            subsystem.metrics.ticket_outcomes[ticket.id] = TicketOutcome(
+                ticket_id=ticket.id,
+                issuer_id=ticket.issuer_id,
+                maturity_day=ticket.maturity_day,
+                face_value=ticket.face,
+            )
+        subsystem.metrics.ticket_outcomes[ticket.id].sold_to_dealer = True
+        subsystem.metrics.ticket_outcomes[ticket.id].sale_day = current_day
+        subsystem.metrics.ticket_outcomes[ticket.id].sale_price = scaled_price
+        subsystem.metrics.ticket_outcomes[ticket.id].seller_id = trader_id
+
+        events.append({
+            "kind": "dealer_trade",
+            "day": current_day,
+            "phase": "simulation",
+            "trader": trader_id,
+            "side": "sell",
+            "ticket_id": ticket.id,
+            "bucket": bucket_id,
+            "price": float(scaled_price),
+            "unit_price": float(result.price),
+            "face": float(ticket.face),
+            "is_passthrough": result.is_passthrough,
+            "is_liquidity_driven": is_liquidity_driven,
+        })
+
+        # Update dealer/VBT cash budget after successful sell trade
+        if dealer_budgets is not None:
+            payer_id = f"vbt_{bucket_id}" if result.is_passthrough else f"dealer_{bucket_id}"
+            dealer_budgets[payer_id] = dealer_budgets.get(payer_id, Decimal(0)) - scaled_price
+
+        return scaled_price
+
+    return Decimal(0)
+
+
+def _execute_buy_trade(
+    subsystem: DealerSubsystem,
+    trader_id: str,
+    current_day: int,
+    events: List[dict],
+    dealer_budgets: Dict[str, Decimal] | None = None,
+) -> Decimal:
+    """Process a single buy trade attempt for a trader. Returns cash drained from ring."""
+    trader = subsystem.traders[trader_id]
+
+    # Try to buy from first available bucket
+    for bucket_id, dealer in subsystem.dealers.items():
+        vbt = subsystem.vbts[bucket_id]
+
+        # Check if dealer or VBT has inventory
+        if not dealer.inventory and not vbt.inventory:
+            continue
+
+        # Capture pre-trade state for metrics (Section 8.1, 8.4)
+        pre_dealer_inventory = dealer.a
+        pre_dealer_cash = dealer.cash
+        pre_dealer_bid = dealer.bid
+        pre_dealer_ask = dealer.ask
+        pre_trader_cash = trader.cash
+        pre_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
+
+        # Risk assessment pre-check for buy (approximate - we don't know exact ticket yet)
+        # We'll do a post-execution check if risk_assessor exists
+        should_reverse = False
+
+        # Execute customer buy
+        result = subsystem.executor.execute_customer_buy(
+            dealer, vbt, trader_id, check_assertions=False
+        )
+
+        if result.executed and result.ticket:
+            # Post-execution risk assessment check (Plan 032)
+            if subsystem.risk_assessor:
+                # Compute asset value (including the ticket we just bought)
+                asset_value = sum(
+                    subsystem.risk_assessor.expected_value(t, current_day)
+                    for t in trader.tickets_owned
+                )
+                # Check if trader would accept this buy
+                if not subsystem.risk_assessor.should_buy(
+                    ticket=result.ticket,
+                    dealer_ask=result.price,  # Unit price
+                    current_day=current_day,
+                    trader_cash=trader.cash,
+                    trader_shortfall=trader.shortfall(current_day),
+                    trader_asset_value=asset_value,
+                ):
+                    # Trader rejects - reverse the transaction
+                    should_reverse = True
+                    # Put ticket back to dealer/VBT
+                    # The kernel added unit price to cash, so reverse by subtracting unit price only
+                    if result.is_passthrough:
+                        vbt.inventory.append(result.ticket)
+                        result.ticket.owner_id = f"vbt_{bucket_id}"
+                        vbt.cash -= result.price
+                    else:
+                        dealer.inventory.append(result.ticket)
+                        result.ticket.owner_id = f"dealer_{bucket_id}"
+                        dealer.cash -= result.price
+                    events.append({
+                        "kind": "buy_rejected",
+                        "day": current_day,
+                        "phase": "simulation",
+                        "trader_id": trader_id,
+                        "ticket_id": result.ticket.id,
+                        "bucket": bucket_id,
+                        "offered_price": float(result.price),
+                        "expected_value": float(subsystem.risk_assessor.expected_value(result.ticket, current_day)),
+                        "threshold": float(subsystem.risk_assessor.params.base_risk_premium * subsystem.risk_assessor.params.buy_premium_multiplier),
+                        "reason": "ev_below_price_threshold",
+                    })
+                    continue
+
+        if result.executed and result.ticket and not should_reverse:
+            # Scale price by ticket face value
+            scaled_price = result.price * result.ticket.face
+
+            # Pre-trade solvency check: trader must be able to afford scaled price
+            if trader.cash < scaled_price:
+                # Reverse the kernel trade — put ticket back
+                if result.is_passthrough:
+                    vbt.inventory.append(result.ticket)
+                    result.ticket.owner_id = f"vbt_{bucket_id}"
+                    vbt.cash -= result.price
+                else:
+                    dealer.inventory.append(result.ticket)
+                    result.ticket.owner_id = f"dealer_{bucket_id}"
+                    dealer.cash -= result.price
+                recompute_dealer_state(dealer, vbt, subsystem.params)
+                continue  # Try next bucket
+
+            # Update trader state
+            trader.tickets_owned.append(result.ticket)
+            trader.cash -= scaled_price
+
+            # Update asset issuer if first ticket
+            if trader.asset_issuer_id is None:
+                trader.asset_issuer_id = result.ticket.issuer_id
+
+            # Capture post-trade state
+            post_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
+
+            # Check if BUY reduced margin below zero (Section 8.4)
+            reduces_margin_below_zero = (
+                pre_safety_margin >= 0 and post_safety_margin < 0
+            )
+
+            # Create detailed trade record for metrics (Section 8)
+            trade_record = TradeRecord(
+                day=current_day,
+                bucket=bucket_id,
+                side="BUY",
+                trader_id=trader_id,
+                ticket_id=result.ticket.id,
+                issuer_id=result.ticket.issuer_id,
+                maturity_day=result.ticket.maturity_day,
+                face_value=result.ticket.face,
+                price=scaled_price,
+                unit_price=result.price,
+                is_passthrough=result.is_passthrough,
+                dealer_inventory_before=pre_dealer_inventory,
+                dealer_cash_before=pre_dealer_cash,
+                dealer_bid_before=pre_dealer_bid,
+                dealer_ask_before=pre_dealer_ask,
+                vbt_mid_before=vbt.M,
+                trader_cash_before=pre_trader_cash,
+                trader_safety_margin_before=pre_safety_margin,
+                dealer_inventory_after=dealer.a,
+                dealer_cash_after=dealer.cash,
+                dealer_bid_after=dealer.bid,
+                dealer_ask_after=dealer.ask,
+                trader_cash_after=trader.cash,
+                trader_safety_margin_after=post_safety_margin,
+                is_liquidity_driven=False,  # BUYs are never liquidity-driven
+                reduces_margin_below_zero=reduces_margin_below_zero,
+            )
+            subsystem.metrics.trades.append(trade_record)
+
+            # Update ticket outcome for return tracking (Section 8.3)
+            ticket = result.ticket
+            if ticket.id not in subsystem.metrics.ticket_outcomes:
+                subsystem.metrics.ticket_outcomes[ticket.id] = TicketOutcome(
+                    ticket_id=ticket.id,
+                    issuer_id=ticket.issuer_id,
+                    maturity_day=ticket.maturity_day,
+                    face_value=ticket.face,
+                )
+            subsystem.metrics.ticket_outcomes[ticket.id].purchased_from_dealer = True
+            subsystem.metrics.ticket_outcomes[ticket.id].purchase_day = current_day
+            subsystem.metrics.ticket_outcomes[ticket.id].purchase_price = scaled_price
+            subsystem.metrics.ticket_outcomes[ticket.id].purchaser_id = trader_id
+
+            events.append({
+                "kind": "dealer_trade",
+                "day": current_day,
+                "phase": "simulation",
+                "trader": trader_id,
+                "side": "buy",
+                "ticket_id": result.ticket.id,
+                "bucket": bucket_id,
+                "price": float(scaled_price),
+                "unit_price": float(result.price),
+                "face": float(result.ticket.face),
+                "is_passthrough": result.is_passthrough,
+                "reduces_margin_below_zero": reduces_margin_below_zero,
+            })
+
+            # Update dealer/VBT cash budget after successful buy trade
+            # For a buy, the dealer/VBT received cash (sold a ticket)
+            if dealer_budgets is not None:
+                payee_id = f"vbt_{bucket_id}" if result.is_passthrough else f"dealer_{bucket_id}"
+                dealer_budgets[payee_id] = dealer_budgets.get(payee_id, Decimal(0)) + scaled_price
+
+            return scaled_price  # One buy per trader per batch
+
+    return Decimal(0)
+
+
 def run_dealer_trading_phase(
     subsystem: DealerSubsystem,
     system,
@@ -805,298 +1147,50 @@ def run_dealer_trading_phase(
     # Traders who can buy (have surplus cash beyond needs)
     # Re-enabled per spec Section 11.2: Investment policy (buying tickets)
     eligible_buyers = []
-    # Only allow buying if trader has significant surplus above obligations
+    # Only allow buying if trader has genuine surplus above ALL upcoming obligations
     for trader_id, trader in subsystem.traders.items():
-        max_upcoming_dues = Decimal(0)
+        total_upcoming_dues = Decimal(0)
         for day_offset in range(horizon + 1):
-            max_upcoming_dues = max(max_upcoming_dues, trader.payment_due(current_day + day_offset))
-        surplus = trader.cash - max_upcoming_dues
-        if surplus > Decimal(500):  # Only if significant surplus
+            total_upcoming_dues += trader.payment_due(current_day + day_offset)
+        surplus = trader.cash - total_upcoming_dues
+        if surplus > subsystem.face_value:  # Buffer of one face-value unit after covering all dues
             eligible_buyers.append(trader_id)
 
-    # Phase 4: Randomized order flow (simplified)
-    # Process sellers first (they have urgent needs)
+    # Phase 4: Interleaved order flow in batches
+    # Sellers and buyers alternate in batches of BATCH_SIZE.
+    # Sellers go first (urgent liquidity needs), then buyers, repeating
+    # until both lists are exhausted.
+    # Cash neutrality: total buy cash cannot exceed total sell cash,
+    # preventing the dealer from being a net cash drain on the ring.
+    BATCH_SIZE = 10
     subsystem.rng.shuffle(eligible_sellers)
-    for trader_id in eligible_sellers[:10]:  # Process up to 10 sellers per phase
-        trader = subsystem.traders[trader_id]
-        if not trader.tickets_owned:
-            continue
-
-        # Select ticket to sell (first in list for simplicity)
-        ticket = trader.tickets_owned[0]
-        bucket_id = ticket.bucket_id
-        dealer = subsystem.dealers[bucket_id]
-        vbt = subsystem.vbts[bucket_id]
-
-        # Capture pre-trade state for metrics (Section 8.1, 8.4)
-        pre_dealer_inventory = dealer.a
-        pre_dealer_cash = dealer.cash
-        pre_dealer_bid = dealer.bid
-        pre_dealer_ask = dealer.ask
-        pre_trader_cash = trader.cash
-        pre_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
-
-        # Check if liquidity-driven (Section 8.3)
-        is_liquidity_driven = trader.shortfall(current_day) > 0
-
-        # Risk assessment check (Plan 032)
-        if subsystem.risk_assessor:
-            # Compute asset value as sum of EVs of owned tickets
-            asset_value = sum(
-                subsystem.risk_assessor.expected_value(t, current_day)
-                for t in trader.tickets_owned
-            )
-            if not subsystem.risk_assessor.should_sell(
-                ticket=ticket,
-                dealer_bid=dealer.bid,
-                current_day=current_day,
-                trader_cash=trader.cash,
-                trader_shortfall=trader.shortfall(current_day),
-                trader_asset_value=asset_value,
-            ):
-                # Trader rejects price - log event and skip
-                events.append({
-                    "kind": "sell_rejected",
-                    "day": current_day,
-                    "phase": "simulation",
-                    "trader_id": trader_id,
-                    "ticket_id": ticket.id,
-                    "bucket": bucket_id,
-                    "offered_price": float(dealer.bid),
-                    "expected_value": float(subsystem.risk_assessor.expected_value(ticket, current_day)),
-                    "threshold": float(subsystem.risk_assessor.params.base_risk_premium),
-                    "reason": "price_below_ev_threshold",
-                })
-                continue
-
-        # Execute customer sell
-        result = subsystem.executor.execute_customer_sell(
-            dealer, vbt, ticket, check_assertions=False
-        )
-
-        if result.executed:
-            # Scale price by ticket face value
-            # The dealer module returns unit price (per S=1), but our tickets have actual face values
-            scaled_price = result.price * ticket.face
-
-            # Update trader state
-            trader.tickets_owned.remove(ticket)
-            trader.cash += scaled_price
-
-            # Capture post-trade state
-            post_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
-
-            # Create detailed trade record for metrics (Section 8)
-            trade_record = TradeRecord(
-                day=current_day,
-                bucket=bucket_id,
-                side="SELL",
-                trader_id=trader_id,
-                ticket_id=ticket.id,
-                issuer_id=ticket.issuer_id,
-                maturity_day=ticket.maturity_day,
-                face_value=ticket.face,
-                price=scaled_price,
-                unit_price=result.price,
-                is_passthrough=result.is_passthrough,
-                dealer_inventory_before=pre_dealer_inventory,
-                dealer_cash_before=pre_dealer_cash,
-                dealer_bid_before=pre_dealer_bid,
-                dealer_ask_before=pre_dealer_ask,
-                vbt_mid_before=vbt.M,
-                trader_cash_before=pre_trader_cash,
-                trader_safety_margin_before=pre_safety_margin,
-                dealer_inventory_after=dealer.a,
-                dealer_cash_after=dealer.cash,
-                dealer_bid_after=dealer.bid,
-                dealer_ask_after=dealer.ask,
-                trader_cash_after=trader.cash,
-                trader_safety_margin_after=post_safety_margin,
-                is_liquidity_driven=is_liquidity_driven,
-                reduces_margin_below_zero=False,  # Only for BUYs
-            )
-            subsystem.metrics.trades.append(trade_record)
-
-            # Update ticket outcome for return tracking (Section 8.3)
-            if ticket.id not in subsystem.metrics.ticket_outcomes:
-                subsystem.metrics.ticket_outcomes[ticket.id] = TicketOutcome(
-                    ticket_id=ticket.id,
-                    issuer_id=ticket.issuer_id,
-                    maturity_day=ticket.maturity_day,
-                    face_value=ticket.face,
-                )
-            subsystem.metrics.ticket_outcomes[ticket.id].sold_to_dealer = True
-            subsystem.metrics.ticket_outcomes[ticket.id].sale_day = current_day
-            subsystem.metrics.ticket_outcomes[ticket.id].sale_price = scaled_price
-            subsystem.metrics.ticket_outcomes[ticket.id].seller_id = trader_id
-
-            events.append({
-                "kind": "dealer_trade",
-                "day": current_day,
-                "phase": "simulation",
-                "trader": trader_id,
-                "side": "sell",
-                "ticket_id": ticket.id,
-                "bucket": bucket_id,
-                "price": float(scaled_price),
-                "unit_price": float(result.price),
-                "face": float(ticket.face),
-                "is_passthrough": result.is_passthrough,
-                "is_liquidity_driven": is_liquidity_driven,
-            })
-
-    # Process buyers (simplified: fewer trades)
     subsystem.rng.shuffle(eligible_buyers)
-    for trader_id in eligible_buyers[:1]:  # Very limited buying for now
-        trader = subsystem.traders[trader_id]
 
-        # Try to buy from first available bucket
-        for bucket_id, dealer in subsystem.dealers.items():
-            vbt = subsystem.vbts[bucket_id]
+    # Initialize cash budgets for dealers/VBTs from system-level cash
+    # This prevents trades that would make dealer/VBT cash go negative
+    dealer_budgets: Dict[str, Decimal] = {}
+    for bucket_id, dealer in subsystem.dealers.items():
+        dealer_budgets[dealer.agent_id] = _get_agent_cash(system, dealer.agent_id)
+    for bucket_id, vbt in subsystem.vbts.items():
+        dealer_budgets[vbt.agent_id] = _get_agent_cash(system, vbt.agent_id)
 
-            # Check if dealer or VBT has inventory
-            if not dealer.inventory and not vbt.inventory:
-                continue
+    seller_idx = 0
+    buyer_idx = 0
+    sell_cash = Decimal(0)  # Cumulative cash injected by sells
+    buy_cash = Decimal(0)   # Cumulative cash drained by buys
 
-            # Capture pre-trade state for metrics (Section 8.1, 8.4)
-            pre_dealer_inventory = dealer.a
-            pre_dealer_cash = dealer.cash
-            pre_dealer_bid = dealer.bid
-            pre_dealer_ask = dealer.ask
-            pre_trader_cash = trader.cash
-            pre_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
+    while seller_idx < len(eligible_sellers) or buyer_idx < len(eligible_buyers):
+        # --- Seller batch ---
+        for trader_id in eligible_sellers[seller_idx:seller_idx + BATCH_SIZE]:
+            sell_cash += _execute_sell_trade(subsystem, trader_id, current_day, events, dealer_budgets)
+        seller_idx += BATCH_SIZE
 
-            # Risk assessment pre-check for buy (approximate - we don't know exact ticket yet)
-            # We'll do a post-execution check if risk_assessor exists
-            should_reverse = False
-
-            # Execute customer buy
-            result = subsystem.executor.execute_customer_buy(
-                dealer, vbt, trader_id, check_assertions=False
-            )
-
-            if result.executed and result.ticket:
-                # Post-execution risk assessment check (Plan 032)
-                if subsystem.risk_assessor:
-                    # Compute asset value (including the ticket we just bought)
-                    asset_value = sum(
-                        subsystem.risk_assessor.expected_value(t, current_day)
-                        for t in trader.tickets_owned
-                    )
-                    # Check if trader would accept this buy
-                    if not subsystem.risk_assessor.should_buy(
-                        ticket=result.ticket,
-                        dealer_ask=result.price,  # Unit price
-                        current_day=current_day,
-                        trader_cash=trader.cash,
-                        trader_shortfall=trader.shortfall(current_day),
-                        trader_asset_value=asset_value,
-                    ):
-                        # Trader rejects - reverse the transaction
-                        should_reverse = True
-                        # Put ticket back to dealer/VBT
-                        if result.is_passthrough:
-                            vbt.inventory.append(result.ticket)
-                            result.ticket.owner_id = f"vbt_{bucket_id}"
-                            vbt.cash -= result.price * result.ticket.face
-                        else:
-                            dealer.inventory.append(result.ticket)
-                            result.ticket.owner_id = f"dealer_{bucket_id}"
-                            dealer.cash -= result.price * result.ticket.face
-                        events.append({
-                            "kind": "buy_rejected",
-                            "day": current_day,
-                            "phase": "simulation",
-                            "trader_id": trader_id,
-                            "ticket_id": result.ticket.id,
-                            "bucket": bucket_id,
-                            "offered_price": float(result.price),
-                            "expected_value": float(subsystem.risk_assessor.expected_value(result.ticket, current_day)),
-                            "threshold": float(subsystem.risk_assessor.params.base_risk_premium * subsystem.risk_assessor.params.buy_premium_multiplier),
-                            "reason": "ev_below_price_threshold",
-                        })
-                        continue
-
-            if result.executed and result.ticket and not should_reverse:
-                # Scale price by ticket face value
-                scaled_price = result.price * result.ticket.face
-
-                # Update trader state
-                trader.tickets_owned.append(result.ticket)
-                trader.cash -= scaled_price
-
-                # Update asset issuer if first ticket
-                if trader.asset_issuer_id is None:
-                    trader.asset_issuer_id = result.ticket.issuer_id
-
-                # Capture post-trade state
-                post_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
-
-                # Check if BUY reduced margin below zero (Section 8.4)
-                reduces_margin_below_zero = (
-                    pre_safety_margin >= 0 and post_safety_margin < 0
-                )
-
-                # Create detailed trade record for metrics (Section 8)
-                trade_record = TradeRecord(
-                    day=current_day,
-                    bucket=bucket_id,
-                    side="BUY",
-                    trader_id=trader_id,
-                    ticket_id=result.ticket.id,
-                    issuer_id=result.ticket.issuer_id,
-                    maturity_day=result.ticket.maturity_day,
-                    face_value=result.ticket.face,
-                    price=scaled_price,
-                    unit_price=result.price,
-                    is_passthrough=result.is_passthrough,
-                    dealer_inventory_before=pre_dealer_inventory,
-                    dealer_cash_before=pre_dealer_cash,
-                    dealer_bid_before=pre_dealer_bid,
-                    dealer_ask_before=pre_dealer_ask,
-                    vbt_mid_before=vbt.M,
-                    trader_cash_before=pre_trader_cash,
-                    trader_safety_margin_before=pre_safety_margin,
-                    dealer_inventory_after=dealer.a,
-                    dealer_cash_after=dealer.cash,
-                    dealer_bid_after=dealer.bid,
-                    dealer_ask_after=dealer.ask,
-                    trader_cash_after=trader.cash,
-                    trader_safety_margin_after=post_safety_margin,
-                    is_liquidity_driven=False,  # BUYs are never liquidity-driven
-                    reduces_margin_below_zero=reduces_margin_below_zero,
-                )
-                subsystem.metrics.trades.append(trade_record)
-
-                # Update ticket outcome for return tracking (Section 8.3)
-                ticket = result.ticket
-                if ticket.id not in subsystem.metrics.ticket_outcomes:
-                    subsystem.metrics.ticket_outcomes[ticket.id] = TicketOutcome(
-                        ticket_id=ticket.id,
-                        issuer_id=ticket.issuer_id,
-                        maturity_day=ticket.maturity_day,
-                        face_value=ticket.face,
-                    )
-                subsystem.metrics.ticket_outcomes[ticket.id].purchased_from_dealer = True
-                subsystem.metrics.ticket_outcomes[ticket.id].purchase_day = current_day
-                subsystem.metrics.ticket_outcomes[ticket.id].purchase_price = scaled_price
-                subsystem.metrics.ticket_outcomes[ticket.id].purchaser_id = trader_id
-
-                events.append({
-                    "kind": "dealer_trade",
-                    "day": current_day,
-                    "phase": "simulation",
-                    "trader": trader_id,
-                    "side": "buy",
-                    "ticket_id": result.ticket.id,
-                    "bucket": bucket_id,
-                    "price": float(scaled_price),
-                    "unit_price": float(result.price),
-                    "face": float(result.ticket.face),
-                    "is_passthrough": result.is_passthrough,
-                    "reduces_margin_below_zero": reduces_margin_below_zero,
-                })
-                break  # One buy per trader per phase
+        # --- Buyer batch (constrained by cash neutrality) ---
+        for trader_id in eligible_buyers[buyer_idx:buyer_idx + BATCH_SIZE]:
+            if buy_cash >= sell_cash:
+                break  # Would drain more cash than sells injected
+            buy_cash += _execute_buy_trade(subsystem, trader_id, current_day, events, dealer_budgets)
+        buyer_idx += BATCH_SIZE
 
     return events
 
@@ -1212,7 +1306,8 @@ def sync_dealer_to_system(
             # Find and reduce their cash contracts
             agent = system.state.agents.get(trader_id)
             if agent:
-                remaining_to_burn = abs(delta)
+                # Cap burn at available cash to prevent negative balances
+                remaining_to_burn = min(abs(delta), main_system_cash)
                 for contract_id in list(agent.asset_ids):
                     if remaining_to_burn <= 0:
                         break
