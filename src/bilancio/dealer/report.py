@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any, Dict, List, TYPE_CHECKING
 import html
 
 if TYPE_CHECKING:
@@ -133,7 +133,7 @@ def _fmt_decimal(d: Decimal | float | int | str | None, precision: int = 4) -> s
         try:
             d = Decimal(d)
         except (ValueError, TypeError, ArithmeticError):
-            return d
+            return str(d)
     if isinstance(d, (int, float)):
         d = Decimal(str(d))
     # Format with requested precision, then strip trailing zeros
@@ -141,7 +141,7 @@ def _fmt_decimal(d: Decimal | float | int | str | None, precision: int = 4) -> s
     return formatted
 
 
-def _render_header(config: "DealerRingConfig", snapshots: list, title: str, subtitle: str) -> str:
+def _render_header(config: "DealerRingConfig", snapshots: List[Any], title: str, subtitle: str) -> str:
     """Render header with config summary."""
     num_days = len(snapshots) - 1 if snapshots else 0  # -1 because Day 0 is setup
     num_buckets = len(config.buckets)
@@ -171,7 +171,7 @@ def _render_header(config: "DealerRingConfig", snapshots: list, title: str, subt
 """
 
 
-def _render_events_table(events: list[dict], table_title: str) -> str:
+def _render_events_table(events: List[Dict[str, Any]], table_title: str) -> str:
     """Render events table for a day."""
     # Filter out day_start events
     display_events = [e for e in events if e.get('kind') != 'day_start']
@@ -279,7 +279,7 @@ def _render_events_table(events: list[dict], table_title: str) -> str:
 """
 
 
-def _render_dealer_card(dealer_dict: dict, vbt_dict: dict) -> str:
+def _render_dealer_card(dealer_dict: Dict[str, Any], vbt_dict: Dict[str, Any]) -> str:
     """Render dealer state card with kernel params."""
     bucket_id = dealer_dict.get('bucket_id', 'unknown')
 
@@ -355,7 +355,7 @@ def _render_dealer_card(dealer_dict: dict, vbt_dict: dict) -> str:
 """
 
 
-def _render_vbt_card(vbt_dict: dict) -> str:
+def _render_vbt_card(vbt_dict: Dict[str, Any]) -> str:
     """Render VBT state card."""
     bucket_id = vbt_dict.get('bucket_id', 'unknown')
     M = _fmt_decimal(vbt_dict.get('M'))
@@ -385,7 +385,7 @@ def _render_vbt_card(vbt_dict: dict) -> str:
 """
 
 
-def _render_trader_balance(trader_dict: dict) -> str:
+def _render_trader_balance(trader_dict: Dict[str, Any]) -> str:
     """Render trader T-account balance sheet."""
     agent_id = trader_dict.get('agent_id', 'unknown')
     cash = trader_dict.get('cash', 0)

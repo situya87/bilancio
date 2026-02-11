@@ -10,7 +10,7 @@ This module enables traders to:
 import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, List
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +274,7 @@ class RiskAssessor:
 
         return should_accept
 
-    def get_diagnostics(self, current_day: int) -> Dict[str, any]:
+    def get_diagnostics(self, current_day: int) -> Dict[str, Any]:
         """
         Get diagnostic information about risk assessor state.
 

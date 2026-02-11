@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from .job_id import generate_job_id
 from .models import Job, JobConfig, JobEvent, JobStatus
@@ -164,7 +164,7 @@ class JobManager:
         self,
         job_id: str,
         run_id: str,
-        metrics: Optional[dict] = None,
+        metrics: Optional[Dict[str, Any]] = None,
         modal_call_id: Optional[str] = None,
     ) -> None:
         """Record progress on a job (a run completed).
@@ -195,7 +195,7 @@ class JobManager:
         self._save_job(job)
         self._save_event(event)
 
-    def complete_job(self, job_id: str, summary: Optional[dict] = None) -> None:
+    def complete_job(self, job_id: str, summary: Optional[Dict[str, Any]] = None) -> None:
         """Mark a job as completed.
 
         Args:

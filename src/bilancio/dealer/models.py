@@ -282,9 +282,10 @@ class TraderState:
             Total face value of tickets maturing on this day
         """
         return sum(
-            ticket.face
+            (ticket.face
             for ticket in self.obligations
-            if ticket.maturity_day == day
+            if ticket.maturity_day == day),
+            Decimal(0),
         )
 
     def shortfall(self, day: int) -> Decimal:

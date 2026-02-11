@@ -30,7 +30,7 @@ def format_duration(start: datetime, end: Optional[datetime]) -> str:
 
 
 @click.group()
-def jobs():
+def jobs() -> None:
     """Query and manage simulation jobs."""
     pass
 
@@ -52,7 +52,7 @@ def jobs():
 @click.option("--limit", default=20, help="Maximum number of jobs to show")
 def list_jobs(
     cloud: bool, local: Optional[Path], status: Optional[str], limit: int
-):
+) -> None:
     """List simulation jobs.
 
     By default, lists from Supabase if configured.
@@ -155,7 +155,7 @@ def list_jobs(
     type=click.Path(exists=True, path_type=Path),
     help="Local directory containing job manifests",
 )
-def get_job(job_id: str, cloud: bool, local: Optional[Path]):
+def get_job(job_id: str, cloud: bool, local: Optional[Path]) -> None:
     """Get detailed information about a job.
 
     Examples:
@@ -247,7 +247,7 @@ def get_job(job_id: str, cloud: bool, local: Optional[Path]):
     type=click.Choice(["pending", "running", "completed", "failed"]),
     help="Filter by run status",
 )
-def list_runs(job_id: str, cloud: bool, status: Optional[str]):
+def list_runs(job_id: str, cloud: bool, status: Optional[str]) -> None:
     """List runs for a specific job.
 
     Examples:
@@ -293,7 +293,7 @@ def list_runs(job_id: str, cloud: bool, status: Optional[str]):
 @jobs.command("metrics")
 @click.argument("job_id")
 @click.option("--cloud", is_flag=True, help="Query from Supabase cloud storage")
-def show_metrics(job_id: str, cloud: bool):
+def show_metrics(job_id: str, cloud: bool) -> None:
     """Show aggregate metrics for a job.
 
     Examples:
@@ -371,7 +371,7 @@ def visualize_job(
     output: Optional[Path],
     title: Optional[str],
     open_browser: bool,
-):
+) -> None:
     """Generate interactive visualization comparing passive vs active runs.
 
     Creates an HTML report with multiple visualization types:

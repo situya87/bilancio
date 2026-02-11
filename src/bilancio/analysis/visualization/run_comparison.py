@@ -12,11 +12,14 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 @dataclass
@@ -55,24 +58,24 @@ def load_job_comparison_data(job_id: str) -> List[RunComparison]:
 
     # Get runs with parameters
     runs_result = client.table('runs').select('*').eq('job_id', job_id).execute()
-    runs = runs_result.data
+    runs: List[Dict[str, Any]] = runs_result.data  # type: ignore[assignment]
 
     # Get metrics for this job
     metrics_result = client.table('metrics').select('*').eq('job_id', job_id).execute()
-    metrics = metrics_result.data
+    metrics: List[Dict[str, Any]] = metrics_result.data  # type: ignore[assignment]
 
     # Build lookup by run_id
-    metrics_by_id = {m['run_id']: m for m in metrics}
+    metrics_by_id: Dict[str, Dict[str, Any]] = {m['run_id']: m for m in metrics}
 
     # Group runs by parameter key
-    passive_runs: Dict[Tuple, Dict] = {}
-    active_runs: Dict[Tuple, Dict] = {}
+    passive_runs: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
+    active_runs: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
 
     for run in runs:
         key = (run['kappa'], run['concentration'], run['mu'], run.get('seed', 42))
         metric = metrics_by_id.get(run['run_id'], {})
 
-        run_data = {
+        run_data: Dict[str, Any] = {
             **run,
             'delta_total': metric.get('delta_total', 0),
             'phi_total': metric.get('phi_total', 0),
@@ -84,16 +87,16 @@ def load_job_comparison_data(job_id: str) -> List[RunComparison]:
             active_runs[key] = run_data
 
     # Pair up runs
-    comparisons = []
+    comparisons: List[RunComparison] = []
     for key in passive_runs:
         if key in active_runs:
             p = passive_runs[key]
             a = active_runs[key]
             comparisons.append(RunComparison(
-                kappa=key[0],
-                concentration=key[1],
-                mu=key[2],
-                seed=key[3],
+                kappa=float(key[0]),
+                concentration=float(key[1]),
+                mu=float(key[2]),
+                seed=int(key[3]),
                 delta_passive=p['delta_total'],
                 delta_active=a['delta_total'],
                 phi_passive=p['phi_total'],

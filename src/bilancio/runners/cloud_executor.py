@@ -59,9 +59,9 @@ class CloudExecutor:
         self.job_id = job_id
 
         # Lazy reference to deployed function
-        self._run_simulation = None
+        self._run_simulation: Any = None
 
-    def _get_run_simulation(self):
+    def _get_run_simulation(self) -> Any:
         """Get reference to the deployed Modal function.
 
         Uses Function.from_name() to reference the deployed function,
@@ -320,4 +320,4 @@ class CloudExecutor:
         else:
             print(f"Warning: Aggregate metrics computation failed: {result.get('error')}", flush=True)
 
-        return result
+        return dict(result)

@@ -6,7 +6,7 @@ all required relationships are defined.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from .models import AgentSpec, InstrumentSpec, InstrumentRelation, AgentRelation
 
@@ -108,7 +108,7 @@ class SpecificationRegistry:
                 missing.append(agent_name)
         return missing
 
-    def get_relationship_matrix(self) -> dict[str, dict[str, str]]:
+    def get_relationship_matrix(self) -> Dict[str, Dict[str, str]]:
         """
         Generate a relationship matrix showing all agent-instrument pairs.
 
@@ -116,7 +116,7 @@ class SpecificationRegistry:
             Dict mapping agent_name -> instrument_name -> status
             where status is "defined", "missing", or the position type
         """
-        matrix = {}
+        matrix: Dict[str, Dict[str, str]] = {}
 
         for agent_name, agent in self.agents.items():
             matrix[agent_name] = {}
@@ -129,7 +129,7 @@ class SpecificationRegistry:
 
         return matrix
 
-    def get_completeness_summary(self) -> dict:
+    def get_completeness_summary(self) -> dict[str, Any]:
         """
         Get a summary of specification completeness.
 

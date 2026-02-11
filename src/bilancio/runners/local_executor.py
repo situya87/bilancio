@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Dict, Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from bilancio.runners.models import RunOptions, ExecutionResult
 from bilancio.storage.models import RunStatus
@@ -110,16 +110,16 @@ class LocalExecutor:
             execution_time_ms = int((time.time() - start_time) * 1000)
 
             # Still record what artifacts exist
-            artifacts: Dict[str, str] = {}
+            fail_artifacts: Dict[str, str] = {}
             if scenario_path.exists():
-                artifacts["scenario_yaml"] = "scenario.yaml"
+                fail_artifacts["scenario_yaml"] = "scenario.yaml"
 
             return ExecutionResult(
                 run_id=run_id,
                 status=RunStatus.FAILED,
                 storage_type="local",
                 storage_base=str(output_dir.resolve()),
-                artifacts=artifacts,
+                artifacts=fail_artifacts,
                 error=str(e),
                 execution_time_ms=execution_time_ms,
             )

@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bilancio.engines.system import System
+    from bilancio.engines.dealer_integration import DealerSubsystem
 
 from bilancio.core.ids import AgentId, InstrId
 from bilancio.domain.agent import AgentKind

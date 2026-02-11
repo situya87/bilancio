@@ -1,6 +1,6 @@
 """Pydantic models for Bilancio scenario configuration."""
 
-from typing import Literal, Optional, Union, List, Dict, Any, Annotated
+from typing import Literal, Optional, Union, List, Dict, Any, Annotated, Self
 from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -34,7 +34,7 @@ class MintReserves(BaseModel):
     
     @field_validator("amount")
     @classmethod
-    def amount_positive(cls, v):
+    def amount_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Amount must be positive")
         return v
@@ -49,10 +49,10 @@ class MintCash(BaseModel):
         None,
         description="Optional alias to reference the created cash contract later"
     )
-    
+
     @field_validator("amount")
     @classmethod
-    def amount_positive(cls, v):
+    def amount_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Amount must be positive")
         return v
@@ -64,10 +64,10 @@ class TransferReserves(BaseModel):
     from_bank: str = Field(..., description="Source bank ID")
     to_bank: str = Field(..., description="Target bank ID")
     amount: Decimal = Field(..., description="Amount to transfer")
-    
+
     @field_validator("amount")
     @classmethod
-    def amount_positive(cls, v):
+    def amount_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Amount must be positive")
         return v
@@ -79,10 +79,10 @@ class TransferCash(BaseModel):
     from_agent: str = Field(..., description="Source agent ID")
     to_agent: str = Field(..., description="Target agent ID")
     amount: Decimal = Field(..., description="Amount to transfer")
-    
+
     @field_validator("amount")
     @classmethod
-    def amount_positive(cls, v):
+    def amount_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Amount must be positive")
         return v
@@ -94,10 +94,10 @@ class DepositCash(BaseModel):
     customer: str = Field(..., description="Customer agent ID")
     bank: str = Field(..., description="Bank ID")
     amount: Decimal = Field(..., description="Amount to deposit")
-    
+
     @field_validator("amount")
     @classmethod
-    def amount_positive(cls, v):
+    def amount_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Amount must be positive")
         return v
@@ -109,10 +109,10 @@ class WithdrawCash(BaseModel):
     customer: str = Field(..., description="Customer agent ID")
     bank: str = Field(..., description="Bank ID")
     amount: Decimal = Field(..., description="Amount to withdraw")
-    
+
     @field_validator("amount")
     @classmethod
-    def amount_positive(cls, v):
+    def amount_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Amount must be positive")
         return v
@@ -124,10 +124,10 @@ class ClientPayment(BaseModel):
     payer: str = Field(..., description="Payer agent ID")
     payee: str = Field(..., description="Payee agent ID")
     amount: Decimal = Field(..., description="Payment amount")
-    
+
     @field_validator("amount")
     @classmethod
-    def amount_positive(cls, v):
+    def amount_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Amount must be positive")
         return v
@@ -143,14 +143,14 @@ class CreateStock(BaseModel):
     
     @field_validator("quantity")
     @classmethod
-    def quantity_positive(cls, v):
+    def quantity_positive(cls, v: int) -> int:
         if v <= 0:
             raise ValueError("Quantity must be positive")
         return v
-    
+
     @field_validator("unit_price")
     @classmethod
-    def price_non_negative(cls, v):
+    def price_non_negative(cls, v: Decimal) -> Decimal:
         if v < 0:
             raise ValueError("Unit price cannot be negative")
         return v
@@ -163,10 +163,10 @@ class TransferStock(BaseModel):
     to_agent: str = Field(..., description="Target agent ID")
     sku: str = Field(..., description="Stock keeping unit identifier")
     quantity: int = Field(..., description="Quantity to transfer")
-    
+
     @field_validator("quantity")
     @classmethod
-    def quantity_positive(cls, v):
+    def quantity_positive(cls, v: int) -> int:
         if v <= 0:
             raise ValueError("Quantity must be positive")
         return v
@@ -188,21 +188,21 @@ class CreateDeliveryObligation(BaseModel):
     
     @field_validator("quantity")
     @classmethod
-    def quantity_positive(cls, v):
+    def quantity_positive(cls, v: int) -> int:
         if v <= 0:
             raise ValueError("Quantity must be positive")
         return v
-    
+
     @field_validator("unit_price")
     @classmethod
-    def price_non_negative(cls, v):
+    def price_non_negative(cls, v: Decimal) -> Decimal:
         if v < 0:
             raise ValueError("Unit price cannot be negative")
         return v
-    
+
     @field_validator("due_day")
     @classmethod
-    def due_day_non_negative(cls, v):
+    def due_day_non_negative(cls, v: int) -> int:
         if v < 0:
             raise ValueError("Due day cannot be negative")
         return v
@@ -226,14 +226,14 @@ class CreatePayable(BaseModel):
 
     @field_validator("amount")
     @classmethod
-    def amount_positive(cls, v):
+    def amount_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Amount must be positive")
         return v
 
     @field_validator("due_day")
     @classmethod
-    def due_day_non_negative(cls, v):
+    def due_day_non_negative(cls, v: int) -> int:
         if v < 0:
             raise ValueError("Due day cannot be negative")
         return v
@@ -253,13 +253,13 @@ class TransferClaim(BaseModel):
 
     @field_validator("to_agent")
     @classmethod
-    def non_empty_agent(cls, v):
+    def non_empty_agent(cls, v: str) -> str:
         if not v:
             raise ValueError("to_agent is required")
         return v
 
     @model_validator(mode="after")
-    def validate_reference(self):
+    def validate_reference(self) -> Self:
         if not self.contract_alias and not self.contract_id:
             raise ValueError("Either contract_alias or contract_id must be provided")
         return self
@@ -272,7 +272,7 @@ class ScheduledAction(BaseModel):
 
     @field_validator("day")
     @classmethod
-    def day_positive(cls, v):
+    def day_positive(cls, v: int) -> int:
         if v < 1:
             raise ValueError("Scheduled action day must be >= 1")
         return v
@@ -334,19 +334,19 @@ class RunConfig(BaseModel):
         False,
         description="Enable continuous rollover of settled payables (Plan 024)"
     )
-    show: ShowConfig = Field(default_factory=ShowConfig)
-    export: ExportConfig = Field(default_factory=ExportConfig)
+    show: ShowConfig = Field(default_factory=ShowConfig)  # type: ignore[arg-type]
+    export: ExportConfig = Field(default_factory=ExportConfig)  # type: ignore[arg-type]
 
     @field_validator("max_days")
     @classmethod
-    def max_days_positive(cls, v):
+    def max_days_positive(cls, v: int) -> int:
         if v <= 0:
             raise ValueError("Max days must be positive")
         return v
-    
+
     @field_validator("quiet_days")
     @classmethod
-    def quiet_days_non_negative(cls, v):
+    def quiet_days_non_negative(cls, v: int) -> int:
         if v < 0:
             raise ValueError("Quiet days cannot be negative")
         return v
@@ -361,27 +361,27 @@ class DealerBucketConfig(BaseModel):
 
     @field_validator("tau_min", "tau_max")
     @classmethod
-    def maturity_positive(cls, v):
+    def maturity_positive(cls, v: int) -> int:
         if v < 1:
             raise ValueError("Maturity bounds must be positive")
         return v
 
     @field_validator("M")
     @classmethod
-    def mid_price_positive(cls, v):
+    def mid_price_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Mid price M must be positive")
         return v
 
     @field_validator("O")
     @classmethod
-    def spread_positive(cls, v):
+    def spread_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("Spread O must be positive")
         return v
 
     @model_validator(mode="after")
-    def validate_maturity_range(self):
+    def validate_maturity_range(self) -> Self:
         if self.tau_min > self.tau_max:
             raise ValueError("tau_min must be <= tau_max")
         return self
@@ -394,14 +394,14 @@ class DealerOrderFlowConfig(BaseModel):
 
     @field_validator("pi_sell")
     @classmethod
-    def pi_sell_valid(cls, v):
+    def pi_sell_valid(cls, v: Decimal) -> Decimal:
         if not (0 <= v <= 1):
             raise ValueError("pi_sell must be between 0 and 1")
         return v
 
     @field_validator("N_max")
     @classmethod
-    def n_max_positive(cls, v):
+    def n_max_positive(cls, v: int) -> int:
         if v < 1:
             raise ValueError("N_max must be positive")
         return v
@@ -414,14 +414,14 @@ class DealerTraderPolicyConfig(BaseModel):
 
     @field_validator("horizon_H")
     @classmethod
-    def horizon_positive(cls, v):
+    def horizon_positive(cls, v: int) -> int:
         if v < 1:
             raise ValueError("horizon_H must be positive")
         return v
 
     @field_validator("buffer_B")
     @classmethod
-    def buffer_positive(cls, v):
+    def buffer_positive(cls, v: Decimal) -> Decimal:
         if v < 0:
             raise ValueError("buffer_B cannot be negative")
         return v
@@ -439,28 +439,28 @@ class RiskAssessmentConfig(BaseModel):
 
     @field_validator("lookback_window")
     @classmethod
-    def lookback_positive(cls, v):
+    def lookback_positive(cls, v: int) -> int:
         if v < 1:
             raise ValueError("lookback_window must be positive")
         return v
 
     @field_validator("smoothing_alpha")
     @classmethod
-    def smoothing_positive(cls, v):
+    def smoothing_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("smoothing_alpha must be positive")
         return v
 
     @field_validator("base_risk_premium", "urgency_sensitivity")
     @classmethod
-    def premium_valid(cls, v):
+    def premium_valid(cls, v: Decimal) -> Decimal:
         if v < 0:
             raise ValueError("Premium values cannot be negative")
         return v
 
     @field_validator("buy_premium_multiplier")
     @classmethod
-    def multiplier_positive(cls, v):
+    def multiplier_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("buy_premium_multiplier must be positive")
         return v
@@ -477,34 +477,34 @@ class DealerConfig(BaseModel):
     dealer_share: Decimal = Field(Decimal("0.25"), description="Fraction of system value for dealer capital")
     vbt_share: Decimal = Field(Decimal("0.50"), description="Fraction for VBT capital")
     order_flow: DealerOrderFlowConfig = Field(
-        default_factory=DealerOrderFlowConfig,
+        default_factory=DealerOrderFlowConfig,  # type: ignore[arg-type]
         description="Order flow arrival configuration"
     )
     trader_policy: DealerTraderPolicyConfig = Field(
-        default_factory=DealerTraderPolicyConfig,
+        default_factory=DealerTraderPolicyConfig,  # type: ignore[arg-type]
         description="Trader policy configuration"
     )
     risk_assessment: RiskAssessmentConfig = Field(
-        default_factory=RiskAssessmentConfig,
+        default_factory=RiskAssessmentConfig,  # type: ignore[arg-type]
         description="Risk assessment configuration for trader decisions"
     )
 
     @field_validator("ticket_size")
     @classmethod
-    def ticket_size_positive(cls, v):
+    def ticket_size_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("ticket_size must be positive")
         return v
 
     @field_validator("dealer_share", "vbt_share")
     @classmethod
-    def share_valid(cls, v):
+    def share_valid(cls, v: Decimal) -> Decimal:
         if not (0 <= v <= 1):
             raise ValueError("Share values must be between 0 and 1")
         return v
 
     @model_validator(mode="after")
-    def set_default_buckets(self):
+    def set_default_buckets(self) -> Self:
         if self.buckets is None:
             self.buckets = {
                 "short": DealerBucketConfig(
@@ -579,35 +579,35 @@ class BalancedDealerConfig(BaseModel):
 
     @field_validator("face_value")
     @classmethod
-    def face_value_positive(cls, v):
+    def face_value_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("face_value must be positive")
         return v
 
     @field_validator("outside_mid_ratio")
     @classmethod
-    def outside_mid_ratio_valid(cls, v):
+    def outside_mid_ratio_valid(cls, v: Decimal) -> Decimal:
         if not (Decimal("0") < v <= Decimal("1")):
             raise ValueError("outside_mid_ratio must be between 0 (exclusive) and 1 (inclusive)")
         return v
 
     @field_validator("big_entity_share")
     @classmethod
-    def big_entity_share_valid(cls, v):
+    def big_entity_share_valid(cls, v: Decimal) -> Decimal:
         if not (Decimal("0") <= v < Decimal("1")):
             raise ValueError("big_entity_share must be between 0 (inclusive) and 1 (exclusive)")
         return v
 
     @field_validator("vbt_share_per_bucket")
     @classmethod
-    def vbt_share_valid(cls, v):
+    def vbt_share_valid(cls, v: Decimal) -> Decimal:
         if not (Decimal("0") < v < Decimal("1")):
             raise ValueError("vbt_share_per_bucket must be between 0 and 1 (exclusive)")
         return v
 
     @field_validator("dealer_share_per_bucket")
     @classmethod
-    def dealer_share_valid(cls, v):
+    def dealer_share_valid(cls, v: Decimal) -> Decimal:
         if not (Decimal("0") < v < Decimal("1")):
             raise ValueError("dealer_share_per_bucket must be between 0 and 1 (exclusive)")
         return v
@@ -639,18 +639,18 @@ class ScenarioConfig(BaseModel):
         default_factory=list,
         description="Actions to execute during simulation (Phase B1) by day"
     )
-    run: RunConfig = Field(default_factory=RunConfig)
-    
+    run: RunConfig = Field(default_factory=RunConfig)  # type: ignore[arg-type]
+
     @field_validator("version")
     @classmethod
-    def version_supported(cls, v):
+    def version_supported(cls, v: int) -> int:
         if v != 1:
             raise ValueError(f"Unsupported configuration version: {v}")
         return v
-    
+
     @field_validator("agents")
     @classmethod
-    def agents_unique_ids(cls, v):
+    def agents_unique_ids(cls, v: List[AgentSpec]) -> List[AgentSpec]:
         ids = [agent.id for agent in v]
         if len(ids) != len(set(ids)):
             raise ValueError("Agent IDs must be unique")
@@ -674,7 +674,7 @@ class RingExplorerLiquidityAllocation(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_allocation(self):
+    def validate_allocation(self) -> Self:
         if self.mode == "single_at" and not self.agent:
             raise ValueError("liquidity.allocation.agent is required for single_at mode")
         if self.mode == "vector":
@@ -693,13 +693,13 @@ class RingExplorerLiquidityConfig(BaseModel):
         description="Total initial liquidity to seed",
     )
     allocation: RingExplorerLiquidityAllocation = Field(
-        default_factory=RingExplorerLiquidityAllocation,
+        default_factory=RingExplorerLiquidityAllocation,  # type: ignore[arg-type]
         description="Allocation strategy for initial liquidity",
     )
 
     @field_validator("total")
     @classmethod
-    def total_positive(cls, v):
+    def total_positive(cls, v: Optional[Decimal]) -> Optional[Decimal]:
         if v is not None and v <= 0:
             raise ValueError("liquidity.total must be positive when provided")
         return v
@@ -725,7 +725,7 @@ class RingExplorerInequalityConfig(BaseModel):
 
     @field_validator("concentration")
     @classmethod
-    def concentration_positive(cls, v):
+    def concentration_positive(cls, v: Decimal) -> Decimal:
         if v <= 0:
             raise ValueError("inequality.concentration must be positive")
         return v
@@ -758,15 +758,15 @@ class RingExplorerParamsModel(BaseModel):
     seed: int = Field(42, description="PRNG seed for reproducibility")
     kappa: Decimal = Field(..., gt=0, description="Debt-to-liquidity ratio target")
     liquidity: RingExplorerLiquidityConfig = Field(
-        default_factory=RingExplorerLiquidityConfig,
+        default_factory=RingExplorerLiquidityConfig,  # type: ignore[arg-type]
         description="Liquidity seeding controls"
     )
     inequality: RingExplorerInequalityConfig = Field(
-        default_factory=RingExplorerInequalityConfig,
+        default_factory=RingExplorerInequalityConfig,  # type: ignore[arg-type]
         description="Payable distribution controls"
     )
     maturity: RingExplorerMaturityConfig = Field(
-        default_factory=RingExplorerMaturityConfig,
+        default_factory=RingExplorerMaturityConfig,  # type: ignore[arg-type]
         description="Maturity misalignment controls"
     )
     currency: str = Field("USD", description="Currency label for descriptions")
@@ -804,13 +804,13 @@ class RingExplorerGeneratorConfig(BaseModel):
     name_prefix: str = Field(..., description="Human-readable prefix for scenario names")
     params: RingExplorerParamsModel = Field(..., description="Generator parameters")
     compile: GeneratorCompileConfig = Field(
-        default_factory=GeneratorCompileConfig,
+        default_factory=GeneratorCompileConfig,  # type: ignore[arg-type]
         description="Compiler output controls"
     )
 
     @field_validator("version")
     @classmethod
-    def version_supported(cls, v):
+    def version_supported(cls, v: int) -> int:
         if v != 1:
             raise ValueError(f"Unsupported generator version: {v}")
         return v

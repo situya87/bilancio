@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from bilancio.analysis.metrics_computer import MetricsComputer
@@ -1023,7 +1023,7 @@ class RingSweepRunner:
         except ValueError:
             return str(absolute)
 
-    def _artifact_loader_for_result(self, result: ExecutionResult):
+    def _artifact_loader_for_result(self, result: ExecutionResult) -> Any:
         if result.storage_type == "modal_volume":
             return ModalVolumeArtifactLoader(base_path=result.storage_base)
         return LocalArtifactLoader(base_path=Path(result.storage_base))

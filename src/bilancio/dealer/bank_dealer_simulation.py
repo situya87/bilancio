@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 import random
 from copy import deepcopy
+from typing import Any
 
 from bilancio.core.ids import AgentId, new_id
 
@@ -73,12 +74,12 @@ class BankDealerDaySnapshot:
     Extended from DaySnapshot to include bank states.
     """
     day: int
-    dealers: dict[str, dict]  # bucket_id -> dealer state dict
-    vbts: dict[str, dict]     # bucket_id -> VBT state dict
-    traders: dict[str, dict]  # agent_id -> bank-aware trader state dict
-    banks: dict[str, dict]    # bank_id -> bank state dict
-    tickets: dict[str, dict]  # ticket_id -> ticket dict
-    events: list[dict]        # Events for this day only
+    dealers: dict[str, dict[str, Any]]  # bucket_id -> dealer state dict
+    vbts: dict[str, dict[str, Any]]     # bucket_id -> VBT state dict
+    traders: dict[str, dict[str, Any]]  # agent_id -> bank-aware trader state dict
+    banks: dict[str, dict[str, Any]]    # bank_id -> bank state dict
+    tickets: dict[str, dict[str, Any]]  # ticket_id -> ticket dict
+    events: list[dict[str, Any]]        # Events for this day only
 
 
 class BankDealerSimulation:
@@ -336,13 +337,15 @@ class BankDealerSimulation:
         # Register tickets and assign buckets
         for ticket in tickets:
             self.all_tickets[ticket.id] = ticket
-            ticket.bucket_id = self._compute_bucket(ticket.remaining_tau)
+            computed_bucket = self._compute_bucket(ticket.remaining_tau)
 
-            if ticket.bucket_id is None:
+            if computed_bucket is None:
                 raise ValueError(
                     f"Ticket {ticket.id} has remaining_tau={ticket.remaining_tau} "
                     f"which does not fit any configured bucket."
                 )
+
+            ticket.bucket_id = computed_bucket
 
         # Allocate tickets (dealers, VBTs, traders)
         self._allocate_tickets(tickets)
@@ -781,8 +784,9 @@ class BankDealerSimulation:
 
         # Risk-based decisions
         asset_value = sum(
-            self.risk_assessor.expected_value(t, self.day)
-            for t in seller.tickets_owned
+            (self.risk_assessor.expected_value(t, self.day)
+            for t in seller.tickets_owned),
+            Decimal(0),
         )
         if not self.risk_assessor.should_sell(
             ticket=ticket,
@@ -795,8 +799,9 @@ class BankDealerSimulation:
             return False
 
         buyer_asset_value = sum(
-            self.risk_assessor.expected_value(t, self.day)
-            for t in buyer.tickets_owned
+            (self.risk_assessor.expected_value(t, self.day)
+            for t in buyer.tickets_owned),
+            Decimal(0),
         )
         if not self.risk_assessor.should_buy(
             ticket=ticket,
@@ -912,8 +917,9 @@ class BankDealerSimulation:
 
         # Risk-based sell decision
         asset_value = sum(
-            self.risk_assessor.expected_value(t, self.day)
-            for t in trader.tickets_owned
+            (self.risk_assessor.expected_value(t, self.day)
+            for t in trader.tickets_owned),
+            Decimal(0),
         )
         if not self.risk_assessor.should_sell(
             ticket=ticket,
@@ -995,8 +1001,9 @@ class BankDealerSimulation:
 
         # Risk-based buy check
         buyer_asset_value = sum(
-            self.risk_assessor.expected_value(t, self.day)
-            for t in trader.tickets_owned
+            (self.risk_assessor.expected_value(t, self.day)
+            for t in trader.tickets_owned),
+            Decimal(0),
         )
         if not self.risk_assessor.should_buy(
             ticket=result.ticket,
@@ -1088,7 +1095,8 @@ class BankDealerSimulation:
         """Select ticket to sell (shortest maturity first)."""
         if not trader.tickets_owned:
             return None
-        return min(trader.tickets_owned, key=lambda t: (t.remaining_tau, t.serial))
+        result: Ticket = min(trader.tickets_owned, key=lambda t: (t.remaining_tau, t.serial))
+        return result
 
     def _select_bucket_to_buy(
         self,
@@ -1142,7 +1150,7 @@ class BankDealerSimulation:
                     issuer.obligations.remove(ticket)
             return
 
-        total_due = sum(ticket.face for ticket in tickets)
+        total_due: Decimal = sum((ticket.face for ticket in tickets), Decimal(0))
 
         if total_due == 0:
             return
@@ -1443,7 +1451,7 @@ class BankDealerSimulation:
         )
         self.snapshots.append(snapshot)
 
-    def get_metrics(self) -> dict:
+    def get_metrics(self) -> dict[str, Any]:
         """
         Get summary metrics for the simulation.
 

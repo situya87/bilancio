@@ -23,7 +23,7 @@ from .utils import console, _as_decimal_list
 
 
 @click.group()
-def sweep():
+def sweep() -> None:
     """Experiment sweeps."""
     pass
 
@@ -62,7 +62,7 @@ def sweep():
 @click.option('--job-id', type=str, default=None, help='Job ID (auto-generated if not provided)')
 @click.pass_context
 def sweep_ring(
-    ctx,
+    ctx: click.Context,
     config: Optional[Path],
     out_dir: Optional[Path],
     cloud: bool,
@@ -94,7 +94,7 @@ def sweep_ring(
     name_prefix: str,
     default_handling: str,
     job_id: Optional[str],
-):
+) -> None:
     """Run the Kalecki ring experiment sweep."""
     sweep_config: Optional[RingSweepConfig] = None
     if config is not None:
@@ -135,13 +135,13 @@ def sweep_ring(
         if _using_default("grid"):
             grid = grid_cfg.enabled
         if grid_cfg.kappas and _using_default("kappas"):
-            kappas = grid_cfg.kappas
+            kappas = ",".join(str(k) for k in grid_cfg.kappas)
         if grid_cfg.concentrations and _using_default("concentrations"):
-            concentrations = grid_cfg.concentrations
+            concentrations = ",".join(str(c) for c in grid_cfg.concentrations)
         if grid_cfg.mus and _using_default("mus"):
-            mus = grid_cfg.mus
+            mus = ",".join(str(m) for m in grid_cfg.mus)
         if grid_cfg.monotonicities and _using_default("monotonicities"):
-            monotonicities = grid_cfg.monotonicities
+            monotonicities = ",".join(str(m) for m in grid_cfg.monotonicities)
 
     if sweep_config is not None and sweep_config.lhs is not None:
         lhs_cfg = sweep_config.lhs
@@ -181,9 +181,6 @@ def sweep_ring(
                 frontier_tolerance = float(frontier_cfg.tolerance)
             if frontier_cfg.max_iterations is not None and _using_default("frontier_iterations"):
                 frontier_iterations = frontier_cfg.max_iterations
-
-    if out_dir is not None and not isinstance(out_dir, Path):
-        out_dir = Path(out_dir)
 
     if out_dir is None:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -357,7 +354,7 @@ def sweep_comparison(
     liquidity_mode: str,
     liquidity_agent: Optional[str],
     name_prefix: str,
-):
+) -> None:
     """
     Run dealer comparison experiments.
 
@@ -690,7 +687,7 @@ def sweep_balanced(
 @click.option('--experiment', type=click.Path(exists=True, path_type=Path), required=True,
               help='Path to experiment directory (containing aggregate/comparison.csv)')
 @click.option('-v', '--verbose', is_flag=True, help='Enable verbose logging')
-def sweep_strategy_outcomes(experiment: Path, verbose: bool):
+def sweep_strategy_outcomes(experiment: Path, verbose: bool) -> None:
     """Analyze trading strategy outcomes across experiment runs.
 
     Reads repayment_events.csv files and computes per-strategy metrics:
@@ -723,7 +720,7 @@ def sweep_strategy_outcomes(experiment: Path, verbose: bool):
 @click.option('--experiment', type=click.Path(exists=True, path_type=Path), required=True,
               help='Path to experiment directory (containing aggregate/comparison.csv)')
 @click.option('-v', '--verbose', is_flag=True, help='Enable verbose logging')
-def sweep_dealer_usage(experiment: Path, verbose: bool):
+def sweep_dealer_usage(experiment: Path, verbose: bool) -> None:
     """Analyze dealer usage patterns across experiment runs.
 
     Reads trades.csv, inventory_timeseries.csv, system_state_timeseries.csv,

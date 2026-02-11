@@ -11,7 +11,7 @@ try:
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
-    RenderableType = Any
+    RenderableType = Any  # type: ignore[misc]
 
 
 def _format_currency(amount: int, show_sign: bool = False) -> str:
@@ -30,7 +30,7 @@ def _print(text: str, console: Optional['Console'] = None) -> None:
         print(text)
 
 
-def _format_agent(agent_id: str, system) -> str:
+def _format_agent(agent_id: str, system: Any) -> str:
     """Format agent as 'Name [ID]' if available.
 
     Args:

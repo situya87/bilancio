@@ -1,6 +1,6 @@
 """YAML loading utilities for Bilancio configuration."""
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from pathlib import Path
 from typing import Any, Dict
 from decimal import Decimal, InvalidOperation, DecimalException
@@ -24,7 +24,7 @@ from .models import (
 )
 
 
-def decimal_constructor(loader, node):
+def decimal_constructor(loader: Any, node: Any) -> Decimal:
     """Construct Decimal from YAML scalar."""
     value = loader.construct_scalar(node)
     return Decimal(value)
@@ -102,7 +102,7 @@ def preprocess_config(data: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Preprocessed configuration dictionary
     """
-    def convert_decimals(obj):
+    def convert_decimals(obj: Any) -> Any:
         """Recursively convert string decimals to Decimal objects."""
         if isinstance(obj, dict):
             return {k: convert_decimals(v) for k, v in obj.items()}
@@ -126,7 +126,7 @@ def preprocess_config(data: Dict[str, Any]) -> Dict[str, Any]:
         else:
             return obj
     
-    return convert_decimals(data)
+    return convert_decimals(data)  # type: ignore[no-any-return]
 
 
 def load_yaml(path: Path | str) -> ScenarioConfig:

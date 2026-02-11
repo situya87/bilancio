@@ -5,13 +5,13 @@ from typing import Dict, Any, Tuple, List
 
 class EventFormatterRegistry:
     """Registry for event formatters."""
-    
-    def __init__(self):
-        self._formatters = {}
-    
-    def register(self, event_kind: str):
+
+    def __init__(self) -> None:
+        self._formatters: Dict[str, Any] = {}
+
+    def register(self, event_kind: str) -> Any:
         """Decorator to register a formatter for an event kind."""
-        def decorator(func):
+        def decorator(func: Any) -> Any:
             self._formatters[event_kind] = func
             return func
         return decorator
@@ -20,9 +20,10 @@ class EventFormatterRegistry:
         """Format an event using the registered formatter."""
         kind = event.get("kind", "Unknown")
         formatter = self._formatters.get(kind)
-        
+
         if formatter:
-            return formatter(event)
+            result: Tuple[str, List[str], str] = formatter(event)
+            return result
         else:
             # Generic fallback for unknown events
             return self._format_generic(event)

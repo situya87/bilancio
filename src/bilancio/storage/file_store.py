@@ -6,7 +6,7 @@ import csv
 import json
 import re
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set, Union
 
 from .models import RunResult, RegistryEntry, RunArtifacts, RunStatus
 
@@ -164,7 +164,7 @@ class FileRegistryStore:
                     entries[row["run_id"]] = dict(row)
 
         # Build row from entry
-        row: Dict[str, str] = {
+        new_row: Dict[str, str] = {
             "run_id": entry.run_id,
             "experiment_id": entry.experiment_id,
             "status": entry.status.value,
@@ -173,21 +173,21 @@ class FileRegistryStore:
 
         # Add parameters, metrics, artifact paths
         for k, v in entry.parameters.items():
-            row[k] = str(v) if v is not None else ""
+            new_row[k] = str(v) if v is not None else ""
             if k not in fieldnames:
                 fieldnames.append(k)
 
         for k, v in entry.metrics.items():
-            row[k] = str(v) if v is not None else ""
+            new_row[k] = str(v) if v is not None else ""
             if k not in fieldnames:
                 fieldnames.append(k)
 
         for k, v in entry.artifact_paths.items():
-            row[k] = str(v) if v is not None else ""
+            new_row[k] = str(v) if v is not None else ""
             if k not in fieldnames:
                 fieldnames.append(k)
 
-        entries[entry.run_id] = row
+        entries[entry.run_id] = new_row
 
         # Write back
         with open(registry_path, "w", newline="") as f:
@@ -223,7 +223,7 @@ class FileRegistryStore:
         self,
         experiment_id: str,
         key_fields: Optional[List[str]] = None
-    ) -> set:
+    ) -> Set[Any]:
         """Get completed parameter keys for resumption."""
         if key_fields is None:
             key_fields = ["seed", "kappa", "concentration"]
@@ -237,7 +237,7 @@ class FileRegistryStore:
             reader = csv.DictReader(f)
             for row in reader:
                 if row.get("status") == "completed":
-                    key_values = []
+                    key_values: List[Union[int, float, str]] = []
                     for field in key_fields:
                         val = row.get(field, "")
                         # Try to parse as number for consistent hashing

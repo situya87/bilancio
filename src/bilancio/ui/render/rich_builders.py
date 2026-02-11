@@ -4,28 +4,21 @@ from __future__ import annotations
 
 from typing import List, Dict, Any, Union
 
-try:
-    from rich.table import Table
-    from rich.columns import Columns
-    from rich.panel import Panel
-    from rich.text import Text
-    from rich.tree import Tree
-    from rich import box
-    from rich.console import RenderableType
-    RICH_AVAILABLE = True
-except ImportError:
-    RICH_AVAILABLE = False
-    # Fallback types for type hints
-    Table = Any
-    Columns = Any
-    Panel = Any
-    RenderableType = Any
+from rich.table import Table
+from rich.columns import Columns
+from rich.panel import Panel
+from rich.text import Text
+from rich.tree import Tree
+from rich import box
+from rich.console import RenderableType
+
+from decimal import Decimal
 
 from .models import AgentBalanceView, DayEventsView, DaySummaryView, BalanceItemView, EventView
 from .formatters import registry as event_formatter_registry
 
 
-def _format_currency(amount: Union[int, float], show_sign: bool = False) -> str:
+def _format_currency(amount: Union[int, float, Decimal], show_sign: bool = False) -> str:
     """Format an amount as currency."""
     formatted = f"{amount:,}"
     if show_sign and amount > 0:
@@ -42,9 +35,6 @@ def build_agent_balance_table(balance_view: AgentBalanceView) -> Table:
     Returns:
         Rich Table renderable
     """
-    if not RICH_AVAILABLE:
-        raise RuntimeError("Rich library not available")
-    
     # Create title with agent info
     if balance_view.agent_name and balance_view.agent_name != balance_view.agent_id:
         title = f"{balance_view.agent_name} [{balance_view.agent_id}] ({balance_view.agent_kind})"
@@ -109,9 +99,6 @@ def build_multiple_agent_balances(balances: List[AgentBalanceView]) -> Columns:
     Returns:
         Rich Columns renderable
     """
-    if not RICH_AVAILABLE:
-        raise RuntimeError("Rich library not available")
-    
     tables = [build_agent_balance_table(balance) for balance in balances]
     return Columns(tables, equal=True, expand=True)
 
@@ -125,9 +112,6 @@ def build_events_panel(day_events_view: DayEventsView) -> Panel:
     Returns:
         Rich Panel renderable
     """
-    if not RICH_AVAILABLE:
-        raise RuntimeError("Rich library not available")
-    
     if not day_events_view.phases:
         return Panel(
             Text("No events occurred on this day.", style="dim"),
@@ -173,52 +157,46 @@ def build_events_list(day_events_view: DayEventsView) -> List[RenderableType]:
     Returns:
         List of Rich renderables
     """
-    if not RICH_AVAILABLE:
-        raise RuntimeError("Rich library not available")
-    
-    renderables = []
-    
+    renderables: List[RenderableType] = []
+
     if not day_events_view.phases:
         renderables.append(Text("No events occurred on this day.", style="dim"))
         return renderables
-    
+
     for phase, events in day_events_view.phases.items():
         if not events:
             continue
-            
+
         # Phase header
         renderables.append(Text(f"📍 {phase}", style="bold blue"))
-        
+
         # Events in this phase
         for event in events:
             event_text = Text()
             event_text.append(f"  {event.icon} ", style="")
             event_text.append(event.title, style="bold")
             renderables.append(event_text)
-            
+
             # Event details
             for line in event.lines:
                 renderables.append(Text(f"    {line}", style="dim"))
-        
+
         # Add spacing between phases
         renderables.append(Text(""))
-    
+
     return renderables
 
 
 def build_day_summary(view: DaySummaryView) -> List[RenderableType]:
     """Build a list of Rich renderables for a complete day summary.
-    
+
     Args:
         view: Day summary view model
-        
+
     Returns:
         List of Rich renderables
     """
-    if not RICH_AVAILABLE:
-        raise RuntimeError("Rich library not available")
-    
-    renderables = []
+    renderables: List[RenderableType] = []
     
     # Day header
     renderables.append(Panel(

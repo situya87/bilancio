@@ -1,6 +1,13 @@
-"""Apply configuration to a Bilancio system."""
+"""Apply configuration to a Bilancio system.
 
-from typing import Dict, Any
+All union-attr errors in this module come from ``parse_action`` returning
+``Action`` (a Union of 12 Pydantic models).  The dispatcher already guards
+each branch with ``action.action == "…"`` so the attribute accesses are safe
+at runtime; the directive below silences mypy for this single error code.
+"""
+# mypy: disable-error-code="union-attr"
+
+from typing import Any, Dict
 from decimal import Decimal
 
 from bilancio.engines.system import System
@@ -82,40 +89,40 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
         if action_type == "mint_reserves":
             instr_id = system.mint_reserves(
                 to_bank_id=action.to,
-                amount=action.amount,
+                amount=int(action.amount),
                 alias=getattr(action, 'alias', None)
             )
             # optional alias capture
-            if getattr(action, 'alias', None):
-                alias = action.alias
-                if alias in system.state.aliases:
-                    raise ValueError(f"Alias already exists: {alias}")
-                system.state.aliases[alias] = instr_id
-            
+            _alias: str | None = getattr(action, 'alias', None)
+            if _alias is not None:
+                if _alias in system.state.aliases:
+                    raise ValueError(f"Alias already exists: {_alias}")
+                system.state.aliases[_alias] = instr_id
+
         elif action_type == "mint_cash":
             instr_id = system.mint_cash(
                 to_agent_id=action.to,
-                amount=action.amount,
+                amount=int(action.amount),
                 alias=getattr(action, 'alias', None)
             )
-            if getattr(action, 'alias', None):
-                alias = action.alias
-                if alias in system.state.aliases:
-                    raise ValueError(f"Alias already exists: {alias}")
-                system.state.aliases[alias] = instr_id
-            
+            _alias = getattr(action, 'alias', None)
+            if _alias is not None:
+                if _alias in system.state.aliases:
+                    raise ValueError(f"Alias already exists: {_alias}")
+                system.state.aliases[_alias] = instr_id
+
         elif action_type == "transfer_reserves":
             system.transfer_reserves(
                 from_bank_id=action.from_bank,
                 to_bank_id=action.to_bank,
-                amount=action.amount
+                amount=int(action.amount)
             )
             
         elif action_type == "transfer_cash":
             system.transfer_cash(
                 from_agent_id=action.from_agent,
                 to_agent_id=action.to_agent,
-                amount=action.amount
+                amount=int(action.amount)
             )
             
         elif action_type == "deposit_cash":
@@ -123,7 +130,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 system=system,
                 customer_id=action.customer,
                 bank_id=action.bank,
-                amount=action.amount
+                amount=int(action.amount)
             )
             
         elif action_type == "withdraw_cash":
@@ -131,7 +138,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 system=system,
                 customer_id=action.customer,
                 bank_id=action.bank,
-                amount=action.amount
+                amount=int(action.amount)
             )
             
         elif action_type == "client_payment":
@@ -162,7 +169,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 payer_bank=payer_bank,
                 payee_id=action.payee,
                 payee_bank=payee_bank,
-                amount=action.amount
+                amount=int(action.amount)
             )
             
         elif action_type == "create_stock":
@@ -203,12 +210,12 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 due_day=action.due_day,
                 alias=getattr(action, 'alias', None)
             )
-            if getattr(action, 'alias', None):
-                alias = action.alias
-                if alias in system.state.aliases:
-                    raise ValueError(f"Alias already exists: {alias}")
-                system.state.aliases[alias] = instr_id
-            
+            _alias = getattr(action, 'alias', None)
+            if _alias is not None:
+                if _alias in system.state.aliases:
+                    raise ValueError(f"Alias already exists: {_alias}")
+                system.state.aliases[_alias] = instr_id
+
         elif action_type == "create_payable":
             # Create a Payable instrument
             # Payable uses asset_holder_id (creditor) and liability_issuer_id (debtor)
@@ -233,11 +240,11 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
             )
             system.add_contract(payable)
             # optional alias capture
-            if getattr(action, 'alias', None):
-                alias = action.alias
-                if alias in system.state.aliases:
-                    raise ValueError(f"Alias already exists: {alias}")
-                system.state.aliases[alias] = payable.id
+            _alias = getattr(action, 'alias', None)
+            if _alias is not None:
+                if _alias in system.state.aliases:
+                    raise ValueError(f"Alias already exists: {_alias}")
+                system.state.aliases[_alias] = payable.id
 
             # Log the event
             system.log("PayableCreated",
@@ -301,7 +308,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
         raise ValueError(f"Failed to apply {action_type}: {e}")
 
 
-def _collect_alias_from_action(action_model) -> str | None:
+def _collect_alias_from_action(action_model: object) -> str | None:
     return getattr(action_model, 'alias', None)
 
 
@@ -326,7 +333,7 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
             alias_set.add(alias)
 
     # 2) Group scheduled by day preserving order
-    by_day: dict[int, list] = {}
+    by_day: dict[int, list[Dict[str, Any]]] = {}
     for sa in getattr(config, 'scheduled_actions', []) or []:
         by_day.setdefault(sa.day, []).append(sa.action)
 

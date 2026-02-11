@@ -11,6 +11,7 @@ from typing import Dict, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bilancio.engines.system import System
+    from bilancio.engines.dealer_integration import DealerSubsystem
 
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.dealer.models import (

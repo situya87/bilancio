@@ -23,7 +23,7 @@ def display_events_tables_by_phase_renderables(events: List[Dict[str, Any]], day
         return _build_single_setup_table(events, day)
 
     # Group by phase markers in original order
-    buckets = {"A": [], "B": [], "C": []}
+    buckets: Dict[str, List[Dict[str, Any]]] = {"A": [], "B": [], "C": []}
     current = "A"
     for e in events:
         kind = e.get("kind")
@@ -35,7 +35,7 @@ def display_events_tables_by_phase_renderables(events: List[Dict[str, Any]], day
             current = "C"; continue
         buckets[current].append(e)
 
-    def build_table(phase: str, rows: List[Dict[str, Any]]):
+    def build_table(phase: str, rows: List[Dict[str, Any]]) -> RenderableType:
         title_parts = {
             "A": "Phase A — Start of day",
             "B": "Phase B — Settlement",

@@ -1,7 +1,10 @@
 """Modal app for triggering sweeps from the web dashboard."""
+from __future__ import annotations
+
 import modal
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 # Create Modal app
 app = modal.App("bilancio-sweep-trigger")
@@ -19,7 +22,7 @@ image = (
     cpu=2,
     memory=4096,
 )
-def run_corrected_risk_sweep():
+def run_corrected_risk_sweep() -> dict[str, Any]:
     """Run the corrected κ sweep with risk-aware traders.
 
     This function can be triggered from the Modal dashboard.
@@ -102,7 +105,7 @@ def run_corrected_risk_sweep():
 
 
 @app.local_entrypoint()
-def main():
+def main() -> None:
     """Deploy and run the sweep."""
     result = run_corrected_risk_sweep.remote()
     print(f"\nResult: {result}")

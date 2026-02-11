@@ -604,7 +604,7 @@ class RunMetrics:
 
     def total_dealer_pnl(self) -> Decimal:
         """Total P&L across all buckets."""
-        return sum(self.dealer_pnl_by_bucket().values())
+        return sum(self.dealer_pnl_by_bucket().values(), Decimal(0))
 
     def total_dealer_return(self) -> Decimal:
         """
@@ -681,10 +681,10 @@ class RunMetrics:
                     returns_by_trader[outcome.purchaser_id].append(r_tau)
 
         # Compute mean return per trader
-        trader_returns = {}
+        trader_returns: Dict[str, Decimal] = {}
         for trader_id, returns in returns_by_trader.items():
             if returns:
-                trader_returns[trader_id] = sum(returns) / len(returns)
+                trader_returns[trader_id] = sum(returns, Decimal(0)) / len(returns)
             else:
                 trader_returns[trader_id] = Decimal(0)
 
@@ -694,7 +694,7 @@ class RunMetrics:
         """Mean return across all traders who bought from dealer."""
         returns = list(self.trader_returns().values())
         if returns:
-            return sum(returns) / len(returns)
+            return sum(returns, Decimal(0)) / len(returns)
         return Decimal(0)
 
     def fraction_profitable_traders(self) -> Decimal:
@@ -764,7 +764,7 @@ class RunMetrics:
         """Mean safety margin at default time."""
         margins = self.margin_at_default_distribution()
         if margins:
-            return sum(margins) / len(margins)
+            return sum(margins, Decimal(0)) / len(margins)
         return None
 
     # =========================================================================
@@ -897,7 +897,7 @@ class RunMetrics:
             # Repayment priority (8.4)
             "unsafe_buy_count": self.unsafe_buy_count(),
             "fraction_unsafe_buys": float(self.fraction_unsafe_buys()),
-            "mean_margin_at_default": float(self.mean_margin_at_default()) if self.mean_margin_at_default() is not None else None,
+            "mean_margin_at_default": (lambda v: float(v) if v is not None else None)(self.mean_margin_at_default()),
 
             # Trade counts
             "total_trades": len(self.trades),
@@ -1125,9 +1125,9 @@ class RunMetrics:
 
 def compute_safety_margin(
     cash: Decimal,
-    tickets_held: list,  # List of Ticket objects
-    obligations: list,   # List of Ticket objects (where trader is issuer)
-    dealers: dict,       # bucket_id -> DealerState
+    tickets_held: List[Any],  # List of Ticket objects
+    obligations: List[Any],   # List of Ticket objects (where trader is issuer)
+    dealers: Dict[str, Any],  # bucket_id -> DealerState
     ticket_size: Decimal
 ) -> Decimal:
     """
@@ -1162,14 +1162,14 @@ def compute_safety_margin(
             a_i += ticket.face
 
     # D_i(t): Sum of remaining obligations
-    d_i = sum(ticket.face for ticket in obligations)
+    d_i: Decimal = sum((ticket.face for ticket in obligations), Decimal(0))
 
     return a_i - d_i
 
 
 def compute_saleable_value(
-    tickets_held: list,
-    dealers: dict,
+    tickets_held: List[Any],
+    dealers: Dict[str, Any],
 ) -> Decimal:
     """
     Compute total saleable value of tickets at dealer bid prices.

@@ -6,36 +6,38 @@ Includes existing financial placeholders (NPV/IRR) kept intact for tests,
 plus new metrics used by the Kalecki ring baseline analysis.
 """
 
+from typing import Any
+
 
 # TODO: Import CashFlow and Money from appropriate modules once defined
 # from bilancio.domain.instruments import CashFlow
 # from bilancio.core.money import Money
 
 
-def calculate_npv(flows: list["CashFlow"], rate: float) -> "Money":
+def calculate_npv(flows: list[Any], rate: float) -> Any:
     """Calculate Net Present Value of cash flows.
-    
+
     Args:
         flows: List of cash flows to analyze
         rate: Discount rate to use for NPV calculation
-        
+
     Returns:
         The net present value as a Money object
-        
+
     TODO: Implement NPV calculation logic
     """
     raise NotImplementedError("NPV calculation not yet implemented")
 
 
-def calculate_irr(flows: list["CashFlow"]) -> float:
+def calculate_irr(flows: list[Any]) -> float:
     """Calculate Internal Rate of Return for cash flows.
-    
+
     Args:
         flows: List of cash flows to analyze
-        
+
     Returns:
         The internal rate of return as a float
-        
+
     TODO: Implement IRR calculation logic
     """
     raise NotImplementedError("IRR calculation not yet implemented")
@@ -52,17 +54,17 @@ from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple
 
 
 # Types
-Event = dict
+Event = dict[str, Any]
 AgentId = str
 
 
-def dues_for_day(events: Iterable[Event], t: int) -> List[dict]:
+def dues_for_day(events: Iterable[Event], t: int) -> List[dict[str, Any]]:
     """Return dues maturing on day t from creation events.
 
     We look for PayableCreated (or similarly named) events that carry a due_day.
     Output items minimally include: debtor, creditor, amount, due_day, and ids if present.
     """
-    dues: List[dict] = []
+    dues: List[dict[str, Any]] = []
     for e in events:
         kind = e.get("kind")
         if kind == "PayableCreated" and int(e.get("due_day", -1)) == int(t):
@@ -71,7 +73,7 @@ def dues_for_day(events: Iterable[Event], t: int) -> List[dict]:
                     "debtor": e.get("debtor") or e.get("from"),
                     "creditor": e.get("creditor") or e.get("to"),
                     "amount": Decimal(e.get("amount", 0)),
-                    "due_day": int(e.get("due_day")),
+                    "due_day": int(e.get("due_day")),  # type: ignore[arg-type]
                     "pid": e.get("payable_id") or e.get("pid"),
                     "alias": e.get("alias"),
                 }
@@ -79,7 +81,7 @@ def dues_for_day(events: Iterable[Event], t: int) -> List[dict]:
     return dues
 
 
-def net_vectors(dues: Iterable[dict]) -> Dict[AgentId, Dict[str, Decimal]]:
+def net_vectors(dues: Iterable[dict[str, Any]]) -> Dict[AgentId, Dict[str, Decimal]]:
     """Compute F (outflows due), I (inflows due), and n=I-F per agent.
 
     Returns mapping: agent -> {"F": Decimal, "I": Decimal, "n": Decimal}
@@ -114,7 +116,7 @@ def raw_minimum_liquidity(nets: Dict[AgentId, Dict[str, Decimal]]) -> Decimal:
 
 
 def size_and_bunching(
-    dues: Iterable[dict], bin_fn: Optional[Callable[[dict], str]] = None
+    dues: Iterable[dict[str, Any]], bin_fn: Optional[Callable[[dict[str, Any]], str]] = None
 ) -> Tuple[Decimal, Decimal]:
     """Return (S_t, BI_t). If no bin_fn, BI_t=0.
 
@@ -143,7 +145,7 @@ def size_and_bunching(
     return S_t, sd / m
 
 
-def phi_delta(events: Iterable[Event], dues: Iterable[dict], t: int) -> Tuple[Optional[Decimal], Optional[Decimal]]:
+def phi_delta(events: Iterable[Event], dues: Iterable[dict[str, Any]], t: int) -> Tuple[Optional[Decimal], Optional[Decimal]]:
     """Compute on-time settlement ratio phi_t and delta_t = 1 - phi_t.
 
     Numerator: settled events with day==t and original due_day==t.
@@ -184,7 +186,7 @@ def phi_delta(events: Iterable[Event], dues: Iterable[dict], t: int) -> Tuple[Op
 
 def replay_intraday_peak(
     events: Iterable[Event], t: int
-) -> Tuple[Decimal, List[dict], Decimal]:
+) -> Tuple[Decimal, List[dict[str, Any]], Decimal]:
     """Replay day-t PayableSettled events in order to compute RTGS peak.
 
     Returns (Mpeak_t, steps_table, gross_settled_t)
@@ -193,7 +195,7 @@ def replay_intraday_peak(
     Delta: Dict[AgentId, Decimal] = defaultdict(lambda: Decimal("0"))
     gross = Decimal("0")
     peak = Decimal("0")
-    steps: List[dict] = []
+    steps: List[dict[str, Any]] = []
     step_idx = 0
 
     for e in events:
@@ -212,7 +214,7 @@ def replay_intraday_peak(
         if payee:
             Delta[payee] -= amount
         gross += amount
-        P = sum((x if x > 0 else Decimal("0")) for x in Delta.values())
+        P = sum((x if x > 0 else Decimal("0")) for x in Delta.values()) or Decimal("0")
         if P > peak:
             peak = P
         step_idx += 1
@@ -257,7 +259,7 @@ def debtor_shortfall_shares(
     return {a: (val / denom if denom != 0 else None) for a, val in short.items()}
 
 
-def start_of_day_money(bal_rows: List[dict], t: int) -> Decimal:
+def start_of_day_money(bal_rows: List[dict[str, Any]], t: int) -> Decimal:
     """Sum system means-of-payment at start of day t.
 
     Since the current CSV is a snapshot (no day column), for baseline we use the
@@ -267,7 +269,7 @@ def start_of_day_money(bal_rows: List[dict], t: int) -> Decimal:
     For closed systems without injections/withdrawals across the day, this equals
     the start-of-day supply. This matches the Kalecki ring baseline.
     """
-    def _get_decimal(row, key: str) -> Decimal:
+    def _get_decimal(row: dict[str, Any], key: str) -> Decimal:
         val = row.get(key)
         if val in (None, "", "None"):
             return Decimal("0")
@@ -365,7 +367,7 @@ def cascade_fraction(events: Iterable[Event]) -> Optional[Decimal]:
 
     # 1. Build obligation graph: creditor -> set of debtors
     #    (who owes money to whom)
-    creditor_to_debtors: Dict[str, set] = defaultdict(set)
+    creditor_to_debtors: Dict[str, set[str]] = defaultdict(set)
     for e in events_list:
         if e.get("kind") == "PayableCreated":
             debtor = e.get("debtor") or e.get("from")

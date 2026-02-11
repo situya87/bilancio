@@ -40,7 +40,7 @@ class ModalVolumeArtifactLoader:
         self.volume_name = volume_name
         self.base_path = base_path
         self._cache_dir = cache_dir
-        self._temp_dir: Optional[tempfile.TemporaryDirectory] = None
+        self._temp_dir: Optional[tempfile.TemporaryDirectory[str]] = None
 
     @property
     def cache_dir(self) -> Path:
@@ -158,7 +158,7 @@ class ModalVolumeArtifactLoader:
             shutil.rmtree(self._cache_dir)
             self._cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup temporary directory on deletion."""
         if self._temp_dir is not None:
             self._temp_dir.cleanup()

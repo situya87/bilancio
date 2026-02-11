@@ -6,9 +6,9 @@ specifications are properly defined before code is written.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from .models import AgentSpec, InstrumentSpec, BalanceSheetPosition
+from .models import AgentSpec, InstrumentSpec, BalanceSheetPosition, InstrumentRelation, AgentRelation
 from .registry import SpecificationRegistry
 
 
@@ -28,16 +28,16 @@ class ValidationResult:
     errors: list[ValidationError] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
-    def add_error(self, category: str, entity: str, field: str, message: str):
+    def add_error(self, category: str, entity: str, field: str, message: str) -> None:
         """Add a validation error."""
         self.errors.append(ValidationError(category, entity, field, message))
         self.is_valid = False
 
-    def add_warning(self, message: str):
+    def add_warning(self, message: str) -> None:
         """Add a warning (doesn't affect validity)."""
         self.warnings.append(message)
 
-    def merge(self, other: "ValidationResult"):
+    def merge(self, other: "ValidationResult") -> None:
         """Merge another validation result into this one."""
         self.errors.extend(other.errors)
         self.warnings.extend(other.warnings)
@@ -80,6 +80,7 @@ def validate_agent_completeness(
         else:
             # 3. Check relation is internally consistent
             relation = agent.get_relation(instrument_name)
+            assert relation is not None
             is_complete, errors = relation.is_complete()
             for error in errors:
                 result.add_error(
@@ -161,6 +162,7 @@ def validate_instrument_completeness(
         else:
             # 3. Check relation is internally consistent
             relation = instrument.get_relation(agent_name)
+            assert relation is not None
             is_complete, errors = relation.is_complete()
             for error in errors:
                 result.add_error(
@@ -283,7 +285,7 @@ def validate_all_relationships(registry: SpecificationRegistry) -> ValidationRes
 
 def generate_stub_relations(
     registry: SpecificationRegistry,
-) -> dict[str, list]:
+) -> dict[str, list[Any]]:
     """
     Generate stub relations for missing agent-instrument pairs.
 
@@ -313,13 +315,13 @@ def generate_stub_relations(
     for instrument_name, instrument in registry.instruments.items():
         for agent_name in registry.list_agents():
             if not instrument.has_relation(agent_name):
-                stub = AgentRelation(
+                agent_stub = AgentRelation(
                     agent_name=agent_name,
                     position=BalanceSheetPosition.NOT_APPLICABLE,
                     can_issue=False,
                     can_hold=False,
                 )
-                instrument_stubs.append((instrument_name, agent_name, stub))
+                instrument_stubs.append((instrument_name, agent_name, agent_stub))
 
     return {
         "agent_stubs": agent_stubs,

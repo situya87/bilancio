@@ -31,7 +31,7 @@ from bilancio.analysis.metrics import (
 )
 
 
-def _to_json(val: Any):
+def _to_json(val: Any) -> Any:
     if isinstance(val, Decimal):
         # avoid lossy float conversion; write as number if integer, else string
         n = val.normalize()
@@ -60,7 +60,7 @@ def write_day_metrics_csv(path: Path | str, rows: List[Dict[str, Any]]) -> None:
         writer = csv.DictWriter(f, fieldnames=keys)
         writer.writeheader()
         for r in rows:
-            row = {}
+            row: Dict[str, Any] = {}
             for k in keys:
                 v = r.get(k)
                 if isinstance(v, Decimal):
@@ -175,9 +175,9 @@ def compute_day_metrics(
             "intraday": [],
         }
 
-    metrics_rows: List[dict] = []
-    ds_rows: List[dict] = []
-    intraday_rows: List[dict] = []
+    metrics_rows: List[Dict[str, Any]] = []
+    ds_rows: List[Dict[str, Any]] = []
+    intraday_rows: List[Dict[str, Any]] = []
 
     for t in sorted(set(int(d) for d in day_list)):
         dues = dues_for_day(events, t)
@@ -195,7 +195,7 @@ def compute_day_metrics(
         M_t = None
         G_t = None
         if balances_rows is not None:
-            M_t = start_of_day_money(balances_rows, t)
+            M_t = start_of_day_money(list(balances_rows), t)
             G_t = liquidity_gap(Mbar_t, M_t)
 
         alpha_t = alpha_fn(Mbar_t, S_t) if S_t is not None else None
@@ -240,7 +240,7 @@ def compute_day_metrics(
     }
 
 
-def summarize_day_metrics(day_metrics: Sequence[Dict[str, Any]]) -> Dict[str, Optional[Decimal]]:
+def summarize_day_metrics(day_metrics: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     """Summarize a day metrics table into aggregate indicators."""
     S_total = Decimal("0")
     phi_weighted = Decimal("0")
@@ -333,7 +333,7 @@ def write_metrics_html(
     p.parent.mkdir(parents=True, exist_ok=True)
 
     # Aggregate summary across days
-    def _dec(x):
+    def _dec(x: Any) -> Decimal:
         return x if isinstance(x, Decimal) else Decimal(str(x)) if x is not None else Decimal("0")
 
     S_total = sum((_dec(r.get("S_t")) for r in day_metrics), start=Decimal("0"))
@@ -369,9 +369,9 @@ def write_metrics_html(
         l, r, t, b = 35, 10, 10, 25
         w = width - l - r
         h = height - t - b
-        def sx(s):
+        def sx(s: int) -> float:
             return l + (0 if max_step <= 1 else (s - 1) * (w / (max_step - 1)))
-        def sy(v):
+        def sy(v: float) -> float:
             return t + (0 if max_val <= 0 else h - (v * h / max_val))
         pts = " ".join(f"{sx(s):.1f},{sy(v):.1f}" for s, v in zip(steps, vals))
         # Axes ticks (simple)
@@ -396,7 +396,7 @@ def write_metrics_html(
     html_title = title or "Bilancio Analytics Report"
     html_sub = subtitle or ""
 
-    def _row(k, v):
+    def _row(k: str, v: Any) -> str:
         return f"<tr><th scope=\"row\">{k}</th><td>{v}</td></tr>"
 
     # Build day table
@@ -434,10 +434,10 @@ def write_metrics_html(
         agents = sorted({str(r.get("agent")) for r in rows})
         shares = {str(r.get("agent")): r.get("DS_t") for r in rows}
         ths = "".join(f"<th>{a}</th>" for a in agents)
-        tds = "".join(f"<td>{_fmt_num(shares.get(a))}</td>" for a in agents)
+        ds_tds = "".join(f"<td>{_fmt_num(shares.get(a))}</td>" for a in agents)
         ds_sections.append(
             f"<h4>Day {d}</h4><table class=\"grid\"><thead><tr><th>Agent</th>{ths}</tr></thead>"
-            f"<tbody><tr><th>DS_t</th>{tds}</tr></tbody></table>"
+            f"<tbody><tr><th>DS_t</th>{ds_tds}</tr></tbody></table>"
         )
 
     # Intraday SVGs per day
@@ -693,11 +693,9 @@ def render_dashboard(results_csv: Path | str, dashboard_html: Path | str) -> Non
         rows = list(reader)
 
     total_runs = len(rows)
-    phi_values = [_decimal_or_none(r.get("phi_total")) for r in rows]
-    phi_values = [v for v in phi_values if v is not None]
-    delta_values = [_decimal_or_none(r.get("delta_total")) for r in rows]
-    delta_values = [v for v in delta_values if v is not None]
-    max_g_values = [_decimal_or_none(r.get("max_G_t")) for r in rows if r.get("max_G_t")]
+    phi_values: List[Decimal] = [v for v in (_decimal_or_none(r.get("phi_total")) for r in rows) if v is not None]
+    delta_values: List[Decimal] = [v for v in (_decimal_or_none(r.get("delta_total")) for r in rows) if v is not None]
+    max_g_values: List[Decimal] = [v for v in (_decimal_or_none(r.get("max_G_t")) for r in rows if r.get("max_G_t")) if v is not None]
 
     avg_phi = (sum(phi_values, start=Decimal("0")) / Decimal(len(phi_values))) if phi_values else None
     avg_delta = (sum(delta_values, start=Decimal("0")) / Decimal(len(delta_values))) if delta_values else None

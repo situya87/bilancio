@@ -9,7 +9,7 @@ class DeliveryObligation(Instrument):
     # all three are always provided explicitly at construction time.
     sku: str = ""
     unit_price: Decimal = Decimal("0")
-    due_day: int = 0  # type: ignore[assignment]  # Narrows base int|None to int
+    due_day: int = 0  # Narrows base int|None to int
 
     def __post_init__(self) -> None:
         self.kind = InstrumentKind.DELIVERY_OBLIGATION

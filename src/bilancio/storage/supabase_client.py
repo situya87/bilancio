@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 import ssl
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from supabase import Client
@@ -47,7 +47,7 @@ def is_supabase_configured() -> bool:
     return bool(url and key)
 
 
-def _create_proxy_aware_httpx_client():
+def _create_proxy_aware_httpx_client() -> Any:
     """Create an httpx client configured for TLS-inspecting proxies.
 
     If a custom CA certificate exists (for environments like Claude Code web

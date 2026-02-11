@@ -159,7 +159,7 @@ def run_scenario(
     
     # Capture initial balance state for HTML export
     initial_balances: Dict[str, Any] = {}
-    initial_rows: Dict[str, Dict[str, list]] = {}
+    initial_rows: Dict[str, Dict[str, List[Any]]] = {}
     from bilancio.analysis.balances import agent_balance
     from bilancio.analysis.visualization import build_t_account_rows
     # Capture balances for all agents that we might display
@@ -168,7 +168,7 @@ def run_scenario(
         initial_balances[agent_id] = agent_balance(system, agent_id)
         # also capture detailed rows with counterparties at setup
         acct = build_t_account_rows(system, agent_id)
-        def _row_dict(r):
+        def _row_dict(r: Any) -> Dict[str, Any]:
             return {
                 'name': getattr(r, 'name', ''),
                 'quantity': getattr(r, 'quantity', None),
@@ -355,8 +355,11 @@ def run_step_mode(
 
         try:
             # Run the next day
-            day_report = run_day(system, enable_dealer=enable_dealer)
-            
+            run_day(system, enable_dealer=enable_dealer)
+            from bilancio.engines.simulation import DayReport, _impacted_today, _has_open_obligations
+            impacted = _impacted_today(system, day_before)
+            day_report = DayReport(day=day_before, impacted=impacted)
+
             # Check invariants if requested
             if check_invariants == "daily":
                 system.assert_invariants()
@@ -392,7 +395,7 @@ def run_step_mode(
                 
                 # Capture current balance state for this day
                 day_balances: Dict[str, Any] = {}
-                day_rows: Dict[str, Dict[str, list]] = {}
+                day_rows: Dict[str, Dict[str, List[Any]]] = {}
                 active_agents_for_day: Optional[List[str]] = None
                 if agent_ids is not None:
                     active_agents_for_day = display_agent_ids or []
@@ -400,7 +403,7 @@ def run_step_mode(
                     from bilancio.analysis.balances import agent_balance
                     from bilancio.analysis.visualization import build_t_account_rows
 
-                    def _row_dict(r):
+                    def _row_dict(r: Any) -> Dict[str, Any]:
                         return {
                             'name': getattr(r, 'name', ''),
                             'quantity': getattr(r, 'quantity', None),
@@ -421,15 +424,15 @@ def run_step_mode(
                 days_data.append({
                     'day': day_before,  # Use actual event day, not 1-based counter
                     'events': day_events,
-                    'quiet': day_report.quiet,
-                    'stable': day_report.quiet and not day_report.has_open_obligations,
+                    'quiet': day_report.impacted == 0,
+                    'stable': day_report.impacted == 0 and not _has_open_obligations(system),
                     'balances': day_balances,
                     'rows': day_rows,
                     'agent_ids': active_agents_for_day if active_agents_for_day is not None else [],
                 })
             
             # Check if we've reached a stable state
-            if day_report.quiet and not day_report.has_open_obligations:
+            if day_report.impacted == 0 and not _has_open_obligations(system):
                 console.print("[green]OK[/green] System reached stable state")
                 break
                 
@@ -584,7 +587,7 @@ def run_until_stable_mode(
                 
                 # Capture current balance state for this day
                 day_balances: Dict[str, Any] = {}
-                day_rows: Dict[str, Dict[str, list]] = {}
+                day_rows: Dict[str, Dict[str, List[Any]]] = {}
                 active_agents_for_day: Optional[List[str]] = None
                 if agent_ids is not None:
                     active_agents_for_day = display_agent_ids or []
@@ -593,7 +596,7 @@ def run_until_stable_mode(
                     for agent_id in active_agents_for_day:
                         day_balances[agent_id] = agent_balance(system, agent_id)
                         acct = build_t_account_rows(system, agent_id)
-                        def to_row(r):
+                        def to_row(r: Any) -> Dict[str, Any]:
                             return {
                                 'name': getattr(r, 'name', ''),
                                 'quantity': getattr(r, 'quantity', None),

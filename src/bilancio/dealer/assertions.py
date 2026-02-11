@@ -56,7 +56,7 @@ def assert_c1_double_entry(
         - Examples Doc Section 1.1 (C1. Double-entry and conservation)
         - Specification Section 6 (Event tables with mirrored entries)
     """
-    total_cash = sum(cash_changes.values())
+    total_cash: Decimal = sum(cash_changes.values(), Decimal(0))
     total_qty = sum(qty_changes.values())
 
     assert abs(total_cash) <= EPSILON_CASH, (

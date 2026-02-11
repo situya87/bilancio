@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import click
 from rich.console import Console
@@ -63,7 +63,7 @@ def run(scenario_file: Path,
         export_events: Optional[Path],
         html: Optional[Path],
         t_account: bool,
-        default_handling: Optional[str]):
+        default_handling: Optional[str]) -> None:
     """Run a Bilancio simulation scenario.
 
     Load a scenario from a YAML file and run the simulation either
@@ -76,10 +76,11 @@ def run(scenario_file: Path,
             agent_ids = [a.strip() for a in agents.split(',')]
 
         # Override export paths if provided via CLI
-        export = {
-            'balances_csv': str(export_balances) if export_balances else None,
-            'events_jsonl': str(export_events) if export_events else None
-        }
+        export_dict: Dict[str, str] = {}
+        if export_balances:
+            export_dict['balances_csv'] = str(export_balances)
+        if export_events:
+            export_dict['events_jsonl'] = str(export_events)
 
         # Run the scenario
         run_scenario(
@@ -90,7 +91,7 @@ def run(scenario_file: Path,
             show=show,
             agent_ids=agent_ids,
             check_invariants=check_invariants,
-            export=export,
+            export=export_dict if export_dict else None,
             html_output=html,
             t_account=t_account,
             default_handling=default_handling
@@ -125,7 +126,7 @@ def run(scenario_file: Path,
 
 @click.command()
 @click.argument('scenario_file', type=click.Path(exists=True, path_type=Path))
-def validate(scenario_file: Path):
+def validate(scenario_file: Path) -> None:
     """Validate a Bilancio scenario configuration file.
 
     Check that a YAML configuration file is valid without running
@@ -203,7 +204,7 @@ def validate(scenario_file: Path):
               help='Base template to use')
 @click.option('-o', '--output', type=click.Path(path_type=Path),
               required=True, help='Output YAML file path')
-def new(from_template: Optional[str], output: Path):
+def new(from_template: Optional[str], output: Path) -> None:
     """Create a new scenario configuration.
 
     Interactive wizard to create a new Bilancio scenario
@@ -245,7 +246,7 @@ def analyze(
     out_json: Optional[Path],
     intraday_csv: Optional[Path],
     html_out: Optional[Path],
-):
+) -> None:
     """Analyze a completed run and export Kalecki-style metrics.
 
     Produces a day-level metrics CSV/JSON, optional intraday CSV (diagnostic).

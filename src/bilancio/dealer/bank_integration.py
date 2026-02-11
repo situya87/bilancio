@@ -11,7 +11,7 @@ References:
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Optional
+from typing import Any, List, Optional
 
 from bilancio.core.ids import AgentId, new_id
 
@@ -102,10 +102,10 @@ class BankAwareTraderState:
     bank_id: str  # Which bank holds this trader's deposits
 
     # Payables held (assets) - same as TraderState
-    tickets_owned: list = field(default_factory=list)
+    tickets_owned: List[Any] = field(default_factory=list)
 
     # Payables issued (liabilities) - same as TraderState
-    obligations: list = field(default_factory=list)
+    obligations: List[Any] = field(default_factory=list)
 
     # Single-issuer constraint - same as TraderState
     asset_issuer_id: AgentId | None = None
@@ -122,12 +122,12 @@ class BankAwareTraderState:
     @property
     def deposit_balance(self) -> Decimal:
         """Total deposit balance across all cohorts."""
-        return sum(c.total_balance for c in self.deposit_cohorts)
+        return sum((c.total_balance for c in self.deposit_cohorts), Decimal(0))
 
     @property
     def total_loan_principal(self) -> Decimal:
         """Total outstanding loan principal."""
-        return sum(loan.principal for loan in self.loans)
+        return sum((loan.principal for loan in self.loans), Decimal(0))
 
     def payment_due(self, day: int) -> Decimal:
         """
@@ -135,26 +135,30 @@ class BankAwareTraderState:
 
         Includes both payable maturities AND loan repayments.
         """
-        payable_due = sum(
-            t.face for t in self.obligations if t.maturity_day == day
+        payable_due: Decimal = sum(
+            (t.face for t in self.obligations if t.maturity_day == day),
+            Decimal(0),
         )
-        loan_due = sum(
-            loan.repayment_amount for loan in self.loans
-            if loan.maturity_day == day
+        loan_due: Decimal = sum(
+            (loan.repayment_amount for loan in self.loans
+            if loan.maturity_day == day),
+            Decimal(0),
         )
         return payable_due + loan_due
 
     def payable_due(self, day: int) -> Decimal:
         """Payable obligations only (excluding loans)."""
         return sum(
-            t.face for t in self.obligations if t.maturity_day == day
+            (t.face for t in self.obligations if t.maturity_day == day),
+            Decimal(0),
         )
 
     def loan_due(self, day: int) -> Decimal:
         """Loan repayments due on a given day."""
         return sum(
-            loan.repayment_amount for loan in self.loans
-            if loan.maturity_day == day
+            (loan.repayment_amount for loan in self.loans
+            if loan.maturity_day == day),
+            Decimal(0),
         )
 
     def shortfall(self, day: int) -> Decimal:
@@ -725,7 +729,7 @@ def resolve_default(
         ))
 
     # Step 4: Compute weights
-    total_weight = sum(c.maturity_weight * c.amount for c in claims)
+    total_weight: Decimal = sum((c.maturity_weight * c.amount for c in claims), Decimal(0))
 
     # Step 5: Distribute pro-rata
     payments: dict[AgentId, Decimal] = {}
@@ -740,7 +744,7 @@ def resolve_default(
             payments[claim.claimant_id] += payment
 
     # Compute recovery rate
-    total_claims = sum(c.amount for c in claims)
+    total_claims: Decimal = sum((c.amount for c in claims), Decimal(0))
     recovery_rate = total_pool / total_claims if total_claims > 0 else Decimal(0)
 
     return DefaultResolution(
@@ -826,12 +830,12 @@ class IntegratedBankState:
     @property
     def total_loans(self) -> Decimal:
         """Total outstanding loan principal."""
-        return sum(loan.principal for loan in self.loans_outstanding.values())
+        return sum((loan.principal for loan in self.loans_outstanding.values()), Decimal(0))
 
     @property
     def total_cb_borrowing(self) -> Decimal:
         """Total CB borrowing principal."""
-        return sum(principal for _, principal, _ in self.cb_borrowing)
+        return sum((principal for _, principal, _ in self.cb_borrowing), Decimal(0))
 
     def issue_loan(
         self,

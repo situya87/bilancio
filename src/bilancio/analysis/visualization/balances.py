@@ -730,10 +730,10 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
             ))
 
     # Ordering within each side
-    def sort_key_assets(row: BalanceRow):
+    def sort_key_assets(row: BalanceRow) -> tuple[int, Any, str]:
         # Inventory first (has quantity and counterparty '—' and maturity '—'),
         # then receivables (name ends with 'receivable'), then financial by kind order
-        financial_order = {InstrumentKind.CASH: 0, InstrumentKind.BANK_DEPOSIT: 1, InstrumentKind.RESERVE_DEPOSIT: 2, InstrumentKind.PAYABLE: 3}
+        financial_order: dict[str, int] = {InstrumentKind.CASH: 0, InstrumentKind.BANK_DEPOSIT: 1, InstrumentKind.RESERVE_DEPOSIT: 2, InstrumentKind.PAYABLE: 3}
         if row.quantity is not None and row.counterparty_name == "—":
             return (0, 0, row.name or "")
         if row.name.endswith("receivable"):
@@ -741,9 +741,9 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
             return (1, day_num, row.name)
         return (2, financial_order.get(row.name, 99), row.name)
 
-    def sort_key_liabs(row: BalanceRow):
+    def sort_key_liabs(row: BalanceRow) -> tuple[int, Any, str]:
         # Obligations (name ends with 'obligation') by due day, then financial by order
-        financial_order = {InstrumentKind.PAYABLE: 0, InstrumentKind.BANK_DEPOSIT: 1, InstrumentKind.RESERVE_DEPOSIT: 2, InstrumentKind.CASH: 3}
+        financial_order: dict[str, int] = {InstrumentKind.PAYABLE: 0, InstrumentKind.BANK_DEPOSIT: 1, InstrumentKind.RESERVE_DEPOSIT: 2, InstrumentKind.CASH: 3}
         if row.name.endswith("obligation"):
             day_num = parse_day_from_maturity(row.maturity)
             return (0, day_num, row.name)
@@ -753,6 +753,25 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
     liabilities.sort(key=sort_key_liabs)
 
     return TAccount(assets=assets, liabilities=liabilities)
+
+
+def _fmt_qty(r: Optional[BalanceRow]) -> str:
+    """Format quantity for a BalanceRow."""
+    return f"{r.quantity:,}" if (r and r.quantity is not None) else "—"
+
+
+def _fmt_val(r: Optional[BalanceRow]) -> str:
+    """Format value for a BalanceRow."""
+    if not r or r.value_minor is None:
+        return "—"
+    return _format_currency(int(r.value_minor))
+
+
+def _cells(r: Optional[BalanceRow]) -> tuple[str, str, str, str, str]:
+    """Return a 5-tuple of cell strings for a BalanceRow."""
+    if not r:
+        return ("", "", "", "", "")
+    return (r.name, _fmt_qty(r), _fmt_val(r), r.counterparty_name or "—", r.maturity or "—")
 
 
 def display_agent_t_account(system: System, agent_id: str, format: str = 'rich') -> None:
@@ -773,15 +792,8 @@ def display_agent_t_account(system: System, agent_id: str, format: str = 'rich')
         print("-" * len(header))
         for i in range(max_rows):
             a = acct.assets[i] if i < len(acct.assets) else None
-            l = acct.liabilities[i] if i < len(acct.liabilities) else None
-            def fmt_qty(r): return f"{r.quantity:,}" if (r and r.quantity is not None) else "—"
-            def fmt_val(r):
-                if not r or r.value_minor is None: return "—"
-                return _format_currency(int(r.value_minor))
-            def cells(r):
-                if not r: return ("", "", "", "", "")
-                return (r.name, fmt_qty(r), fmt_val(r), r.counterparty_name or "—", r.maturity or "—")
-            row = list(cells(a) + cells(l))
+            l_row = acct.liabilities[i] if i < len(acct.liabilities) else None
+            row = list(_cells(a) + _cells(l_row))
             print(" | ".join(str(x) for x in row))
 
 
@@ -790,21 +802,14 @@ def display_agent_t_account_renderable(system: System, agent_id: str) -> Rendera
     if not RICH_AVAILABLE:
         # Fallback to string
         acct = build_t_account_rows(system, agent_id)
-        lines = []
+        lines: list[str] = []
         columns = ["Name", "Qty", "Value", "Counterparty", "Maturity"]
         lines.append(" | ".join([f"Assets:{c}" for c in columns] + [f"Liabilities:{c}" for c in columns]))
         max_rows = max(len(acct.assets), len(acct.liabilities))
         for i in range(max_rows):
             a = acct.assets[i] if i < len(acct.assets) else None
-            l = acct.liabilities[i] if i < len(acct.liabilities) else None
-            def fmt_qty(r): return f"{r.quantity:,}" if (r and r.quantity is not None) else "—"
-            def fmt_val(r):
-                if not r or r.value_minor is None: return "—"
-                return _format_currency(int(r.value_minor))
-            def cells(r):
-                if not r: return ("", "", "", "", "")
-                return (r.name, fmt_qty(r), fmt_val(r), r.counterparty_name or "—", r.maturity or "—")
-            row = list(cells(a) + cells(l))
+            l_row = acct.liabilities[i] if i < len(acct.liabilities) else None
+            row = list(_cells(a) + _cells(l_row))
             lines.append(" | ".join(str(x) for x in row))
         return "\n".join(lines)
 
@@ -833,19 +838,11 @@ def display_agent_t_account_renderable(system: System, agent_id: str) -> Rendera
     except Exception:
         pass
 
-    def fmt_qty(r): return f"{r.quantity:,}" if (r and r.quantity is not None) else "—"
-    def fmt_val(r):
-        if not r or r.value_minor is None: return "—"
-        return _format_currency(int(r.value_minor))
-    def cells(r):
-        if not r: return ("", "", "", "", "")
-        return (r.name, fmt_qty(r), fmt_val(r), r.counterparty_name or "—", r.maturity or "—")
-
     max_rows = max(len(acct.assets), len(acct.liabilities))
     for i in range(max_rows):
         a = acct.assets[i] if i < len(acct.assets) else None
-        l = acct.liabilities[i] if i < len(acct.liabilities) else None
-        table.add_row(*cells(a), *cells(l))
+        l_row = acct.liabilities[i] if i < len(acct.liabilities) else None
+        table.add_row(*_cells(a), *_cells(l_row))
     return table
 
 

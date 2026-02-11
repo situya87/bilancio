@@ -84,7 +84,9 @@ class ComparisonResult:
             return None
         if self.delta_control == 0:
             return Decimal("0")  # No defaults to reduce
-        return self.delta_reduction / self.delta_control
+        reduction = self.delta_reduction
+        assert reduction is not None  # guaranteed by checks above
+        return reduction / self.delta_control
 
 
 class ComparisonSweepConfig(BaseModel):

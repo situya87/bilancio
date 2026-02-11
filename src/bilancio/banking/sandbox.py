@@ -194,7 +194,8 @@ def run_sandbox() -> None:
 
     print("\n--- Bank A After Loan ---")
     print_bank_state(state_a)
-    print_quote(result.new_quote, "Bank A Updated Quote")
+    if result.new_quote is not None:
+        print_quote(result.new_quote, "Bank A Updated Quote")
 
     # --- Test 2: Inter-bank payment (Alice at A pays Bob at B) ---
     print_separator("Test 2: Inter-bank Payment (A -> B)")
@@ -209,6 +210,8 @@ def run_sandbox() -> None:
     )
 
     print(f"Settlement success: {settlement.success}")
+    assert settlement.payer_result is not None
+    assert settlement.payee_result is not None
     print(f"Payer (Bank A) result: {settlement.payer_result.message}")
     print(f"  Reserve delta: {settlement.payer_result.reserve_delta:,}")
     print(f"Payee (Bank B) result: {settlement.payee_result.message}")
@@ -283,13 +286,13 @@ def run_sandbox() -> None:
     )
 
     print("\n--- Day 2 Results ---")
-    for bank_id, result in results_d2.items():
+    for bank_id, day_result in results_d2.items():
         print(f"\n{bank_id}:")
-        print(f"  Tickets processed: {result.tickets_processed}")
-        print(f"  Opening reserves: {result.opening_reserves:,}")
-        print(f"  Closing reserves: {result.closing_reserves:,}")
-        print(f"  Opening deposits: {result.opening_deposits:,}")
-        print(f"  Closing deposits: {result.closing_deposits:,}")
+        print(f"  Tickets processed: {day_result.tickets_processed}")
+        print(f"  Opening reserves: {day_result.opening_reserves:,}")
+        print(f"  Closing reserves: {day_result.closing_reserves:,}")
+        print(f"  Opening deposits: {day_result.opening_deposits:,}")
+        print(f"  Closing deposits: {day_result.closing_deposits:,}")
 
     # Day 3: Test deposit interest (should kick in for day 0 deposits)
     # Day 0 deposits get interest at day 2 (issuance + 2)
@@ -302,10 +305,10 @@ def run_sandbox() -> None:
     )
 
     print("\n--- Day 3 Results ---")
-    for bank_id, result in results_d3.items():
+    for bank_id, day_result in results_d3.items():
         print(f"\n{bank_id}:")
-        print(f"  Deposit interest credited: {result.deposit_interest_credited:,}")
-        for event in result.events:
+        print(f"  Deposit interest credited: {day_result.deposit_interest_credited:,}")
+        for event in day_result.events:
             if event.event_type == "deposit_interest":
                 print(f"  Event: {event.description}")
 

@@ -21,7 +21,7 @@ def generate_job_id(num_words: int = 4) -> str:
         >>> job_id = generate_job_id()
         >>> print(job_id)  # "correct-horse-battery-staple"
     """
-    return xp.generate_xkcdpassword(_wordlist, numwords=num_words, delimiter="-")
+    return str(xp.generate_xkcdpassword(_wordlist, numwords=num_words, delimiter="-"))
 
 
 def validate_job_id(job_id: str) -> bool:

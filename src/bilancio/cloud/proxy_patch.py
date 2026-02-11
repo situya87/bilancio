@@ -11,11 +11,14 @@ Usage:
     import bilancio.cloud.proxy_patch  # Apply patch before importing modal
     import modal
 """
+from __future__ import annotations
+
 import asyncio
 import os
 import ssl
 import base64
 import socket
+from typing import Any
 from urllib.parse import urlparse
 
 import grpclib.client
@@ -45,7 +48,7 @@ def _create_proxy_ssl_context() -> ssl.SSLContext:
 # grpclib patch for Modal API (gRPC)
 # =============================================================================
 
-async def _proxied_create_connection(self):
+async def _proxied_create_connection(self: Any) -> Any:
     """Create connection through HTTP CONNECT proxy if proxy is configured."""
     if not _should_use_proxy():
         # No proxy configured or no custom CA - use original method
@@ -101,7 +104,7 @@ async def _proxied_create_connection(self):
 # Modal HTTP client patch for file downloads (aiohttp)
 # =============================================================================
 
-def _patched_http_client_with_tls(timeout):
+def _patched_http_client_with_tls(timeout: Any) -> Any:
     """Create HTTP client with custom CA for TLS inspection proxy."""
     from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
@@ -118,7 +121,7 @@ def _patched_http_client_with_tls(timeout):
     )
 
 
-def _patch_modal_http_client():
+def _patch_modal_http_client() -> None:
     """Patch Modal's HTTP client to use custom CA and proxy."""
     global _original_http_client_with_tls
 
@@ -141,9 +144,9 @@ def _patch_modal_http_client():
 # Patch application
 # =============================================================================
 
-def apply_proxy_patch():
+def apply_proxy_patch() -> None:
     """Apply all proxy patches."""
-    grpclib.client.Channel._create_connection = _proxied_create_connection
+    grpclib.client.Channel._create_connection = _proxied_create_connection  # type: ignore[method-assign]
     _patch_modal_http_client()
 
 

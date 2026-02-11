@@ -109,13 +109,13 @@ def payables_to_tickets(
         face_value = Decimal(payable.amount) / Decimal(100)
 
         # Calculate number of tickets
-        num_tickets = face_value / ticket_size
-        if num_tickets != int(num_tickets):
+        num_tickets_dec = face_value / ticket_size
+        if num_tickets_dec != int(num_tickets_dec):
             raise ValueError(
                 f"Payable {payable_id} face value {face_value} is not divisible "
                 f"by ticket size {ticket_size}"
             )
-        num_tickets = int(num_tickets)
+        num_tickets = int(num_tickets_dec)
 
         # Calculate remaining maturity and assign bucket
         remaining_tau = payable.due_day - current_day
@@ -177,7 +177,7 @@ def tickets_to_trader_holdings(
 def apply_trade_results_to_payables(
     payables: Dict[str, Payable],
     ticket_to_payable: Dict[str, str],
-    trade_results: List[dict],
+    trade_results: List[Dict[str, str]],
 ) -> None:
     """
     Apply dealer trade results back to main system by updating Payable holders.
