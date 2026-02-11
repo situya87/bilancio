@@ -475,7 +475,7 @@ def sweep_comparison(
 @click.option(
     "--default-handling",
     type=click.Choice(["fail-fast", "expel-agent"]),
-    default="fail-fast",
+    default="expel-agent",
     help="Default handling mode",
 )
 @click.option(

@@ -122,7 +122,7 @@ class BalancedComparisonConfig(BaseModel):
     liquidity_mode: str = Field(default="uniform", description="Liquidity allocation mode")
     base_seed: int = Field(default=42, description="Base random seed")
     name_prefix: str = Field(default="Balanced Comparison", description="Scenario name prefix")
-    default_handling: str = Field(default="fail-fast", description="Default handling mode")
+    default_handling: str = Field(default="expel-agent", description="Default handling mode")
 
     # Detailed logging (Plan 022)
     detailed_logging: bool = Field(
@@ -1029,7 +1029,7 @@ def run_balanced_comparison_sweep(
     outside_mid_ratios: Sequence[Decimal],
     big_entity_share: Decimal = Decimal("0.25"),
     base_seed: int = 42,
-    default_handling: str = "fail-fast",
+    default_handling: str = "expel-agent",
     name_prefix: str = "Balanced Comparison",
 ) -> List[BalancedComparisonResult]:
     """

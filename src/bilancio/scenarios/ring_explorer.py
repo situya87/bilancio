@@ -429,8 +429,8 @@ def compile_ring_explorer_balanced(
         "scheduled_actions": [],
         "run": {
             "mode": "until_stable",
-            "max_days": max(30, params.maturity.days + 5),
-            "quiet_days": 2,
+            "max_days": max(30, 3 * params.maturity.days),
+            "quiet_days": params.maturity.days + 1 if rollover_enabled else 2,
             "rollover_enabled": rollover_enabled,  # Plan 024: continuous rollover
             "show": {
                 "balances": [agent["id"] for agent in agents],
