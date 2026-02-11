@@ -559,6 +559,17 @@ class RingSweepRunner:
                 dealer_section["risk_assessment"] = risk_section
             scenario["dealer"] = dealer_section
 
+            if self.balanced_mode:
+                scenario["balanced_dealer"] = {
+                    "enabled": True,
+                    "face_value": str(self.face_value),
+                    "outside_mid_ratio": str(self.outside_mid_ratio),
+                    "vbt_share_per_bucket": str(self.vbt_share_per_bucket),
+                    "dealer_share_per_bucket": str(self.dealer_share_per_bucket),
+                    "mode": "active",
+                    "rollover_enabled": self.rollover_enabled,
+                }
+
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
             scenario_run["default_handling"] = self.default_handling
@@ -810,6 +821,17 @@ class RingSweepRunner:
                     risk_section.update(self.risk_assessment_config)
                 dealer_section["risk_assessment"] = risk_section
             scenario["dealer"] = dealer_section
+
+            if self.balanced_mode:
+                scenario["balanced_dealer"] = {
+                    "enabled": True,
+                    "face_value": str(self.face_value),
+                    "outside_mid_ratio": str(self.outside_mid_ratio),
+                    "vbt_share_per_bucket": str(self.vbt_share_per_bucket),
+                    "dealer_share_per_bucket": str(self.dealer_share_per_bucket),
+                    "mode": "active",
+                    "rollover_enabled": self.rollover_enabled,
+                }
 
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})

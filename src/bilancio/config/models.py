@@ -594,8 +594,8 @@ class BalancedDealerConfig(BaseModel):
     @field_validator("big_entity_share")
     @classmethod
     def big_entity_share_valid(cls, v):
-        if not (Decimal("0") < v < Decimal("1")):
-            raise ValueError("big_entity_share must be between 0 and 1 (exclusive)")
+        if not (Decimal("0") <= v < Decimal("1")):
+            raise ValueError("big_entity_share must be between 0 (inclusive) and 1 (exclusive)")
         return v
 
     @field_validator("vbt_share_per_bucket")

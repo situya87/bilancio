@@ -438,6 +438,20 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
                 buy_premium_multiplier=config.dealer.risk_assessment.buy_premium_multiplier,
             )
 
-        system.state.dealer_subsystem = initialize_dealer_subsystem(
-            system, dealer_ring_config, risk_params=risk_params
-        )
+        if config.balanced_dealer and config.balanced_dealer.enabled:
+            from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
+            system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
+                system,
+                dealer_ring_config,
+                face_value=config.balanced_dealer.face_value,
+                outside_mid_ratio=config.balanced_dealer.outside_mid_ratio,
+                vbt_share_per_bucket=config.balanced_dealer.vbt_share_per_bucket,
+                dealer_share_per_bucket=config.balanced_dealer.dealer_share_per_bucket,
+                mode=config.balanced_dealer.mode,
+                current_day=0,
+                risk_params=risk_params,
+            )
+        else:
+            system.state.dealer_subsystem = initialize_dealer_subsystem(
+                system, dealer_ring_config, risk_params=risk_params
+            )
