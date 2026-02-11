@@ -7,9 +7,12 @@ This module enables traders to:
 3. Make rational buy/sell decisions based on price vs expected value
 """
 
+import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Dict, List
+
+logger = logging.getLogger(__name__)
 
 from bilancio.core.ids import AgentId
 from .models import Ticket

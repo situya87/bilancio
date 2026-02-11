@@ -15,8 +15,11 @@ The kernel is the mathematical heart of the dealer system, computing:
 All arithmetic uses Decimal for precision - never float.
 """
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_FLOOR
+
+logger = logging.getLogger(__name__)
 
 from .models import DealerState, VBTState, Ticket
 

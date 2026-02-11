@@ -19,10 +19,13 @@ References:
 - Specification Section 10: Ring Trader Policies
 """
 
+import logging
 from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 import random
 from copy import deepcopy
+
+logger = logging.getLogger(__name__)
 
 # Cash precision for settlement calculations to avoid floating-point accumulation errors
 # Uses 6 decimal places which is standard for financial calculations
@@ -450,6 +453,7 @@ class DealerRingSimulation:
             - Section 11: Full Event Loop
         """
         self.day += 1
+        logger.debug("dealer day %d: starting event loop (%d tickets)", self.day, len(self.all_tickets))
         self.events.log_day_start(self.day)
 
         # Phase 1: Update maturities and buckets
@@ -491,6 +495,8 @@ class DealerRingSimulation:
             max_days: Number of days to simulate (defaults to config.max_days)
         """
         days = max_days or self.config.max_days
+        logger.info("dealer simulation: running %d days (%d traders, %d tickets)",
+                     days, len(self.traders), len(self.all_tickets))
         for _ in range(days):
             self.run_day()
 
@@ -1301,6 +1307,9 @@ class DealerRingSimulation:
                 maturing_by_issuer[issuer_id].append(ticket)
 
         # Settle each issuer
+        if maturing_by_issuer:
+            logger.debug("dealer day %d: settling %d issuers with maturing debt",
+                         self.day, len(maturing_by_issuer))
         for issuer_id, tickets in maturing_by_issuer.items():
             self._settle_issuer(issuer_id, tickets)
 
