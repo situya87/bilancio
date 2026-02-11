@@ -68,7 +68,9 @@ def _pay_with_deposits(system, debtor_id, creditor_id, amount) -> int:
     """Pay using bank deposits. Returns amount actually paid."""
     debtor_deposit_ids = []
     for cid in system.state.agents[debtor_id].asset_ids:
-        contract = system.state.contracts[cid]
+        contract = system.state.contracts.get(cid)
+        if contract is None:
+            continue  # Skip stale references
         if contract.kind == "bank_deposit":
             debtor_deposit_ids.append(cid)
 
@@ -89,7 +91,9 @@ def _pay_with_deposits(system, debtor_id, creditor_id, amount) -> int:
 
     creditor_deposit_ids = []
     for cid in system.state.agents[creditor_id].asset_ids:
-        contract = system.state.contracts[cid]
+        contract = system.state.contracts.get(cid)
+        if contract is None:
+            continue  # Skip stale references
         if contract.kind == "bank_deposit":
             creditor_deposit_ids.append(cid)
 
@@ -112,7 +116,9 @@ def _pay_with_cash(system, debtor_id, creditor_id, amount) -> int:
     """Pay using cash. Returns amount actually paid."""
     debtor_cash_ids = []
     for cid in system.state.agents[debtor_id].asset_ids:
-        contract = system.state.contracts[cid]
+        contract = system.state.contracts.get(cid)
+        if contract is None:
+            continue  # Skip stale references (contract may have been removed)
         if contract.kind == "cash":
             debtor_cash_ids.append(cid)
 
@@ -139,7 +145,9 @@ def _pay_bank_to_bank_with_reserves(system, debtor_bank_id, creditor_bank_id, am
 
     debtor_reserve_ids = []
     for cid in system.state.agents[debtor_bank_id].asset_ids:
-        contract = system.state.contracts[cid]
+        contract = system.state.contracts.get(cid)
+        if contract is None:
+            continue  # Skip stale references
         if contract.kind == "reserve_deposit":
             debtor_reserve_ids.append(cid)
 
@@ -195,7 +203,9 @@ def _deliver_stock(system, debtor_id, creditor_id, sku: str, required_quantity: 
 
 def _remove_contract(system, contract_id):
     """Remove contract from system and update agent registries."""
-    contract = system.state.contracts[contract_id]
+    contract = system.state.contracts.get(contract_id)
+    if contract is None:
+        return  # Already removed
     contract_kind = contract.kind
     contract_amount = getattr(contract, "amount", 0)
 
@@ -296,6 +306,116 @@ def _action_references_contract(action_dict, contract_ids: set[str], aliases: se
             return True
 
     return False
+
+
+def _reconnect_ring(system, defaulted_agent_id: str, successor_id: str, day: int) -> dict | None:
+    """Reconnect the ring after an agent defaults.
+
+    When agent X defaults, find the predecessor P (who owed X) and create a new
+    payable from P to S (the successor, who X owed). The ring shrinks from N to N-1.
+
+    Args:
+        system: The System instance
+        defaulted_agent_id: ID of the agent that just defaulted
+        successor_id: ID of the agent the defaulted agent owed (ring successor)
+        day: Current simulation day
+
+    Returns:
+        Dict with reconnection info, or None if reconnection not possible
+    """
+    from bilancio.domain.instruments.credit import Payable
+
+    # Find predecessor: an active ring payable where asset_holder_id == defaulted_agent_id
+    # (i.e., someone owes the defaulted agent)
+    predecessor_payable = None
+    for c in list(system.state.contracts.values()):
+        if (c.kind == "payable"
+            and c.asset_holder_id == defaulted_agent_id
+            and c.liability_issuer_id != defaulted_agent_id
+            and c.liability_issuer_id not in system.state.defaulted_agent_ids):
+            predecessor_payable = c
+            break
+
+    if predecessor_payable is None:
+        # No predecessor found (already defaulted or ring fully collapsed)
+        return None
+
+    predecessor_id = predecessor_payable.liability_issuer_id
+
+    # Check if predecessor == successor (ring down to 2, one defaults → only 1 left)
+    if predecessor_id == successor_id:
+        # Ring collapsed to a single agent - remove orphaned payable, log collapse
+        system.log(
+            "RingCollapsed",
+            defaulted_agent=defaulted_agent_id,
+            remaining_agent=predecessor_id,
+            removed_payable=predecessor_payable.id,
+        )
+        _remove_contract(system, predecessor_payable.id)
+        return None
+
+    # Get parameters from predecessor's payable
+    amount = predecessor_payable.amount
+    maturity_distance = getattr(predecessor_payable, 'maturity_distance', None)
+    if maturity_distance is None:
+        # Fallback: use due_day - current_day if available
+        if predecessor_payable.due_day is not None:
+            maturity_distance = max(1, predecessor_payable.due_day - day)
+        else:
+            maturity_distance = 1
+
+    new_due_day = day + maturity_distance
+
+    # Remove old payable: predecessor → defaulted agent
+    old_payable_id = predecessor_payable.id
+    _remove_contract(system, old_payable_id)
+
+    # Create new payable: predecessor → successor
+    new_payable = Payable(
+        id=system.new_contract_id("PAY"),
+        kind="payable",
+        amount=amount,
+        denom="X",
+        asset_holder_id=successor_id,
+        liability_issuer_id=predecessor_id,
+        due_day=new_due_day,
+        maturity_distance=maturity_distance,
+    )
+    system.add_contract(new_payable)
+
+    # Log events
+    system.log(
+        "RingReconnected",
+        defaulted_agent=defaulted_agent_id,
+        predecessor=predecessor_id,
+        successor=successor_id,
+        old_payable=old_payable_id,
+        new_payable=new_payable.id,
+        amount=amount,
+        maturity_distance=maturity_distance,
+        new_due_day=new_due_day,
+    )
+
+    system.log(
+        "PayableCreated",
+        contract_id=new_payable.id,
+        debtor=predecessor_id,
+        creditor=successor_id,
+        amount=amount,
+        due_day=new_due_day,
+        maturity_distance=maturity_distance,
+        reason="ring_reconnection",
+    )
+
+    return {
+        "predecessor": predecessor_id,
+        "successor": successor_id,
+        "old_payable": old_payable_id,
+        "new_payable": new_payable.id,
+        "amount": amount,
+        "maturity_distance": maturity_distance,
+        "new_due_day": new_due_day,
+    }
 
 
 def _expel_agent(
@@ -555,6 +675,9 @@ def settle_due(system, day: int, *, rollover_enabled: bool = False):
                     amount=remaining,
                 )
 
+                # Capture ring successor before payable removal (for reconnection)
+                ring_successor_id = payable.asset_holder_id
+
                 _remove_contract(system, payable.id)
                 _expel_agent(
                     system,
@@ -571,7 +694,9 @@ def settle_due(system, day: int, *, rollover_enabled: bool = False):
                         issuer_id=debtor.id,
                         defaulted=True,
                     )
-                # Defaulted - no rollover
+                # Reconnect ring if rollover is enabled
+                if rollover_enabled:
+                    _reconnect_ring(system, debtor.id, ring_successor_id, day)
                 continue
 
             _remove_contract(system, payable.id)
@@ -607,22 +732,41 @@ def settle_due(system, day: int, *, rollover_enabled: bool = False):
     return settled_for_rollover
 
 
-def rollover_settled_payables(system, day: int, settled_payables: list):
+def rollover_settled_payables(system, day: int, settled_payables: list, dealer_active: bool = False):
     """Create new payables for successfully settled ones (continuous issuance via rollover).
 
     Per PDF specification (Plan 024):
     - Each liability records its original maturity distance ΔT
     - When a claim is repaid, borrower immediately issues new claim of same size/ΔT
-    - Due date = current_day + ΔT
-    - Cash moves from lender (creditor) to borrower (debtor) as part of new issuance
+    - Due date = max(all current due_days in system) + ΔT
+      This queues the new payable after the last existing maturity,
+      preventing synchronized settlement waves.
+
+    Model C (when dealer_active=True):
+    - Trader payables: No cash transfer (debt represents ongoing real economic relationships)
+    - VBT/Dealer payables: Cash transfer maintained (financial intermediaries who lend money)
 
     Args:
         system: The system
         day: Current simulation day
         settled_payables: List of (debtor_id, creditor_id, amount, maturity_distance)
+        dealer_active: If True, use Model C (no cash transfer for trader payables)
+
+    Returns:
+        List of new payable IDs created by rollover
     """
     from bilancio.domain.instruments.credit import Payable
 
+    # Compute max due_day across all current payables in the system.
+    # Rolled-over payables queue after this, preventing synchronized waves.
+    max_due_day = day  # Floor: at minimum, use current day
+    for c in system.state.contracts.values():
+        if c.kind == "payable":
+            due = getattr(c, "due_day", None)
+            if due is not None and due > max_due_day:
+                max_due_day = due
+
+    new_payable_ids = []
     for debtor_id, creditor_id, amount, maturity_distance in settled_payables:
         # Skip if either party has defaulted
         debtor = system.state.agents.get(debtor_id)
@@ -633,7 +777,7 @@ def rollover_settled_payables(system, day: int, settled_payables: list):
         if creditor is None or getattr(creditor, "defaulted", False):
             continue
 
-        new_due_day = day + maturity_distance
+        new_due_day = max_due_day + maturity_distance
 
         with atomic(system):
             # 1. Create new payable with same amount and ΔT
@@ -648,12 +792,19 @@ def rollover_settled_payables(system, day: int, settled_payables: list):
                 maturity_distance=maturity_distance,
             )
             system.add_contract(new_payable)
+            new_payable_ids.append(new_payable.id)
 
-            # 2. Transfer cash from creditor to debtor (new issuance)
-            # This represents the creditor re-lending the money they just received
-            cash_transferred = _pay_with_cash(system, creditor_id, debtor_id, amount)
+            # Model C: no cash transfer for real-economy relationships
+            # Model A: cash transfer for financial intermediaries (VBT/Dealer)
+            is_financial_creditor = creditor_id.startswith("vbt_") or creditor_id.startswith("dealer_")
+            if not dealer_active or is_financial_creditor:
+                # 2. Transfer cash from creditor to debtor (new issuance)
+                cash_transferred = _pay_with_cash(system, creditor_id, debtor_id, amount)
+            else:
+                # Model C: skip cash transfer for trader payables
+                cash_transferred = 0
 
-            if cash_transferred != amount:
+            if cash_transferred != amount and (not dealer_active or is_financial_creditor):
                 # Creditor doesn't have enough cash - this shouldn't happen in normal rollover
                 # but handle gracefully
                 system.log(
@@ -664,6 +815,7 @@ def rollover_settled_payables(system, day: int, settled_payables: list):
                     cash_transferred=cash_transferred,
                     new_due_day=new_due_day,
                     payable_id=new_payable.id,
+                    cash_transfer=True,
                 )
             else:
                 system.log(
@@ -674,4 +826,7 @@ def rollover_settled_payables(system, day: int, settled_payables: list):
                     new_due_day=new_due_day,
                     maturity_distance=maturity_distance,
                     payable_id=new_payable.id,
+                    cash_transfer=(not dealer_active or is_financial_creditor),
                 )
+
+    return new_payable_ids

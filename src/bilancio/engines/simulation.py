@@ -182,7 +182,10 @@ def run_day(system, enable_dealer: bool = False):
     # Plan 024: Rollover - create new payables for settled ones
     if rollover_enabled and settled_for_rollover:
         system.log("SubphaseB_Rollover")
-        rollover_settled_payables(system, current_day, settled_for_rollover)
+        dealer_active = (enable_dealer and hasattr(system.state, 'dealer_subsystem')
+                         and system.state.dealer_subsystem is not None)
+        rollover_settled_payables(system, current_day, settled_for_rollover,
+                                  dealer_active=dealer_active)
 
     # Phase C: Clear intraday nets for the current day
     system.log("PhaseC")  # optional: helps timeline

@@ -116,6 +116,9 @@ class DealerSubsystem:
     # Risk assessment module (optional)
     risk_assessor: RiskAssessor | None = None
 
+    # Serial counter for ticket IDs (continues from initialization)
+    _ticket_serial_counter: int = 0
+
 
 def initialize_dealer_subsystem(
     system,
@@ -360,6 +363,8 @@ def initialize_dealer_subsystem(
     subsystem.metrics.initial_total_debt = total_debt
     subsystem.metrics.initial_total_money = total_money
 
+    subsystem._ticket_serial_counter = serial_counter
+
     return subsystem
 
 
@@ -603,6 +608,9 @@ def initialize_balanced_dealer_subsystem(
     subsystem.metrics.initial_total_debt = total_debt
     subsystem.metrics.initial_total_money = total_money
 
+    # Store serial counter so ingestion can continue the sequence
+    subsystem._ticket_serial_counter = serial_counter
+
     return subsystem
 
 
@@ -630,6 +638,86 @@ def _get_agent_cash(system, agent_id: str) -> Decimal:
             total_cash += Decimal(contract.amount)
 
     return total_cash
+
+
+def _ingest_new_payables(subsystem: DealerSubsystem, system, current_day: int) -> int:
+    """Create tickets for new payables (from rollover) that have no ticket yet.
+
+    Called during the dealer trading phase to pick up payables created by
+    rollover that need to enter the dealer subsystem as tradable tickets.
+
+    Args:
+        subsystem: Dealer subsystem state
+        system: Main System instance
+        current_day: Current simulation day
+
+    Returns:
+        Number of new tickets created
+    """
+    from bilancio.domain.instruments.credit import Payable
+
+    new_count = 0
+    for contract_id, contract in list(system.state.contracts.items()):
+        if not isinstance(contract, Payable):
+            continue
+        if contract_id in subsystem.payable_to_ticket:
+            continue  # Already tracked
+
+        remaining_tau = max(0, contract.due_day - current_day)
+        if remaining_tau == 0:
+            continue  # Already matured
+
+        # Skip defaulted issuers
+        issuer = system.state.agents.get(contract.liability_issuer_id)
+        if issuer is None or getattr(issuer, 'defaulted', False):
+            continue
+
+        # Create ticket
+        ticket_id = f"TKT_{contract_id}"
+        ticket = Ticket(
+            id=ticket_id,
+            issuer_id=contract.liability_issuer_id,
+            owner_id=contract.effective_creditor,
+            face=Decimal(contract.amount),
+            maturity_day=contract.due_day,
+            remaining_tau=remaining_tau,
+            bucket_id="",
+            serial=subsystem._ticket_serial_counter,
+        )
+        subsystem._ticket_serial_counter += 1
+        ticket.bucket_id = _assign_bucket(ticket.remaining_tau, subsystem.bucket_configs)
+
+        subsystem.tickets[ticket_id] = ticket
+        subsystem.ticket_to_payable[ticket_id] = contract_id
+        subsystem.payable_to_ticket[contract_id] = ticket_id
+
+        # Assign to correct inventory based on owner
+        owner = ticket.owner_id
+        if owner.startswith("vbt_"):
+            bucket_name = owner.replace("vbt_", "")
+            vbt = subsystem.vbts.get(bucket_name)
+            if vbt:
+                vbt.inventory.append(ticket)
+        elif owner.startswith("dealer_"):
+            bucket_name = owner.replace("dealer_", "")
+            dealer = subsystem.dealers.get(bucket_name)
+            if dealer:
+                dealer.inventory.append(ticket)
+        else:
+            trader = subsystem.traders.get(owner)
+            if trader:
+                trader.tickets_owned.append(ticket)
+                if trader.asset_issuer_id is None:
+                    trader.asset_issuer_id = ticket.issuer_id
+
+        # Link obligation to issuer
+        issuer_trader = subsystem.traders.get(ticket.issuer_id)
+        if issuer_trader:
+            issuer_trader.obligations.append(ticket)
+
+        new_count += 1
+
+    return new_count
 
 
 def _execute_sell_trade(
@@ -1065,6 +1153,9 @@ def run_dealer_trading_phase(
         payable_id = subsystem.ticket_to_payable.pop(ticket_id, None)
         if payable_id:
             subsystem.payable_to_ticket.pop(payable_id, None)
+
+    # Phase 0.75: Ingest new payables as tickets (from rollover)
+    _ingest_new_payables(subsystem, system, current_day)
 
     # Phase 1: Update ticket maturities and buckets
     # Collect matured tickets to remove after iteration
