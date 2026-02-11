@@ -640,6 +640,33 @@ def _get_agent_cash(system, agent_id: str) -> Decimal:
     return total_cash
 
 
+def _reassign_payable_owner(system, contract_id: str, old_owner: str, new_owner: str) -> None:
+    """Transfer payable ownership in the main system when bucket changes.
+
+    Called during ingestion when a VBT/Dealer payable rolled over to a
+    different maturity bucket. Updates asset_holder_id, holder_id, and
+    agent asset_ids lists.
+    """
+    from bilancio.domain.instruments.credit import Payable
+
+    payable = system.state.contracts.get(contract_id)
+    if not isinstance(payable, Payable):
+        return
+
+    # Move from old owner's asset_ids to new owner's
+    old_agent = system.state.agents.get(old_owner)
+    new_agent = system.state.agents.get(new_owner)
+
+    if old_agent and contract_id in old_agent.asset_ids:
+        old_agent.asset_ids.remove(contract_id)
+    if new_agent and contract_id not in new_agent.asset_ids:
+        new_agent.asset_ids.append(contract_id)
+
+    # Update the payable's ownership fields
+    payable.asset_holder_id = new_owner
+    payable.holder_id = None  # Reset secondary holder since asset_holder_id is now correct
+
+
 def _ingest_new_payables(subsystem: DealerSubsystem, system, current_day: int) -> int:
     """Create tickets for new payables (from rollover) that have no ticket yet.
 
@@ -691,18 +718,29 @@ def _ingest_new_payables(subsystem: DealerSubsystem, system, current_day: int) -
         subsystem.ticket_to_payable[ticket_id] = contract_id
         subsystem.payable_to_ticket[contract_id] = ticket_id
 
-        # Assign to correct inventory based on owner
+        # Assign to correct inventory based on owner.
+        # For VBT/Dealer: use the ticket's bucket_id (not the owner's name suffix),
+        # because rollover may have shifted the maturity to a different bucket.
         owner = ticket.owner_id
+        target_bucket = ticket.bucket_id
         if owner.startswith("vbt_"):
-            bucket_name = owner.replace("vbt_", "")
-            vbt = subsystem.vbts.get(bucket_name)
+            correct_owner = f"vbt_{target_bucket}"
+            vbt = subsystem.vbts.get(target_bucket)
             if vbt:
+                # Reassign ownership to the correct bucket's VBT
+                ticket.owner_id = correct_owner
                 vbt.inventory.append(ticket)
+                # Update payable ownership in the main system
+                if correct_owner != owner:
+                    _reassign_payable_owner(system, contract_id, owner, correct_owner)
         elif owner.startswith("dealer_"):
-            bucket_name = owner.replace("dealer_", "")
-            dealer = subsystem.dealers.get(bucket_name)
+            correct_owner = f"dealer_{target_bucket}"
+            dealer = subsystem.dealers.get(target_bucket)
             if dealer:
+                ticket.owner_id = correct_owner
                 dealer.inventory.append(ticket)
+                if correct_owner != owner:
+                    _reassign_payable_owner(system, contract_id, owner, correct_owner)
         else:
             trader = subsystem.traders.get(owner)
             if trader:

@@ -869,6 +869,103 @@ class TestTicketIngestion:
         assert ticket.serial == counter_before
         assert subsystem._ticket_serial_counter == counter_before + 1
 
+    def test_ingest_reassigns_vbt_to_correct_bucket(self):
+        """VBT_short payable with long maturity goes to vbt_long inventory, not vbt_short."""
+        system, trader_ids, dealer_config, _ = _dealer_ring_system(n_agents=3, maturity_days=3)
+        subsystem = initialize_balanced_dealer_subsystem(system, dealer_config, current_day=0)
+
+        long_inv_before = len(subsystem.vbts["long"].inventory)
+        short_inv_before = len(subsystem.vbts["short"].inventory)
+
+        # Payable originally from vbt_short, but rolled over to a long maturity
+        # remaining_tau = 15 - 3 = 12 → "long" bucket (tau >= 9)
+        new_payable = Payable(
+            id=system.new_contract_id("PAY"),
+            kind="payable",
+            amount=25,
+            denom="X",
+            asset_holder_id="vbt_short",  # Original owner was short VBT
+            liability_issuer_id="H1",
+            due_day=15,
+            maturity_distance=3,
+        )
+        system.add_contract(new_payable)
+
+        _ingest_new_payables(subsystem, system, current_day=3)
+
+        # Should be in vbt_long's inventory, NOT vbt_short's
+        assert len(subsystem.vbts["long"].inventory) == long_inv_before + 1
+        assert len(subsystem.vbts["short"].inventory) == short_inv_before
+
+        # Ticket owner should be vbt_long
+        ticket_id = f"TKT_{new_payable.id}"
+        ticket = subsystem.tickets[ticket_id]
+        assert ticket.owner_id == "vbt_long"
+        assert ticket.bucket_id == "long"
+
+        # Payable in main system should also be reassigned
+        payable = system.state.contracts[new_payable.id]
+        assert payable.asset_holder_id == "vbt_long"
+        assert new_payable.id in system.state.agents["vbt_long"].asset_ids
+        assert new_payable.id not in system.state.agents["vbt_short"].asset_ids
+
+    def test_ingest_reassigns_dealer_to_correct_bucket(self):
+        """Dealer_short payable with mid maturity goes to dealer_mid inventory."""
+        system, trader_ids, dealer_config, _ = _dealer_ring_system(n_agents=3, maturity_days=3)
+        subsystem = initialize_balanced_dealer_subsystem(system, dealer_config, current_day=0)
+
+        mid_inv_before = len(subsystem.dealers["mid"].inventory)
+
+        # remaining_tau = 10 - 3 = 7 → "mid" bucket (tau 4-8)
+        new_payable = Payable(
+            id=system.new_contract_id("PAY"),
+            kind="payable",
+            amount=12,
+            denom="X",
+            asset_holder_id="dealer_short",  # Original owner was short dealer
+            liability_issuer_id="H1",
+            due_day=10,
+            maturity_distance=3,
+        )
+        system.add_contract(new_payable)
+
+        _ingest_new_payables(subsystem, system, current_day=3)
+
+        assert len(subsystem.dealers["mid"].inventory) == mid_inv_before + 1
+
+        ticket_id = f"TKT_{new_payable.id}"
+        ticket = subsystem.tickets[ticket_id]
+        assert ticket.owner_id == "dealer_mid"
+        assert ticket.bucket_id == "mid"
+
+    def test_ingest_keeps_same_bucket_when_matching(self):
+        """VBT_short payable staying in short bucket keeps vbt_short as owner."""
+        system, trader_ids, dealer_config, _ = _dealer_ring_system(n_agents=3, maturity_days=3)
+        subsystem = initialize_balanced_dealer_subsystem(system, dealer_config, current_day=0)
+
+        short_inv_before = len(subsystem.vbts["short"].inventory)
+
+        # remaining_tau = 6 - 3 = 3 → "short" bucket (tau 1-3)
+        new_payable = Payable(
+            id=system.new_contract_id("PAY"),
+            kind="payable",
+            amount=25,
+            denom="X",
+            asset_holder_id="vbt_short",
+            liability_issuer_id="H1",
+            due_day=6,
+            maturity_distance=3,
+        )
+        system.add_contract(new_payable)
+
+        _ingest_new_payables(subsystem, system, current_day=3)
+
+        assert len(subsystem.vbts["short"].inventory) == short_inv_before + 1
+
+        ticket_id = f"TKT_{new_payable.id}"
+        ticket = subsystem.tickets[ticket_id]
+        assert ticket.owner_id == "vbt_short"  # Stays with short VBT
+
 
 class TestFullCycle:
     """End-to-end: init → settle → rollover → ingest → verify continuous trading."""
