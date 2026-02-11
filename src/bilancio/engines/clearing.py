@@ -80,7 +80,9 @@ def settle_intraday_nets(system, day: int):
                 # Find available reserves for debtor bank
                 debtor_reserve_ids = []
                 for cid in system.state.agents[debtor_bank].asset_ids:
-                    contract = system.state.contracts[cid]
+                    contract = system.state.contracts.get(cid)
+                    if contract is None:
+                        continue
                     if contract.kind == "reserve_deposit":
                         debtor_reserve_ids.append(cid)
 

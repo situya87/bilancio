@@ -994,7 +994,8 @@ class TestPhase1BucketTransition:
         assert subsystem.tickets[ticket_id].bucket_id == "mid"
         assert subsystem.tickets[ticket_id].owner_id == "dealer_mid"
 
-        short_inv_before = len(subsystem.dealers["short"].inventory)
+        mid_cash_before = subsystem.dealers["mid"].cash
+        short_cash_before = subsystem.dealers["short"].cash
 
         # Run trading phase at day=3: remaining_tau = 5-3 = 2 → "short" (tau 1-3)
         run_dealer_trading_phase(subsystem, system, current_day=3)
@@ -1008,6 +1009,33 @@ class TestPhase1BucketTransition:
             # Main system payable should also be reassigned
             payable = system.state.contracts[test_payable.id]
             assert payable.asset_holder_id == "dealer_short"
+
+    def test_dealer_bucket_transition_is_free_internal_move(self):
+        """Bucket transitions are internal moves (cash pooling), no interdealer payment."""
+        system, trader_ids, dealer_config, _ = _dealer_ring_system(n_agents=3, maturity_days=5)
+        subsystem = initialize_balanced_dealer_subsystem(system, dealer_config, current_day=0)
+
+        test_payable = Payable(
+            id=system.new_contract_id("PAY"),
+            kind="payable",
+            amount=100,
+            denom="X",
+            asset_holder_id="dealer_mid",
+            liability_issuer_id="H1",
+            due_day=5,
+            maturity_distance=5,
+        )
+        system.add_contract(test_payable)
+        _ingest_new_payables(subsystem, system, current_day=0)
+
+        # Run at day=3: tau=2 → short bucket. Ticket moves internally.
+        run_dealer_trading_phase(subsystem, system, current_day=3)
+
+        ticket_id = f"TKT_{test_payable.id}"
+        ticket = subsystem.tickets.get(ticket_id)
+        if ticket:
+            assert ticket.owner_id == "dealer_short"
+            assert ticket in subsystem.dealers["short"].inventory
 
     def test_vbt_ticket_moves_to_new_bucket_on_maturity_update(self):
         """VBT_long ticket ages into mid bucket → moves to vbt_mid inventory."""
@@ -1043,6 +1071,36 @@ class TestPhase1BucketTransition:
 
             payable = system.state.contracts[test_payable.id]
             assert payable.asset_holder_id == "vbt_mid"
+
+    def test_cash_pooling_equalizes_desk_cash(self):
+        """After pooling, all dealer desks have equal cash; same for VBT desks."""
+        from bilancio.engines.dealer_integration import _pool_desk_cash
+
+        system, trader_ids, dealer_config, _ = _dealer_ring_system(n_agents=3, maturity_days=5)
+        subsystem = initialize_balanced_dealer_subsystem(system, dealer_config, current_day=0)
+
+        # Artificially set unequal cash (simulating short absorbing defaults)
+        subsystem.dealers["short"].cash = Decimal(100)
+        subsystem.dealers["mid"].cash = Decimal(400)
+        subsystem.dealers["long"].cash = Decimal(500)
+
+        subsystem.vbts["short"].cash = Decimal(50)
+        subsystem.vbts["mid"].cash = Decimal(200)
+        subsystem.vbts["long"].cash = Decimal(350)
+
+        _pool_desk_cash(subsystem)
+
+        # All dealer desks should have equal cash
+        expected_dealer = Decimal(1000) / 3
+        for dealer in subsystem.dealers.values():
+            assert dealer.cash == expected_dealer, \
+                f"dealer_{dealer.bucket_id} cash={dealer.cash}, expected {expected_dealer}"
+
+        # All VBT desks should have equal cash
+        expected_vbt = Decimal(600) / 3
+        for vbt in subsystem.vbts.values():
+            assert vbt.cash == expected_vbt, \
+                f"vbt_{vbt.bucket_id} cash={vbt.cash}, expected {expected_vbt}"
 
     def test_trader_ticket_bucket_changes_without_owner_change(self):
         """Trader-owned ticket changes bucket but owner stays the same."""

@@ -144,7 +144,7 @@ class System:
         with atomic(self):
             remaining = amount
             cash_ids = [cid for cid in self.state.agents[from_agent_id].asset_ids
-                        if self.state.contracts[cid].kind == "cash"]
+                        if cid in self.state.contracts and self.state.contracts[cid].kind == "cash"]
             for cid in list(cash_ids):
                 instr = self.state.contracts[cid]
                 take = min(instr.amount, remaining)
@@ -180,10 +180,12 @@ class System:
                 raise ValidationError("insufficient cash")
             # optional coalesce at receiver (merge duplicates)
             rx_ids = [cid for cid in self.state.agents[to_agent_id].asset_ids
-                      if self.state.contracts[cid].kind == "cash"]
+                      if cid in self.state.contracts and self.state.contracts[cid].kind == "cash"]
             # naive coalesce: pairwise merge same-key
             seen = {}
             for cid in rx_ids:
+                if cid not in self.state.contracts:
+                    continue  # may have been merged in prior iteration
                 k = (self.state.contracts[cid].denom, self.state.contracts[cid].liability_issuer_id)
                 keep = seen.get(k)
                 if keep and keep != cid:
@@ -242,10 +244,12 @@ class System:
                 raise ValidationError("insufficient reserves")
             # optional coalesce at receiver (merge duplicates)
             rx_ids = [cid for cid in self.state.agents[to_bank_id].asset_ids
-                      if self.state.contracts[cid].kind == "reserve_deposit"]
+                      if cid in self.state.contracts and self.state.contracts[cid].kind == "reserve_deposit"]
             # naive coalesce: pairwise merge same-key
             seen = {}
             for cid in rx_ids:
+                if cid not in self.state.contracts:
+                    continue
                 k = (self.state.contracts[cid].denom, self.state.contracts[cid].liability_issuer_id)
                 keep = seen.get(k)
                 if keep and keep != cid:
@@ -259,7 +263,7 @@ class System:
             # consume reserves
             remaining = amount
             reserve_ids = [cid for cid in self.state.agents[bank_id].asset_ids
-                          if self.state.contracts[cid].kind == "reserve_deposit"]
+                          if cid in self.state.contracts and self.state.contracts[cid].kind == "reserve_deposit"]
             for cid in list(reserve_ids):
                 instr = self.state.contracts[cid]
                 take = min(instr.amount, remaining)
@@ -287,7 +291,7 @@ class System:
             # consume cash
             remaining = amount
             cash_ids = [cid for cid in self.state.agents[bank_id].asset_ids
-                       if self.state.contracts[cid].kind == "cash"]
+                       if cid in self.state.contracts and self.state.contracts[cid].kind == "cash"]
             for cid in list(cash_ids):
                 instr = self.state.contracts[cid]
                 take = min(instr.amount, remaining)
@@ -406,7 +410,7 @@ class System:
             # 1. Consume reserves from bank (repayment amount)
             remaining = repayment_amount
             reserve_ids = [cid for cid in self.state.agents[bank_id].asset_ids
-                          if self.state.contracts[cid].kind == "reserve_deposit"]
+                          if cid in self.state.contracts and self.state.contracts[cid].kind == "reserve_deposit"]
 
             for cid in list(reserve_ids):
                 instr = self.state.contracts[cid]
@@ -571,7 +575,9 @@ class System:
         """Filter customer assets for bank_deposit issued by bank_id"""
         out = []
         for cid in self.state.agents[customer_id].asset_ids:
-            c = self.state.contracts[cid]
+            c = self.state.contracts.get(cid)
+            if c is None:
+                continue
             if c.kind == "bank_deposit" and c.liability_issuer_id == bank_id:
                 out.append(cid)
         return out

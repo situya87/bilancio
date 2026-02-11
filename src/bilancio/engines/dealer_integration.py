@@ -1096,6 +1096,35 @@ def _execute_buy_trade(
     return Decimal(0)
 
 
+def _pool_desk_cash(subsystem: DealerSubsystem) -> None:
+    """Redistribute cash equally across dealer desks and VBT desks.
+
+    The three dealer desks (short/mid/long) are conceptually one firm with
+    a shared balance sheet. Similarly for VBT desks. This function pools
+    all desk cash and redistributes it equally so that:
+    - Default losses (absorbed by the short desk at maturity) are shared
+    - Settlement revenue (received by short desk) is shared
+    - No interdealer payment is needed for bucket transitions
+
+    Called between Phase 1 (maturity aging) and Phase 2 (quote recomputation).
+    """
+    # Pool dealer cash
+    num_dealers = len(subsystem.dealers)
+    if num_dealers > 0:
+        total_dealer_cash = sum(d.cash for d in subsystem.dealers.values())
+        per_desk = total_dealer_cash / num_dealers
+        for dealer in subsystem.dealers.values():
+            dealer.cash = per_desk
+
+    # Pool VBT cash
+    num_vbts = len(subsystem.vbts)
+    if num_vbts > 0:
+        total_vbt_cash = sum(v.cash for v in subsystem.vbts.values())
+        per_desk = total_vbt_cash / num_vbts
+        for vbt in subsystem.vbts.values():
+            vbt.cash = per_desk
+
+
 def run_dealer_trading_phase(
     subsystem: DealerSubsystem,
     system,
@@ -1239,7 +1268,9 @@ def run_dealer_trading_phase(
             new_dealer = subsystem.dealers.get(new_bucket)
             new_vbt = subsystem.vbts.get(new_bucket)
 
-            # Reassign dealer/VBT-owned tickets to the new bucket's entity
+            # Reassign dealer/VBT-owned tickets to the new bucket's desk.
+            # This is an internal transfer within the same firm (shared cash pool),
+            # so no payment is needed — just move inventory and update ownership.
             if ticket.owner_id.startswith("dealer_") and new_dealer:
                 old_owner = ticket.owner_id
                 new_owner = f"dealer_{new_bucket}"
@@ -1264,6 +1295,12 @@ def run_dealer_trading_phase(
     # Clean up matured tickets to prevent unbounded memory growth
     for ticket_id in matured_ticket_ids:
         del subsystem.tickets[ticket_id]
+
+    # Phase 1.5: Cash pooling — redistribute cash equally across desks.
+    # The three dealer desks (short/mid/long) are one firm sharing a balance sheet.
+    # Same for VBT desks. Pooling ensures default losses and settlement revenue
+    # are amortized across all desks, not concentrated in the short bucket.
+    _pool_desk_cash(subsystem)
 
     # Phase 2: Recompute dealer quotes for all buckets
     for bucket_id, dealer in subsystem.dealers.items():

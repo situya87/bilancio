@@ -657,7 +657,9 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
 
     # Contracts as assets (held by agent)
     for cid in agent.asset_ids:
-        c = system.state.contracts[cid]
+        c = system.state.contracts.get(cid)
+        if c is None:
+            continue  # Contract removed (e.g. during dealer trading)
         if c.kind == "delivery_obligation":
             # Receivable goods
             # valued_amount is Decimal
@@ -693,7 +695,9 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
 
     # Contracts as liabilities (issued by agent)
     for cid in agent.liability_ids:
-        c = system.state.contracts[cid]
+        c = system.state.contracts.get(cid)
+        if c is None:
+            continue  # Contract removed (e.g. during dealer trading)
         if c.kind == "delivery_obligation":
             valued = getattr(c, 'valued_amount', None)
             try:
