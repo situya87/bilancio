@@ -407,12 +407,12 @@ def initialize_balanced_dealer_subsystem(
     from bilancio.domain.agents import Dealer, VBT
     from bilancio.domain.instruments.credit import Payable
 
-    # Calculate outside mid M from ratio and face value
-    outside_mid = outside_mid_ratio * face_value
+    # Calculate outside mid M from ratio (per-unit-of-face convention, S=1)
+    outside_mid = outside_mid_ratio
 
     subsystem = DealerSubsystem(
         bucket_configs=dealer_config.buckets,
-        params=KernelParams(S=face_value),  # Use face_value as ticket size
+        params=KernelParams(S=Decimal(1)),  # Per-unit-of-face: kernel prices are fractions of face
         rng=random.Random(dealer_config.seed),
         enabled=(mode == "active"),  # Disable trading for passive mode
     )
@@ -517,7 +517,7 @@ def initialize_balanced_dealer_subsystem(
         # Create VBT state WITH inventory
         # VBT anchors based on outside_mid
         M = outside_mid
-        O = Decimal("0.30")  # Default spread
+        O = Decimal("0.30") * outside_mid_ratio  # Spread scaled to maintain relative width
 
         vbt = VBTState(
             bucket_id=bucket_id,

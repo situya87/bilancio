@@ -157,7 +157,7 @@ def _balanced_scenario_config(*, enabled=True, mode="active"):
 class TestApplyBalancedDealer:
 
     def test_balanced_dealer_uses_correct_vbt_anchors(self):
-        """With balanced_dealer.enabled=True: VBT anchor M = ρ×S (=15 for ρ=0.75, S=20)."""
+        """With balanced_dealer.enabled=True: VBT anchor M = ρ (=0.75 for ρ=0.75, per-unit-of-face)."""
         data = _balanced_scenario_config(enabled=True, mode="active")
         config = ScenarioConfig(**data)
         system = System()
@@ -166,10 +166,10 @@ class TestApplyBalancedDealer:
         subsystem = system.state.dealer_subsystem
         assert subsystem is not None
 
-        # Check VBT anchor: M should be outside_mid_ratio * face_value = 0.75 * 20 = 15
+        # Check VBT anchor: M should be outside_mid_ratio = 0.75 (per-unit-of-face convention)
         for bucket_id, vbt in subsystem.vbts.items():
-            assert vbt.M == Decimal("15"), (
-                f"VBT bucket '{bucket_id}' M={vbt.M}, expected 15 (ρ×S = 0.75×20)"
+            assert vbt.M == Decimal("0.75"), (
+                f"VBT bucket '{bucket_id}' M={vbt.M}, expected 0.75 (ρ = 0.75, per-unit-of-face)"
             )
 
     def test_balanced_dealer_gives_inventory(self):
