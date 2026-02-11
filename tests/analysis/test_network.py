@@ -10,6 +10,7 @@ from bilancio.analysis.network import (
     _snapshot_to_dict,
 )
 from bilancio.engines.system import System
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.means_of_payment import Cash, BankDeposit, ReserveDeposit
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.agents.central_bank import CentralBank
@@ -162,7 +163,7 @@ def test_edge_source_target_mapping(system_with_simple_contracts):
     payable_id = system.new_contract_id()
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=500,
         denom="X",
         asset_holder_id="H1",
@@ -210,7 +211,7 @@ def system_with_simple_contracts():
     cash1_id = system.new_contract_id()
     cash1 = Cash(
         id=cash1_id,
-        kind="cash",
+        kind=InstrumentKind.CASH,
         amount=100,
         denom="X",
         asset_holder_id="H1",
@@ -221,7 +222,7 @@ def system_with_simple_contracts():
     cash2_id = system.new_contract_id()
     cash2 = Cash(
         id=cash2_id,
-        kind="cash",
+        kind=InstrumentKind.CASH,
         amount=200,
         denom="X",
         asset_holder_id="H2",
@@ -249,7 +250,7 @@ def system_with_multiple_instruments():
     cash_id = system.new_contract_id()
     cash = Cash(
         id=cash_id,
-        kind="cash",
+        kind=InstrumentKind.CASH,
         amount=100,
         denom="X",
         asset_holder_id="H1",
@@ -261,7 +262,7 @@ def system_with_multiple_instruments():
     deposit_id = system.new_contract_id()
     deposit = BankDeposit(
         id=deposit_id,
-        kind="bank_deposit",
+        kind=InstrumentKind.BANK_DEPOSIT,
         amount=500,
         denom="X",
         asset_holder_id="H1",
@@ -273,7 +274,7 @@ def system_with_multiple_instruments():
     reserve_id = system.new_contract_id()
     reserve = ReserveDeposit(
         id=reserve_id,
-        kind="reserve_deposit",
+        kind=InstrumentKind.RESERVE_DEPOSIT,
         amount=1000,
         denom="X",
         asset_holder_id="B1",
@@ -285,7 +286,7 @@ def system_with_multiple_instruments():
     payable_id = system.new_contract_id()
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=200,
         denom="X",
         asset_holder_id="H2",

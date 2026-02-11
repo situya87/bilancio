@@ -10,8 +10,7 @@ def test_core_imports():
     from bilancio.core.errors import (
         BilancioError,
         ValidationError,
-        CalculationError,
-        ConfigurationError,
+        DefaultError,
     )
     from bilancio.core.atomic import AtomicValue, Money, Quantity, Rate
     

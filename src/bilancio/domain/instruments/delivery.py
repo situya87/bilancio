@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
-from bilancio.domain.instruments.base import Instrument
+from bilancio.domain.instruments.base import Instrument, InstrumentKind
 
 @dataclass
 class DeliveryObligation(Instrument):
@@ -9,11 +9,11 @@ class DeliveryObligation(Instrument):
     unit_price: Decimal
     due_day: int
 
-    def __post_init__(self):
-        self.kind = "delivery_obligation"
-        # Ensure unit_price is a Decimal
+    def __post_init__(self) -> None:
+        self.kind = InstrumentKind.DELIVERY_OBLIGATION
+        # Ensure unit_price is a Decimal (callers may pass float/int at runtime)
         if not isinstance(self.unit_price, Decimal):
-            self.unit_price = Decimal(str(self.unit_price))
+            self.unit_price = Decimal(str(self.unit_price))  # type: ignore[unreachable]
 
     def is_financial(self) -> bool:
         # Shows up in balance analysis as non-financial (valued) obligation

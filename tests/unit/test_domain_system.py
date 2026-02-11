@@ -3,6 +3,7 @@ from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.household import Household
 from bilancio.domain.agents.treasury import Treasury
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.means_of_payment import Cash, BankDeposit, ReserveDeposit
 from bilancio.domain.instruments.credit import Payable
 
@@ -13,7 +14,7 @@ def test_create_agents_and_deposit_invariants():
     h1 = Household(id="H1", name="HH 1", kind="household")
     sys.add_agent(cb); sys.add_agent(b1); sys.add_agent(h1)
 
-    d = BankDeposit(id="D1", kind="bank_deposit", amount=100, denom="X",
+    d = BankDeposit(id="D1", kind=InstrumentKind.BANK_DEPOSIT, amount=100, denom="X",
                     asset_holder_id="H1", liability_issuer_id="B1")
     sys.add_contract(d)
     sys.assert_invariants()
@@ -27,7 +28,7 @@ def test_policy_allows_and_blocks_expected_cases():
     sys.add_agent(cb); sys.add_agent(b1); sys.add_agent(h1); sys.add_agent(t1)
 
     # HH can hold bank deposit; bank issues it
-    sys.add_contract(BankDeposit(id="d", kind="bank_deposit", amount=10, denom="X",
+    sys.add_contract(BankDeposit(id="d", kind=InstrumentKind.BANK_DEPOSIT, amount=10, denom="X",
                                  asset_holder_id="H1", liability_issuer_id="B1"))
 
     # Treasury can hold reserves, not required to test now, but ensure creation passes
@@ -35,6 +36,6 @@ def test_policy_allows_and_blocks_expected_cases():
     sys.mint_reserves("B1", 5)
 
     # Any agent can issue a payable in MVP
-    sys.add_contract(Payable(id="p", kind="payable", amount=7, denom="X",
+    sys.add_contract(Payable(id="p", kind=InstrumentKind.PAYABLE, amount=7, denom="X",
                              asset_holder_id="B1", liability_issuer_id="H1", due_day=0))
     sys.assert_invariants()

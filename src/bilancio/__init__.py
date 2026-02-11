@@ -5,8 +5,6 @@ __version__ = "0.1.0"
 # Core imports
 from bilancio.core.errors import (
     BilancioError,
-    CalculationError,
-    ConfigurationError,
     ValidationError,
 )
 from bilancio.core.time import TimeCoordinate, TimeInterval, now
@@ -20,6 +18,4 @@ __all__ = [
     # Core exceptions
     "BilancioError",
     "ValidationError",
-    "CalculationError",
-    "ConfigurationError",
 ]

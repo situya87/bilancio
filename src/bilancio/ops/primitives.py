@@ -1,20 +1,26 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from bilancio.core.errors import ValidationError
 from bilancio.core.ids import new_id
-from bilancio.domain.instruments.base import Instrument
+from bilancio.domain.instruments.base import Instrument, InstrumentKind
+
+if TYPE_CHECKING:
+    from bilancio.engines.system import System
 
 
-def fungible_key(instr: Instrument) -> tuple:
-    # Same type, denomination, issuer, holder → can merge
+def fungible_key(instr: Instrument) -> tuple[str, str, str, str]:
+    # Same type, denomination, issuer, holder -> can merge
     return (instr.kind, instr.denom, instr.liability_issuer_id, instr.asset_holder_id)
 
 def is_divisible(instr: Instrument) -> bool:
     # Cash and bank deposits are divisible
-    if instr.kind in ("cash", "bank_deposit", "reserve_deposit"):
+    if instr.kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT, InstrumentKind.RESERVE_DEPOSIT):
         return True
     return False
 
-def split(system, instr_id: str, amount: int) -> str:
+def split(system: System, instr_id: str, amount: int) -> str:
     instr = system.state.contracts[instr_id]
     if amount <= 0 or amount > instr.amount:
         raise ValidationError("invalid split amount")
@@ -46,7 +52,7 @@ def split(system, instr_id: str, amount: int) -> str:
     system.add_contract(twin)  # attaches to holder/issuer lists too
     return twin_id
 
-def merge(system, a_id: str, b_id: str) -> str:
+def merge(system: System, a_id: str, b_id: str) -> str:
     if a_id == b_id:
         return a_id
     a = system.state.contracts[a_id]
@@ -63,7 +69,7 @@ def merge(system, a_id: str, b_id: str) -> str:
     system.log("InstrumentMerged", keep=a_id, removed=b_id)
     return a_id
 
-def consume(system, instr_id: str, amount: int) -> None:
+def consume(system: System, instr_id: str, amount: int) -> None:
     instr = system.state.contracts[instr_id]
     if amount <= 0 or amount > instr.amount:
         raise ValidationError("invalid consume amount")
@@ -75,7 +81,7 @@ def consume(system, instr_id: str, amount: int) -> None:
         issuer.liability_ids.remove(instr_id)
         del system.state.contracts[instr_id]
 
-def coalesce_deposits(system, customer_id: str, bank_id: str) -> str:
+def coalesce_deposits(system: System, customer_id: str, bank_id: str) -> str:
     """Coalesce all deposits for a customer at a bank into a single instrument"""
     ids = system.deposit_ids(customer_id, bank_id)
     if not ids:
@@ -83,7 +89,7 @@ def coalesce_deposits(system, customer_id: str, bank_id: str) -> str:
         from bilancio.domain.instruments.means_of_payment import BankDeposit
         dep_id = system.new_contract_id("D")
         dep = BankDeposit(
-            id=dep_id, kind="bank_deposit", amount=0, denom="X",
+            id=dep_id, kind=InstrumentKind.BANK_DEPOSIT, amount=0, denom="X",
             asset_holder_id=customer_id, liability_issuer_id=bank_id
         )
         system.add_contract(dep)

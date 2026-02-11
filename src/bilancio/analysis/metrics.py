@@ -273,7 +273,7 @@ def start_of_day_money(bal_rows: List[dict], t: int) -> Decimal:
             return Decimal("0")
         try:
             return Decimal(str(val))
-        except Exception:
+        except (ValueError, TypeError, ArithmeticError):
             return Decimal("0")
 
     total = Decimal("0")

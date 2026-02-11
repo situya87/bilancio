@@ -6,6 +6,7 @@ Outputs are intentionally minimal and stdlib-only.
 from __future__ import annotations
 
 import csv
+import decimal
 import json
 from dataclasses import asdict, dataclass
 from decimal import Decimal
@@ -95,7 +96,7 @@ def _fmt_num(val: Any) -> str:
         try:
             if n == n.to_integral_value():
                 return f"{int(n)}"
-        except Exception:
+        except (ValueError, TypeError, ArithmeticError):
             pass
         # Limit to 6 decimal places when not integral
         return f"{float(n):.6f}".rstrip('0').rstrip('.')
@@ -121,14 +122,14 @@ def parse_day_ranges(spec: str) -> List[int]:
             try:
                 start = int(a)
                 end = int(b)
-            except Exception:
+            except (ValueError, TypeError):
                 continue
             rng = range(min(start, end), max(start, end) + 1)
             out.extend(rng)
         else:
             try:
                 out.append(int(part))
-            except Exception:
+            except (ValueError, TypeError):
                 continue
     return sorted(set(out))
 
@@ -573,7 +574,7 @@ def _decimal_or_none(val: Any) -> Optional[Decimal]:
         return None
     try:
         return Decimal(str(val))
-    except Exception:
+    except (ValueError, TypeError, decimal.InvalidOperation):
         return None
 
 

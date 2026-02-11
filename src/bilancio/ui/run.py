@@ -38,7 +38,7 @@ def _filter_active_agent_ids(system: System, agent_ids: Optional[List[str]]) -> 
         agent = system.state.agents.get(aid)
         if not agent:
             continue
-        if getattr(agent, "defaulted", False):
+        if agent.defaulted:
             continue
         active_ids.append(aid)
     return active_ids

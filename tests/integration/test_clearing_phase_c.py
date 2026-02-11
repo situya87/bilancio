@@ -1,5 +1,6 @@
 import pytest
 from bilancio.engines.system import System
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.engines.clearing import settle_intraday_nets, compute_intraday_nets
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.bank import Bank
@@ -61,12 +62,12 @@ def test_phase_c_netting_reserves():
     
     # Check B1 reserves reduced by 70
     b1_reserves = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B1"].asset_ids 
-                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     assert b1_reserves == 930  # 1000 - 70
     
     # Check B2 reserves increased by 70
     b2_reserves = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B2"].asset_ids 
-                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     assert b2_reserves == 1070  # 1000 + 70
     
     # Check InterbankCleared event logged
@@ -117,16 +118,16 @@ def test_phase_c_overnight_creation():
     
     # Check B1 reserves unchanged (insufficient to cover 100)
     b1_reserves = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B1"].asset_ids 
-                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     assert b1_reserves == 30  # unchanged
     
     # Check B2 reserves unchanged
     b2_reserves = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B2"].asset_ids 
-                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     assert b2_reserves == 1000  # unchanged
     
     # Check overnight payable created: B1 owes B2, due tomorrow
-    payables = [c for c in sys.state.contracts.values() if c.kind == "payable"]
+    payables = [c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE]
     assert len(payables) == 1
     overnight_payable = payables[0]
     assert overnight_payable.liability_issuer_id == "B1"
@@ -195,7 +196,7 @@ def test_phase_c_no_nets_for_same_bank():
     assert len(interbank_events) == 0
     
     # Check no payables created
-    payables = [c for c in sys.state.contracts.values() if c.kind == "payable"]
+    payables = [c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE]
     assert len(payables) == 0
     
     # Check deposit balances (from same-bank transfers)

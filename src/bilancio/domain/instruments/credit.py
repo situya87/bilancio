@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from .base import Instrument
+from .base import Instrument, InstrumentKind
 
 
 @dataclass
@@ -33,8 +33,8 @@ class Payable(Instrument):
         """
         return self.holder_id if self.holder_id else self.asset_holder_id
 
-    def __post_init__(self):
-        self.kind = "payable"
+    def __post_init__(self) -> None:
+        self.kind = InstrumentKind.PAYABLE
 
     def validate_type_invariants(self) -> None:
         super().validate_type_invariants()

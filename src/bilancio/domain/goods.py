@@ -15,11 +15,11 @@ class StockLot:
     owner_id: AgentId
     divisible: bool = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.kind = "stock_lot"
-        # Ensure unit_price is a Decimal
+        # Ensure unit_price is a Decimal (callers may pass float/int at runtime)
         if not isinstance(self.unit_price, Decimal):
-            self.unit_price = Decimal(str(self.unit_price))
+            self.unit_price = Decimal(str(self.unit_price))  # type: ignore[unreachable]
 
     @property
     def value(self) -> Decimal:

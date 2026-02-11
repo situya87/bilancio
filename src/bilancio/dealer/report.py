@@ -132,7 +132,7 @@ def _fmt_decimal(d: Decimal | float | int | str | None, precision: int = 4) -> s
     if isinstance(d, str):
         try:
             d = Decimal(d)
-        except Exception:
+        except (ValueError, TypeError, ArithmeticError):
             return d
     if isinstance(d, (int, float)):
         d = Decimal(str(d))

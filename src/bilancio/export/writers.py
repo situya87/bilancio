@@ -145,7 +145,7 @@ def write_balances_snapshot(
                 assets.append({
                     "id": asset_id,
                     "type": type(contract).__name__,
-                    "amount": getattr(contract, "amount", None)
+                    "amount": contract.amount
                 })
         
         liabilities = []
@@ -155,7 +155,7 @@ def write_balances_snapshot(
                 liabilities.append({
                     "id": liability_id,
                     "type": type(contract).__name__,
-                    "amount": getattr(contract, "amount", None)
+                    "amount": contract.amount
                 })
         
         stocks = []

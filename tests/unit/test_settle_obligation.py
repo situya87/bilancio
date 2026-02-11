@@ -3,6 +3,7 @@ from decimal import Decimal
 from bilancio.engines.system import System
 from bilancio.domain.agents.household import Household
 from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.delivery import DeliveryObligation
 from bilancio.core.errors import ValidationError
@@ -54,7 +55,7 @@ def test_settle_payable_obligation():
     # Create a payable
     payable = Payable(
         id="PAY1",
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=100,
         denom="USD",
         asset_holder_id="CREDITOR",
@@ -218,9 +219,9 @@ def test_complete_chair_transaction_with_settlement():
     
     # Verify state after payment
     seller_cash = sum(sys.state.contracts[cid].amount for cid in seller.asset_ids
-                      if sys.state.contracts[cid].kind == "cash")
+                      if sys.state.contracts[cid].kind == InstrumentKind.CASH)
     buyer_cash = sum(sys.state.contracts[cid].amount for cid in buyer.asset_ids
-                     if sys.state.contracts[cid].kind == "cash")
+                     if sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert seller_cash == 100
     assert buyer_cash == 0
     assert chair_promise_id in buyer.asset_ids
@@ -236,7 +237,7 @@ def test_complete_chair_transaction_with_settlement():
     
     # Seller still has the cash
     seller_cash = sum(sys.state.contracts[cid].amount for cid in seller.asset_ids
-                      if sys.state.contracts[cid].kind == "cash")
+                      if sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert seller_cash == 100
     
     sys.assert_invariants()

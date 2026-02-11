@@ -13,6 +13,7 @@ from decimal import Decimal
 
 from bilancio.engines.system import System
 from bilancio.domain.agents import Bank, Household, CentralBank
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.simulation import run_day
 from bilancio.engines.dealer_integration import (
@@ -52,7 +53,7 @@ def create_test_system_with_payables():
     p1_id = sys.new_contract_id("P")
     p1 = Payable(
         id=p1_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=50,
         denom="X",
         asset_holder_id="H2",
@@ -65,7 +66,7 @@ def create_test_system_with_payables():
     p2_id = sys.new_contract_id("P")
     p2 = Payable(
         id=p2_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=30,
         denom="X",
         asset_holder_id="H3",
@@ -78,7 +79,7 @@ def create_test_system_with_payables():
     p3_id = sys.new_contract_id("P")
     p3 = Payable(
         id=p3_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=20,
         denom="X",
         asset_holder_id="H1",
@@ -307,7 +308,7 @@ def test_settlement_pays_effective_creditor():
     payable_id = sys.new_contract_id("P")
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=25,
         denom="X",
         asset_holder_id="H2",  # Original creditor
@@ -325,17 +326,17 @@ def test_settlement_pays_effective_creditor():
     h1_cash_before = sum(
         sys.state.contracts[cid].amount
         for cid in sys.state.agents["H1"].asset_ids
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     h2_cash_before = sum(
         sys.state.contracts[cid].amount
         for cid in sys.state.agents["H2"].asset_ids
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     h3_cash_before = sum(
         sys.state.contracts[cid].amount
         for cid in sys.state.agents["H3"].asset_ids
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
 
     # Run settlement
@@ -345,17 +346,17 @@ def test_settlement_pays_effective_creditor():
     h1_cash_after = sum(
         sys.state.contracts[cid].amount
         for cid in sys.state.agents["H1"].asset_ids
-        if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash"
+        if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     h2_cash_after = sum(
         sys.state.contracts[cid].amount
         for cid in sys.state.agents["H2"].asset_ids
-        if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash"
+        if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     h3_cash_after = sum(
         sys.state.contracts[cid].amount
         for cid in sys.state.agents["H3"].asset_ids
-        if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash"
+        if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
 
     # Verify H1 (debtor) paid 25
@@ -451,7 +452,7 @@ def test_integration_multiple_days_with_dealer():
     subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
     sys.state.dealer_subsystem = subsystem
 
-    initial_payable_count = len([c for c in sys.state.contracts.values() if c.kind == "payable"])
+    initial_payable_count = len([c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE])
     assert initial_payable_count == 3, "Should start with 3 payables"
 
     # Run 5 days with dealer enabled
@@ -466,7 +467,7 @@ def test_integration_multiple_days_with_dealer():
     assert len(dealer_events) == 5, "Should have dealer events for 5 days"
 
     # Verify at least one payable has settled (due_day=2)
-    final_payable_count = len([c for c in sys.state.contracts.values() if c.kind == "payable"])
+    final_payable_count = len([c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE])
     assert final_payable_count < initial_payable_count, "Some payables should have settled"
 
     # Verify settlement events logged

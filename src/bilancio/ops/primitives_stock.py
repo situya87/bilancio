@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from bilancio.engines.system import System
 
 
-def stock_fungible_key(lot: StockLot) -> tuple:
+def stock_fungible_key(lot: StockLot) -> tuple[str, str, str, Decimal]:
     """Return fungible key for stock lots. Include price so lots with different valuation don't merge."""
     return (lot.kind, lot.sku, lot.owner_id, lot.unit_price)
 

@@ -12,6 +12,7 @@ import pytest
 from decimal import Decimal
 
 from bilancio.core.errors import DefaultError
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.settlement import settle_due, rollover_settled_payables, _reconnect_ring, _remove_contract, _expel_agent
 from bilancio.engines.dealer_integration import (
@@ -55,7 +56,7 @@ def _ring_system(n_agents: int, default_mode: str = "expel-agent", rollover_enab
         creditor = agents[(i + 1) % n_agents]
         payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=100,
             denom="X",
             asset_holder_id=creditor.id,
@@ -132,7 +133,7 @@ class TestBasicReconnection:
             creditor = agents[(i + 1) % 5]
             payable = Payable(
                 id=system.new_contract_id("PAY"),
-                kind="payable",
+                kind=InstrumentKind.PAYABLE,
                 amount=amounts[i],
                 denom="X",
                 asset_holder_id=creditor.id,
@@ -230,7 +231,7 @@ class TestEdgeCases:
         # Verify final state: H2→H5 payable exists
         found = False
         for c in system.state.contracts.values():
-            if (c.kind == "payable"
+            if (c.kind == InstrumentKind.PAYABLE
                 and c.liability_issuer_id == "H2"
                 and c.asset_holder_id == "H5"):
                 found = True
@@ -277,7 +278,7 @@ class TestEdgeCases:
 
         # No self-payable should exist (H1 should not owe itself)
         for c in system.state.contracts.values():
-            if c.kind == "payable":
+            if c.kind == InstrumentKind.PAYABLE:
                 assert c.liability_issuer_id != c.asset_holder_id, \
                     "Self-payable should not exist after ring collapse"
 
@@ -447,7 +448,7 @@ def _dealer_ring_system(n_agents: int = 5, maturity_days: int = 3):
         creditor_id = trader_ids[(i + 1) % n_agents]
         payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=face_value,
             denom="X",
             asset_holder_id=creditor_id,
@@ -462,7 +463,7 @@ def _dealer_ring_system(n_agents: int = 5, maturity_days: int = 3):
         debtor_id = trader_ids[i]
         vbt_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=25,
             denom="X",
             asset_holder_id="vbt_short",
@@ -477,7 +478,7 @@ def _dealer_ring_system(n_agents: int = 5, maturity_days: int = 3):
         debtor_id = trader_ids[i]
         dealer_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=12,
             denom="X",
             asset_holder_id="dealer_short",
@@ -639,7 +640,7 @@ class TestModelCRollover:
         # Each non-defaulted settlement produces a new payable
         for pid in new_ids:
             assert pid in system.state.contracts
-            assert system.state.contracts[pid].kind == "payable"
+            assert system.state.contracts[pid].kind == InstrumentKind.PAYABLE
 
 
 class TestTicketIngestion:
@@ -661,7 +662,7 @@ class TestTicketIngestion:
         # Manually create a new payable (simulating rollover output)
         new_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=100,
             denom="X",
             asset_holder_id="H2",
@@ -701,7 +702,7 @@ class TestTicketIngestion:
         # Create payable owned by VBT
         new_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=25,
             denom="X",
             asset_holder_id="vbt_short",
@@ -724,7 +725,7 @@ class TestTicketIngestion:
 
         new_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=12,
             denom="X",
             asset_holder_id="dealer_short",
@@ -747,7 +748,7 @@ class TestTicketIngestion:
 
         new_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=100,
             denom="X",
             asset_holder_id="H1",
@@ -770,7 +771,7 @@ class TestTicketIngestion:
 
         new_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=100,
             denom="X",
             asset_holder_id="H1",
@@ -805,7 +806,7 @@ class TestTicketIngestion:
         # Create a payable that's already matured (due_day == current_day)
         matured_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=100,
             denom="X",
             asset_holder_id="H1",
@@ -829,7 +830,7 @@ class TestTicketIngestion:
 
         new_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=100,
             denom="X",
             asset_holder_id="H2",
@@ -852,7 +853,7 @@ class TestTicketIngestion:
 
         new_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=100,
             denom="X",
             asset_holder_id="H1",
@@ -881,7 +882,7 @@ class TestTicketIngestion:
         # remaining_tau = 15 - 3 = 12 → "long" bucket (tau >= 9)
         new_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=25,
             denom="X",
             asset_holder_id="vbt_short",  # Original owner was short VBT
@@ -919,7 +920,7 @@ class TestTicketIngestion:
         # remaining_tau = 10 - 3 = 7 → "mid" bucket (tau 4-8)
         new_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=12,
             denom="X",
             asset_holder_id="dealer_short",  # Original owner was short dealer
@@ -948,7 +949,7 @@ class TestTicketIngestion:
         # remaining_tau = 6 - 3 = 3 → "short" bucket (tau 1-3)
         new_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=25,
             denom="X",
             asset_holder_id="vbt_short",
@@ -979,7 +980,7 @@ class TestPhase1BucketTransition:
         # At current_day=0: remaining_tau=5 → "mid" (tau 4-8)
         test_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=12,
             denom="X",
             asset_holder_id="dealer_mid",
@@ -1017,7 +1018,7 @@ class TestPhase1BucketTransition:
 
         test_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=100,
             denom="X",
             asset_holder_id="dealer_mid",
@@ -1045,7 +1046,7 @@ class TestPhase1BucketTransition:
         # At current_day=0: remaining_tau=10 → "long" (tau >= 9)
         test_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=25,
             denom="X",
             asset_holder_id="vbt_long",
@@ -1110,7 +1111,7 @@ class TestPhase1BucketTransition:
         # Create mid-bucket trader ticket: remaining_tau=5 → "mid"
         test_payable = Payable(
             id=system.new_contract_id("PAY"),
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=100,
             denom="X",
             asset_holder_id="H1",

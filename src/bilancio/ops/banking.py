@@ -1,16 +1,24 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from bilancio.core.atomic_tx import atomic
 from bilancio.core.errors import ValidationError
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.ops.primitives import coalesce_deposits, split
 
+if TYPE_CHECKING:
+    from bilancio.engines.system import System
 
-def deposit_cash(system, customer_id: str, bank_id: str, amount: int) -> str:
+
+def deposit_cash(system: System, customer_id: str, bank_id: str, amount: int) -> str:
     if amount <= 0:
         raise ValidationError("amount must be positive")
     # collect payer cash, splitting as needed
     with atomic(system):
         remaining = amount
         cash_ids = [cid for cid in list(system.state.agents[customer_id].asset_ids)
-                    if system.state.contracts[cid].kind == "cash"]
+                    if system.state.contracts[cid].kind == InstrumentKind.CASH]
         moved_piece_ids = []
         for cid in cash_ids:
             instr = system.state.contracts[cid]
@@ -35,7 +43,7 @@ def deposit_cash(system, customer_id: str, bank_id: str, amount: int) -> str:
                    cash_piece_ids=moved_piece_ids, deposit_id=dep_id)
         return dep_id
 
-def withdraw_cash(system, customer_id: str, bank_id: str, amount: int) -> str:
+def withdraw_cash(system: System, customer_id: str, bank_id: str, amount: int) -> str:
     if amount <= 0:
         raise ValidationError("amount must be positive")
     with atomic(system):
@@ -63,7 +71,7 @@ def withdraw_cash(system, customer_id: str, bank_id: str, amount: int) -> str:
 
         # 2) move cash from bank vault → customer (require sufficient cash on hand)
         bank_cash_ids = [cid for cid in list(system.state.agents[bank_id].asset_ids)
-                         if system.state.contracts[cid].kind == "cash"]
+                         if system.state.contracts[cid].kind == InstrumentKind.CASH]
         remaining = amount
         moved_piece_ids = []
         for cid in bank_cash_ids:
@@ -85,8 +93,8 @@ def withdraw_cash(system, customer_id: str, bank_id: str, amount: int) -> str:
         # 3) coalesce customer cash if you want tidy balances (optional)
         return "ok"
 
-def client_payment(system, payer_id: str, payer_bank: str, payee_id: str, payee_bank: str,
-                   amount: int, allow_cash_fallback: bool=False) -> str:
+def client_payment(system: System, payer_id: str, payer_bank: str, payee_id: str, payee_bank: str,
+                   amount: int, allow_cash_fallback: bool = False) -> str:
     if amount <= 0:
         raise ValidationError("amount must be positive")
     with atomic(system):
@@ -113,7 +121,7 @@ def client_payment(system, payer_id: str, payer_bank: str, payee_id: str, payee_
         cash_paid = 0
         if remaining and allow_cash_fallback:
             cash_ids = [cid for cid in list(system.state.agents[payer_id].asset_ids)
-                        if system.state.contracts[cid].kind == "cash"]
+                        if system.state.contracts[cid].kind == InstrumentKind.CASH]
             for cid in cash_ids:
                 instr = system.state.contracts[cid]
                 if instr.amount > remaining:

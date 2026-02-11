@@ -15,6 +15,7 @@ from decimal import Decimal
 from bilancio.engines.system import System
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.bank import Bank
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.domain.instruments.means_of_payment import ReserveDeposit
 from bilancio.core.errors import ValidationError
@@ -31,7 +32,7 @@ class TestCBLoanInstrument:
         """Test CBLoan computes maturity and repayment correctly."""
         loan = CBLoan(
             id="L1",
-            kind="cb_loan",
+            kind=InstrumentKind.CB_LOAN,
             amount=10000,
             denom="X",
             asset_holder_id="CB",
@@ -49,7 +50,7 @@ class TestCBLoanInstrument:
         """Test CBLoan due date checking."""
         loan = CBLoan(
             id="L1",
-            kind="cb_loan",
+            kind=InstrumentKind.CB_LOAN,
             amount=5000,
             denom="X",
             asset_holder_id="CB",
@@ -68,7 +69,7 @@ class TestCBLoanInstrument:
         # Low rate
         loan_low = CBLoan(
             id="L1",
-            kind="cb_loan",
+            kind=InstrumentKind.CB_LOAN,
             amount=1000,
             denom="X",
             asset_holder_id="CB",
@@ -81,7 +82,7 @@ class TestCBLoanInstrument:
         # High rate
         loan_high = CBLoan(
             id="L2",
-            kind="cb_loan",
+            kind=InstrumentKind.CB_LOAN,
             amount=1000,
             denom="X",
             asset_holder_id="CB",
@@ -103,7 +104,7 @@ class TestReserveInterest:
         """Test ReserveDeposit with interest tracking fields."""
         reserve = ReserveDeposit(
             id="R1",
-            kind="reserve_deposit",
+            kind=InstrumentKind.RESERVE_DEPOSIT,
             amount=10000,
             denom="X",
             asset_holder_id="B1",
@@ -123,7 +124,7 @@ class TestReserveInterest:
         """Test ReserveDeposit without interest (backwards compatible)."""
         reserve = ReserveDeposit(
             id="R1",
-            kind="reserve_deposit",
+            kind=InstrumentKind.RESERVE_DEPOSIT,
             amount=10000,
             denom="X",
             asset_holder_id="B1",
@@ -139,7 +140,7 @@ class TestReserveInterest:
         """Test that last_interest_day updates affect next_interest_day."""
         reserve = ReserveDeposit(
             id="R1",
-            kind="reserve_deposit",
+            kind=InstrumentKind.RESERVE_DEPOSIT,
             amount=5000,
             denom="X",
             asset_holder_id="B1",
@@ -253,7 +254,7 @@ class TestCBLendingFacility:
         # Check loan created
         assert loan_id in self.sys.state.contracts
         loan = self.sys.state.contracts[loan_id]
-        assert loan.kind == "cb_loan"
+        assert loan.kind == InstrumentKind.CB_LOAN
         assert loan.amount == 10000
         assert loan.asset_holder_id == "CB"
         assert loan.liability_issuer_id == "B1"
@@ -262,7 +263,7 @@ class TestCBLendingFacility:
         # Check reserves created
         bank_reserves = sum(
             c.amount for c in self.sys.state.contracts.values()
-            if c.kind == "reserve_deposit" and c.asset_holder_id == "B1"
+            if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert bank_reserves == 10000
 
@@ -280,7 +281,7 @@ class TestCBLendingFacility:
         # Find the reserve
         reserve = next(
             c for c in self.sys.state.contracts.values()
-            if c.kind == "reserve_deposit" and c.asset_holder_id == "B1"
+            if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
 
         assert reserve.remuneration_rate == Decimal("0.01")
@@ -343,7 +344,7 @@ class TestCBLoanRepayment:
         # Bank should have remaining reserves
         bank_reserves = sum(
             c.amount for c in self.sys.state.contracts.values()
-            if c.kind == "reserve_deposit" and c.asset_holder_id == "B1"
+            if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert bank_reserves == 100  # 10400 - 10300
 
@@ -423,7 +424,7 @@ class TestReserveInterestCrediting:
         # Bank should have original + interest
         bank_reserves = sum(
             c.amount for c in self.sys.state.contracts.values()
-            if c.kind == "reserve_deposit" and c.asset_holder_id == "B1"
+            if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert bank_reserves == 10100
 
@@ -440,11 +441,11 @@ class TestReserveInterestCrediting:
 
         b1_reserves = sum(
             c.amount for c in self.sys.state.contracts.values()
-            if c.kind == "reserve_deposit" and c.asset_holder_id == "B1"
+            if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         b2_reserves = sum(
             c.amount for c in self.sys.state.contracts.values()
-            if c.kind == "reserve_deposit" and c.asset_holder_id == "B2"
+            if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B2"
         )
 
         assert b1_reserves == 10100
@@ -463,7 +464,7 @@ class TestReserveInterestCrediting:
 
         bank_reserves = sum(
             c.amount for c in self.sys.state.contracts.values()
-            if c.kind == "reserve_deposit" and c.asset_holder_id == "B1"
+            if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert bank_reserves == 10000
 
@@ -560,7 +561,7 @@ class TestCBCorridorIntegration:
         # Bank should have: 10100 + 200 - 10300 = 0
         bank_reserves = sum(
             c.amount for c in sys.state.contracts.values()
-            if c.kind == "reserve_deposit" and c.asset_holder_id == "B1"
+            if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert bank_reserves == 0
 
@@ -600,7 +601,7 @@ class TestCBCorridorIntegration:
         # Check B1 earning at floor
         b1_reserves = sum(
             c.amount for c in sys.state.contracts.values()
-            if c.kind == "reserve_deposit" and c.asset_holder_id == "B1"
+            if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert b1_reserves == 20200  # 20000 + 200
 
