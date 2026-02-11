@@ -180,7 +180,7 @@ class BalancedComparisonConfig(BaseModel):
         default_factory=lambda: {
             "base_risk_premium": "0.02",
             "urgency_sensitivity": "0.10",
-            "buy_premium_multiplier": "2.0",
+            "buy_premium_multiplier": "1.0",
             "lookback_window": 5,
         },
         description="Risk assessment parameters"

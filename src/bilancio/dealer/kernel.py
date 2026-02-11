@@ -98,14 +98,14 @@ def recompute_dealer_state(
 
     # Step 3: Normal computation (M > M_MIN)
 
-    # V = Mid-valued inventory = M * a + C
+    # V = Mid-valued inventory = M * x + C = M * a * S + C
     # This is the dealer's "equity" valued at VBT mid
-    dealer.V = M * dealer.a + dealer.cash
+    dealer.V = M * dealer.x + dealer.cash
 
-    # K* = floor(V / M)
-    # Maximum number of tickets dealer can buy without borrowing
+    # K* = floor(V / (M * S))
+    # Maximum number of tickets dealer can fund without borrowing
     # Uses ROUND_FLOOR to ensure integer result
-    K_star_decimal = (dealer.V / M).quantize(Decimal(1), rounding=ROUND_FLOOR)
+    K_star_decimal = (dealer.V / (M * S)).quantize(Decimal(1), rounding=ROUND_FLOOR)
     dealer.K_star = int(K_star_decimal)
 
     # X* = S * K*
@@ -186,7 +186,7 @@ def can_interior_buy(dealer: DealerState, params: KernelParams) -> bool:
     """
     S = params.S
     has_capacity = (dealer.x + S <= dealer.X_star)
-    has_cash = (dealer.cash >= dealer.bid)
+    has_cash = (dealer.cash >= dealer.bid * S)
     return has_capacity and has_cash
 
 

@@ -435,7 +435,7 @@ class RiskAssessmentConfig(BaseModel):
     base_risk_premium: Decimal = Field(Decimal("0.02"), description="Base risk premium (threshold for trading)")
     urgency_sensitivity: Decimal = Field(Decimal("0.10"), description="How much liquidity urgency reduces threshold")
     use_issuer_specific: bool = Field(False, description="Use per-issuer vs system-wide default rates")
-    buy_premium_multiplier: Decimal = Field(Decimal("2.0"), description="Multiplier for buy threshold (buyers more cautious)")
+    buy_premium_multiplier: Decimal = Field(Decimal("1.0"), description="Multiplier for buy threshold (same premium as sellers)")
 
     @field_validator("lookback_window")
     @classmethod

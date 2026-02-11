@@ -420,7 +420,7 @@ def initialize_balanced_dealer_subsystem(
 
     subsystem = DealerSubsystem(
         bucket_configs=dealer_config.buckets,
-        params=KernelParams(S=Decimal(1)),  # Per-unit-of-face: kernel prices are fractions of face
+        params=KernelParams(S=face_value),  # S=face_value: kernel accounts for real ticket size
         rng=random.Random(dealer_config.seed),
         enabled=(mode == "active"),  # Disable trading for passive mode
         face_value=face_value,
@@ -526,7 +526,7 @@ def initialize_balanced_dealer_subsystem(
         # Create VBT state WITH inventory
         # VBT anchors based on outside_mid
         M = outside_mid
-        O = Decimal("0.30") * outside_mid_ratio  # Spread scaled to maintain relative width
+        O = Decimal("0.50") * outside_mid_ratio  # Wider spread for price sensitivity
 
         vbt = VBTState(
             bucket_id=bucket_id,

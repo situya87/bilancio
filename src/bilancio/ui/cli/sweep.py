@@ -610,7 +610,7 @@ def sweep_balanced(
     risk_config = {
         "base_risk_premium": str(risk_premium),
         "urgency_sensitivity": str(risk_urgency),
-        "buy_premium_multiplier": "2.0",
+        "buy_premium_multiplier": "1.0",
         "lookback_window": 5,
     }
 

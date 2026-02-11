@@ -34,7 +34,7 @@ class RiskAssessmentParams:
     base_risk_premium: Decimal = Decimal("0.02")  # 2% premium
     urgency_sensitivity: Decimal = Decimal("0.10")  # 10% sensitivity
     use_issuer_specific: bool = False
-    buy_premium_multiplier: Decimal = Decimal("1.5")  # Buyers need 1.5x premium
+    buy_premium_multiplier: Decimal = Decimal("1.0")  # Buyers use same premium as sellers
 
 
 class RiskAssessor:

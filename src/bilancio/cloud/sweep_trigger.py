@@ -52,7 +52,7 @@ def run_corrected_risk_sweep():
         risk_assessment_config={
             "base_risk_premium": "0.02",
             "urgency_sensitivity": "0.10",
-            "buy_premium_multiplier": "2.0",
+            "buy_premium_multiplier": "1.0",
             "lookback_window": 5,
         },
     )
