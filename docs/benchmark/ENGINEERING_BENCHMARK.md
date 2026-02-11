@@ -14,9 +14,12 @@
 | Test-to-source ratio | 0.62 |
 | Packages | 17 top-level under `src/bilancio/` |
 | Pydantic models | 32 (`config/models.py`) |
-| Weighted score | **3.5 / 5.0** |
+| Tests | 977 passed, 0 failed (9.25s) |
+| Coverage | 67% (54 files at 100%, 6 files at 0%) |
+| mypy errors | 1,187 in 83 / 138 files |
+| Weighted score | **3.4 / 5.0** |
 
-Bilancio is a well-structured financial simulation framework with clean domain/infrastructure separation, strong type discipline (11 mypy strict flags, 3.3:1 Decimal-to-float ratio), and thorough Pydantic validation. The main weaknesses are oversized functions in the settlement/dealer layer, heavy reliance on `getattr` and magic strings instead of typed enums, and incomplete observability infrastructure (no structured logging or indexing for hot-path lookups).
+Bilancio is a well-structured financial simulation framework with clean domain/infrastructure separation, strong type discipline aspirations (11 mypy strict flags configured, 3.3:1 Decimal-to-float ratio), and thorough Pydantic validation. All 977 tests pass with 67% line coverage. The main weaknesses are unenforced mypy compliance (1,187 errors remain despite strict config), oversized functions in the settlement/dealer layer, heavy reliance on `getattr` and magic strings instead of typed enums, and incomplete observability infrastructure (logging in only 9 of 114 source files).
 
 ---
 
@@ -39,7 +42,7 @@ Each category is scored 1-5:
 | # | Category | Weight | Score | Weighted |
 |---|----------|--------|-------|----------|
 | 1 | Architecture & Modularity | 15% | 4.0 | 0.60 |
-| 2 | Type Safety & Data Integrity | 15% | 3.5 | 0.53 |
+| 2 | Type Safety & Data Integrity | 15% | 3.0 | 0.45 |
 | 3 | Testing | 15% | 3.5 | 0.53 |
 | 4 | Error Handling & Resilience | 10% | 3.5 | 0.35 |
 | 5 | Code Complexity & Readability | 10% | 3.0 | 0.30 |
@@ -48,9 +51,9 @@ Each category is scored 1-5:
 | 8 | Configuration & Validation | 5% | 4.0 | 0.20 |
 | 9 | Observability & Operations | 10% | 3.0 | 0.30 |
 | 10 | Documentation & Developer Experience | 5% | 3.5 | 0.18 |
-| | **Weighted Total** | **100%** | | **3.49** |
+| | **Weighted Total** | **100%** | | **3.41** |
 
-Rounded overall: **3.5 / 5.0**
+Rounded overall: **3.4 / 5.0**
 
 ---
 
@@ -73,7 +76,7 @@ Rounded overall: **3.5 / 5.0**
 
 ---
 
-### 2. Type Safety & Data Integrity — 3.5 / 5
+### 2. Type Safety & Data Integrity — 3.0 / 5
 
 **Strengths**
 
@@ -81,8 +84,22 @@ Rounded overall: **3.5 / 5.0**
 - **Decimal-first arithmetic.** 477 `Decimal(` vs 143 `float(` usages (3.3:1 ratio). Core financial paths (settlement, payments, pricing) use Decimal throughout.
 - **8 invariant assertion functions** (`core/invariants.py:1-69`): `assert_cb_cash_matches_outstanding`, `assert_no_negative_balances`, `assert_cb_reserves_match`, `assert_double_entry_numeric`, `assert_no_duplicate_refs`, `assert_all_stock_ids_owned`, `assert_no_negative_stocks`, `assert_no_duplicate_stock_refs`.
 - **`AgentKind` enum** defined at `domain/agent.py:9-23` with 11 variants.
+- **Domain and core layers are nearly clean.** `domain/` has only 6 mypy errors and `core/` has 10 — confirming type discipline where it matters most.
 
 **Weaknesses**
+
+- **mypy is not passing.** Despite 11 strict flags in `pyproject.toml`, running `mypy src/bilancio/` produces **1,187 errors in 83 of 138 files**. The strict config is aspirational, not enforced. Error breakdown by type:
+
+  | Error Type | Count | % |
+  |------------|-------|---|
+  | `[union-attr]` | 585 | 49% |
+  | `[no-untyped-def]` | 195 | 16% |
+  | `[type-arg]` | 109 | 9% |
+  | `[arg-type]` | 84 | 7% |
+  | `[assignment]` | 36 | 3% |
+  | Other (10 types) | 178 | 15% |
+
+  Errors concentrate in `config/` (589 — largely Pydantic v2 typing), `analysis/` (136), `ui/` (93), and `engines/` (89). The domain and core layers are nearly clean (16 combined).
 
 - **No `InstrumentKind` enum.** `Instrument.kind` is `str` (`domain/instruments/base.py:11`). All 9+ contract kinds (`"payable"`, `"cash"`, `"reserve_deposit"`, `"bank_deposit"`, `"delivery_obligation"`, `"cb_loan"`, etc.) are magic strings compared via `c.kind == "payable"` throughout `settlement.py`.
 - **18 `getattr()` calls in `settlement.py`** (lines 45, 49, 50, 56, 63, 210, 214, 359, 480, 481, 484, 498, 511, 605, 619, 765, 775, 777). Most use defaults like `getattr(contract, "amount", 0)` — indicates optional attributes not captured in the type system.
@@ -93,16 +110,30 @@ Rounded overall: **3.5 / 5.0**
 
 ### 3. Testing — 3.5 / 5
 
+**Execution Results** (2026-02-11):
+
+| Metric | Value |
+|--------|-------|
+| Tests collected | 977 |
+| Passed | 977 (100%) |
+| Failed | 0 |
+| Runtime | 9.25s |
+| Line coverage | 67% |
+| Files at 100% | 54 |
+| Files at 0% | 6 |
+
+**Zero-coverage files:** `banking/sandbox.py`, `cloud/modal_app.py`, `cloud/sweep_trigger.py`, `dealer/bridge.py`, `jobs/supabase_store.py`, `ui/settings.py` — infrastructure/cloud code that is harder to unit-test but represents real production paths.
+
 **Strengths**
 
-- **0.62 test-to-source ratio** (22,995 / 37,245 LOC). 65 test files across 16 directories mirroring source structure.
+- **977 tests, 100% pass rate.** 0.62 test-to-source ratio (22,995 / 37,245 LOC). 65 test files across 16 directories mirroring source structure.
 - **Category breadth.** Unit (6), integration (5), banking (8), dealer (11), analysis (8), engines (6), config (5), cloud (2), storage (4), UI (5+), runners (3), specification (1), scenarios (1), ops (1), experiments (1).
 - **pytest configuration** (`pyproject.toml:82-97`). Strict markers, coverage reporting (`--cov=bilancio`, `--cov-report=term-missing`, `--cov-report=html`), slow test marker.
 - **Smoke test** (`tests/test_smoke.py`) for fast CI gate checks.
 
 **Weaknesses**
 
-- **No `fail_under` coverage threshold.** Coverage is measured but not enforced — regressions can slip through without CI gate.
+- **67% coverage with no `fail_under` threshold.** Coverage is measured but not enforced — regressions can slip through without CI gate. Key gaps: `balanced_comparison.py` at 33%, `cloud_executor.py` at 43%, `supabase_store.py` at 0%.
 - **No property-based / fuzz testing.** Financial invariants (double-entry balance, non-negative amounts) are prime candidates for Hypothesis.
 - **Cloud/experiment tests are thin.** `tests/cloud/` has 2 files; `tests/experiments/` has 1 file. These are the highest-risk production paths.
 - **No mutation testing** (e.g., mutmut) to validate assertion quality.
@@ -205,7 +236,7 @@ Rounded overall: **3.5 / 5.0**
 
 **Weaknesses**
 
-- **Standard `logging` used in only 8 of 114 source files.** Modules like `balanced_comparison.py`, `html_export.py`, `strategy_outcomes.py` use `logging.getLogger(__name__)`, but the core simulation (`settlement.py`, `system.py`, `dealer/simulation.py`) has no Python logging — only structured events. This means no log-level filtering, no log aggregation compatibility, and no runtime verbosity control.
+- **Standard `logging` used in only 9 of 114 source files.** Modules like `balanced_comparison.py`, `html_export.py`, `strategy_outcomes.py` use `logging.getLogger(__name__)`, but the core simulation (`settlement.py`, `system.py`, `dealer/simulation.py`) has no Python logging — only structured events. This means no log-level filtering, no log aggregation compatibility, and no runtime verbosity control.
 - **No health endpoints or readiness probes.** Cloud execution via Modal has no liveness/readiness checks beyond job status polling.
 - **Event schema is untyped.** Events are `dict[str, Any]` with string `kind` keys — no enum, no validation, no schema evolution strategy.
 - **`logging.basicConfig()` called inside library modules** (`analysis/strategy_outcomes.py:259`, `analysis/dealer_usage_summary.py:385`) — should be caller's responsibility.
@@ -235,16 +266,17 @@ Ranked by impact-to-effort ratio:
 
 | # | Improvement | Category | Effort | Impact |
 |---|------------|----------|--------|--------|
-| 1 | **Create `InstrumentKind` enum** and replace all `c.kind == "payable"` magic strings | Type Safety | S | High — eliminates an entire class of typo bugs, enables IDE autocomplete |
-| 2 | **Add `fail_under = 80` to pytest coverage config** | Testing | S | Medium — prevents coverage regression without any code changes |
-| 3 | **Convert bare `assert` to `raise` in `invariants.py:3,12`** | Type Safety | S | Medium — ensures invariants can't be silently disabled with `-O` |
-| 4 | **Add due-day index to contract storage** (`dict[int, list[InstrId]]`) | Performance | M | High — converts O(n) per-day settlement scan to O(1) lookup |
-| 5 | **Split `settle_due()` into sub-functions** (resolve_amount, attempt_settlement, handle_default, track_rollover) | Complexity | M | High — improves testability and readability of most critical function |
-| 6 | **Eliminate module-level `_settled_payables_for_rollover`** — pass as parameter or return value | Error Handling | S | Medium — removes global state, enables safe concurrent execution |
-| 7 | **Add Python `logging` to core simulation modules** (settlement, system, dealer/simulation) | Observability | M | High — enables runtime verbosity control, log aggregation, debugging |
-| 8 | **Extract `dealer_integration.py` into 3+ focused modules** (wiring, trade execution, sync) | Architecture | L | High — breaks up 1,700-LOC god module |
-| 9 | **Replace `getattr()` calls with typed Optional fields** on Instrument subclasses | Type Safety | M | Medium — makes the type system reflect actual data shape |
-| 10 | **Add property-based tests with Hypothesis** for double-entry invariants | Testing | M | Medium — catches edge cases that example-based tests miss |
+| 1 | **Fix mypy errors and add to CI** — start with `config/` (589 errors, mostly Pydantic v2 `union-attr`), then `engines/` and `analysis/` | Type Safety | L | Critical — 1,187 errors make the strict config meaningless without enforcement |
+| 2 | **Create `InstrumentKind` enum** and replace all `c.kind == "payable"` magic strings | Type Safety | S | High — eliminates an entire class of typo bugs, enables IDE autocomplete |
+| 3 | **Add `fail_under = 70` to pytest coverage config** (current: 67%, target: incremental) | Testing | S | Medium — prevents coverage regression without any code changes |
+| 4 | **Convert bare `assert` to `raise` in `invariants.py:3,12`** | Type Safety | S | Medium — ensures invariants can't be silently disabled with `-O` |
+| 5 | **Add due-day index to contract storage** (`dict[int, list[InstrId]]`) | Performance | M | High — converts O(n) per-day settlement scan to O(1) lookup |
+| 6 | **Split `settle_due()` into sub-functions** (resolve_amount, attempt_settlement, handle_default, track_rollover) | Complexity | M | High — improves testability and readability of most critical function |
+| 7 | **Eliminate module-level `_settled_payables_for_rollover`** — pass as parameter or return value | Error Handling | S | Medium — removes global state, enables safe concurrent execution |
+| 8 | **Add Python `logging` to core simulation modules** (settlement, system, dealer/simulation) | Observability | M | High — enables runtime verbosity control, log aggregation, debugging |
+| 9 | **Extract `dealer_integration.py` into 3+ focused modules** (wiring, trade execution, sync) | Architecture | L | High — breaks up 1,700-LOC god module |
+| 10 | **Replace `getattr()` calls with typed Optional fields** on Instrument subclasses | Type Safety | M | Medium — makes the type system reflect actual data shape |
+| 11 | **Add property-based tests with Hypothesis** for double-entry invariants | Testing | M | Medium — catches edge cases that example-based tests miss |
 
 **Effort key:** S = < 1 hour, M = 1-4 hours, L = 4+ hours
 
@@ -304,11 +336,14 @@ uv run mypy src/bilancio/
 
 ## Methodology
 
-This benchmark was generated by automated static analysis of the codebase at commit `3a75b05b`. Scores reflect:
+This benchmark was generated by static analysis and verified by tool execution against commit `3a75b05b`. Scores reflect:
 
 - **Quantitative metrics**: LOC, function lengths, type annotation coverage, test ratios
+- **Tool execution**: Full test suite (`uv run pytest tests/ -v`), mypy strict mode (`uv run mypy src/bilancio/`), coverage report
 - **Pattern analysis**: `grep`/`glob` searches for anti-patterns (magic strings, bare asserts, `getattr`, global state)
 - **Architectural review**: Import graph analysis, module coupling, layer violations
 - **Comparison to standards**: Measured against practices expected in production-grade Python financial software (PEP 8, PEP 484, OWASP, 12-factor app)
+
+All 15 quantitative claims were independently verified. One minor correction applied (logging in 9 files, not 8). The Type Safety score was revised downward (3.5 → 3.0) after mypy execution revealed 1,187 errors despite strict configuration.
 
 Scores are intentionally conservative — a 5.0 means "nothing to improve" which is rare in any active codebase.
