@@ -5,11 +5,13 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 from bilancio.core.atomic_tx import atomic
 from bilancio.core.errors import ValidationError
 from bilancio.core.ids import AgentId, InstrId, new_id
 from bilancio.domain.agent import Agent, AgentKind
+from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.instruments.base import Instrument, InstrumentKind
 from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.domain.instruments.means_of_payment import Cash, ReserveDeposit
@@ -43,6 +45,7 @@ class State:
     rollover_enabled: bool = False
     # Index contracts by due_day for fast lookup (preserves insertion order)
     contracts_by_due_day: dict[int, list[str]] = field(default_factory=dict)
+    dealer_subsystem: Any = None
 
 class System:
     def __init__(self, policy: PolicyEngine | None = None, default_mode: str = "fail-fast"):
@@ -87,7 +90,7 @@ class System:
         logger.debug("add_contract: %s (kind=%s)", c.id, c.kind)
 
         # Maintain due_day index
-        due_day = getattr(c, 'due_day', None)
+        due_day = c.due_day
         if due_day is not None:
             if due_day not in self.state.contracts_by_due_day:
                 self.state.contracts_by_due_day[due_day] = []
@@ -112,7 +115,7 @@ class System:
         for cid, c in self.state.contracts.items():
             # For secondary market transfers (e.g., payables sold to dealers),
             # check the effective holder, not the original asset_holder_id
-            effective_holder_id = getattr(c, 'effective_creditor', None) or c.asset_holder_id
+            effective_holder_id = c.effective_creditor
             assert cid in self.state.agents[effective_holder_id].asset_ids, f"{cid} missing on asset holder {effective_holder_id}"
             assert cid in self.state.agents[c.liability_issuer_id].liability_ids, f"{cid} missing on issuer"
         assert_no_duplicate_refs(self)
@@ -353,7 +356,7 @@ class System:
         cb = self.state.agents[cb_id]
 
         # Get the CB lending rate
-        cb_rate = getattr(cb, 'cb_lending_rate', Decimal("0.03"))
+        cb_rate = cb.cb_lending_rate if isinstance(cb, CentralBank) else Decimal("0.03")
 
         with atomic(self):
             # 1. Create new reserves for the bank
@@ -365,7 +368,7 @@ class System:
                 denom=denom,
                 asset_holder_id=bank_id,
                 liability_issuer_id=cb_id,
-                remuneration_rate=getattr(cb, 'reserve_remuneration_rate', None),
+                remuneration_rate=cb.reserve_remuneration_rate if isinstance(cb, CentralBank) else None,
                 issuance_day=day,
             )
             self.add_contract(reserve)
@@ -449,7 +452,7 @@ class System:
             self.state.agents[bank_id].liability_ids.remove(loan_id)
 
             # Maintain due_day index
-            loan_due_day = getattr(loan, 'due_day', None)
+            loan_due_day = loan.due_day
             if loan_due_day is not None:
                 bucket = self.state.contracts_by_due_day.get(loan_due_day)
                 if bucket:
@@ -497,7 +500,7 @@ class System:
         cb = self.state.agents[cb_id]
 
         # Check if CB has interest enabled
-        if not getattr(cb, 'reserves_accrue_interest', True):
+        if not (cb.reserves_accrue_interest if isinstance(cb, CentralBank) else True):
             return 0
 
         total_interest = 0
@@ -580,8 +583,8 @@ class System:
         cb = self.state.agents[cb_id]
 
         remuneration_rate = None
-        if getattr(cb, 'reserves_accrue_interest', True):
-            remuneration_rate = getattr(cb, 'reserve_remuneration_rate', Decimal("0.01"))
+        if cb.reserves_accrue_interest if isinstance(cb, CentralBank) else True:
+            remuneration_rate = cb.reserve_remuneration_rate if isinstance(cb, CentralBank) else Decimal("0.01")
 
         instr_id = self.new_contract_id("R")
         reserve = ReserveDeposit(
@@ -656,7 +659,7 @@ class System:
             issuer.liability_ids.remove(contract_id)
 
             # Maintain due_day index
-            due_day = getattr(contract, 'due_day', None)
+            due_day = contract.due_day
             if due_day is not None:
                 bucket = self.state.contracts_by_due_day.get(due_day)
                 if bucket:
@@ -805,7 +808,7 @@ class System:
         issuer.liability_ids.remove(obligation_id)
 
         # Maintain due_day index
-        due_day = getattr(contract, 'due_day', None)
+        due_day = contract.due_day
         if due_day is not None:
             bucket = self.state.contracts_by_due_day.get(due_day)
             if bucket:

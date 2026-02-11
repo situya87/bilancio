@@ -5,9 +5,11 @@ from bilancio.domain.instruments.base import Instrument, InstrumentKind
 @dataclass
 class DeliveryObligation(Instrument):
     # amount = quantity promised (rename for clarity at call sites)
-    sku: str
-    unit_price: Decimal
-    due_day: int
+    # Defaults exist for dataclass field-ordering (base Instrument.due_day has default);
+    # all three are always provided explicitly at construction time.
+    sku: str = ""
+    unit_price: Decimal = Decimal("0")
+    due_day: int = 0  # type: ignore[assignment]  # Narrows base int|None to int
 
     def __post_init__(self) -> None:
         self.kind = InstrumentKind.DELIVERY_OBLIGATION

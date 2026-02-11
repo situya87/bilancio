@@ -31,6 +31,11 @@ class Instrument:
     denom: str
     asset_holder_id: AgentId
     liability_issuer_id: AgentId
+    due_day: int | None = None
+
+    @property
+    def effective_creditor(self) -> AgentId:
+        return self.asset_holder_id
 
     def is_financial(self) -> bool:  # override if needed
         return True

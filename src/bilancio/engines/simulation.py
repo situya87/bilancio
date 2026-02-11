@@ -174,7 +174,7 @@ def run_day(system: System, enable_dealer: bool = False) -> None:
         raise
 
     # SubphaseB_Dealer: Run dealer trading phase (optional)
-    if enable_dealer and hasattr(system.state, 'dealer_subsystem') and system.state.dealer_subsystem is not None:
+    if enable_dealer and system.state.dealer_subsystem is not None:
         system.log("SubphaseB_Dealer")
         # Lazy import to avoid circular dependencies
         from bilancio.engines.dealer_integration import run_dealer_trading_phase, sync_dealer_to_system
@@ -193,8 +193,7 @@ def run_day(system: System, enable_dealer: bool = False) -> None:
     # Plan 024: Rollover - create new payables for settled ones
     if rollover_enabled and settled_for_rollover:
         system.log("SubphaseB_Rollover")
-        dealer_active = (enable_dealer and hasattr(system.state, 'dealer_subsystem')
-                         and system.state.dealer_subsystem is not None)
+        dealer_active = (enable_dealer and system.state.dealer_subsystem is not None)
         rollover_settled_payables(system, current_day, settled_for_rollover,
                                   dealer_active=dealer_active)
 

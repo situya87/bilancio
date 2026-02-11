@@ -50,12 +50,12 @@ _ACTION_CONTRACT_FIELDS = {
 
 def _get_default_mode(system: System) -> str:
     """Return the configured default-handling mode for the system."""
-    return getattr(system, "default_mode", DEFAULT_MODE_FAIL_FAST)
+    return system.default_mode
 
 
 def _get_risk_assessor(system: System) -> Any:
-    subsystem = getattr(system.state, "dealer_subsystem", None)
-    return getattr(subsystem, "risk_assessor", None)
+    subsystem = system.state.dealer_subsystem
+    return subsystem.risk_assessor if subsystem is not None else None
 
 
 def due_payables(system: System, day: int) -> Generator[Instrument, None, None]:
@@ -221,7 +221,7 @@ def _remove_contract(system: System, contract_id: str) -> None:
     logger.debug("removing contract %s (kind=%s)", contract_id, contract_kind)
 
     # Maintain due_day index
-    due_day_val = getattr(contract, 'due_day', None)
+    due_day_val = contract.due_day
     if due_day_val is not None:
         bucket = system.state.contracts_by_due_day.get(due_day_val)
         if bucket:
@@ -502,7 +502,7 @@ def _expel_agent(
             "creditor": contract.asset_holder_id,
             "contract_kind": contract.kind,
             "amount": contract.amount,
-            "due_day": getattr(contract, "due_day", None),
+            "due_day": contract.due_day,
         }
         if isinstance(contract, DeliveryObligation):
             payload["sku"] = contract.sku
