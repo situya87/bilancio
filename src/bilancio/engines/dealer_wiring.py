@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from bilancio.engines.system import System
 
 from bilancio.core.ids import AgentId, InstrId
+from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.dealer.models import (
     DealerState,
@@ -196,7 +197,7 @@ def _initialize_traders(
     from bilancio.engines.dealer_integration import _get_agent_cash
 
     for agent_id, agent in system.state.agents.items():
-        if agent.kind != "household":
+        if agent.kind != AgentKind.HOUSEHOLD:
             continue
         if skip_prefixes and agent_id.startswith(skip_prefixes):
             continue

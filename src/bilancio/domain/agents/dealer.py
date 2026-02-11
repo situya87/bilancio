@@ -8,7 +8,7 @@ maturity bucket. Dealers hold inventory and trade with both customers
 """
 from dataclasses import dataclass, field
 
-from bilancio.domain.agent import Agent
+from bilancio.domain.agent import Agent, AgentKind
 
 
 @dataclass
@@ -36,4 +36,4 @@ class Dealer(Agent):
         ownership tracking during claim transfers.
     """
 
-    kind: str = field(default="dealer", init=False)
+    kind: str = field(default=AgentKind.DEALER, init=False)

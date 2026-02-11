@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple
+import logging
+from collections.abc import Generator
+from typing import TYPE_CHECKING, Any
 
 from bilancio.core.atomic_tx import atomic
 from bilancio.core.errors import DefaultError, ValidationError
+from bilancio.core.events import EventKind
+from bilancio.domain.agent import Agent, AgentKind
+from bilancio.domain.instruments.base import Instrument, InstrumentKind
+from bilancio.domain.instruments.credit import Payable
+from bilancio.domain.instruments.delivery import DeliveryObligation
 from bilancio.ops.banking import client_payment
 from bilancio.ops.aliases import get_alias_for_id
 
+if TYPE_CHECKING:
+    from bilancio.engines.system import System
+
+logger = logging.getLogger(__name__)
+
 DEFAULT_MODE_FAIL_FAST = "fail-fast"
 DEFAULT_MODE_EXPEL = "expel-agent"
-
-# Plan 024: Track settled payables for rollover
-_settled_payables_for_rollover: List[Tuple[str, str, int, int, int]] = []
-# List of (debtor_id, creditor_id, amount, maturity_distance, current_day)
 
 _ACTION_AGENT_FIELDS = {
     "mint_reserves": ("to",),
@@ -40,38 +48,40 @@ _ACTION_CONTRACT_FIELDS = {
 }
 
 
-def _get_default_mode(system) -> str:
+def _get_default_mode(system: System) -> str:
     """Return the configured default-handling mode for the system."""
     return getattr(system, "default_mode", DEFAULT_MODE_FAIL_FAST)
 
 
-def _get_risk_assessor(system):
+def _get_risk_assessor(system: System) -> Any:
     subsystem = getattr(system.state, "dealer_subsystem", None)
     return getattr(subsystem, "risk_assessor", None)
 
 
-def due_payables(system, day: int):
-    """Scan contracts for payables with due_day == day."""
-    for c in system.state.contracts.values():
-        if c.kind == "payable" and getattr(c, "due_day", None) == day:
+def due_payables(system: System, day: int) -> Generator[Instrument, None, None]:
+    """Look up payables with due_day == day using the due-day index."""
+    for cid in list(system.state.contracts_by_due_day.get(day, ())):
+        c = system.state.contracts.get(cid)
+        if c is not None and c.kind == InstrumentKind.PAYABLE:
             yield c
 
 
-def due_delivery_obligations(system, day: int):
-    """Scan contracts for delivery obligations with due_day == day."""
-    for c in system.state.contracts.values():
-        if c.kind == "delivery_obligation" and getattr(c, "due_day", None) == day:
+def due_delivery_obligations(system: System, day: int) -> Generator[Instrument, None, None]:
+    """Look up delivery obligations with due_day == day using the due-day index."""
+    for cid in list(system.state.contracts_by_due_day.get(day, ())):
+        c = system.state.contracts.get(cid)
+        if c is not None and c.kind == InstrumentKind.DELIVERY_OBLIGATION:
             yield c
 
 
-def _pay_with_deposits(system, debtor_id, creditor_id, amount) -> int:
+def _pay_with_deposits(system: System, debtor_id: str, creditor_id: str, amount: int) -> int:
     """Pay using bank deposits. Returns amount actually paid."""
     debtor_deposit_ids = []
     for cid in system.state.agents[debtor_id].asset_ids:
         contract = system.state.contracts.get(cid)
         if contract is None:
             continue  # Skip stale references
-        if contract.kind == "bank_deposit":
+        if contract.kind == InstrumentKind.BANK_DEPOSIT:
             debtor_deposit_ids.append(cid)
 
     if not debtor_deposit_ids:
@@ -94,7 +104,7 @@ def _pay_with_deposits(system, debtor_id, creditor_id, amount) -> int:
         contract = system.state.contracts.get(cid)
         if contract is None:
             continue  # Skip stale references
-        if contract.kind == "bank_deposit":
+        if contract.kind == InstrumentKind.BANK_DEPOSIT:
             creditor_deposit_ids.append(cid)
 
     if creditor_deposit_ids:
@@ -112,14 +122,14 @@ def _pay_with_deposits(system, debtor_id, creditor_id, amount) -> int:
         return 0
 
 
-def _pay_with_cash(system, debtor_id, creditor_id, amount) -> int:
+def _pay_with_cash(system: System, debtor_id: str, creditor_id: str, amount: int) -> int:
     """Pay using cash. Returns amount actually paid."""
     debtor_cash_ids = []
     for cid in system.state.agents[debtor_id].asset_ids:
         contract = system.state.contracts.get(cid)
         if contract is None:
             continue  # Skip stale references (contract may have been removed)
-        if contract.kind == "cash":
+        if contract.kind == InstrumentKind.CASH:
             debtor_cash_ids.append(cid)
 
     if not debtor_cash_ids:
@@ -138,7 +148,7 @@ def _pay_with_cash(system, debtor_id, creditor_id, amount) -> int:
         return 0
 
 
-def _pay_bank_to_bank_with_reserves(system, debtor_bank_id, creditor_bank_id, amount) -> int:
+def _pay_bank_to_bank_with_reserves(system: System, debtor_bank_id: str, creditor_bank_id: str, amount: int) -> int:
     """Pay using reserves between banks. Returns amount actually paid."""
     if debtor_bank_id == creditor_bank_id:
         return 0
@@ -148,7 +158,7 @@ def _pay_bank_to_bank_with_reserves(system, debtor_bank_id, creditor_bank_id, am
         contract = system.state.contracts.get(cid)
         if contract is None:
             continue  # Skip stale references
-        if contract.kind == "reserve_deposit":
+        if contract.kind == InstrumentKind.RESERVE_DEPOSIT:
             debtor_reserve_ids.append(cid)
 
     if not debtor_reserve_ids:
@@ -167,7 +177,7 @@ def _pay_bank_to_bank_with_reserves(system, debtor_bank_id, creditor_bank_id, am
         return 0
 
 
-def _deliver_stock(system, debtor_id, creditor_id, sku: str, required_quantity: int) -> int:
+def _deliver_stock(system: System, debtor_id: str, creditor_id: str, sku: str, required_quantity: int) -> int:
     """Transfer stock lots from debtor to creditor by SKU using FIFO allocation."""
     available_stocks = []
     for stock_id in system.state.agents[debtor_id].stock_ids:
@@ -201,17 +211,30 @@ def _deliver_stock(system, debtor_id, creditor_id, sku: str, required_quantity: 
         return 0
 
 
-def _remove_contract(system, contract_id):
+def _remove_contract(system: System, contract_id: str) -> None:
     """Remove contract from system and update agent registries."""
     contract = system.state.contracts.get(contract_id)
     if contract is None:
         return  # Already removed
     contract_kind = contract.kind
-    contract_amount = getattr(contract, "amount", 0)
+    contract_amount = contract.amount
+    logger.debug("removing contract %s (kind=%s)", contract_id, contract_kind)
+
+    # Maintain due_day index
+    due_day_val = getattr(contract, 'due_day', None)
+    if due_day_val is not None:
+        bucket = system.state.contracts_by_due_day.get(due_day_val)
+        if bucket:
+            try:
+                bucket.remove(contract_id)
+            except ValueError:
+                pass
+            if not bucket:
+                del system.state.contracts_by_due_day[due_day_val]
 
     # For secondary market transfers (e.g., payables sold to dealers),
     # remove from the effective holder, not the original asset_holder_id
-    effective_holder_id = getattr(contract, 'effective_creditor', None) or contract.asset_holder_id
+    effective_holder_id = contract.effective_creditor if isinstance(contract, Payable) else contract.asset_holder_id
     effective_holder = system.state.agents.get(effective_holder_id)
     if effective_holder and contract_id in effective_holder.asset_ids:
         effective_holder.asset_ids.remove(contract_id)
@@ -228,13 +251,13 @@ def _remove_contract(system, contract_id):
 
     del system.state.contracts[contract_id]
 
-    if contract_kind == "cash":
+    if contract_kind == InstrumentKind.CASH:
         system.state.cb_cash_outstanding -= contract_amount
-    elif contract_kind == "reserve_deposit":
+    elif contract_kind == InstrumentKind.RESERVE_DEPOSIT:
         system.state.cb_reserves_outstanding -= contract_amount
 
 
-def _action_references_agent(action_dict, agent_id: str) -> bool:
+def _action_references_agent(action_dict: object, agent_id: str) -> bool:
     """Return True if the scheduled action references the given agent."""
     if not isinstance(action_dict, dict) or len(action_dict) != 1:
         return False
@@ -253,7 +276,7 @@ def _action_references_agent(action_dict, agent_id: str) -> bool:
 
 
 def _cancel_scheduled_actions_for_agent(
-    system,
+    system: System,
     agent_id: str,
     cancelled_contract_ids: set[str] | None = None,
     cancelled_aliases: set[str] | None = None,
@@ -270,7 +293,7 @@ def _cancel_scheduled_actions_for_agent(
             if _action_references_agent(action_dict, agent_id) or _action_references_contract(action_dict, cancelled_contract_ids, cancelled_aliases):
                 action_name = next(iter(action_dict.keys()), "unknown") if isinstance(action_dict, dict) else "unknown"
                 system.log(
-                    "ScheduledActionCancelled",
+                    EventKind.SCHEDULED_ACTION_CANCELLED,
                     agent=agent_id,
                     scheduled_day=day,
                     action=action_name,
@@ -284,7 +307,7 @@ def _cancel_scheduled_actions_for_agent(
             del system.state.scheduled_actions_by_day[day]
 
 
-def _action_references_contract(action_dict, contract_ids: set[str], aliases: set[str]) -> bool:
+def _action_references_contract(action_dict: object, contract_ids: set[str], aliases: set[str]) -> bool:
     if not isinstance(action_dict, dict) or len(action_dict) != 1:
         return False
     if not contract_ids and not aliases:
@@ -308,7 +331,7 @@ def _action_references_contract(action_dict, contract_ids: set[str], aliases: se
     return False
 
 
-def _reconnect_ring(system, defaulted_agent_id: str, successor_id: str, day: int) -> dict | None:
+def _reconnect_ring(system: System, defaulted_agent_id: str, successor_id: str, day: int) -> dict[str, object] | None:
     """Reconnect the ring after an agent defaults.
 
     When agent X defaults, find the predecessor P (who owed X) and create a new
@@ -323,13 +346,12 @@ def _reconnect_ring(system, defaulted_agent_id: str, successor_id: str, day: int
     Returns:
         Dict with reconnection info, or None if reconnection not possible
     """
-    from bilancio.domain.instruments.credit import Payable
-
     # Find predecessor: an active ring payable where asset_holder_id == defaulted_agent_id
     # (i.e., someone owes the defaulted agent)
-    predecessor_payable = None
+    predecessor_payable: Payable | None = None
     for c in list(system.state.contracts.values()):
-        if (c.kind == "payable"
+        if (c.kind == InstrumentKind.PAYABLE
+            and isinstance(c, Payable)
             and c.asset_holder_id == defaulted_agent_id
             and c.liability_issuer_id != defaulted_agent_id
             and c.liability_issuer_id not in system.state.defaulted_agent_ids):
@@ -346,7 +368,7 @@ def _reconnect_ring(system, defaulted_agent_id: str, successor_id: str, day: int
     if predecessor_id == successor_id:
         # Ring collapsed to a single agent - remove orphaned payable, log collapse
         system.log(
-            "RingCollapsed",
+            EventKind.RING_COLLAPSED,
             defaulted_agent=defaulted_agent_id,
             remaining_agent=predecessor_id,
             removed_payable=predecessor_payable.id,
@@ -356,7 +378,7 @@ def _reconnect_ring(system, defaulted_agent_id: str, successor_id: str, day: int
 
     # Get parameters from predecessor's payable
     amount = predecessor_payable.amount
-    maturity_distance = getattr(predecessor_payable, 'maturity_distance', None)
+    maturity_distance = predecessor_payable.maturity_distance
     if maturity_distance is None:
         # Fallback: use due_day - current_day if available
         if predecessor_payable.due_day is not None:
@@ -373,7 +395,7 @@ def _reconnect_ring(system, defaulted_agent_id: str, successor_id: str, day: int
     # Create new payable: predecessor → successor
     new_payable = Payable(
         id=system.new_contract_id("PAY"),
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=amount,
         denom="X",
         asset_holder_id=successor_id,
@@ -385,7 +407,7 @@ def _reconnect_ring(system, defaulted_agent_id: str, successor_id: str, day: int
 
     # Log events
     system.log(
-        "RingReconnected",
+        EventKind.RING_RECONNECTED,
         defaulted_agent=defaulted_agent_id,
         predecessor=predecessor_id,
         successor=successor_id,
@@ -397,7 +419,7 @@ def _reconnect_ring(system, defaulted_agent_id: str, successor_id: str, day: int
     )
 
     system.log(
-        "PayableCreated",
+        EventKind.PAYABLE_CREATED,
         contract_id=new_payable.id,
         debtor=predecessor_id,
         creditor=successor_id,
@@ -407,6 +429,7 @@ def _reconnect_ring(system, defaulted_agent_id: str, successor_id: str, day: int
         reason="ring_reconnection",
     )
 
+    logger.info("ring reconnected: %s -> %s (was %s)", predecessor_id, successor_id, defaulted_agent_id)
     return {
         "predecessor": predecessor_id,
         "successor": successor_id,
@@ -419,7 +442,7 @@ def _reconnect_ring(system, defaulted_agent_id: str, successor_id: str, day: int
 
 
 def _expel_agent(
-    system,
+    system: System,
     agent_id: str,
     *,
     trigger_contract_id: str | None = None,
@@ -439,14 +462,15 @@ def _expel_agent(
     if agent is None:
         return
 
-    if agent.kind == "central_bank":
+    if agent.kind == AgentKind.CENTRAL_BANK:
         raise DefaultError("Central bank cannot default")
 
     agent.defaulted = True
     system.state.defaulted_agent_ids.add(agent_id)
+    logger.info("agent %s defaulted (trigger=%s)", agent_id, trigger_contract_id)
 
     system.log(
-        "AgentDefaulted",
+        EventKind.AGENT_DEFAULTED,
         agent=agent_id,
         frm=agent_id,
         trigger_contract=trigger_contract_id,
@@ -468,47 +492,49 @@ def _expel_agent(
         if trigger_contract_id and cid == trigger_contract_id:
             continue
 
-        alias = get_alias_for_id(system, cid)
-        if alias:
-            cancelled_aliases.add(alias)
+        contract_alias = get_alias_for_id(system, cid)
+        if contract_alias:
+            cancelled_aliases.add(contract_alias)
         payload = {
             "contract_id": cid,
-            "alias": alias,
+            "alias": contract_alias,
             "debtor": contract.liability_issuer_id,
             "creditor": contract.asset_holder_id,
             "contract_kind": contract.kind,
-            "amount": getattr(contract, "amount", None),
+            "amount": contract.amount,
             "due_day": getattr(contract, "due_day", None),
         }
-        if hasattr(contract, "sku"):
-            payload["sku"] = getattr(contract, "sku")
+        if isinstance(contract, DeliveryObligation):
+            payload["sku"] = contract.sku
         if payload.get("due_day") is None:
             payload.pop("due_day", None)
 
-        system.log("ObligationWrittenOff", **payload)
+        system.log(EventKind.OBLIGATION_WRITTEN_OFF, **payload)
         _remove_contract(system, cid)
         cancelled_contract_ids.add(cid)
-        if alias:
-            system.state.aliases.pop(alias, None)
+        if contract_alias:
+            system.state.aliases.pop(contract_alias, None)
 
     _cancel_scheduled_actions_for_agent(system, agent_id, cancelled_contract_ids, cancelled_aliases)
 
     # If every non-central-bank agent has defaulted, halt the simulation with a DefaultError.
     if all(
-        (ag.kind == "central_bank") or getattr(ag, "defaulted", False)
+        (ag.kind == AgentKind.CENTRAL_BANK) or ag.defaulted
         for ag in system.state.agents.values()
     ):
         raise DefaultError("All non-central-bank agents have defaulted")
 
 
-def settle_due_delivery_obligations(system, day: int):
+def settle_due_delivery_obligations(system: System, day: int) -> None:
     """Settle all delivery obligations due today using stock operations."""
-    for obligation in list(due_delivery_obligations(system, day)):
-        if obligation.id not in system.state.contracts:
+    for obligation_instr in list(due_delivery_obligations(system, day)):
+        if obligation_instr.id not in system.state.contracts:
             continue
+        assert isinstance(obligation_instr, DeliveryObligation)
+        obligation = obligation_instr
 
         debtor = system.state.agents[obligation.liability_issuer_id]
-        if getattr(debtor, "defaulted", False):
+        if debtor.defaulted:
             continue
 
         creditor = system.state.agents[obligation.asset_holder_id]
@@ -530,7 +556,7 @@ def settle_due_delivery_obligations(system, day: int):
                 cancelled_aliases = {alias} if alias else set()
                 if delivered_quantity > 0:
                     system.log(
-                        "PartialSettlement",
+                        EventKind.PARTIAL_SETTLEMENT,
                         contract_id=obligation.id,
                         alias=alias,
                         debtor=debtor.id,
@@ -544,7 +570,7 @@ def settle_due_delivery_obligations(system, day: int):
                     )
 
                 system.log(
-                    "ObligationDefaulted",
+                    EventKind.OBLIGATION_DEFAULTED,
                     contract_id=obligation.id,
                     alias=alias,
                     debtor=debtor.id,
@@ -572,7 +598,7 @@ def settle_due_delivery_obligations(system, day: int):
             system._cancel_delivery_obligation_internal(obligation.id)
             alias = get_alias_for_id(system, obligation.id)
             system.log(
-                "DeliveryObligationSettled",
+                EventKind.DELIVERY_OBLIGATION_SETTLED,
                 obligation_id=obligation.id,
                 contract_id=obligation.id,
                 alias=alias,
@@ -583,7 +609,143 @@ def settle_due_delivery_obligations(system, day: int):
             )
 
 
-def settle_due(system, day: int, *, rollover_enabled: bool = False):
+def _settle_single_payable(
+    system: System,
+    payable: Payable,
+    day: int,
+    *,
+    risk_assessor: Any,
+    rollover_enabled: bool,
+) -> tuple[bool, tuple[str, str, int, int] | None]:
+    """Settle a single payable. Returns (settled_ok, rollover_info_or_None)."""
+    debtor = system.state.agents[payable.liability_issuer_id]
+    if debtor.defaulted:
+        return True, None  # skip silently
+
+    creditor_id = payable.effective_creditor
+    creditor = system.state.agents[creditor_id]
+    order = system.policy.settlement_order(debtor)
+
+    remaining = payable.amount
+    payments_summary: list[dict[str, object]] = []
+    payable_amount = payable.amount
+    payable_maturity_distance = payable.maturity_distance
+    original_creditor = payable.asset_holder_id
+
+    with atomic(system):
+        for method in order:
+            if remaining == 0:
+                break
+            if method == InstrumentKind.BANK_DEPOSIT:
+                paid_now = _pay_with_deposits(system, debtor.id, creditor.id, remaining)
+            elif method == InstrumentKind.CASH:
+                paid_now = _pay_with_cash(system, debtor.id, creditor.id, remaining)
+            elif method == InstrumentKind.RESERVE_DEPOSIT:
+                paid_now = _pay_bank_to_bank_with_reserves(system, debtor.id, creditor.id, remaining)
+            else:
+                raise ValidationError(f"unknown payment method {method}")
+            remaining -= paid_now
+            if paid_now > 0:
+                payments_summary.append({"method": method, "amount": paid_now})
+
+        if remaining != 0:
+            return _handle_payable_default(
+                system, payable, debtor, creditor, day,
+                remaining=remaining,
+                payments_summary=payments_summary,
+                risk_assessor=risk_assessor,
+                rollover_enabled=rollover_enabled,
+            ), None
+
+        _remove_contract(system, payable.id)
+        alias = get_alias_for_id(system, payable.id)
+        system.log(
+            EventKind.PAYABLE_SETTLED,
+            pid=payable.id,
+            contract_id=payable.id,
+            alias=alias,
+            debtor=debtor.id,
+            creditor=creditor.id,
+            amount=payable_amount,
+        )
+        if risk_assessor:
+            risk_assessor.update_history(day=day, issuer_id=debtor.id, defaulted=False)
+
+        rollover_info = None
+        if rollover_enabled and payable_maturity_distance is not None:
+            rollover_info = (debtor.id, original_creditor, payable_amount, payable_maturity_distance)
+        return True, rollover_info
+
+
+def _handle_payable_default(
+    system: System,
+    payable: Payable,
+    debtor: Agent,
+    creditor: Agent,
+    day: int,
+    *,
+    remaining: int,
+    payments_summary: list[dict[str, object]],
+    risk_assessor: Any,
+    rollover_enabled: bool,
+) -> bool:
+    """Handle a payable that couldn't be fully settled. Returns False (not settled)."""
+    if _get_default_mode(system) == DEFAULT_MODE_FAIL_FAST:
+        raise DefaultError(f"Insufficient funds to settle payable {payable.id}: {remaining} still owed")
+
+    alias = get_alias_for_id(system, payable.id)
+    cancelled_contract_ids = {payable.id}
+    cancelled_aliases = {alias} if alias else set()
+    amount_paid = payable.amount - remaining
+
+    if amount_paid > 0:
+        payload: dict[str, object] = {
+            "contract_id": payable.id,
+            "alias": alias,
+            "debtor": debtor.id,
+            "creditor": creditor.id,
+            "contract_kind": payable.kind,
+            "settlement_kind": "payable",
+            "amount_paid": amount_paid,
+            "shortfall": remaining,
+            "original_amount": payable.amount,
+        }
+        if payments_summary:
+            payload["distribution"] = payments_summary
+        system.log(EventKind.PARTIAL_SETTLEMENT, **payload)
+
+    system.log(
+        EventKind.OBLIGATION_DEFAULTED,
+        contract_id=payable.id,
+        alias=alias,
+        debtor=debtor.id,
+        creditor=creditor.id,
+        contract_kind=payable.kind,
+        shortfall=remaining,
+        amount_paid=amount_paid,
+        original_amount=payable.amount,
+        amount=remaining,
+    )
+
+    ring_successor_id = payable.asset_holder_id
+    _remove_contract(system, payable.id)
+    _expel_agent(
+        system,
+        debtor.id,
+        trigger_contract_id=payable.id,
+        trigger_kind=payable.kind,
+        trigger_shortfall=remaining,
+        cancelled_contract_ids=cancelled_contract_ids,
+        cancelled_aliases=cancelled_aliases,
+    )
+    if risk_assessor:
+        risk_assessor.update_history(day=day, issuer_id=debtor.id, defaulted=True)
+    if rollover_enabled:
+        _reconnect_ring(system, debtor.id, ring_successor_id, day)
+    return False
+
+
+def settle_due(system: System, day: int, *, rollover_enabled: bool = False) -> list[tuple[str, str, int, int]]:
     """Settle all obligations due today (payables and delivery obligations).
 
     Args:
@@ -594,145 +756,27 @@ def settle_due(system, day: int, *, rollover_enabled: bool = False):
     Returns:
         List of settled payable info for rollover: [(debtor_id, creditor_id, amount, maturity_distance)]
     """
+    logger.debug("settle_due: processing day %d", day)
     settled_for_rollover = []
     risk_assessor = _get_risk_assessor(system)
 
-    for payable in list(due_payables(system, day)):
-        if payable.id not in system.state.contracts:
+    for payable_instr in list(due_payables(system, day)):
+        if payable_instr.id not in system.state.contracts:
             continue
-
-        debtor = system.state.agents[payable.liability_issuer_id]
-        if getattr(debtor, "defaulted", False):
-            continue
-
-        # Use effective_creditor to handle secondary market transfers
-        # (holder_id if transferred, otherwise original asset_holder_id)
-        creditor_id = payable.effective_creditor
-        creditor = system.state.agents[creditor_id]
-        order = system.policy.settlement_order(debtor)
-
-        remaining = payable.amount
-        payments_summary: list[dict] = []
-
-        # Save payable info before potential removal
-        payable_amount = payable.amount
-        payable_maturity_distance = getattr(payable, 'maturity_distance', None)
-        original_creditor = payable.asset_holder_id  # Original creditor for rollover
-
-        with atomic(system):
-            for method in order:
-                if remaining == 0:
-                    break
-
-                if method == "bank_deposit":
-                    paid_now = _pay_with_deposits(system, debtor.id, creditor.id, remaining)
-                elif method == "cash":
-                    paid_now = _pay_with_cash(system, debtor.id, creditor.id, remaining)
-                elif method == "reserve_deposit":
-                    paid_now = _pay_bank_to_bank_with_reserves(system, debtor.id, creditor.id, remaining)
-                else:
-                    raise ValidationError(f"unknown payment method {method}")
-
-                remaining -= paid_now
-                if paid_now > 0:
-                    payments_summary.append({"method": method, "amount": paid_now})
-
-            if remaining != 0:
-                if _get_default_mode(system) == DEFAULT_MODE_FAIL_FAST:
-                    raise DefaultError(f"Insufficient funds to settle payable {payable.id}: {remaining} still owed")
-
-                alias = get_alias_for_id(system, payable.id)
-                cancelled_contract_ids = {payable.id}
-                cancelled_aliases = {alias} if alias else set()
-                amount_paid = payable.amount - remaining
-
-                if amount_paid > 0:
-                    payload = {
-                        "contract_id": payable.id,
-                        "alias": alias,
-                        "debtor": debtor.id,
-                        "creditor": creditor.id,
-                        "contract_kind": payable.kind,
-                        "settlement_kind": "payable",
-                        "amount_paid": amount_paid,
-                        "shortfall": remaining,
-                        "original_amount": payable.amount,
-                    }
-                    if payments_summary:
-                        payload["distribution"] = payments_summary
-                    system.log("PartialSettlement", **payload)
-
-                system.log(
-                    "ObligationDefaulted",
-                    contract_id=payable.id,
-                    alias=alias,
-                    debtor=debtor.id,
-                    creditor=creditor.id,
-                    contract_kind=payable.kind,
-                    shortfall=remaining,
-                    amount_paid=amount_paid,
-                    original_amount=payable.amount,
-                    amount=remaining,
-                )
-
-                # Capture ring successor before payable removal (for reconnection)
-                ring_successor_id = payable.asset_holder_id
-
-                _remove_contract(system, payable.id)
-                _expel_agent(
-                    system,
-                    debtor.id,
-                    trigger_contract_id=payable.id,
-                    trigger_kind=payable.kind,
-                    trigger_shortfall=remaining,
-                    cancelled_contract_ids=cancelled_contract_ids,
-                    cancelled_aliases=cancelled_aliases,
-                )
-                if risk_assessor:
-                    risk_assessor.update_history(
-                        day=day,
-                        issuer_id=debtor.id,
-                        defaulted=True,
-                    )
-                # Reconnect ring if rollover is enabled
-                if rollover_enabled:
-                    _reconnect_ring(system, debtor.id, ring_successor_id, day)
-                continue
-
-            _remove_contract(system, payable.id)
-            alias = get_alias_for_id(system, payable.id)
-            system.log(
-                "PayableSettled",
-                pid=payable.id,
-                contract_id=payable.id,
-                alias=alias,
-                debtor=debtor.id,
-                creditor=creditor.id,
-                amount=payable_amount,
-            )
-            if risk_assessor:
-                risk_assessor.update_history(
-                    day=day,
-                    issuer_id=debtor.id,
-                    defaulted=False,
-                )
-
-            # Plan 024: Track for rollover (only if successfully settled AND rollover enabled)
-            if rollover_enabled and payable_maturity_distance is not None:
-                # Use original creditor for rollover, not secondary market holder
-                settled_for_rollover.append((
-                    debtor.id,
-                    original_creditor,
-                    payable_amount,
-                    payable_maturity_distance,
-                ))
+        assert isinstance(payable_instr, Payable)
+        settled, rollover_info = _settle_single_payable(
+            system, payable_instr, day,
+            risk_assessor=risk_assessor,
+            rollover_enabled=rollover_enabled,
+        )
+        if rollover_info is not None:
+            settled_for_rollover.append(rollover_info)
 
     settle_due_delivery_obligations(system, day)
-
     return settled_for_rollover
 
 
-def rollover_settled_payables(system, day: int, settled_payables: list, dealer_active: bool = False):
+def rollover_settled_payables(system: System, day: int, settled_payables: list[tuple[str, str, int, int]], dealer_active: bool = False) -> list[str]:
     """Create new payables for successfully settled ones (continuous issuance via rollover).
 
     Per PDF specification (Plan 024):
@@ -755,16 +799,13 @@ def rollover_settled_payables(system, day: int, settled_payables: list, dealer_a
     Returns:
         List of new payable IDs created by rollover
     """
-    from bilancio.domain.instruments.credit import Payable
-
     # Compute max due_day across all current payables in the system.
     # Rolled-over payables queue after this, preventing synchronized waves.
     max_due_day = day  # Floor: at minimum, use current day
     for c in system.state.contracts.values():
-        if c.kind == "payable":
-            due = getattr(c, "due_day", None)
-            if due is not None and due > max_due_day:
-                max_due_day = due
+        if c.kind == InstrumentKind.PAYABLE and isinstance(c, Payable):
+            if c.due_day is not None and c.due_day > max_due_day:
+                max_due_day = c.due_day
 
     new_payable_ids = []
     for debtor_id, creditor_id, amount, maturity_distance in settled_payables:
@@ -772,9 +813,9 @@ def rollover_settled_payables(system, day: int, settled_payables: list, dealer_a
         debtor = system.state.agents.get(debtor_id)
         creditor = system.state.agents.get(creditor_id)
 
-        if debtor is None or getattr(debtor, "defaulted", False):
+        if debtor is None or debtor.defaulted:
             continue
-        if creditor is None or getattr(creditor, "defaulted", False):
+        if creditor is None or creditor.defaulted:
             continue
 
         new_due_day = max_due_day + maturity_distance
@@ -783,7 +824,7 @@ def rollover_settled_payables(system, day: int, settled_payables: list, dealer_a
             # 1. Create new payable with same amount and ΔT
             new_payable = Payable(
                 id=system.new_contract_id("PAY"),
-                kind="payable",
+                kind=InstrumentKind.PAYABLE,
                 amount=amount,
                 denom="X",
                 asset_holder_id=creditor_id,  # creditor holds the asset
@@ -808,7 +849,7 @@ def rollover_settled_payables(system, day: int, settled_payables: list, dealer_a
                 # Creditor doesn't have enough cash - this shouldn't happen in normal rollover
                 # but handle gracefully
                 system.log(
-                    "RolloverPartial",
+                    EventKind.ROLLOVER_PARTIAL,
                     debtor=debtor_id,
                     creditor=creditor_id,
                     amount=amount,
@@ -819,7 +860,7 @@ def rollover_settled_payables(system, day: int, settled_payables: list, dealer_a
                 )
             else:
                 system.log(
-                    "PayableRolledOver",
+                    EventKind.PAYABLE_ROLLED_OVER,
                     debtor=debtor_id,
                     creditor=creditor_id,
                     amount=amount,

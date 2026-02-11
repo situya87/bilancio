@@ -14,6 +14,7 @@ import html as _html
 import json
 import logging
 
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.engines.system import System
 from bilancio.analysis.visualization import build_t_account_rows
 from bilancio.analysis.balances import AgentBalance
@@ -211,14 +212,14 @@ def _build_rows_from_balance(balance: AgentBalance) -> (List[dict], List[dict]):
 
     # Financial assets by kind (skip non-financial kinds)
     for kind, amount in balance.assets_by_kind.items():
-        if kind == 'delivery_obligation':
+        if kind == InstrumentKind.DELIVERY_OBLIGATION:
             continue
         try:
             amount_i = _safe_int_conversion(amount)
         except ValueError:
             amount_i = None
         if amount_i and amount_i > 0:
-            assets.append({'name': kind, 'quantity': None, 'value_minor': amount_i, 'counterparty_name': '—', 'maturity': 'on-demand' if kind in ('cash','bank_deposit','reserve_deposit') else '—'})
+            assets.append({'name': kind, 'quantity': None, 'value_minor': amount_i, 'counterparty_name': '—', 'maturity': 'on-demand' if kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT, InstrumentKind.RESERVE_DEPOSIT) else '—'})
 
     # Non-financial liabilities
     for sku, data in balance.nonfinancial_liabilities_by_kind.items():
@@ -237,14 +238,14 @@ def _build_rows_from_balance(balance: AgentBalance) -> (List[dict], List[dict]):
 
     # Financial liabilities
     for kind, amount in balance.liabilities_by_kind.items():
-        if kind == 'delivery_obligation':
+        if kind == InstrumentKind.DELIVERY_OBLIGATION:
             continue
         try:
             amount_i = _safe_int_conversion(amount)
         except ValueError:
             amount_i = None
         if amount_i and amount_i > 0:
-            liabs.append({'name': kind, 'quantity': None, 'value_minor': amount_i, 'counterparty_name': '—', 'maturity': 'on-demand' if kind in ('cash','bank_deposit','reserve_deposit') else '—'})
+            liabs.append({'name': kind, 'quantity': None, 'value_minor': amount_i, 'counterparty_name': '—', 'maturity': 'on-demand' if kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT, InstrumentKind.RESERVE_DEPOSIT) else '—'})
 
     # Ordering similar to render layer
     def asset_key(row):
@@ -254,14 +255,14 @@ def _build_rows_from_balance(balance: AgentBalance) -> (List[dict], List[dict]):
             return (0, name)
         if name.endswith('receivable'):
             return (1, name)
-        order = {'cash':0,'bank_deposit':1,'reserve_deposit':2,'payable':3}
+        order = {InstrumentKind.CASH:0,InstrumentKind.BANK_DEPOSIT:1,InstrumentKind.RESERVE_DEPOSIT:2,InstrumentKind.PAYABLE:3}
         return (2, order.get(name, 99), name)
 
     def liab_key(row):
         name = row['name']
         if name.endswith('obligation'):
             return (0, name)
-        order = {'payable':0,'bank_deposit':1,'reserve_deposit':2,'cash':3}
+        order = {InstrumentKind.PAYABLE:0,InstrumentKind.BANK_DEPOSIT:1,InstrumentKind.RESERVE_DEPOSIT:2,InstrumentKind.CASH:3}
         return (1, order.get(name, 99), name)
 
     assets.sort(key=asset_key)
@@ -765,7 +766,7 @@ def export_pretty_html(
     # Determine convergence robustly: check tail quiet days and open obligations
     def _has_open_obligations() -> bool:
         try:
-            return any(c.kind in ("payable", "delivery_obligation") for c in system.state.contracts.values())
+            return any(c.kind in (InstrumentKind.PAYABLE, InstrumentKind.DELIVERY_OBLIGATION) for c in system.state.contracts.values())
         except Exception:
             return False
     has_open = _has_open_obligations()

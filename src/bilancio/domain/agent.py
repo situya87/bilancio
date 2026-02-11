@@ -6,8 +6,12 @@ from enum import Enum
 from bilancio.core.ids import AgentId, InstrId
 
 
-class AgentKind(Enum):
-    """Enumeration of agent types in the financial system."""
+class AgentKind(str, Enum):
+    """Enumeration of agent types in the financial system.
+
+    Using str mixin ensures AgentKind values work as dict keys,
+    compare equal to their string values, and are JSON-serializable.
+    """
     CENTRAL_BANK = "central_bank"
     BANK = "bank"
     HOUSEHOLD = "household"

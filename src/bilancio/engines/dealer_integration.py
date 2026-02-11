@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from bilancio.engines.system import System
 
 from bilancio.core.ids import AgentId, InstrId
+from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.dealer.models import (
     DealerState,
@@ -295,7 +296,7 @@ def initialize_dealer_subsystem(
     # Dealer and VBT get NEW CASH from outside the system (not taken from traders)
     total_system_cash = Decimal(0)
     for agent_id, agent in system.state.agents.items():
-        if agent.kind in ("dealer", "vbt"):
+        if agent.kind in (AgentKind.DEALER, AgentKind.VBT):
             continue
         total_system_cash += _get_agent_cash(system, agent_id)
 

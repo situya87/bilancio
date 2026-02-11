@@ -4,9 +4,11 @@ from typing import Dict, Any
 from decimal import Decimal
 
 from bilancio.engines.system import System
+from bilancio.domain.agent import AgentKind
 from bilancio.domain.agents import Bank, Household, Firm, CentralBank, Treasury
 from bilancio.ops.banking import deposit_cash, withdraw_cash, client_payment
 from bilancio.domain.instruments.credit import Payable
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.core.errors import ValidationError
 from bilancio.core.atomic_tx import atomic
 
@@ -145,7 +147,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
             payee_bank = None
             
             # Check for existing deposits to determine banks
-            for bank_id in [a.id for a in agents.values() if a.kind == "bank"]:
+            for bank_id in [a.id for a in agents.values() if a.kind == AgentKind.BANK]:
                 if system.deposit_ids(action.payer, bank_id):
                     payer_bank = bank_id
                 if system.deposit_ids(action.payee, bank_id):
@@ -221,7 +223,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
 
             payable = Payable(
                 id=system.new_contract_id("PAY"),
-                kind="payable",  # Will be set by __post_init__ but required by dataclass
+                kind=InstrumentKind.PAYABLE,  # Will be set by __post_init__ but required by dataclass
                 amount=int(action.amount),  # Assumes amount is already in minor units
                 denom="X",  # Default denomination - could be made configurable
                 asset_holder_id=action.to_agent,  # creditor holds the asset
@@ -294,7 +296,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
         else:
             raise ValueError(f"Unknown action type: {action_type}")
             
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ValidationError) as e:
         # Add context to the error
         raise ValueError(f"Failed to apply {action_type}: {e}")
 
@@ -314,7 +316,7 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
     for act in config.initial_actions or []:
         try:
             m = parse_action(act)
-        except Exception:
+        except (ValueError, TypeError, KeyError):
             # malformed action will be caught elsewhere
             continue
         alias = _collect_alias_from_action(m)
@@ -333,7 +335,7 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
         for act in by_day[day]:
             try:
                 m = parse_action(act)
-            except Exception:
+            except (ValueError, TypeError, KeyError):
                 continue
             action_type = m.action
             if action_type == 'transfer_claim':
