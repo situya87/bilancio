@@ -90,6 +90,21 @@ class BalancedComparisonResult:
     dealer_passive_return: Optional[float] = None
     dealer_trading_incremental_pnl: Optional[float] = None
 
+    @staticmethod
+    def _compute_incremental_pnl(
+        active_metrics: Optional[Dict[str, Any]],
+        passive_metrics: Optional[Dict[str, Any]],
+    ) -> Optional[float]:
+        """Compute trading incremental PnL = active_pnl - passive_pnl.
+
+        Returns None if either metric is unavailable.
+        """
+        active_pnl = (active_metrics or {}).get("dealer_total_pnl")
+        passive_pnl = (passive_metrics or {}).get("dealer_total_pnl")
+        if active_pnl is not None and passive_pnl is not None:
+            return active_pnl - passive_pnl
+        return None
+
     @property
     def trading_effect(self) -> Optional[Decimal]:
         """Effect of trading = delta_passive - delta_active.
@@ -617,10 +632,8 @@ class BalancedComparisonRunner:
                 alpha_trader=self.config.alpha_trader,
                 dealer_passive_pnl=(passive_summary.dealer_metrics or {}).get("dealer_total_pnl"),
                 dealer_passive_return=(passive_summary.dealer_metrics or {}).get("dealer_total_return"),
-                dealer_trading_incremental_pnl=(
-                    dm.get("dealer_total_pnl") - (passive_summary.dealer_metrics or {}).get("dealer_total_pnl")
-                    if dm.get("dealer_total_pnl") is not None and (passive_summary.dealer_metrics or {}).get("dealer_total_pnl") is not None
-                    else None
+                dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
+                    dm, passive_summary.dealer_metrics,
                 ),
             )
 
@@ -837,10 +850,8 @@ class BalancedComparisonRunner:
             alpha_trader=self.config.alpha_trader,
             dealer_passive_pnl=(passive_result.dealer_metrics or {}).get("dealer_total_pnl"),
             dealer_passive_return=(passive_result.dealer_metrics or {}).get("dealer_total_return"),
-            dealer_trading_incremental_pnl=(
-                dm.get("dealer_total_pnl") - (passive_result.dealer_metrics or {}).get("dealer_total_pnl")
-                if dm.get("dealer_total_pnl") is not None and (passive_result.dealer_metrics or {}).get("dealer_total_pnl") is not None
-                else None
+            dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
+                dm, passive_result.dealer_metrics,
             ),
         )
 

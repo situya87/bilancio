@@ -356,6 +356,7 @@ def _initialize_balanced_market_makers(
         naive_prior = subsystem.risk_assessor.estimate_default_prob("_system_", 0)
 
     if alpha_vbt > 0 and kappa is not None:
+        # Safe: kappa is validated > 0 so (1 + kappa) > 1, no division-by-zero.
         informed_prior = Decimal(1) / (Decimal(1) + kappa)
         blended_prior = (Decimal(1) - alpha_vbt) * naive_prior + alpha_vbt * informed_prior
     else:

@@ -379,11 +379,14 @@ def initialize_balanced_dealer_subsystem(
     Returns:
         Initialized DealerSubsystem ready for trading (or holding if passive)
     """
-    # Compute blended trader prior if informedness is enabled
+    # Compute blended trader prior if informedness is enabled.
+    # Formula: blended = (1 - α_trader) × 0.15 + α_trader × 1/(1+κ)
+    # With α=0: naive prior (backward compatible). With α=1: fully κ-informed.
     if alpha_trader > 0 and kappa is not None and risk_params is not None:
         from dataclasses import replace as dc_replace
         naive_prior = Decimal("0.15")
-        informed_prior = Decimal(1) / (Decimal(1) + kappa)  # 1/(1+κ)
+        # Safe: kappa is validated > 0 so (1 + kappa) > 1, no division-by-zero.
+        informed_prior = Decimal(1) / (Decimal(1) + kappa)
         blended_prior = (Decimal(1) - alpha_trader) * naive_prior + alpha_trader * informed_prior
         risk_params = dc_replace(risk_params, initial_prior=blended_prior)
 
