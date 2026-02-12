@@ -90,10 +90,10 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
             instr_id = system.mint_reserves(
                 to_bank_id=action.to,
                 amount=int(action.amount),
-                alias=getattr(action, 'alias', None)
+                alias=action.alias
             )
             # optional alias capture
-            _alias: str | None = getattr(action, 'alias', None)
+            _alias: str | None = action.alias
             if _alias is not None:
                 if _alias in system.state.aliases:
                     raise ValueError(f"Alias already exists: {_alias}")
@@ -103,9 +103,9 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
             instr_id = system.mint_cash(
                 to_agent_id=action.to,
                 amount=int(action.amount),
-                alias=getattr(action, 'alias', None)
+                alias=action.alias
             )
-            _alias = getattr(action, 'alias', None)
+            _alias = action.alias
             if _alias is not None:
                 if _alias in system.state.aliases:
                     raise ValueError(f"Alias already exists: {_alias}")
@@ -208,9 +208,9 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 quantity=action.quantity,
                 unit_price=action.unit_price,
                 due_day=action.due_day,
-                alias=getattr(action, 'alias', None)
+                alias=action.alias
             )
-            _alias = getattr(action, 'alias', None)
+            _alias = action.alias
             if _alias is not None:
                 if _alias in system.state.aliases:
                     raise ValueError(f"Alias already exists: {_alias}")
@@ -224,7 +224,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
             # For now, we assume the YAML amounts are already in minor units
 
             # Plan 024: maturity_distance for rollover - defaults to due_day if not set
-            maturity_distance = getattr(action, 'maturity_distance', None)
+            maturity_distance = action.maturity_distance
             if maturity_distance is None:
                 maturity_distance = action.due_day
 
@@ -240,7 +240,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
             )
             system.add_contract(payable)
             # optional alias capture
-            _alias = getattr(action, 'alias', None)
+            _alias = action.alias
             if _alias is not None:
                 if _alias in system.state.aliases:
                     raise ValueError(f"Alias already exists: {_alias}")
@@ -254,14 +254,14 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 due_day=action.due_day,
                 maturity_distance=maturity_distance,
                 payable_id=payable.id,
-                alias=getattr(action, 'alias', None)
+                alias=action.alias
             )
-        
+
         elif action_type == "transfer_claim":
             # Transfer claim (reassign asset holder) by alias or id (order-independent validation)
             data = action
-            alias = getattr(data, 'contract_alias', None)
-            explicit_id = getattr(data, 'contract_id', None)
+            alias = data.contract_alias
+            explicit_id = data.contract_id
             id_from_alias = None
             if alias is not None:
                 id_from_alias = system.state.aliases.get(alias)
@@ -334,7 +334,7 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
 
     # 2) Group scheduled by day preserving order
     by_day: dict[int, list[Dict[str, Any]]] = {}
-    for sa in getattr(config, 'scheduled_actions', []) or []:
+    for sa in config.scheduled_actions:
         by_day.setdefault(sa.day, []).append(sa.action)
 
     # 3) Validate day by day
@@ -346,7 +346,7 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
                 continue
             action_type = m.action
             if action_type == 'transfer_claim':
-                alias = getattr(m, 'contract_alias', None)
+                alias = m.contract_alias
                 if alias and alias not in alias_set:
                     raise ValueError(
                         f"Scheduled transfer_claim references unknown alias '{alias}' on day {day}. "

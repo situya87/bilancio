@@ -347,7 +347,11 @@ def _reconnect_ring(system: System, defaulted_agent_id: str, successor_id: str, 
         Dict with reconnection info, or None if reconnection not possible
     """
     # Find predecessor: an active ring payable where asset_holder_id == defaulted_agent_id
-    # (i.e., someone owes the defaulted agent)
+    # (i.e., someone owes the defaulted agent).
+    # NOTE: We intentionally use asset_holder_id (original creditor), NOT effective_creditor,
+    # because the ring topology is defined by original issuance. If the payable was traded to
+    # a dealer in secondary market, effective_creditor would be the dealer — but the ring
+    # reconnection must still link the original predecessor to the successor.
     predecessor_payable: Payable | None = None
     for c in list(system.state.contracts.values()):
         if (c.kind == InstrumentKind.PAYABLE
