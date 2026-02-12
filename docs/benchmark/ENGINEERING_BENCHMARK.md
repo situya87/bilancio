@@ -158,7 +158,7 @@ Rounded overall: **4.0 / 5.0** (prev: 3.6)
 **Weaknesses**
 
 - **`DefaultError` used for control flow.** `settlement.py` raises `DefaultError` to trigger default handling, which is caught and processed as a business logic branch — exception-as-control-flow anti-pattern.
-- **77 bare `except Exception` clauses** across 22 source files. Many in `analysis/`, `ui/`, `jobs/`, `storage/` layers swallow specific error types.
+- **48 broad `except Exception` clauses remain** (down from 77), all annotated with `# Intentionally broad` comments. These are in top-level CLI handlers, cloud execution wrappers, and external service calls where catching all exceptions is appropriate. 29 clauses were narrowed to specific exception types.
 - **No retry/circuit-breaker for cloud calls.** `CloudExecutor` wraps Modal RPC but doesn't handle transient failures gracefully.
 
 ---
@@ -247,7 +247,7 @@ Rounded overall: **4.0 / 5.0** (prev: 3.6)
 - **Core simulation still lacks Python logging.** `settlement.py`, `system.py` have no `logging` calls — only structured events. This means no log-level filtering for the settlement layer.
 - **No health endpoints or readiness probes.** Cloud execution via Modal has no liveness/readiness checks beyond job status polling.
 - **Event schema partially typed.** `EventKind` enum (`core/events.py`) covers clearing and settlement events, but event payloads remain `dict[str, Any]` — no Pydantic model, no schema evolution strategy.
-- **`logging.basicConfig()` called inside library modules** (`analysis/strategy_outcomes.py:259`, `analysis/dealer_usage_summary.py:385`, `ui/cli/sweep.py:371,708,738`) — should be caller's responsibility.
+- ~~**`logging.basicConfig()` called inside library modules**~~ Fixed — removed from `strategy_outcomes.py` and `dealer_usage_summary.py`. Only CLI entry points in `ui/cli/sweep.py` configure logging.
 
 ---
 
@@ -287,8 +287,8 @@ Ranked by impact-to-effort ratio:
 | ~~8~~ | ~~**Replace `getattr()` calls with typed Optional fields**~~ | ~~Type Safety~~ | ~~M~~ | ~~Medium~~ | **Done** (commit `45d9e93b`) — Instrument subclasses now declare optional attributes as proper typed fields. |
 | ~~9~~ | ~~**Add property-based tests with Hypothesis**~~ | ~~Testing~~ | ~~M~~ | ~~Medium~~ | **Done** (commit `7e5445b8`) — `tests/property/test_invariants_property.py` added. |
 | ~~10~~ | ~~**Extract `dealer_integration.py` into 3+ focused modules**~~ | ~~Architecture~~ | ~~L~~ | ~~High~~ | **Done** (commit `9d36523f`) |
-| 11 | **Reduce bare `except Exception` clauses** — 77 across 22 files; replace with specific exception types | Error Handling | M | Medium — improves debuggability, prevents silent error swallowing | Open |
-| 12 | **Move `logging.basicConfig()` to CLI entry points** — currently in 3 library modules | Observability | S | Low — prevents library modules from configuring root logger | Open |
+| ~~11~~ | ~~**Reduce bare `except Exception` clauses**~~ | ~~Error Handling~~ | ~~M~~ | ~~Medium~~ | **Done** (commit `bbd01399`) — Narrowed 29 clauses to specific types; annotated 48 as "Intentionally broad". |
+| ~~12~~ | ~~**Move `logging.basicConfig()` to CLI entry points**~~ | ~~Observability~~ | ~~S~~ | ~~Low~~ | **Done** (commit `bbd01399`) — Removed from 2 library modules; only CLI entry points configure logging. |
 
 **Effort key:** S = < 1 hour, M = 1-4 hours, L = 4+ hours
 
@@ -304,7 +304,8 @@ Ranked by impact-to-effort ratio:
 | 2026-02-11 | `45d9e93b` | 3.6 | Replace `getattr()` calls with typed Optional fields and isinstance checks. |
 | 2026-02-11 | `4e25b0e1` | 3.6 | Add Python logging to dealer subsystem modules (4 files). Observability +0.5. |
 | 2026-02-11 | `c0ba64c5` | 3.8 | Raise coverage to 75.9% with 1,205 new tests across 20 test files. `fail_under=75`. Testing +0.5. |
-| 2026-02-11 | `c5ca191f` | 4.0 | Fix all 1,095 mypy strict-mode errors across 142 source files. 0 errors remaining. Type Safety +1.0. All 10 improvement items complete (8 of 10 original + 2 done prior). |
+| 2026-02-11 | `c5ca191f` | 4.0 | Fix all 1,095 mypy strict-mode errors across 142 source files. 0 errors remaining. Type Safety +1.0. |
+| 2026-02-11 | `bbd01399` | 4.0 | Replace 29 bare `except Exception` with specific types; annotate 48 intentional ones. Remove `logging.basicConfig()` from library modules. All 12 improvement items complete. |
 
 ---
 
