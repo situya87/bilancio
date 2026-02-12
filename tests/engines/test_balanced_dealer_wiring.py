@@ -157,7 +157,11 @@ def _balanced_scenario_config(*, enabled=True, mode="active"):
 class TestApplyBalancedDealer:
 
     def test_balanced_dealer_uses_correct_vbt_anchors(self):
-        """With balanced_dealer.enabled=True: VBT anchor M = ρ (=0.75 for ρ=0.75, per-unit-of-face)."""
+        """With balanced_dealer.enabled=True: VBT anchor M = ρ × (1 - P_default_prior).
+
+        With ρ=0.75 and default prior=0.15: M = 0.75 × 0.85 = 0.6375.
+        The VBT is credit-aware and discounts by estimated default probability.
+        """
         data = _balanced_scenario_config(enabled=True, mode="active")
         config = ScenarioConfig(**data)
         system = System()
@@ -166,10 +170,12 @@ class TestApplyBalancedDealer:
         subsystem = system.state.dealer_subsystem
         assert subsystem is not None
 
-        # Check VBT anchor: M should be outside_mid_ratio = 0.75 (per-unit-of-face convention)
+        # M = outside_mid_ratio × (1 - default_prior) = 0.75 × 0.85 = 0.6375
+        expected_M = Decimal("0.75") * (Decimal(1) - Decimal("0.15"))
         for bucket_id, vbt in subsystem.vbts.items():
-            assert vbt.M == Decimal("0.75"), (
-                f"VBT bucket '{bucket_id}' M={vbt.M}, expected 0.75 (ρ = 0.75, per-unit-of-face)"
+            assert vbt.M == expected_M, (
+                f"VBT bucket '{bucket_id}' M={vbt.M}, expected {expected_M} "
+                f"(ρ=0.75 × (1-0.15) credit-adjusted)"
             )
 
     def test_balanced_dealer_gives_inventory(self):

@@ -335,7 +335,15 @@ def _initialize_balanced_market_makers(
     """
     from bilancio.engines.dealer_integration import _get_agent_cash
 
-    outside_mid = outside_mid_ratio
+    # VBT mid reflects credit risk: M = ratio × (1 - P_default_prior).
+    # With no payment history the risk assessor uses a 15% default prior,
+    # so an outside_mid_ratio of 1.0 gives initial M ≈ 0.85.
+    # This ensures dealer ask prices sit below par, enabling rational buys.
+    default_prior = Decimal("0.15")
+    if subsystem.risk_assessor:
+        # Use the risk assessor's actual no-history prior
+        default_prior = subsystem.risk_assessor.estimate_default_prob("_none_", 0)
+    credit_adjusted_mid = outside_mid_ratio * (Decimal(1) - default_prior)
 
     for bucket_config in subsystem.bucket_configs:
         bucket_id = bucket_config.name
@@ -351,9 +359,9 @@ def _initialize_balanced_market_makers(
         dealer_cash = _get_agent_cash(system, f"dealer_{bucket_id}")
 
         # Create VBT state WITH inventory
-        # VBT anchors based on outside_mid
-        M = outside_mid
-        O = Decimal("0.50") * outside_mid_ratio  # Wider spread for price sensitivity
+        # M incorporates credit risk; O scales with the base ratio
+        M = credit_adjusted_mid
+        O = Decimal("0.50") * outside_mid_ratio  # Spread anchored to par ratio
 
         vbt = VBTState(
             bucket_id=bucket_id,

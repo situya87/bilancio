@@ -883,7 +883,7 @@ class TestEstimateDefaultProb:
     def test_no_history_returns_prior(self):
         assessor = RiskAssessor(RiskAssessmentParams())
         p = assessor.estimate_default_prob("x", current_day=10)
-        assert p == Decimal("0.25")
+        assert p == Decimal("0.15")
 
     def test_all_successes_within_window(self):
         params = RiskAssessmentParams(lookback_window=5, smoothing_alpha=Decimal(1))
@@ -968,8 +968,8 @@ class TestExpectedValue:
         assessor = RiskAssessor(RiskAssessmentParams())
         t = _make_ticket(face=Decimal(100))
         ev = assessor.expected_value(t, current_day=5)
-        # No history: p_default = 0.25, EV = 0.75 * 100 = 75
-        assert ev == Decimal(75)
+        # No history: p_default = 0.15, EV = 0.85 * 100 = 85
+        assert ev == Decimal(85)
 
     def test_ev_scales_with_face(self):
         assessor = RiskAssessor(RiskAssessmentParams())
@@ -1051,11 +1051,11 @@ class TestShouldSell:
     def test_accept_high_bid(self):
         assessor = RiskAssessor(RiskAssessmentParams(base_risk_premium=Decimal("0.02")))
         t = _make_ticket(face=Decimal(1))
-        # No history: EV = 0.75, threshold = 0.02
+        # No history: EV = 0.85, threshold = 0.02
         # Need: bid * face >= EV + threshold * face
-        # bid * 1 >= 0.75 + 0.02 = 0.77
+        # bid * 1 >= 0.85 + 0.02 = 0.87
         accept = assessor.should_sell(
-            ticket=t, dealer_bid=Decimal("0.80"), current_day=1,
+            ticket=t, dealer_bid=Decimal("0.90"), current_day=1,
             trader_cash=Decimal(100), trader_shortfall=Decimal(0),
             trader_asset_value=Decimal(50),
         )
@@ -1121,8 +1121,10 @@ class TestShouldBuy:
             )
         )
         t = _make_ticket(face=Decimal(1))
+        # No history: EV = 0.85, threshold = 0.02
+        # Need: EV >= ask * face + threshold * face => ask <= 0.85 - 0.02 = 0.83
         accept = assessor.should_buy(
-            ticket=t, dealer_ask=Decimal("0.80"), current_day=1,
+            ticket=t, dealer_ask=Decimal("0.90"), current_day=1,
             trader_cash=Decimal(100), trader_shortfall=Decimal(0),
             trader_asset_value=Decimal(50),
         )
@@ -1142,11 +1144,11 @@ class TestShouldBuy:
         a_high = RiskAssessor(params_high)
 
         t = _make_ticket(face=Decimal(10))
-        # EV = 7.5 (no history, p_default=0.25)
-        # Low: need EV >= ask*10 + 0.05*10 = ask*10 + 0.5 => ask <= 0.70
-        # High: need EV >= ask*10 + 0.15*10 = ask*10 + 1.5 => ask <= 0.60
+        # EV = 8.5 (no history, p_default=0.15)
+        # Low: need EV >= ask*10 + 0.05*10 = ask*10 + 0.5 => ask <= 0.80
+        # High: need EV >= ask*10 + 0.15*10 = ask*10 + 1.5 => ask <= 0.70
 
-        ask = Decimal("0.65")
+        ask = Decimal("0.75")
         buy_low = a_low.should_buy(
             ticket=t, dealer_ask=ask, current_day=1,
             trader_cash=Decimal(100), trader_shortfall=Decimal(0),

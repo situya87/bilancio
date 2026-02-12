@@ -180,6 +180,27 @@ def _pool_desk_cash(subsystem: "DealerSubsystem") -> None:
             vbt.cash = per_desk
 
 
+def _update_vbt_credit_mids(subsystem: "DealerSubsystem", current_day: int) -> None:
+    """Update VBT mid prices to reflect the risk assessor's current default estimate.
+
+    The VBT is a credit-aware long-term holder.  Its mid M should equal
+    ``outside_mid_ratio × (1 − P_default)`` so that ask prices sit below
+    par and rational buyers can participate.
+
+    Called once per day before dealer quote recomputation.
+    """
+    if not subsystem.risk_assessor:
+        return
+
+    # Use system-wide default estimate (no specific issuer)
+    p_default = subsystem.risk_assessor.estimate_default_prob("_system_", current_day)
+    new_M = subsystem.outside_mid_ratio * (Decimal(1) - p_default)
+
+    for vbt in subsystem.vbts.values():
+        vbt.M = new_M
+        vbt.recompute_quotes()
+
+
 def _sync_trader_cash_from_system(
     subsystem: "DealerSubsystem",
     system: "System",

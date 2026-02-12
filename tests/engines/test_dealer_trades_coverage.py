@@ -808,7 +808,7 @@ class TestBuildEligible:
 
     def test_eligible_buyers_no_surplus(self):
         subsystem = _make_subsystem(face_value=Decimal(1000))
-        _add_trader(subsystem, "T1", cash=Decimal(10))
+        _add_trader(subsystem, "T1", cash=Decimal(0))
 
         buyers = _build_eligible_buyers(subsystem, current_day=5)
         assert "T1" not in buyers

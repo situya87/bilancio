@@ -81,6 +81,7 @@ from bilancio.engines.dealer_sync import (
     _ingest_new_payables,
     _update_ticket_maturities,
     _pool_desk_cash,
+    _update_vbt_credit_mids,
     _capture_dealer_snapshots,
     _capture_trader_snapshots,
     _capture_system_state_snapshot,
@@ -147,6 +148,9 @@ class DealerSubsystem:
 
     # Risk assessment module (optional)
     risk_assessor: RiskAssessor | None = None
+
+    # Base outside-mid ratio (stored for daily VBT M recalculation)
+    outside_mid_ratio: Decimal = Decimal(1)
 
     # Serial counter for ticket IDs (continues from initialization)
     _ticket_serial_counter: int = 0
@@ -373,6 +377,7 @@ def initialize_balanced_dealer_subsystem(
         rng=random.Random(dealer_config.seed),
         enabled=(mode == "active"),  # Disable trading for passive mode
         face_value=face_value,
+        outside_mid_ratio=outside_mid_ratio,
     )
 
     # Initialize risk assessor if params provided
@@ -493,6 +498,12 @@ def run_dealer_trading_phase(
     # Same for VBT desks. Pooling ensures default losses and settlement revenue
     # are amortized across all desks, not concentrated in the short bucket.
     _pool_desk_cash(subsystem)
+
+    # Phase 1.75: Update VBT mid prices from risk assessor's credit estimate.
+    # VBTs are credit-aware holders: M = outside_mid_ratio × (1 - P_default).
+    # As the system learns actual default rates, VBT mid drifts accordingly,
+    # keeping dealer asks below par so rational buys remain viable.
+    _update_vbt_credit_mids(subsystem, current_day)
 
     # Phase 2: Recompute dealer quotes for all buckets
     for bucket_id, dealer in subsystem.dealers.items():

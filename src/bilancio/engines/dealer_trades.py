@@ -447,8 +447,11 @@ def _execute_buy_trade(
     """Process a single buy trade attempt for a trader. Returns cash drained from ring."""
     trader = subsystem.traders[trader_id]
 
-    # Try to buy from first available bucket
-    for bucket_id, dealer in subsystem.dealers.items():
+    # Shuffle bucket order so buys don't always hit the same bucket first
+    bucket_ids = list(subsystem.dealers.keys())
+    subsystem.rng.shuffle(bucket_ids)
+    for bucket_id in bucket_ids:
+        dealer = subsystem.dealers[bucket_id]
         vbt = subsystem.vbts[bucket_id]
 
         # Check if dealer or VBT has inventory
@@ -547,12 +550,12 @@ def _build_eligible_sellers(
 def _build_eligible_buyers(
     subsystem: "DealerSubsystem",
     current_day: int,
-    horizon: int = 10,
+    horizon: int = 5,
 ) -> List[str]:
     """Identify traders eligible to buy (have surplus cash beyond needs).
 
     Only allows buying if trader has genuine surplus above ALL upcoming
-    obligations, with a buffer of one face-value unit.
+    obligations.
 
     Args:
         subsystem: Dealer subsystem state
@@ -568,7 +571,7 @@ def _build_eligible_buyers(
         for day_offset in range(horizon + 1):
             total_upcoming_dues += trader.payment_due(current_day + day_offset)
         surplus = trader.cash - total_upcoming_dues
-        if surplus > subsystem.face_value:
+        if surplus > 0:
             eligible_buyers.append(trader_id)
     return eligible_buyers
 
