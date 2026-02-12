@@ -157,10 +157,12 @@ def recompute_dealer_state(
     # Step 6: Clipped quotes
     # a_c(x) = min(A, a(x))  (clip ask at outside ask)
     # b_c(x) = max(B, b(x))  (clip bid at outside bid)
-    dealer.bid = max(B, b_interior)
+    # Zero-coupon claims pay at most face at maturity, so quotes are capped at par.
+    PAR = Decimal(1)
+    dealer.bid = min(max(B, b_interior), PAR)
     # Ask is floored at bid to ensure non-negative spread:
     # the dealer should never sell for less than it would buy.
-    dealer.ask = max(dealer.bid, min(A, a_interior))
+    dealer.ask = max(dealer.bid, min(A, a_interior, PAR))
 
     # Step 7: Pin detection
     # Dealer is "pinned" when its quote equals the outside quote

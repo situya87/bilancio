@@ -221,6 +221,9 @@ class VBTState:
         self.A = self.M + half_spread
         self.B = self.M - half_spread
 
+        # Cap ask at par: zero-coupon claims pay at most face at maturity
+        self.A = min(self.A, Decimal(1))
+
         # Apply non-negative bid clipping if enabled
         if self.clip_nonneg_B:
             self.B = max(self.B, Decimal(0))

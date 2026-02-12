@@ -91,6 +91,8 @@ def _convert_payables_to_tickets(
             continue
         if contract.due_day is None:
             continue
+        if contract.amount <= 0:
+            continue  # Skip zero-face payables (Dirichlet rounding artifacts)
 
         ticket_id = f"TKT_{contract_id}"
         remaining_tau = max(0, contract.due_day - current_day)

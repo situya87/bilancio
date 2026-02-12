@@ -116,8 +116,8 @@ class TestExample5DealerEarns:
     Example 5: Dealer earns spread over multiple trades.
 
     Initial state:
-    - a=2, C=2, M=1.0, O=0.30
-    - V=4, K*=4, X*=4
+    - a=2, C=2, M=0.80, O=0.30
+    - V=3.60, K*=4, X*=4
 
     Trade sequence:
     1. Customer SELL (dealer buys at bid 0.97)
@@ -134,7 +134,7 @@ class TestExample5DealerEarns:
         dealer, vbt, params = setup_dealer_vbt_params(
             dealer_tickets=2,
             dealer_cash=Decimal(2),
-            M=Decimal("1.0"),
+            M=Decimal("0.80"),
             O=Decimal("0.30"),
         )
 
@@ -142,7 +142,7 @@ class TestExample5DealerEarns:
         assert dealer.a == 2
         assert dealer.x == Decimal(2)
         assert dealer.cash == Decimal(2)
-        assert dealer.V == Decimal(4)
+        assert dealer.V == Decimal("3.60")
         assert dealer.K_star == 4
         assert dealer.X_star == Decimal(4)
         assert dealer.N == 5
@@ -150,9 +150,9 @@ class TestExample5DealerEarns:
         assert dealer.I == Decimal("0.06")  # 0.2 * 0.30
 
         # Check quotes at x=2
-        assert dealer.midline == Decimal(1)  # p(2) = 1
-        assert dealer.ask == Decimal("1.03")  # a(2) = 1.03
-        assert dealer.bid == Decimal("0.97")  # b(2) = 0.97
+        assert dealer.midline == Decimal("0.80")  # p(2) = 0.80
+        assert dealer.ask == Decimal("0.83")  # a(2) = 0.83
+        assert dealer.bid == Decimal("0.77")  # b(2) = 0.77
 
         # Verify invariants
         run_all_assertions(dealer, vbt, params)
@@ -248,11 +248,11 @@ class TestExample4InventoryLimit:
     Example 4: Dealer depletes inventory and VBT layoff occurs.
 
     Initial state:
-    - a=2, C=2, M=1.0, O=0.30
-    - V=4, K*=4, X*=4, x=2
+    - a=2, C=2, M=0.80, O=0.30
+    - V=3.60, K*=4, X*=4, x=2
 
     Two customer BUYs deplete inventory to x=0.
-    Third customer BUY: interior sell infeasible -> passthrough to VBT at A=1.15.
+    Third customer BUY: interior sell infeasible -> passthrough to VBT at A=0.95.
     Dealer state unchanged (C4 assertion).
     """
 
@@ -261,29 +261,30 @@ class TestExample4InventoryLimit:
         dealer, vbt, params = setup_dealer_vbt_params(
             dealer_tickets=2,
             dealer_cash=Decimal(2),
+            M=Decimal("0.80"),
         )
 
         executor = TradeExecutor(params)
 
         # Initial: x=2
         assert dealer.x == Decimal(2)
-        assert dealer.ask == Decimal("1.03")
+        assert dealer.ask == Decimal("0.83")
 
         # First BUY: x=2 -> x=1
         result1 = executor.execute_customer_buy(dealer, vbt, "buyer1")
         assert result1.executed
         assert not result1.is_passthrough
-        assert result1.price == Decimal("1.03")
+        assert result1.price == Decimal("0.83")
         assert dealer.x == Decimal(1)
-        assert dealer.ask == Decimal("1.08")  # p(1) = 1.05, a(1) = 1.08
+        assert dealer.ask == Decimal("0.88")  # p(1) = 0.85, a(1) = 0.88
 
         # Second BUY: x=1 -> x=0
         result2 = executor.execute_customer_buy(dealer, vbt, "buyer2")
         assert result2.executed
         assert not result2.is_passthrough
-        assert result2.price == Decimal("1.08")
+        assert result2.price == Decimal("0.88")
         assert dealer.x == Decimal(0)
-        assert dealer.cash == Decimal("4.11")  # 2 + 1.03 + 1.08
+        assert dealer.cash == Decimal("3.71")  # 2 + 0.83 + 0.88
 
     def test_passthrough_at_zero_inventory(self):
         """Third BUY routes to VBT at A when dealer has no inventory."""
@@ -698,6 +699,7 @@ class TestQuoteBounds:
         dealer, vbt, params = setup_dealer_vbt_params(
             dealer_tickets=2,
             dealer_cash=Decimal(2),
+            M=Decimal("0.80"),
         )
 
         # At x=2 (balanced), quotes should be strictly inside

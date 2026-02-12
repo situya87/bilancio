@@ -209,18 +209,18 @@ class TestVBTState:
         assert v.cash == Decimal(0)
 
     def test_recompute_quotes_basic(self):
-        v = VBTState(bucket_id="short", M=Decimal(1), O=Decimal("0.30"))
+        v = VBTState(bucket_id="short", M=Decimal("0.80"), O=Decimal("0.30"))
         v.recompute_quotes()
-        assert v.A == Decimal(1) + Decimal("0.15")  # 1.15
-        assert v.B == Decimal(1) - Decimal("0.15")  # 0.85
+        assert v.A == Decimal("0.80") + Decimal("0.15")  # 0.95
+        assert v.B == Decimal("0.80") - Decimal("0.15")  # 0.65
 
     def test_recompute_quotes_minimum_spread(self):
         """O_min enforces a floor on the effective spread."""
-        v = VBTState(bucket_id="short", M=Decimal(1), O=Decimal("0.01"), O_min=Decimal("0.10"))
+        v = VBTState(bucket_id="short", M=Decimal("0.80"), O=Decimal("0.01"), O_min=Decimal("0.10"))
         v.recompute_quotes()
         # O_min = 0.10 takes effect since O < O_min
-        assert v.A == Decimal(1) + Decimal("0.05")  # 1.05
-        assert v.B == Decimal(1) - Decimal("0.05")  # 0.95
+        assert v.A == Decimal("0.80") + Decimal("0.05")  # 0.85
+        assert v.B == Decimal("0.80") - Decimal("0.05")  # 0.75
 
     def test_recompute_quotes_nonneg_bid_clipping(self):
         """B is clipped to 0 when M is very low."""
@@ -244,25 +244,25 @@ class TestVBTState:
     def test_update_from_loss(self):
         v = VBTState(
             bucket_id="short",
-            M=Decimal(1),
+            M=Decimal("0.80"),
             O=Decimal("0.30"),
             phi_M=Decimal(1),
             phi_O=Decimal("0.6"),
         )
         loss = Decimal("0.10")
         v.update_from_loss(loss)
-        # M_new = 1 - 1 * 0.10 = 0.90
-        assert v.M == Decimal("0.90")
+        # M_new = 0.80 - 1 * 0.10 = 0.70
+        assert v.M == Decimal("0.70")
         # O_new = max(0, 0.30 + 0.6 * 0.10) = 0.36
         assert v.O == Decimal("0.36")
         # Quotes are recomputed
-        assert v.A == Decimal("0.90") + Decimal("0.36") / 2  # 1.08
-        assert v.B == Decimal("0.90") - Decimal("0.36") / 2  # 0.72
+        assert v.A == Decimal("0.70") + Decimal("0.36") / 2  # 0.88
+        assert v.B == Decimal("0.70") - Decimal("0.36") / 2  # 0.52
 
     def test_update_from_loss_respects_o_min(self):
         v = VBTState(
             bucket_id="short",
-            M=Decimal(1),
+            M=Decimal("0.80"),
             O=Decimal("0.05"),
             phi_M=Decimal(1),
             phi_O=Decimal("0.6"),
@@ -271,11 +271,11 @@ class TestVBTState:
         v.update_from_loss(Decimal(0))
         # O_new = max(O_min=0.10, 0.05 + 0.6*0) = max(0.10, 0.05) = 0.10
         assert v.O == Decimal("0.10")
-        # M unchanged: 1 - 1*0 = 1
-        assert v.M == Decimal(1)
-        # Quotes: A = 1 + 0.10/2 = 1.05, B = 1 - 0.10/2 = 0.95
-        assert v.A == Decimal("1.05")
-        assert v.B == Decimal("0.95")
+        # M unchanged: 0.80 - 1*0 = 0.80
+        assert v.M == Decimal("0.80")
+        # Quotes: A = 0.80 + 0.10/2 = 0.85, B = 0.80 - 0.10/2 = 0.75
+        assert v.A == Decimal("0.85")
+        assert v.B == Decimal("0.75")
 
     def test_update_from_loss_large_loss_clips_bid_to_zero(self):
         v = VBTState(bucket_id="short", M=Decimal("0.50"), O=Decimal("0.30"))

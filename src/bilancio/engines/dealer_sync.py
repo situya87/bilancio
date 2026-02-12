@@ -86,6 +86,8 @@ def _ingest_new_payables(subsystem: "DealerSubsystem", system: "System", current
         remaining_tau = max(0, contract.due_day - current_day)
         if remaining_tau == 0:
             continue  # Already matured
+        if contract.amount <= 0:
+            continue  # Skip zero-face payables (Dirichlet rounding artifacts)
 
         # Skip defaulted issuers
         issuer = system.state.agents.get(contract.liability_issuer_id)
