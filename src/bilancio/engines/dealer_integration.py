@@ -152,6 +152,11 @@ class DealerSubsystem:
     # Base outside-mid ratio (stored for daily VBT M recalculation)
     outside_mid_ratio: Decimal = Decimal(1)
 
+    # Informedness parameters (Plan: credit-informed pricing)
+    alpha_vbt: Decimal = Decimal(0)
+    alpha_trader: Decimal = Decimal(0)
+    kappa: Optional[Decimal] = None
+
     # Serial counter for ticket IDs (continues from initialization)
     _ticket_serial_counter: int = 0
 
@@ -338,6 +343,9 @@ def initialize_balanced_dealer_subsystem(
     mode: str = "active",
     current_day: int = 0,
     risk_params: RiskAssessmentParams | None = None,
+    alpha_vbt: Decimal = Decimal("0"),
+    alpha_trader: Decimal = Decimal("0"),
+    kappa: Decimal | None = None,
 ) -> DealerSubsystem:
     """
     Initialize dealer subsystem for balanced scenarios (C vs D comparison).
@@ -371,6 +379,17 @@ def initialize_balanced_dealer_subsystem(
     Returns:
         Initialized DealerSubsystem ready for trading (or holding if passive)
     """
+    # Compute blended trader prior if informedness is enabled.
+    # Formula: blended = (1 - α_trader) × 0.15 + α_trader × 1/(1+κ)
+    # With α=0: naive prior (backward compatible). With α=1: fully κ-informed.
+    if alpha_trader > 0 and kappa is not None and risk_params is not None:
+        from dataclasses import replace as dc_replace
+        naive_prior = Decimal("0.15")
+        # Safe: kappa is validated > 0 so (1 + kappa) > 1, no division-by-zero.
+        informed_prior = Decimal(1) / (Decimal(1) + kappa)
+        blended_prior = (Decimal(1) - alpha_trader) * naive_prior + alpha_trader * informed_prior
+        risk_params = dc_replace(risk_params, initial_prior=blended_prior)
+
     subsystem = DealerSubsystem(
         bucket_configs=dealer_config.buckets,
         params=KernelParams(S=face_value),  # S=face_value: kernel accounts for real ticket size
@@ -378,6 +397,9 @@ def initialize_balanced_dealer_subsystem(
         enabled=(mode == "active"),  # Disable trading for passive mode
         face_value=face_value,
         outside_mid_ratio=outside_mid_ratio,
+        alpha_vbt=alpha_vbt,
+        alpha_trader=alpha_trader,
+        kappa=kappa,
     )
 
     # Initialize risk assessor if params provided
@@ -403,6 +425,8 @@ def initialize_balanced_dealer_subsystem(
     _initialize_balanced_market_makers(
         subsystem, system, dealer_config, outside_mid_ratio,
         vbt_tickets, dealer_tickets,
+        alpha_vbt=alpha_vbt,
+        kappa=kappa,
     )
 
     # Step 3: Initialize traders (regular household agents, skip VBT/Dealer/big)
@@ -526,6 +550,86 @@ def run_dealer_trading_phase(
     )
 
     return events
+
+
+def compute_passive_pnl(
+    subsystem: DealerSubsystem,
+    system: System,
+) -> Dict[str, Any]:
+    """Compute PnL for passive dealer entities (hold-only, no trading).
+
+    In passive mode, dealers and VBTs hold their initial inventory but never
+    trade. This function computes their mark-to-mid equity at the end of the
+    simulation and compares it to their initial equity.
+
+    Uses the same formula as active PnL (mark-to-mid) for fair comparison:
+        final_equity = dealer_cash + VBT_M × inventory_count × S
+        passive_pnl = final_equity - initial_equity
+
+    VBT_M in passive mode is the initial value (never updated since no trading
+    phase runs).
+
+    Args:
+        subsystem: Dealer subsystem (with enabled=False for passive)
+        system: Main System instance
+
+    Returns:
+        Dictionary compatible with dealer_metrics.json format (summary dict)
+    """
+    pnl_by_bucket: Dict[str, float] = {}
+    return_by_bucket: Dict[str, float] = {}
+    total_pnl = Decimal(0)
+    total_initial_equity = Decimal(0)
+
+    for bucket_id, dealer in subsystem.dealers.items():
+        vbt = subsystem.vbts[bucket_id]
+        initial_equity = subsystem.metrics.initial_equity_by_bucket.get(bucket_id, Decimal(0))
+
+        # Read current dealer cash from system
+        dealer_cash = _get_agent_cash(system, dealer.agent_id)
+
+        # Count remaining inventory tickets whose underlying payable still
+        # exists in the system.  In passive mode _cleanup_orphaned_tickets is
+        # never called, so dealer.inventory still references tickets whose
+        # payables have settled or defaulted (and been removed from contracts).
+        inventory_count = 0
+        for ticket in dealer.inventory:
+            payable_id = subsystem.ticket_to_payable.get(ticket.id)
+            if payable_id and payable_id in system.state.contracts:
+                inventory_count += 1
+
+        # Mark to mid: final_equity = cash + M × inventory × S
+        final_equity = dealer_cash + vbt.M * inventory_count * subsystem.params.S
+
+        bucket_pnl = final_equity - initial_equity
+        pnl_by_bucket[bucket_id] = float(bucket_pnl)
+
+        if initial_equity > 0:
+            return_by_bucket[bucket_id] = float(bucket_pnl / initial_equity)
+        else:
+            return_by_bucket[bucket_id] = 0.0
+
+        total_pnl += bucket_pnl
+        total_initial_equity += initial_equity
+
+    total_return = float(total_pnl / total_initial_equity) if total_initial_equity > 0 else 0.0
+
+    return {
+        "dealer_total_pnl": float(total_pnl),
+        "dealer_total_return": total_return,
+        "dealer_profitable": total_pnl >= 0,
+        "dealer_pnl_by_bucket": pnl_by_bucket,
+        "dealer_return_by_bucket": return_by_bucket,
+        "total_trades": 0,
+        "total_sell_trades": 0,
+        "total_buy_trades": 0,
+        "interior_trades": 0,
+        "passthrough_trades": 0,
+        "spread_income_total": 0.0,
+        "initial_total_debt": float(subsystem.metrics.initial_total_debt),
+        "initial_total_money": float(subsystem.metrics.initial_total_money),
+        "debt_to_money_ratio": float(subsystem.metrics.debt_to_money_ratio),
+    }
 
 
 def sync_dealer_to_system(

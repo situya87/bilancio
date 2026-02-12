@@ -68,6 +68,10 @@ class BalancedComparisonResult:
     vbt_share_per_bucket: Decimal = Decimal("0.25")
     dealer_share_per_bucket: Decimal = Decimal("0.125")
 
+    # Informedness parameters
+    alpha_vbt: Decimal = Decimal("0")
+    alpha_trader: Decimal = Decimal("0")
+
     # Dealer metrics from active run
     dealer_total_pnl: Optional[float] = None
     dealer_total_return: Optional[float] = None
@@ -80,6 +84,26 @@ class BalancedComparisonResult:
     # Modal call IDs for cloud execution debugging
     passive_modal_call_id: Optional[str] = None
     active_modal_call_id: Optional[str] = None
+
+    # Comparative dealer PnL (passive vs active)
+    dealer_passive_pnl: Optional[float] = None
+    dealer_passive_return: Optional[float] = None
+    dealer_trading_incremental_pnl: Optional[float] = None
+
+    @staticmethod
+    def _compute_incremental_pnl(
+        active_metrics: Optional[Dict[str, Any]],
+        passive_metrics: Optional[Dict[str, Any]],
+    ) -> Optional[float]:
+        """Compute trading incremental PnL = active_pnl - passive_pnl.
+
+        Returns None if either metric is unavailable.
+        """
+        active_pnl = (active_metrics or {}).get("dealer_total_pnl")
+        passive_pnl = (passive_metrics or {}).get("dealer_total_pnl")
+        if active_pnl is not None and passive_pnl is not None:
+            return active_pnl - passive_pnl
+        return None
 
     @property
     def trading_effect(self) -> Optional[Decimal]:
@@ -188,6 +212,10 @@ class BalancedComparisonConfig(BaseModel):
         description="Risk assessment parameters"
     )
 
+    # Informedness parameters (credit-informed pricing)
+    alpha_vbt: Decimal = Field(default=Decimal("0"), description="VBT informedness (0=naive, 1=fully informed)")
+    alpha_trader: Decimal = Field(default=Decimal("0"), description="Trader informedness (0=naive, 1=fully informed)")
+
 
 class BalancedComparisonRunner:
     """
@@ -232,6 +260,11 @@ class BalancedComparisonRunner:
         "cascade_fraction_passive",
         "cascade_fraction_active",
         "cascade_effect",
+        "alpha_vbt",
+        "alpha_trader",
+        "dealer_passive_pnl",
+        "dealer_passive_return",
+        "dealer_trading_incremental_pnl",
     ]
 
     def __init__(
@@ -383,6 +416,8 @@ class BalancedComparisonRunner:
             quiet=self.config.quiet,  # Plan 030
             risk_assessment_enabled=self.config.risk_assessment_enabled,
             risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
         )
 
     def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -418,6 +453,8 @@ class BalancedComparisonRunner:
             quiet=self.config.quiet,  # Plan 030
             risk_assessment_enabled=self.config.risk_assessment_enabled,
             risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
         )
 
     def run_all(self) -> List[BalancedComparisonResult]:
@@ -591,6 +628,13 @@ class BalancedComparisonRunner:
                 cascade_fraction_active=active_summary.cascade_fraction,
                 passive_modal_call_id=passive_summary.modal_call_id,
                 active_modal_call_id=active_summary.modal_call_id,
+                alpha_vbt=self.config.alpha_vbt,
+                alpha_trader=self.config.alpha_trader,
+                dealer_passive_pnl=(passive_summary.dealer_metrics or {}).get("dealer_total_pnl"),
+                dealer_passive_return=(passive_summary.dealer_metrics or {}).get("dealer_total_return"),
+                dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
+                    dm, passive_summary.dealer_metrics,
+                ),
             )
 
             self.comparison_results.append(result)
@@ -802,6 +846,13 @@ class BalancedComparisonRunner:
             cascade_fraction_active=active_result.cascade_fraction,
             passive_modal_call_id=passive_result.modal_call_id,
             active_modal_call_id=active_result.modal_call_id,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
+            dealer_passive_pnl=(passive_result.dealer_metrics or {}).get("dealer_total_pnl"),
+            dealer_passive_return=(passive_result.dealer_metrics or {}).get("dealer_total_return"),
+            dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
+                dm, passive_result.dealer_metrics,
+            ),
         )
 
         # Log comparison
@@ -937,6 +988,11 @@ class BalancedComparisonRunner:
                     "cascade_fraction_passive": str(result.cascade_fraction_passive) if result.cascade_fraction_passive is not None else "",
                     "cascade_fraction_active": str(result.cascade_fraction_active) if result.cascade_fraction_active is not None else "",
                     "cascade_effect": str(result.cascade_effect) if result.cascade_effect is not None else "",
+                    "alpha_vbt": str(result.alpha_vbt),
+                    "alpha_trader": str(result.alpha_trader),
+                    "dealer_passive_pnl": str(result.dealer_passive_pnl) if result.dealer_passive_pnl is not None else "",
+                    "dealer_passive_return": str(result.dealer_passive_return) if result.dealer_passive_return is not None else "",
+                    "dealer_trading_incremental_pnl": str(result.dealer_trading_incremental_pnl) if result.dealer_trading_incremental_pnl is not None else "",
                 }
                 writer.writerow(row)
 

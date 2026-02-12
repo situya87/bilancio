@@ -509,6 +509,18 @@ def sweep_comparison(
     default=Decimal("0.10"),
     help='Urgency sensitivity (default: 0.10)',
 )
+@click.option(
+    '--alpha-vbt',
+    type=Decimal,
+    default=Decimal("0"),
+    help='VBT informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0)',
+)
+@click.option(
+    '--alpha-trader',
+    type=Decimal,
+    default=Decimal("0"),
+    help='Trader informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0)',
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -530,6 +542,8 @@ def sweep_balanced(
     risk_assessment: bool,
     risk_premium: Decimal,
     risk_urgency: Decimal,
+    alpha_vbt: Decimal,
+    alpha_trader: Decimal,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -611,6 +625,9 @@ def sweep_balanced(
         "lookback_window": 5,
     }
 
+    if alpha_vbt > 0 or alpha_trader > 0:
+        click.echo(f"Informedness enabled (alpha_vbt={alpha_vbt}, alpha_trader={alpha_trader})")
+
     config = BalancedComparisonConfig(
         n_agents=n_agents,
         maturity_days=maturity_days,
@@ -628,6 +645,8 @@ def sweep_balanced(
         rollover_enabled=rollover,
         risk_assessment_enabled=risk_assessment,
         risk_assessment_config=risk_config,
+        alpha_vbt=alpha_vbt,
+        alpha_trader=alpha_trader,
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)

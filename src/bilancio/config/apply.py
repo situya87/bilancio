@@ -459,6 +459,9 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
                 mode=config.balanced_dealer.mode,
                 current_day=0,
                 risk_params=risk_params,
+                alpha_vbt=config.balanced_dealer.alpha_vbt,
+                alpha_trader=config.balanced_dealer.alpha_trader,
+                kappa=config.balanced_dealer.kappa,
             )
         else:
             system.state.dealer_subsystem = initialize_dealer_subsystem(

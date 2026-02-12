@@ -252,6 +252,8 @@ class RingSweepRunner:
         registry_store: Optional[RegistryStore] = None,  # Plan 026
         executor: Optional[SimulationExecutor] = None,  # Plan 027
         quiet: bool = True,  # Plan 030: suppress verbose output for sweeps
+        alpha_vbt: Decimal = Decimal("0"),
+        alpha_trader: Decimal = Decimal("0"),
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -278,6 +280,8 @@ class RingSweepRunner:
         self.rollover_enabled = rollover_enabled
         self.detailed_dealer_logging = detailed_dealer_logging  # Plan 022
         self.quiet = quiet  # Plan 030: suppress verbose output
+        self.alpha_vbt = alpha_vbt
+        self.alpha_trader = alpha_trader
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -541,7 +545,9 @@ class RingSweepRunner:
         else:
             scenario = compile_ring_explorer(generator_config, source_path=None)
 
-        if self.dealer_enabled:
+        # Add dealer config: always for active mode, also for balanced passive
+        # (passive balanced runs need the subsystem initialized for PnL tracking)
+        if self.dealer_enabled or self.balanced_mode:
             dealer_section: Dict[str, Any] = {"enabled": True}
             if self.dealer_config:
                 dealer_section.update(self.dealer_config)
@@ -566,8 +572,11 @@ class RingSweepRunner:
                     "outside_mid_ratio": str(self.outside_mid_ratio),
                     "vbt_share_per_bucket": str(self.vbt_share_per_bucket),
                     "dealer_share_per_bucket": str(self.dealer_share_per_bucket),
-                    "mode": "active",
+                    "mode": "active" if self.dealer_enabled else "passive",
                     "rollover_enabled": self.rollover_enabled,
+                    "alpha_vbt": str(self.alpha_vbt),
+                    "alpha_trader": str(self.alpha_trader),
+                    "kappa": str(kappa),
                 }
 
         if self.default_handling:
@@ -804,7 +813,9 @@ class RingSweepRunner:
         else:
             scenario = compile_ring_explorer(generator_config, source_path=None)
 
-        if self.dealer_enabled:
+        # Add dealer config: always for active mode, also for balanced passive
+        # (passive balanced runs need the subsystem initialized for PnL tracking)
+        if self.dealer_enabled or self.balanced_mode:
             dealer_section: Dict[str, Any] = {"enabled": True}
             if self.dealer_config:
                 dealer_section.update(self.dealer_config)
@@ -829,8 +840,11 @@ class RingSweepRunner:
                     "outside_mid_ratio": str(self.outside_mid_ratio),
                     "vbt_share_per_bucket": str(self.vbt_share_per_bucket),
                     "dealer_share_per_bucket": str(self.dealer_share_per_bucket),
-                    "mode": "active",
+                    "mode": "active" if self.dealer_enabled else "passive",
                     "rollover_enabled": self.rollover_enabled,
+                    "alpha_vbt": str(self.alpha_vbt),
+                    "alpha_trader": str(self.alpha_trader),
+                    "kappa": str(kappa),
                 }
 
         if self.default_handling:

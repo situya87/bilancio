@@ -576,6 +576,22 @@ class BalancedDealerConfig(BaseModel):
         default="active",
         description="passive = C (mimics don't trade), active = D (dealers can trade)"
     )
+    alpha_vbt: Decimal = Field(
+        default=Decimal("0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="VBT informedness: 0=naive prior, 1=fully kappa-informed pricing"
+    )
+    alpha_trader: Decimal = Field(
+        default=Decimal("0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="Trader informedness: 0=naive prior, 1=fully kappa-informed pricing"
+    )
+    kappa: Optional[Decimal] = Field(
+        default=None,
+        description="Kappa (injected from run parameters for informedness computation)"
+    )
 
     @field_validator("face_value")
     @classmethod
