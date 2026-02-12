@@ -254,6 +254,12 @@ class RingSweepRunner:
         quiet: bool = True,  # Plan 030: suppress verbose output for sweeps
         alpha_vbt: Decimal = Decimal("0"),
         alpha_trader: Decimal = Decimal("0"),
+        risk_aversion: Decimal = Decimal("0"),
+        planning_horizon: int = 10,
+        aggressiveness: Decimal = Decimal("1.0"),
+        default_observability: Decimal = Decimal("1.0"),
+        vbt_mid_sensitivity: Decimal = Decimal("1.0"),
+        vbt_spread_sensitivity: Decimal = Decimal("0.0"),
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -282,6 +288,12 @@ class RingSweepRunner:
         self.quiet = quiet  # Plan 030: suppress verbose output
         self.alpha_vbt = alpha_vbt
         self.alpha_trader = alpha_trader
+        self.risk_aversion = risk_aversion
+        self.planning_horizon = planning_horizon
+        self.aggressiveness = aggressiveness
+        self.default_observability = default_observability
+        self.vbt_mid_sensitivity = vbt_mid_sensitivity
+        self.vbt_spread_sensitivity = vbt_spread_sensitivity
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -577,6 +589,12 @@ class RingSweepRunner:
                     "alpha_vbt": str(self.alpha_vbt),
                     "alpha_trader": str(self.alpha_trader),
                     "kappa": str(kappa),
+                    "risk_aversion": str(self.risk_aversion),
+                    "planning_horizon": self.planning_horizon,
+                    "aggressiveness": str(self.aggressiveness),
+                    "default_observability": str(self.default_observability),
+                    "vbt_mid_sensitivity": str(self.vbt_mid_sensitivity),
+                    "vbt_spread_sensitivity": str(self.vbt_spread_sensitivity),
                 }
 
         if self.default_handling:
@@ -845,6 +863,12 @@ class RingSweepRunner:
                     "alpha_vbt": str(self.alpha_vbt),
                     "alpha_trader": str(self.alpha_trader),
                     "kappa": str(kappa),
+                    "risk_aversion": str(self.risk_aversion),
+                    "planning_horizon": self.planning_horizon,
+                    "aggressiveness": str(self.aggressiveness),
+                    "default_observability": str(self.default_observability),
+                    "vbt_mid_sensitivity": str(self.vbt_mid_sensitivity),
+                    "vbt_spread_sensitivity": str(self.vbt_spread_sensitivity),
                 }
 
         if self.default_handling:

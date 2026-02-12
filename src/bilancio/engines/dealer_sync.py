@@ -189,6 +189,12 @@ def _update_vbt_credit_mids(subsystem: "DealerSubsystem", current_day: int) -> N
     ``outside_mid_ratio × (1 − P_default)`` so that ask prices sit below
     par and rational buyers can participate.
 
+    When mid_sensitivity < 1.0, M is blended toward its initial value,
+    damping the response to observed defaults.
+
+    When spread_sensitivity > 0.0, O widens proportionally to the observed
+    default probability.
+
     Called once per day before dealer quote recomputation.
     """
     if not subsystem.risk_assessor:
@@ -196,10 +202,24 @@ def _update_vbt_credit_mids(subsystem: "DealerSubsystem", current_day: int) -> N
 
     # Use system-wide default estimate (no specific issuer)
     p_default = subsystem.risk_assessor.estimate_default_prob("_system_", current_day)
-    new_M = subsystem.outside_mid_ratio * (Decimal(1) - p_default)
+    raw_M = subsystem.outside_mid_ratio * (Decimal(1) - p_default)
 
-    for vbt in subsystem.vbts.values():
+    # Blend toward initial M based on mid_sensitivity
+    initial_prior = subsystem.risk_assessor.params.initial_prior
+    initial_M = subsystem.outside_mid_ratio * (Decimal(1) - initial_prior)
+    sens = subsystem.vbt_profile.mid_sensitivity
+    new_M = initial_M + sens * (raw_M - initial_M)
+
+    spread_sens = subsystem.vbt_profile.spread_sensitivity
+
+    for bucket_id, vbt in subsystem.vbts.items():
         vbt.M = new_M
+
+        # Update spread if spread_sensitivity > 0
+        if spread_sens > 0:
+            base_O = subsystem.initial_spread_by_bucket.get(bucket_id, vbt.O)
+            vbt.O = base_O * (Decimal(1) + spread_sens * p_default)
+
         vbt.recompute_quotes()
 
 

@@ -38,6 +38,7 @@ class RiskAssessmentParams:
     urgency_sensitivity: Decimal = Decimal("0.10")  # 10% sensitivity
     use_issuer_specific: bool = False
     buy_premium_multiplier: Decimal = Decimal("1.0")  # Buyers use same premium as sellers
+    default_observability: Decimal = Decimal("1.0")  # 0=ignore observed defaults, 1=full tracking
     initial_prior: Decimal = Decimal("0.15")  # No-history default prior (can be overridden by informedness)
 
 
@@ -130,7 +131,12 @@ class RiskAssessor:
         alpha = self.params.smoothing_alpha
         p_default = (alpha + Decimal(defaults)) / (Decimal(2) * alpha + Decimal(total))
 
-        return p_default
+        # Blend observed rate with prior based on observability:
+        # obs=1.0 (default): full tracking of observed defaults
+        # obs=0.0: always return initial_prior regardless of observed data
+        if self.params.default_observability == Decimal("1"):
+            return p_default
+        return self.params.initial_prior + self.params.default_observability * (p_default - self.params.initial_prior)
 
     def expected_value(self, ticket: Ticket, current_day: int) -> Decimal:
         """

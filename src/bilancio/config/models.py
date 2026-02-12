@@ -593,6 +593,44 @@ class BalancedDealerConfig(BaseModel):
         description="Kappa (injected from run parameters for informedness computation)"
     )
 
+    # Decision module parameters
+    risk_aversion: Decimal = Field(
+        default=Decimal("0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="Trader risk aversion (0=risk-neutral, 1=max risk-averse)",
+    )
+    planning_horizon: int = Field(
+        default=10,
+        ge=1,
+        le=20,
+        description="Trader planning horizon in days",
+    )
+    aggressiveness: Decimal = Field(
+        default=Decimal("1.0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="Buyer aggressiveness (0=conservative, 1=eager)",
+    )
+    default_observability: Decimal = Field(
+        default=Decimal("1.0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="Trader default observability (0=ignore, 1=full tracking)",
+    )
+    vbt_mid_sensitivity: Decimal = Field(
+        default=Decimal("1.0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="VBT mid price sensitivity to defaults (0=ignore, 1=full tracking)",
+    )
+    vbt_spread_sensitivity: Decimal = Field(
+        default=Decimal("0.0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="VBT spread sensitivity to defaults (0=fixed, 1=widen with defaults)",
+    )
+
     @field_validator("face_value")
     @classmethod
     def face_value_positive(cls, v: Decimal) -> Decimal:

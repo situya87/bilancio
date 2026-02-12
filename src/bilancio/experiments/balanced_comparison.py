@@ -72,6 +72,14 @@ class BalancedComparisonResult:
     alpha_vbt: Decimal = Decimal("0")
     alpha_trader: Decimal = Decimal("0")
 
+    # Decision module parameters
+    risk_aversion: Decimal = Decimal("0")
+    planning_horizon: int = 10
+    aggressiveness: Decimal = Decimal("1.0")
+    default_observability: Decimal = Decimal("1.0")
+    vbt_mid_sensitivity: Decimal = Decimal("1.0")
+    vbt_spread_sensitivity: Decimal = Decimal("0.0")
+
     # Dealer metrics from active run
     dealer_total_pnl: Optional[float] = None
     dealer_total_return: Optional[float] = None
@@ -216,6 +224,14 @@ class BalancedComparisonConfig(BaseModel):
     alpha_vbt: Decimal = Field(default=Decimal("0"), description="VBT informedness (0=naive, 1=fully informed)")
     alpha_trader: Decimal = Field(default=Decimal("0"), description="Trader informedness (0=naive, 1=fully informed)")
 
+    # Decision module parameters
+    risk_aversion: Decimal = Field(default=Decimal("0"), description="Trader risk aversion (0-1)")
+    planning_horizon: int = Field(default=10, description="Trader planning horizon (1-20 days)")
+    aggressiveness: Decimal = Field(default=Decimal("1.0"), description="Buyer aggressiveness (0-1)")
+    default_observability: Decimal = Field(default=Decimal("1.0"), description="Trader default observability (0-1)")
+    vbt_mid_sensitivity: Decimal = Field(default=Decimal("1.0"), description="VBT mid price sensitivity to defaults (0-1)")
+    vbt_spread_sensitivity: Decimal = Field(default=Decimal("0.0"), description="VBT spread sensitivity to defaults (0-1)")
+
 
 class BalancedComparisonRunner:
     """
@@ -265,6 +281,12 @@ class BalancedComparisonRunner:
         "dealer_passive_pnl",
         "dealer_passive_return",
         "dealer_trading_incremental_pnl",
+        "risk_aversion",
+        "planning_horizon",
+        "aggressiveness",
+        "default_observability",
+        "vbt_mid_sensitivity",
+        "vbt_spread_sensitivity",
     ]
 
     def __init__(
@@ -418,6 +440,12 @@ class BalancedComparisonRunner:
             risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
         )
 
     def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -455,6 +483,12 @@ class BalancedComparisonRunner:
             risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
         )
 
     def run_all(self) -> List[BalancedComparisonResult]:
@@ -630,6 +664,12 @@ class BalancedComparisonRunner:
                 active_modal_call_id=active_summary.modal_call_id,
                 alpha_vbt=self.config.alpha_vbt,
                 alpha_trader=self.config.alpha_trader,
+                risk_aversion=self.config.risk_aversion,
+                planning_horizon=self.config.planning_horizon,
+                aggressiveness=self.config.aggressiveness,
+                default_observability=self.config.default_observability,
+                vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+                vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
                 dealer_passive_pnl=(passive_summary.dealer_metrics or {}).get("dealer_total_pnl"),
                 dealer_passive_return=(passive_summary.dealer_metrics or {}).get("dealer_total_return"),
                 dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
@@ -848,6 +888,12 @@ class BalancedComparisonRunner:
             active_modal_call_id=active_result.modal_call_id,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
             dealer_passive_pnl=(passive_result.dealer_metrics or {}).get("dealer_total_pnl"),
             dealer_passive_return=(passive_result.dealer_metrics or {}).get("dealer_total_return"),
             dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
@@ -993,6 +1039,12 @@ class BalancedComparisonRunner:
                     "dealer_passive_pnl": str(result.dealer_passive_pnl) if result.dealer_passive_pnl is not None else "",
                     "dealer_passive_return": str(result.dealer_passive_return) if result.dealer_passive_return is not None else "",
                     "dealer_trading_incremental_pnl": str(result.dealer_trading_incremental_pnl) if result.dealer_trading_incremental_pnl is not None else "",
+                    "risk_aversion": str(result.risk_aversion),
+                    "planning_horizon": str(result.planning_horizon),
+                    "aggressiveness": str(result.aggressiveness),
+                    "default_observability": str(result.default_observability),
+                    "vbt_mid_sensitivity": str(result.vbt_mid_sensitivity),
+                    "vbt_spread_sensitivity": str(result.vbt_spread_sensitivity),
                 }
                 writer.writerow(row)
 

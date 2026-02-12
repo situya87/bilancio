@@ -59,6 +59,7 @@ from bilancio.dealer.trading import TradeExecutor
 from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.dealer.metrics import RunMetrics
 from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
+from bilancio.decision.profiles import TraderProfile, VBTProfile
 
 # --- Submodule imports (implementation) ---
 from bilancio.engines.dealer_wiring import (
@@ -159,6 +160,13 @@ class DealerSubsystem:
 
     # Serial counter for ticket IDs (continues from initialization)
     _ticket_serial_counter: int = 0
+
+    # Decision module profiles
+    trader_profile: TraderProfile = field(default_factory=TraderProfile)
+    vbt_profile: VBTProfile = field(default_factory=VBTProfile)
+
+    # Initial spread per bucket (for spread_sensitivity computation)
+    initial_spread_by_bucket: Dict[str, Decimal] = field(default_factory=dict)
 
 
 def _get_agent_cash(system: System, agent_id: str) -> Decimal:
@@ -346,6 +354,8 @@ def initialize_balanced_dealer_subsystem(
     alpha_vbt: Decimal = Decimal("0"),
     alpha_trader: Decimal = Decimal("0"),
     kappa: Decimal | None = None,
+    trader_profile: TraderProfile | None = None,
+    vbt_profile: VBTProfile | None = None,
 ) -> DealerSubsystem:
     """
     Initialize dealer subsystem for balanced scenarios (C vs D comparison).
@@ -379,6 +389,16 @@ def initialize_balanced_dealer_subsystem(
     Returns:
         Initialized DealerSubsystem ready for trading (or holding if passive)
     """
+    # Override risk_params from trader_profile if provided
+    if trader_profile is not None and risk_params is not None:
+        from dataclasses import replace as dc_replace
+        risk_params = dc_replace(
+            risk_params,
+            base_risk_premium=trader_profile.base_risk_premium,
+            buy_premium_multiplier=trader_profile.buy_premium_multiplier,
+            default_observability=trader_profile.default_observability,
+        )
+
     # Compute blended trader prior if informedness is enabled.
     # Formula: blended = (1 - α_trader) × 0.15 + α_trader × 1/(1+κ)
     # With α=0: naive prior (backward compatible). With α=1: fully κ-informed.
@@ -401,6 +421,12 @@ def initialize_balanced_dealer_subsystem(
         alpha_trader=alpha_trader,
         kappa=kappa,
     )
+
+    # Attach decision profiles
+    if trader_profile is not None:
+        subsystem.trader_profile = trader_profile
+    if vbt_profile is not None:
+        subsystem.vbt_profile = vbt_profile
 
     # Initialize risk assessor if params provided
     if risk_params:
@@ -427,6 +453,7 @@ def initialize_balanced_dealer_subsystem(
         vbt_tickets, dealer_tickets,
         alpha_vbt=alpha_vbt,
         kappa=kappa,
+        vbt_profile=vbt_profile,
     )
 
     # Step 3: Initialize traders (regular household agents, skip VBT/Dealer/big)

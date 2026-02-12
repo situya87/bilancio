@@ -449,6 +449,19 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
 
         if config.balanced_dealer and config.balanced_dealer.enabled:
             from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
+            from bilancio.decision import TraderProfile, VBTProfile
+
+            trader_profile = TraderProfile(
+                risk_aversion=config.balanced_dealer.risk_aversion,
+                planning_horizon=config.balanced_dealer.planning_horizon,
+                aggressiveness=config.balanced_dealer.aggressiveness,
+                default_observability=config.balanced_dealer.default_observability,
+            )
+            vbt_profile = VBTProfile(
+                mid_sensitivity=config.balanced_dealer.vbt_mid_sensitivity,
+                spread_sensitivity=config.balanced_dealer.vbt_spread_sensitivity,
+            )
+
             system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
                 system,
                 dealer_ring_config,
@@ -462,6 +475,8 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
                 alpha_vbt=config.balanced_dealer.alpha_vbt,
                 alpha_trader=config.balanced_dealer.alpha_trader,
                 kappa=config.balanced_dealer.kappa,
+                trader_profile=trader_profile,
+                vbt_profile=vbt_profile,
             )
         else:
             system.state.dealer_subsystem = initialize_dealer_subsystem(
