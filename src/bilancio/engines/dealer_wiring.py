@@ -344,7 +344,7 @@ def _initialize_balanced_market_makers(
     default_prior = Decimal("0.15")
     if subsystem.risk_assessor:
         # Use the risk assessor's actual no-history prior
-        default_prior = subsystem.risk_assessor.estimate_default_prob("_none_", 0)
+        default_prior = subsystem.risk_assessor.estimate_default_prob("_system_", 0)
     credit_adjusted_mid = outside_mid_ratio * (Decimal(1) - default_prior)
 
     for bucket_config in subsystem.bucket_configs:

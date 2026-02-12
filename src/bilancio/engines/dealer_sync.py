@@ -91,7 +91,7 @@ def _ingest_new_payables(subsystem: "DealerSubsystem", system: "System", current
 
         # Skip defaulted issuers
         issuer = system.state.agents.get(contract.liability_issuer_id)
-        if issuer is None or getattr(issuer, 'defaulted', False):
+        if issuer is None or issuer.defaulted:
             continue
 
         # Create ticket
