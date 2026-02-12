@@ -38,6 +38,7 @@ class RiskAssessmentParams:
     urgency_sensitivity: Decimal = Decimal("0.10")  # 10% sensitivity
     use_issuer_specific: bool = False
     buy_premium_multiplier: Decimal = Decimal("1.0")  # Buyers use same premium as sellers
+    initial_prior: Decimal = Decimal("0.15")  # No-history default prior (can be overridden by informedness)
 
 
 class RiskAssessor:
@@ -113,10 +114,12 @@ class RiskAssessor:
             ]
 
         if not recent:
-            # No recent data: assume uncertain default rate as prior
-            # 15% reflects moderate uncertainty with zero observations,
-            # allowing initial trades at market prices before data arrives
-            return Decimal("0.15")
+            # No recent data: use configured initial prior.
+            # Default 0.15 reflects moderate uncertainty with zero observations,
+            # allowing initial trades at market prices before data arrives.
+            # When informedness (alpha) is used, this is a blended prior
+            # incorporating the kappa-implied default probability.
+            return self.params.initial_prior
 
         # Count defaults and total payments
         defaults = sum(1 for _, defaulted in recent if defaulted)

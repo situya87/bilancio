@@ -230,8 +230,9 @@ def run_scenario(
         write_events_jsonl(system, export_path)
         console.print(f"[green]OK[/green] Exported events to {export_path}")
 
-    # Export dealer metrics if dealer subsystem is enabled
-    if enable_dealer and hasattr(system.state, 'dealer_subsystem') and system.state.dealer_subsystem is not None:
+    # Export dealer metrics if dealer subsystem exists (active or passive)
+    if hasattr(system.state, 'dealer_subsystem') and system.state.dealer_subsystem is not None:
+        subsystem = system.state.dealer_subsystem
         dealer_metrics_path = None
         if export.get('events_jsonl'):
             dealer_metrics_path = Path(export['events_jsonl']).parent / "dealer_metrics.json"
@@ -240,13 +241,19 @@ def run_scenario(
 
         if dealer_metrics_path:
             import json
-            dealer_summary = system.state.dealer_subsystem.metrics.summary()
+            if subsystem.enabled:
+                # Active mode: use full metrics summary
+                dealer_summary = subsystem.metrics.summary()
+            else:
+                # Passive mode: compute hold-only PnL for comparison
+                from bilancio.engines.dealer_integration import compute_passive_pnl
+                dealer_summary = compute_passive_pnl(subsystem, system)
             with dealer_metrics_path.open('w') as f:
                 json.dump(dealer_summary, f, indent=2)
             console.print(f"[green]OK[/green] Exported dealer metrics to {dealer_metrics_path}")
 
-            # Plan 022: Export detailed dealer CSV logs if enabled
-            if detailed_dealer_logging:
+            # Plan 022: Export detailed dealer CSV logs if enabled (active mode only)
+            if detailed_dealer_logging and subsystem.enabled:
                 metrics = system.state.dealer_subsystem.metrics
                 # Set run context on metrics and propagate to all records
                 metrics.run_id = run_id

@@ -321,6 +321,8 @@ def _initialize_balanced_market_makers(
     outside_mid_ratio: Decimal,
     vbt_tickets: Dict[str, List["Ticket"]],
     dealer_tickets: Dict[str, List["Ticket"]],
+    alpha_vbt: Decimal = Decimal("0"),
+    kappa: Optional[Decimal] = None,
 ) -> None:
     """Initialize VBT and Dealer states per bucket for balanced scenarios.
 
@@ -338,14 +340,28 @@ def _initialize_balanced_market_makers(
     from bilancio.engines.dealer_integration import _get_agent_cash
 
     # VBT mid reflects credit risk: M = ratio × (1 - P_default_prior).
-    # With no payment history the risk assessor uses a 15% default prior,
-    # so an outside_mid_ratio of 1.0 gives initial M ≈ 0.85.
-    # This ensures dealer ask prices sit below par, enabling rational buys.
-    default_prior = Decimal("0.15")
+    # The default prior can be blended with the kappa-implied default rate
+    # when informedness (alpha_vbt) is enabled.
+    #
+    # Formula:
+    #   informed_prior(κ) = 1 / (1 + κ)
+    #   blended_prior = (1 - α_vbt) × 0.15 + α_vbt × informed_prior(κ)
+    #   M = outside_mid_ratio × (1 - blended_prior)
+    #
+    # With α_vbt=0 (default): uses naive 0.15 prior (backward compatible).
+    # With α_vbt=1: fully informed pricing based on κ.
+    naive_prior = Decimal("0.15")
     if subsystem.risk_assessor:
-        # Use the risk assessor's actual no-history prior
-        default_prior = subsystem.risk_assessor.estimate_default_prob("_system_", 0)
-    credit_adjusted_mid = outside_mid_ratio * (Decimal(1) - default_prior)
+        # Use the risk assessor's actual no-history prior (may already be blended for traders)
+        naive_prior = subsystem.risk_assessor.estimate_default_prob("_system_", 0)
+
+    if alpha_vbt > 0 and kappa is not None:
+        informed_prior = Decimal(1) / (Decimal(1) + kappa)
+        blended_prior = (Decimal(1) - alpha_vbt) * naive_prior + alpha_vbt * informed_prior
+    else:
+        blended_prior = naive_prior
+
+    credit_adjusted_mid = outside_mid_ratio * (Decimal(1) - blended_prior)
 
     for bucket_config in subsystem.bucket_configs:
         bucket_id = bucket_config.name
@@ -361,9 +377,15 @@ def _initialize_balanced_market_makers(
         dealer_cash = _get_agent_cash(system, f"dealer_{bucket_id}")
 
         # Create VBT state WITH inventory
-        # M incorporates credit risk; O scales with the base ratio
+        # M incorporates credit risk; O scales with credit-informed widening
         M = credit_adjusted_mid
-        O = Decimal("0.50") * outside_mid_ratio  # Spread anchored to par ratio
+        # Spread widens with credit risk when informedness is enabled:
+        # O = 0.50 × outside_mid_ratio × (1 + α_vbt × informed_prior(κ))
+        if alpha_vbt > 0 and kappa is not None:
+            informed_prior_for_spread = Decimal(1) / (Decimal(1) + kappa)
+            O = Decimal("0.50") * outside_mid_ratio * (Decimal(1) + alpha_vbt * informed_prior_for_spread)
+        else:
+            O = Decimal("0.50") * outside_mid_ratio  # Spread anchored to par ratio
 
         vbt = VBTState(
             bucket_id=bucket_id,
