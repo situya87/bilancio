@@ -2,6 +2,7 @@ import pytest
 from bilancio.engines.system import System
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.bank import Bank
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.core.errors import ValidationError
 
 
@@ -25,7 +26,7 @@ def test_mint_reserves():
     assert reserve_instr.amount == 100
     assert reserve_instr.asset_holder_id == "B1"
     assert reserve_instr.liability_issuer_id == "CB1"
-    assert reserve_instr.kind == "reserve_deposit"
+    assert reserve_instr.kind == InstrumentKind.RESERVE_DEPOSIT
     
     # Check CB liability
     assert reserve_id in cb.liability_ids
@@ -54,12 +55,12 @@ def test_transfer_reserves():
     b1_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     b2_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b2.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     assert b1_reserves == 90
     assert b2_reserves == 60
@@ -89,7 +90,7 @@ def test_convert_reserves_to_cash():
     b1_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     assert b1_reserves == 120
     
@@ -97,7 +98,7 @@ def test_convert_reserves_to_cash():
     b1_cash = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     assert b1_cash == 80
     
@@ -127,7 +128,7 @@ def test_convert_cash_to_reserves():
     b1_cash = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     assert b1_cash == 70
     
@@ -135,7 +136,7 @@ def test_convert_cash_to_reserves():
     b1_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     assert b1_reserves == 50
     
@@ -160,7 +161,7 @@ def test_reserves_roundtrip():
     initial_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     
     # Convert all reserves to cash
@@ -170,12 +171,12 @@ def test_reserves_roundtrip():
     b1_cash = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     b1_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     assert b1_cash == 100
     assert b1_reserves == 0
@@ -187,12 +188,12 @@ def test_reserves_roundtrip():
     final_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     final_cash = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     assert final_reserves == initial_reserves
     assert final_cash == 0
@@ -230,12 +231,12 @@ def test_transfer_insufficient_reserves():
     b1_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1_from_sys.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     b2_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b2_from_sys.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     assert b1_reserves == 50
     assert b2_reserves == 0
@@ -267,12 +268,12 @@ def test_convert_insufficient_reserves_to_cash():
     b1_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1_from_sys.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     b1_cash = sum(
         sys.state.contracts[cid].amount 
         for cid in b1_from_sys.asset_ids 
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     assert b1_reserves == 30
     assert b1_cash == 0
@@ -304,12 +305,12 @@ def test_convert_insufficient_cash_to_reserves():
     b1_cash = sum(
         sys.state.contracts[cid].amount 
         for cid in b1_from_sys.asset_ids 
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     b1_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1_from_sys.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     assert b1_cash == 40
     assert b1_reserves == 0
@@ -338,7 +339,7 @@ def test_no_op_reserve_transfer():
     b1_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     assert b1_reserves == 100
     
@@ -363,7 +364,7 @@ def test_multiple_reserve_transfers_with_coalescing():
     
     # B1 has 3 reserve instruments totaling 100
     b1_reserve_ids = [cid for cid in b1.asset_ids 
-                     if sys.state.contracts[cid].kind == "reserve_deposit"]
+                     if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT]
     assert len(b1_reserve_ids) == 3
     assert sum(sys.state.contracts[cid].amount for cid in b1_reserve_ids) == 100
     
@@ -374,7 +375,7 @@ def test_multiple_reserve_transfers_with_coalescing():
     
     # B2 should have merged reserve instruments
     b2_reserve_ids = [cid for cid in b2.asset_ids 
-                     if sys.state.contracts[cid].kind == "reserve_deposit"]
+                     if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT]
     # Should be consolidated to fewer instruments (ideally 1)
     assert len(b2_reserve_ids) <= 3
     assert sum(sys.state.contracts[cid].amount for cid in b2_reserve_ids) == 100
@@ -383,7 +384,7 @@ def test_multiple_reserve_transfers_with_coalescing():
     b1_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     assert b1_reserves == 0
     
@@ -409,12 +410,12 @@ def test_partial_reserve_conversion():
     b1_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     b1_cash = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     assert b1_reserves == 125
     assert b1_cash == 75
@@ -426,12 +427,12 @@ def test_partial_reserve_conversion():
     final_reserves = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "reserve_deposit"
+        if sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
     final_cash = sum(
         sys.state.contracts[cid].amount 
         for cid in b1.asset_ids 
-        if sys.state.contracts[cid].kind == "cash"
+        if sys.state.contracts[cid].kind == InstrumentKind.CASH
     )
     assert final_reserves == 150
     assert final_cash == 50

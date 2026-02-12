@@ -155,24 +155,24 @@ class TestSimulationInit:
         """VBTs initialized with configured anchors."""
         config = DealerRingConfig(
             vbt_anchors={
-                "short": (Decimal("1.0"), Decimal("0.20")),
-                "mid": (Decimal("1.0"), Decimal("0.30")),
-                "long": (Decimal("1.0"), Decimal("0.40")),
+                "short": (Decimal("0.75"), Decimal("0.20")),
+                "mid": (Decimal("0.75"), Decimal("0.30")),
+                "long": (Decimal("0.75"), Decimal("0.40")),
             }
         )
         sim = DealerRingSimulation(config)
 
-        # Check short VBT
-        assert sim.vbts["short"].M == Decimal("1.0")
+        # Check short VBT: M=0.75, O=0.20, A=0.85, B=0.65
+        assert sim.vbts["short"].M == Decimal("0.75")
         assert sim.vbts["short"].O == Decimal("0.20")
-        assert sim.vbts["short"].A == Decimal("1.10")  # M + O/2
-        assert sim.vbts["short"].B == Decimal("0.90")  # M - O/2
+        assert sim.vbts["short"].A == Decimal("0.85")  # M + O/2
+        assert sim.vbts["short"].B == Decimal("0.65")  # M - O/2
 
-        # Check mid VBT
-        assert sim.vbts["mid"].M == Decimal("1.0")
+        # Check mid VBT: M=0.75, O=0.30, A=0.90, B=0.60
+        assert sim.vbts["mid"].M == Decimal("0.75")
         assert sim.vbts["mid"].O == Decimal("0.30")
-        assert sim.vbts["mid"].A == Decimal("1.15")
-        assert sim.vbts["mid"].B == Decimal("0.85")
+        assert sim.vbts["mid"].A == Decimal("0.90")
+        assert sim.vbts["mid"].B == Decimal("0.60")
 
 
 # =========================================================================

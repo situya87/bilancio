@@ -21,9 +21,12 @@ References:
 - Examples Doc Section 1: Programmatic Assertions
 """
 
+import logging
 import random
 from decimal import Decimal
 from copy import deepcopy
+
+logger = logging.getLogger(__name__)
 
 from bilancio.core.ids import AgentId
 from .models import DealerState, VBTState, Ticket
@@ -119,6 +122,8 @@ class TradeExecutor:
 
         # Determine if interior execution is feasible
         is_interior = can_interior_buy(dealer, self.params)
+        logger.debug("customer_sell: ticket=%s customer=%s interior=%s",
+                      ticket.id, customer_id, is_interior)
 
         if is_interior:
             # Event 1: Interior execution at dealer bid
@@ -250,6 +255,7 @@ class TradeExecutor:
         """
         # Determine if interior execution is feasible
         is_interior = can_interior_sell(dealer, self.params)
+        logger.debug("customer_buy: buyer=%s interior=%s", buyer_id, is_interior)
 
         if is_interior:
             # Event 2: Interior execution at dealer ask

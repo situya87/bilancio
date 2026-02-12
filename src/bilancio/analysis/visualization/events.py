@@ -75,7 +75,7 @@ def display_events_table(events: List[Dict[str, Any]], group_by_day: bool = True
         # Alternate row shading for readability
         try:
             table.row_styles = ["on #ffffff", "on #e6f2ff"]
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
         for e in evs:
@@ -211,7 +211,7 @@ def display_events_table_renderable(events: List[Dict[str, Any]]) -> RenderableT
         table.add_column("Notes", justify="left")
         try:
             table.row_styles = ["on #ffffff", "on #e6f2ff"]
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
         for e in evs:
@@ -569,7 +569,7 @@ def display_events_for_day_renderable(system: System, day: int) -> List[Renderab
 
 def _build_events_summary_renderables(events: List[Dict[str, Any]]) -> List[RenderableType]:
     """Build renderables for events in summary format."""
-    renderables = []
+    renderables: List[RenderableType] = []
     
     for event in events:
         kind = event.get("kind", "Unknown")
@@ -602,9 +602,9 @@ def _build_events_detailed_renderables(events: List[Dict[str, Any]]) -> List[Ren
     return build_events_detailed_with_phases(events, RICH_AVAILABLE)
 
 
-def _format_single_event(event: Dict[str, Any], registry) -> List[RenderableType]:
+def _format_single_event(event: Dict[str, Any], registry: Any) -> List[RenderableType]:
     """Format a single event and return renderables."""
-    renderables = []
+    renderables: List[RenderableType] = []
     
     # Format the event using the registry
     title, lines, icon = registry.format(event)
@@ -651,11 +651,11 @@ def _format_single_event(event: Dict[str, Any], registry) -> List[RenderableType
         renderables.append(text)
     else:
         # Simple text format
-        text = f"• {title}"
+        simple_text = f"• {title}"
         if lines:
-            text += " - " + ", ".join(lines[:2])
-        renderables.append(text)
-    
+            simple_text += " - " + ", ".join(lines[:2])
+        renderables.append(simple_text)
+
     return [renderables[0]] if renderables else []
 
 

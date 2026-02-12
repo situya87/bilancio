@@ -15,8 +15,8 @@ def test_default_probability_estimation_no_history():
 
     p_default = assessor.estimate_default_prob(issuer_id="issuer_1", current_day=10)
 
-    # Should return prior (25% - reflects genuine uncertainty with zero data)
-    assert p_default == Decimal("0.25")
+    # Should return prior (15% - reflects moderate uncertainty with zero data)
+    assert p_default == Decimal("0.15")
 
 
 def test_default_probability_estimation_with_history():

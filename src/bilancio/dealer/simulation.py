@@ -19,10 +19,15 @@ References:
 - Specification Section 10: Ring Trader Policies
 """
 
+import logging
 from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
 import random
 from copy import deepcopy
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Cash precision for settlement calculations to avoid floating-point accumulation errors
 # Uses 6 decimal places which is standard for financial calculations
@@ -56,11 +61,11 @@ class DaySnapshot:
         events: Events that occurred on this day
     """
     day: int
-    dealers: dict[str, dict]  # bucket_id -> dealer state dict
-    vbts: dict[str, dict]      # bucket_id -> VBT state dict
-    traders: dict[str, dict]   # agent_id -> trader state dict
-    tickets: dict[str, dict]   # ticket_id -> ticket dict
-    events: list[dict]         # Events for this day only
+    dealers: dict[str, dict[str, Any]]  # bucket_id -> dealer state dict
+    vbts: dict[str, dict[str, Any]]      # bucket_id -> VBT state dict
+    traders: dict[str, dict[str, Any]]   # agent_id -> trader state dict
+    tickets: dict[str, dict[str, Any]]   # ticket_id -> ticket dict
+    events: list[dict[str, Any]]         # Events for this day only
 
 
 @dataclass
@@ -364,14 +369,16 @@ class DealerRingSimulation:
             self.all_tickets[ticket.id] = ticket
 
             # Determine bucket based on remaining maturity
-            ticket.bucket_id = self._compute_bucket(ticket.remaining_tau)
+            computed_bucket = self._compute_bucket(ticket.remaining_tau)
 
-            if ticket.bucket_id is None:
+            if computed_bucket is None:
                 raise ValueError(
                     f"Ticket {ticket.id} has remaining_tau={ticket.remaining_tau} "
                     f"which does not fit any configured bucket. "
                     f"Buckets: {[(b.name, b.tau_min, b.tau_max) for b in self.config.buckets]}"
                 )
+
+            ticket.bucket_id = computed_bucket
 
         # Sort tickets by bucket for allocation
         tickets_by_bucket: dict[str, list[Ticket]] = {}
@@ -450,6 +457,7 @@ class DealerRingSimulation:
             - Section 11: Full Event Loop
         """
         self.day += 1
+        logger.debug("dealer day %d: starting event loop (%d tickets)", self.day, len(self.all_tickets))
         self.events.log_day_start(self.day)
 
         # Phase 1: Update maturities and buckets
@@ -491,6 +499,8 @@ class DealerRingSimulation:
             max_days: Number of days to simulate (defaults to config.max_days)
         """
         days = max_days or self.config.max_days
+        logger.info("dealer simulation: running %d days (%d traders, %d tickets)",
+                     days, len(self.traders), len(self.all_tickets))
         for _ in range(days):
             self.run_day()
 
@@ -908,8 +918,9 @@ class DealerRingSimulation:
         # Risk-based sell decision (if risk assessor configured)
         if self.risk_assessor:
             asset_value = sum(
-                self.risk_assessor.expected_value(t, self.day)
-                for t in seller.tickets_owned
+                (self.risk_assessor.expected_value(t, self.day)
+                for t in seller.tickets_owned),
+                Decimal(0),
             )
             if not self.risk_assessor.should_sell(
                 ticket=ticket,
@@ -924,8 +935,9 @@ class DealerRingSimulation:
         # Risk-based buy decision (if risk assessor configured)
         if self.risk_assessor:
             buyer_asset_value = sum(
-                self.risk_assessor.expected_value(t, self.day)
-                for t in buyer.tickets_owned
+                (self.risk_assessor.expected_value(t, self.day)
+                for t in buyer.tickets_owned),
+                Decimal(0),
             )
             if not self.risk_assessor.should_buy(
                 ticket=ticket,
@@ -1034,8 +1046,9 @@ class DealerRingSimulation:
         if self.risk_assessor:
             # Compute total asset value for urgency calculation
             asset_value = sum(
-                self.risk_assessor.expected_value(t, self.day)
-                for t in trader.tickets_owned
+                (self.risk_assessor.expected_value(t, self.day)
+                for t in trader.tickets_owned),
+                Decimal(0),
             )
 
             if not self.risk_assessor.should_sell(
@@ -1153,8 +1166,9 @@ class DealerRingSimulation:
         # Risk-based buy validation (post-execution since we need actual ticket)
         if result.ticket and self.risk_assessor:
             asset_value = sum(
-                self.risk_assessor.expected_value(t, self.day)
-                for t in trader.tickets_owned
+                (self.risk_assessor.expected_value(t, self.day)
+                for t in trader.tickets_owned),
+                Decimal(0),
             )
 
             # Convert price to unit price for should_buy
@@ -1301,6 +1315,9 @@ class DealerRingSimulation:
                 maturing_by_issuer[issuer_id].append(ticket)
 
         # Settle each issuer
+        if maturing_by_issuer:
+            logger.debug("dealer day %d: settling %d issuers with maturing debt",
+                         self.day, len(maturing_by_issuer))
         for issuer_id, tickets in maturing_by_issuer.items():
             self._settle_issuer(issuer_id, tickets)
 
@@ -1326,7 +1343,7 @@ class DealerRingSimulation:
         issuer = self.traders[issuer_id]
 
         # Compute total obligations
-        total_due = sum(ticket.face for ticket in tickets)
+        total_due: Decimal = sum((ticket.face for ticket in tickets), Decimal(0))
 
         # Compute recovery rate
         if total_due == 0:
@@ -1382,7 +1399,7 @@ class DealerRingSimulation:
 
             # Log default per bucket
             for bucket_id, bucket_tickets in tickets_by_bucket.items():
-                bucket_due = sum(t.face for t in bucket_tickets)
+                bucket_due: Decimal = sum((t.face for t in bucket_tickets), Decimal(0))
                 bucket_paid = recovery_rate * bucket_due
 
                 self.events.log_default(

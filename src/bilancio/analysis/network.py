@@ -7,7 +7,7 @@ the relationships between agents through financial instruments/contracts.
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from bilancio.engines.system import System
 
@@ -136,7 +136,7 @@ def build_network_time_series(
     return snapshots
 
 
-def _snapshot_to_dict(snapshot: NetworkSnapshot) -> dict:
+def _snapshot_to_dict(snapshot: NetworkSnapshot) -> dict[str, Any]:
     """Convert NetworkSnapshot to JSON-serializable dictionary.
 
     Args:

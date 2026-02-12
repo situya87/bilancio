@@ -6,8 +6,11 @@ function for running bilancio simulations in the cloud.
 Simulations run on Modal compute metrics locally and save results directly
 to Supabase, eliminating the need to download artifacts.
 """
+# mypy: disable-error-code="union-attr"
 
 from __future__ import annotations
+
+from typing import Any
 
 import modal
 
@@ -26,7 +29,7 @@ results_volume = modal.Volume.from_name(
 # Create with: modal secret create supabase \
 #   BILANCIO_SUPABASE_URL=https://xxx.supabase.co \
 #   BILANCIO_SUPABASE_ANON_KEY=eyJ...
-_secrets = []
+_secrets: list[modal.Secret] = []
 
 # Define the container image with all bilancio dependencies
 # We add the local source code to the image
@@ -52,7 +55,7 @@ image = (
 RESULTS_MOUNT_PATH = "/results"
 
 
-def compute_metrics_from_events(events_path: str) -> dict:
+def compute_metrics_from_events(events_path: str) -> dict[str, Any]:
     """Compute metrics from events.jsonl file.
 
     Args:
@@ -65,7 +68,7 @@ def compute_metrics_from_events(events_path: str) -> dict:
     from decimal import Decimal
     from pathlib import Path
 
-    def to_serializable(val):
+    def to_serializable(val: Any) -> Any:
         """Convert Decimal to float for JSON serialization."""
         if isinstance(val, Decimal):
             return float(val)
@@ -123,10 +126,10 @@ def save_run_to_supabase(
     run_id: str,
     job_id: str,
     status: str,
-    metrics: dict,
-    params: dict,
+    metrics: dict[str, Any],
+    params: dict[str, Any],
     execution_time_ms: int,
-    modal_call_id: str,
+    modal_call_id: str | None,
     modal_volume_path: str,
     error: str | None = None,
 ) -> bool:
@@ -173,7 +176,7 @@ def save_run_to_supabase(
         now = datetime.now(timezone.utc).isoformat()
 
         # Build runs table row
-        runs_row = {
+        runs_row: dict[str, Any] = {
             "run_id": run_id,
             "job_id": job_id,
             "status": status,
@@ -241,7 +244,7 @@ def save_run_to_supabase(
         # Log but don't fail - Supabase is optional
         print(f"Supabase not configured, skipping save for run {run_id}")
         return False
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: cloud execution wrapper
         # Log other errors but don't fail the run - Supabase save is secondary
         print(f"WARNING: Failed to save to Supabase: {e}")
         print(f"Run {run_id} completed but metrics not persisted to Supabase!")
@@ -256,12 +259,12 @@ def save_run_to_supabase(
     memory=2048,  # 2GB RAM
 )
 def run_simulation(
-    scenario_config: dict,
+    scenario_config: dict[str, Any],
     run_id: str,
     experiment_id: str,
-    options: dict,
+    options: dict[str, Any],
     job_id: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Run a single simulation in the cloud.
 
     Args:
@@ -277,7 +280,7 @@ def run_simulation(
     import time
     from pathlib import Path
 
-    import yaml
+    import yaml  # type: ignore[import-untyped]
 
     start_time = time.time()
 
@@ -384,7 +387,7 @@ def run_simulation(
             "metrics": metrics,  # Include computed metrics in return
         }
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: cloud execution wrapper
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         # Still commit to preserve any partial output
@@ -427,7 +430,7 @@ def run_simulation(
 def compute_aggregate_metrics(
     job_id: str,
     run_ids: list[str],
-) -> dict:
+) -> dict[str, Any]:
     """Compute aggregate/comparison metrics for a sweep and save to Supabase.
 
     This function is called after all runs complete to compute:
@@ -472,38 +475,41 @@ def compute_aggregate_metrics(
             return {"status": "error", "error": "No runs found"}
 
         # Group runs by parameters (excluding regime)
-        grouped = defaultdict(lambda: {"passive": None, "active": None})
+        grouped: dict[tuple[Any, ...], dict[str, Any]] = defaultdict(
+            lambda: {"passive": None, "active": None}
+        )
 
         for row in result.data:
-            key = (
-                row.get("kappa"),
-                row.get("concentration"),
-                row.get("mu"),
-                row.get("outside_mid_ratio"),
-                row.get("seed"),
+            row_dict: dict[str, Any] = row  # type: ignore[assignment]
+            param_key: tuple[Any, ...] = (
+                row_dict.get("kappa"),
+                row_dict.get("concentration"),
+                row_dict.get("mu"),
+                row_dict.get("outside_mid_ratio"),
+                row_dict.get("seed"),
             )
-            regime = row.get("regime", "")
-            metrics_data = row.get("metrics")
+            regime = row_dict.get("regime", "")
+            metrics_data = row_dict.get("metrics")
 
             if metrics_data:
                 # metrics is a list from join, take first
                 if isinstance(metrics_data, list) and metrics_data:
-                    metrics = metrics_data[0]
+                    metrics_entry: dict[str, Any] = metrics_data[0]
                 else:
-                    metrics = metrics_data
+                    metrics_entry = metrics_data
 
-                delta = metrics.get("delta_total")
-                phi = metrics.get("phi_total")
+                delta = metrics_entry.get("delta_total")
+                phi = metrics_entry.get("phi_total")
 
                 if "passive" in regime or regime == "":
-                    grouped[key]["passive"] = {"delta": delta, "phi": phi, "run_id": row["run_id"]}
+                    grouped[param_key]["passive"] = {"delta": delta, "phi": phi, "run_id": row_dict["run_id"]}
                 elif "active" in regime:
-                    grouped[key]["active"] = {"delta": delta, "phi": phi, "run_id": row["run_id"]}
+                    grouped[param_key]["active"] = {"delta": delta, "phi": phi, "run_id": row_dict["run_id"]}
 
         # Compute trading effects
-        comparisons = []
+        comparisons: list[dict[str, Any]] = []
         for params, runs in grouped.items():
-            if runs["passive"] and runs["active"]:
+            if runs.get("passive") and runs.get("active"):
                 d_passive = runs["passive"]["delta"]
                 d_active = runs["active"]["delta"]
 
@@ -533,8 +539,8 @@ def compute_aggregate_metrics(
             effects = [c["trading_effect"] for c in comparisons]
             deltas_passive = [c["delta_passive"] for c in comparisons if c["delta_passive"] is not None]
             deltas_active = [c["delta_active"] for c in comparisons if c["delta_active"] is not None]
-            phis_passive = [c.get("phi_passive") for c in comparisons if c.get("phi_passive") is not None]
-            phis_active = [c.get("phi_active") for c in comparisons if c.get("phi_active") is not None]
+            phis_passive: list[float] = [c["phi_passive"] for c in comparisons if c.get("phi_passive") is not None]
+            phis_active: list[float] = [c["phi_active"] for c in comparisons if c.get("phi_active") is not None]
 
             # Compute standard deviation if we have enough data
             std_effect = statistics.stdev(effects) if len(effects) > 1 else 0.0
@@ -584,7 +590,7 @@ def compute_aggregate_metrics(
             else:
                 client.table("job_metrics").insert(job_metrics_row).execute()
             print(f"Saved job_metrics for {job_id}")
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             print(f"Warning: Failed to save job_metrics: {e}")
 
         # Update job status
@@ -605,7 +611,7 @@ def compute_aggregate_metrics(
             "comparisons": comparisons,
         }
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: cloud execution wrapper
         print(f"Failed to compute aggregate metrics: {e}")
         return {"status": "error", "error": str(e)}
 
@@ -615,7 +621,7 @@ def compute_aggregate_metrics(
     timeout=60,
     memory=256,
 )
-def health_check() -> dict:
+def health_check() -> dict[str, Any]:
     """Simple health check to verify Modal deployment.
 
     Returns:
@@ -639,7 +645,7 @@ def health_check() -> dict:
 
 # Local entrypoint for testing
 @app.local_entrypoint()
-def main():
+def main() -> None:
     """Test the Modal deployment with a health check."""
     print("Running health check...")
     result = health_check.remote()

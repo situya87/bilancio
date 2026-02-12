@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bilancio.engines.system import System
 
 
-def get_alias_for_id(system, contract_id: str) -> Optional[str]:
+def get_alias_for_id(system: System, contract_id: str) -> Optional[str]:
     """Return the alias for a given contract_id, if any."""
     for alias, cid in (system.state.aliases or {}).items():
         if cid == contract_id:
@@ -11,7 +14,7 @@ def get_alias_for_id(system, contract_id: str) -> Optional[str]:
     return None
 
 
-def get_id_for_alias(system, alias: str) -> Optional[str]:
+def get_id_for_alias(system: System, alias: str) -> Optional[str]:
     """Return the contract id for a given alias, if any."""
     return (system.state.aliases or {}).get(alias)
 

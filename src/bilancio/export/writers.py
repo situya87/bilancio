@@ -3,14 +3,14 @@
 import json
 import csv
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from decimal import Decimal
 
 from bilancio.engines.system import System
 from bilancio.analysis.balances import as_rows, system_trial_balance
 
 
-def decimal_default(obj):
+def decimal_default(obj: Any) -> Any:
     """JSON encoder for Decimal types.
     
     Preserves precision by converting to string for exact representation.
@@ -72,7 +72,7 @@ def write_balances_csv(system: System, path: Path) -> None:
     # Write to CSV
     if rows:
         # Collect all unique fieldnames from all rows
-        fieldnames_set = set()
+        fieldnames_set: set[str] = set()
         for row in rows:
             fieldnames_set.update(row.keys())
         fieldnames = sorted(list(fieldnames_set))
@@ -111,7 +111,7 @@ def write_balances_snapshot(
     system: System,
     path: Path,
     day: int,
-    agent_ids: List[str] = None
+    agent_ids: Optional[List[str]] = None
 ) -> None:
     """Export a snapshot of balances for specific agents on a specific day.
     
@@ -121,9 +121,10 @@ def write_balances_snapshot(
         day: Day number for the snapshot
         agent_ids: List of agent IDs to include (None for all)
     """
-    snapshot = {
+    agents_data: Dict[str, Any] = {}
+    snapshot: Dict[str, Any] = {
         "day": day,
-        "agents": {}
+        "agents": agents_data,
     }
     
     # Determine which agents to include
@@ -145,7 +146,7 @@ def write_balances_snapshot(
                 assets.append({
                     "id": asset_id,
                     "type": type(contract).__name__,
-                    "amount": getattr(contract, "amount", None)
+                    "amount": contract.amount
                 })
         
         liabilities = []
@@ -155,7 +156,7 @@ def write_balances_snapshot(
                 liabilities.append({
                     "id": liability_id,
                     "type": type(contract).__name__,
-                    "amount": getattr(contract, "amount", None)
+                    "amount": contract.amount
                 })
         
         stocks = []
@@ -170,7 +171,7 @@ def write_balances_snapshot(
                     "total_value": stock.quantity * stock.unit_price
                 })
         
-        snapshot["agents"][agent_id] = {
+        agents_data[agent_id] = {
             "name": agent.name,
             "kind": agent.kind,
             "assets": assets,

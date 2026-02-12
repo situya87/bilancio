@@ -11,7 +11,7 @@ from .jobs import jobs
 
 
 @click.group()
-def cli():
+def cli() -> None:
     """Bilancio - Economic simulation framework."""
     pass
 
@@ -26,7 +26,7 @@ cli.add_command(volume)
 cli.add_command(jobs)
 
 
-def main():
+def main() -> None:
     """Main entry point for the CLI."""
     cli()
 

@@ -1,6 +1,7 @@
 import pytest
 
 from bilancio.core.errors import DefaultError
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.settlement import settle_due
 from bilancio.engines.system import System
@@ -22,7 +23,7 @@ def _basic_system(default_mode: str = "fail-fast"):
 def _make_payable(system: System, debtor: Firm, creditor: Firm, amount: int, due_day: int) -> Payable:
     payable = Payable(
         id=system.new_contract_id("PAY"),
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=amount,
         denom="X",
         asset_holder_id=creditor.id,

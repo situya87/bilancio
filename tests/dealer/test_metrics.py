@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from bilancio.engines.system import System
 from bilancio.domain.agents import Household, CentralBank
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.dealer_integration import (
     initialize_dealer_subsystem,
@@ -58,7 +59,7 @@ def create_test_system_with_ring():
         p_id = sys.new_contract_id("P")
         payable = Payable(
             id=p_id,
-            kind="payable",
+            kind=InstrumentKind.PAYABLE,
             amount=50,
             denom="USD",
             asset_holder_id=creditor_id,
@@ -396,65 +397,38 @@ class TestMarkToMidEquity:
 class TestDealerPremiumMetrics:
     """Test dealer and VBT premium/discount metrics (Plan 020 - Phase A.3)."""
 
-    def test_dealer_premium_at_par(self):
-        """Test dealer premium is 0 when midline equals face value."""
+    @pytest.mark.parametrize("midline,vbt_mid,bid,ask,expected_dealer_premium,expected_dealer_pct,expected_vbt_premium,expected_vbt_pct", [
+        # At par: premium is 0
+        (Decimal("1.0"), Decimal("1.0"), Decimal("0.95"), Decimal("1.05"),
+         Decimal(0), Decimal(0), Decimal(0), Decimal(0)),
+        # Above par: positive premium
+        (Decimal("1.05"), Decimal("1.02"), Decimal("1.00"), Decimal("1.10"),
+         Decimal("0.05"), Decimal("5"), Decimal("0.02"), Decimal("2")),
+        # Below par: negative premium (discount)
+        (Decimal("0.85"), Decimal("0.90"), Decimal("0.80"), Decimal("0.90"),
+         Decimal("-0.15"), Decimal("-15"), Decimal("-0.10"), Decimal("-10")),
+    ], ids=["at_par", "above_par", "below_par"])
+    def test_dealer_premium_vs_face(self, midline, vbt_mid, bid, ask,
+                                     expected_dealer_premium, expected_dealer_pct,
+                                     expected_vbt_premium, expected_vbt_pct):
+        """Test dealer/VBT premium relative to face value."""
         snapshot = DealerSnapshot(
             day=1,
             bucket="short",
             inventory=0,
             cash=Decimal(100),
-            bid=Decimal("0.95"),
-            ask=Decimal("1.05"),
-            midline=Decimal("1.0"),  # At par
-            vbt_mid=Decimal("1.0"),  # At par
+            bid=bid,
+            ask=ask,
+            midline=midline,
+            vbt_mid=vbt_mid,
             vbt_spread=Decimal("0.10"),
             ticket_size=Decimal(1),
         )
 
-        assert snapshot.dealer_premium_vs_face == Decimal(0)
-        assert snapshot.dealer_premium_pct == Decimal(0)
-        assert snapshot.vbt_premium_vs_face == Decimal(0)
-        assert snapshot.vbt_premium_pct == Decimal(0)
-
-    def test_dealer_premium_above_par(self):
-        """Test premium is positive when midline above face value."""
-        snapshot = DealerSnapshot(
-            day=1,
-            bucket="short",
-            inventory=0,
-            cash=Decimal(100),
-            bid=Decimal("1.00"),
-            ask=Decimal("1.10"),
-            midline=Decimal("1.05"),  # 5% above par
-            vbt_mid=Decimal("1.02"),  # 2% above par
-            vbt_spread=Decimal("0.10"),
-            ticket_size=Decimal(1),
-        )
-
-        assert snapshot.dealer_premium_vs_face == Decimal("0.05")
-        assert snapshot.dealer_premium_pct == Decimal("5")  # 5%
-        assert snapshot.vbt_premium_vs_face == Decimal("0.02")
-        assert snapshot.vbt_premium_pct == Decimal("2")  # 2%
-
-    def test_dealer_discount_below_par(self):
-        """Test premium is negative (discount) when midline below face value."""
-        snapshot = DealerSnapshot(
-            day=1,
-            bucket="short",
-            inventory=0,
-            cash=Decimal(100),
-            bid=Decimal("0.80"),
-            ask=Decimal("0.90"),
-            midline=Decimal("0.85"),  # 15% below par
-            vbt_mid=Decimal("0.90"),  # 10% below par
-            vbt_spread=Decimal("0.10"),
-            ticket_size=Decimal(1),
-        )
-
-        assert snapshot.dealer_premium_vs_face == Decimal("-0.15")
-        assert snapshot.dealer_premium_pct == Decimal("-15")  # -15%
-        assert snapshot.vbt_premium_vs_face == Decimal("-0.10")
-        assert snapshot.vbt_premium_pct == Decimal("-10")  # -10%
+        assert snapshot.dealer_premium_vs_face == expected_dealer_premium
+        assert snapshot.dealer_premium_pct == expected_dealer_pct
+        assert snapshot.vbt_premium_vs_face == expected_vbt_premium
+        assert snapshot.vbt_premium_pct == expected_vbt_pct
 
     def test_to_dict_includes_premium_fields(self):
         """Test that to_dict includes premium fields."""
@@ -483,22 +457,18 @@ class TestDealerPremiumMetrics:
 class TestDebtToMoneyRatio:
     """Test debt-to-money ratio metric (Plan 020 - Phase B)."""
 
-    def test_debt_to_money_ratio_computation(self):
+    @pytest.mark.parametrize("debt,money,expected_ratio", [
+        (Decimal(10000), Decimal(5000), Decimal(2)),
+        (Decimal(10000), Decimal(0), Decimal(0)),
+        (Decimal(0), Decimal(5000), Decimal(0)),
+    ], ids=["normal", "zero_money", "zero_debt"])
+    def test_debt_to_money_ratio_computation(self, debt, money, expected_ratio):
         """Test debt-to-money ratio is computed correctly."""
         metrics = RunMetrics()
-        metrics.initial_total_debt = Decimal(10000)
-        metrics.initial_total_money = Decimal(5000)
+        metrics.initial_total_debt = debt
+        metrics.initial_total_money = money
 
-        # Ratio = 10000 / 5000 = 2
-        assert metrics.debt_to_money_ratio == Decimal(2)
-
-    def test_debt_to_money_ratio_zero_money(self):
-        """Test debt-to-money ratio with zero money returns 0."""
-        metrics = RunMetrics()
-        metrics.initial_total_debt = Decimal(10000)
-        metrics.initial_total_money = Decimal(0)
-
-        assert metrics.debt_to_money_ratio == Decimal(0)
+        assert metrics.debt_to_money_ratio == expected_ratio
 
     def test_debt_to_money_captured_on_init(self):
         """Test that debt and money are captured at initialization."""

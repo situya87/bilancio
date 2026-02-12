@@ -23,7 +23,7 @@ from .utils import console, _as_decimal_list
 
 
 @click.group()
-def sweep():
+def sweep() -> None:
     """Experiment sweeps."""
     pass
 
@@ -62,7 +62,7 @@ def sweep():
 @click.option('--job-id', type=str, default=None, help='Job ID (auto-generated if not provided)')
 @click.pass_context
 def sweep_ring(
-    ctx,
+    ctx: click.Context,
     config: Optional[Path],
     out_dir: Optional[Path],
     cloud: bool,
@@ -94,7 +94,7 @@ def sweep_ring(
     name_prefix: str,
     default_handling: str,
     job_id: Optional[str],
-):
+) -> None:
     """Run the Kalecki ring experiment sweep."""
     sweep_config: Optional[RingSweepConfig] = None
     if config is not None:
@@ -135,13 +135,13 @@ def sweep_ring(
         if _using_default("grid"):
             grid = grid_cfg.enabled
         if grid_cfg.kappas and _using_default("kappas"):
-            kappas = grid_cfg.kappas
+            kappas = ",".join(str(k) for k in grid_cfg.kappas)
         if grid_cfg.concentrations and _using_default("concentrations"):
-            concentrations = grid_cfg.concentrations
+            concentrations = ",".join(str(c) for c in grid_cfg.concentrations)
         if grid_cfg.mus and _using_default("mus"):
-            mus = grid_cfg.mus
+            mus = ",".join(str(m) for m in grid_cfg.mus)
         if grid_cfg.monotonicities and _using_default("monotonicities"):
-            monotonicities = grid_cfg.monotonicities
+            monotonicities = ",".join(str(m) for m in grid_cfg.monotonicities)
 
     if sweep_config is not None and sweep_config.lhs is not None:
         lhs_cfg = sweep_config.lhs
@@ -182,9 +182,6 @@ def sweep_ring(
             if frontier_cfg.max_iterations is not None and _using_default("frontier_iterations"):
                 frontier_iterations = frontier_cfg.max_iterations
 
-    if out_dir is not None and not isinstance(out_dir, Path):
-        out_dir = Path(out_dir)
-
     if out_dir is None:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         out_dir = Path("out") / "experiments" / f"{ts}_ring"
@@ -223,7 +220,7 @@ def sweep_ring(
 
         console.print(f"[cyan]Job ID: {job.job_id}[/cyan]")
         manager.start_job(job.job_id)
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         console.print(f"[yellow]Warning: Job tracking initialization failed: {e}[/yellow]")
         manager = None
 
@@ -306,19 +303,19 @@ def sweep_ring(
                     "lhs_runs": lhs_count,
                     "frontier": frontier,
                 })
-            except Exception as e:
+            except Exception as e:  # Intentionally broad: top-level CLI handler
                 console.print(f"[yellow]Warning: Failed to complete job tracking: {e}[/yellow]")
 
         console.print(f"[green]Sweep complete.[/green] Registry: {registry_csv}")
         console.print(f"[green]Aggregated results: {results_csv}")
         console.print(f"[green]Dashboard: {dashboard_html}")
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         # Fail job on error
         if manager is not None:
             try:
                 manager.fail_job(job_id, str(e))
-            except Exception:
+            except Exception:  # Intentionally broad: must not mask original error
                 pass  # Don't let job tracking failure mask the original error
         raise
 
@@ -357,7 +354,7 @@ def sweep_comparison(
     liquidity_mode: str,
     liquidity_agent: Optional[str],
     name_prefix: str,
-):
+) -> None:
     """
     Run dealer comparison experiments.
 
@@ -475,7 +472,7 @@ def sweep_comparison(
 @click.option(
     "--default-handling",
     type=click.Choice(["fail-fast", "expel-agent"]),
-    default="fail-fast",
+    default="expel-agent",
     help="Default handling mode",
 )
 @click.option(
@@ -587,7 +584,7 @@ def sweep_balanced(
 
         click.echo(f"Job ID: {job.job_id}")
         manager.start_job(job.job_id)
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         click.echo(f"Warning: Job tracking initialization failed: {e}")
         manager = None
 
@@ -610,7 +607,7 @@ def sweep_balanced(
     risk_config = {
         "base_risk_premium": str(risk_premium),
         "urgency_sensitivity": str(risk_urgency),
-        "buy_premium_multiplier": "2.0",
+        "buy_premium_multiplier": "1.0",
         "lookback_window": 5,
     }
 
@@ -652,7 +649,7 @@ def sweep_balanced(
                             job_id, r.active_run_id,
                             modal_call_id=r.active_modal_call_id
                         )
-            except Exception as e:
+            except Exception as e:  # Intentionally broad: top-level CLI handler
                 click.echo(f"Warning: Failed to record run progress: {e}")
 
         # Print summary
@@ -667,7 +664,7 @@ def sweep_balanced(
                     "completed": completed,
                     "improved_with_trading": improved,
                 })
-            except Exception as e:
+            except Exception as e:  # Intentionally broad: top-level CLI handler
                 click.echo(f"Warning: Failed to complete job tracking: {e}")
 
         click.echo(f"\nBalanced comparison complete!")
@@ -676,12 +673,12 @@ def sweep_balanced(
         click.echo(f"  Improved with trading: {improved}")
         click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         # Fail job on error
         if manager is not None:
             try:
                 manager.fail_job(job_id, str(e))
-            except Exception:
+            except Exception:  # Intentionally broad: must not mask original error
                 pass  # Don't let job tracking failure mask the original error
         raise
 
@@ -690,7 +687,7 @@ def sweep_balanced(
 @click.option('--experiment', type=click.Path(exists=True, path_type=Path), required=True,
               help='Path to experiment directory (containing aggregate/comparison.csv)')
 @click.option('-v', '--verbose', is_flag=True, help='Enable verbose logging')
-def sweep_strategy_outcomes(experiment: Path, verbose: bool):
+def sweep_strategy_outcomes(experiment: Path, verbose: bool) -> None:
     """Analyze trading strategy outcomes across experiment runs.
 
     Reads repayment_events.csv files and computes per-strategy metrics:
@@ -723,7 +720,7 @@ def sweep_strategy_outcomes(experiment: Path, verbose: bool):
 @click.option('--experiment', type=click.Path(exists=True, path_type=Path), required=True,
               help='Path to experiment directory (containing aggregate/comparison.csv)')
 @click.option('-v', '--verbose', is_flag=True, help='Enable verbose logging')
-def sweep_dealer_usage(experiment: Path, verbose: bool):
+def sweep_dealer_usage(experiment: Path, verbose: bool) -> None:
     """Analyze dealer usage patterns across experiment runs.
 
     Reads trades.csv, inventory_timeseries.csv, system_state_timeseries.csv,

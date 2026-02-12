@@ -1,13 +1,18 @@
 """Phase-aware event visualization for bilancio."""
 
-from typing import List, Dict, Any, Union
-from rich.text import Text
+from typing import Any, List, Dict, Union
+
+try:
+    from rich.text import Text
+    _RICH_TEXT_AVAILABLE = True
+except ImportError:
+    _RICH_TEXT_AVAILABLE = False
 
 RenderableType = Any  # Type alias for renderables
 
 def build_events_detailed_with_phases(events: List[Dict[str, Any]], RICH_AVAILABLE: bool = True) -> List[RenderableType]:
     """Build renderables for events in detailed format, properly organized by phase markers."""
-    renderables = []
+    renderables: List[RenderableType] = []
     
     # Use the formatter registry to format events nicely
     from bilancio.ui.render.formatters import registry
@@ -98,9 +103,9 @@ def build_events_detailed_with_phases(events: List[Dict[str, Any]], RICH_AVAILAB
     return renderables
 
 
-def _format_single_event(event: Dict[str, Any], registry, RICH_AVAILABLE: bool) -> List[RenderableType]:
+def _format_single_event(event: Dict[str, Any], registry: Any, RICH_AVAILABLE: bool) -> List[RenderableType]:
     """Format a single event and return renderables."""
-    renderables = []
+    renderables: List[RenderableType] = []
     
     # Format the event using the registry
     title, lines, icon = registry.format(event)
@@ -147,9 +152,9 @@ def _format_single_event(event: Dict[str, Any], registry, RICH_AVAILABLE: bool) 
         renderables.append(text)
     else:
         # Simple text format
-        text = f"• {title}"
+        simple_text = f"• {title}"
         if lines:
-            text += " - " + ", ".join(lines[:2])
-        renderables.append(text)
+            simple_text += " - " + ", ".join(lines[:2])
+        renderables.append(simple_text)
     
     return [renderables[0]] if renderables else []

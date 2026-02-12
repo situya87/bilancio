@@ -83,7 +83,7 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
             try:
                 trades = pd.read_csv(trades_path)
                 row_out.update(_compute_trade_metrics(trades))
-            except Exception as e:
+            except (ValueError, KeyError, FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
                 logger.warning("Failed to read trades.csv for %s: %s", run_id, e)
                 row_out.update(_empty_trade_metrics())
         else:
@@ -95,7 +95,7 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
             try:
                 inv = pd.read_csv(inv_path)
                 row_out.update(_compute_inventory_metrics(inv))
-            except Exception as e:
+            except (ValueError, KeyError, FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
                 logger.warning("Failed to read inventory_timeseries.csv for %s: %s", run_id, e)
                 row_out.update(_empty_inventory_metrics())
         else:
@@ -107,7 +107,7 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
             try:
                 sys_ts = pd.read_csv(sys_path)
                 row_out.update(_compute_system_state_metrics(sys_ts))
-            except Exception as e:
+            except (ValueError, KeyError, FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
                 logger.warning("Failed to read system_state_timeseries.csv for %s: %s", run_id, e)
                 row_out.update(_empty_system_state_metrics())
         else:
@@ -119,7 +119,7 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
             try:
                 rep = pd.read_csv(rep_path)
                 row_out.update(_compute_repayment_metrics(rep))
-            except Exception as e:
+            except (ValueError, KeyError, FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
                 logger.warning("Failed to read repayment_events.csv for %s: %s", run_id, e)
                 row_out.update(_empty_repayment_metrics())
         else:
@@ -359,41 +359,3 @@ def run_dealer_usage_analysis(experiment_root: Path) -> Path:
     logger.info("Wrote %d rows to %s", len(df), output_path)
 
     return output_path
-
-
-def main() -> None:
-    """CLI entry point for dealer usage analysis."""
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Analyze dealer usage patterns across experiment runs"
-    )
-    parser.add_argument(
-        "--experiment",
-        type=Path,
-        required=True,
-        help="Path to experiment directory (containing aggregate/comparison.csv)",
-    )
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Enable verbose logging",
-    )
-
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(levelname)s: %(message)s",
-    )
-
-    output_path = run_dealer_usage_analysis(args.experiment)
-
-    if output_path.exists():
-        print(f"Dealer usage summary: {output_path}")
-    else:
-        print("No output generated - check that required CSV files exist")
-
-
-if __name__ == "__main__":
-    main()

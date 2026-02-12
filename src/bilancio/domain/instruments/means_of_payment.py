@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Optional
 
-from .base import Instrument
+from .base import Instrument, InstrumentKind
 
 
 @dataclass
@@ -12,8 +12,8 @@ class Cash(Instrument):
 
     Cash does not accrue interest.
     """
-    def __post_init__(self):
-        self.kind = "cash"
+    def __post_init__(self) -> None:
+        self.kind = InstrumentKind.CASH
 
 
 @dataclass
@@ -24,8 +24,8 @@ class BankDeposit(Instrument):
     Interest accrual is handled by the banking kernel's cohort tracking,
     not on this base instrument.
     """
-    def __post_init__(self):
-        self.kind = "bank_deposit"
+    def __post_init__(self) -> None:
+        self.kind = InstrumentKind.BANK_DEPOSIT
 
 
 @dataclass
@@ -49,8 +49,8 @@ class ReserveDeposit(Instrument):
     # Last day interest was credited on this reserve
     last_interest_day: Optional[int] = field(default=None)
 
-    def __post_init__(self):
-        self.kind = "reserve_deposit"
+    def __post_init__(self) -> None:
+        self.kind = InstrumentKind.RESERVE_DEPOSIT
 
     def next_interest_day(self) -> Optional[int]:
         """

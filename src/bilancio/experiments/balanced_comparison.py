@@ -98,7 +98,9 @@ class BalancedComparisonResult:
             return None
         if self.delta_passive == 0:
             return Decimal("0")  # No defaults to reduce
-        return self.trading_effect / self.delta_passive
+        effect = self.trading_effect
+        assert effect is not None  # guaranteed by checks above
+        return effect / self.delta_passive
 
     @property
     def cascade_effect(self) -> Optional[Decimal]:
@@ -122,7 +124,7 @@ class BalancedComparisonConfig(BaseModel):
     liquidity_mode: str = Field(default="uniform", description="Liquidity allocation mode")
     base_seed: int = Field(default=42, description="Base random seed")
     name_prefix: str = Field(default="Balanced Comparison", description="Scenario name prefix")
-    default_handling: str = Field(default="fail-fast", description="Default handling mode")
+    default_handling: str = Field(default="expel-agent", description="Default handling mode")
 
     # Detailed logging (Plan 022)
     detailed_logging: bool = Field(
@@ -180,7 +182,7 @@ class BalancedComparisonConfig(BaseModel):
         default_factory=lambda: {
             "base_risk_premium": "0.02",
             "urgency_sensitivity": "0.10",
-            "buy_premium_multiplier": "2.0",
+            "buy_premium_multiplier": "1.0",
             "lookback_window": 5,
         },
         description="Risk assessment parameters"
@@ -283,7 +285,7 @@ class BalancedComparisonRunner:
                     from bilancio.storage.supabase_registry import SupabaseRegistryStore
                     self._supabase_store = SupabaseRegistryStore()
                     logger.info("Supabase registry enabled for run persistence")
-            except Exception as e:
+            except Exception as e:  # Intentionally broad: external service init
                 logger.warning(f"Failed to initialize Supabase registry: {e}")
 
         # Load existing results for resumption
@@ -321,7 +323,7 @@ class BalancedComparisonRunner:
                     len(self._completed_keys),
                     self.seed_counter,
                 )
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: sweep resumption
             logger.warning("Could not load existing results: %s", e)
 
     def _make_key(
@@ -508,7 +510,7 @@ class BalancedComparisonRunner:
         print(f"Submitting {len(prepared_runs) * 2} runs to Modal (parallel execution)...", flush=True)
 
         # Build flat list for batch execution
-        batch_runs: List[Tuple[Dict[str, Any], str, RunOptions, Path]] = []
+        batch_runs: List[Tuple[Dict[str, Any], str, RunOptions]] = []
         run_index_map: Dict[str, int] = {}  # run_id -> index in prepared_runs
 
         for idx, (passive_prep, active_prep, *_) in enumerate(prepared_runs):
@@ -529,14 +531,15 @@ class BalancedComparisonRunner:
         # Execute batch with progress callback
         completed = [0]
 
-        def progress_callback(done: int, total: int):
+        def progress_callback(done: int, total: int) -> None:
             completed[0] = done
+            assert self._start_time is not None
             elapsed = time.time() - self._start_time
             if done > 0:
                 eta = elapsed / done * (total - done)
                 print(f"\r  Progress: {done}/{total} runs ({done * 100 // total}%) - ETA: {self._format_time(eta)}    ", end="", flush=True)
 
-        results = self.executor.execute_batch(
+        results = self.executor.execute_batch(  # type: ignore[attr-defined]
             [(config, run_id, opts) for config, run_id, opts, *_ in batch_runs],
             progress_callback=progress_callback,
         )
@@ -615,7 +618,7 @@ class BalancedComparisonRunner:
             if all_run_ids:
                 try:
                     self.executor.compute_aggregate_metrics(all_run_ids)
-                except Exception as e:
+                except Exception as e:  # Intentionally broad: sweep orchestration
                     print(f"\nWarning: Aggregate metrics computation failed: {e}", flush=True)
                     print("Local comparison.csv is still available.", flush=True)
 
@@ -722,6 +725,7 @@ class BalancedComparisonRunner:
     def _make_progress_callback(self, run_type: str) -> Callable[[int, int], None]:
         """Create a progress callback that prints day-by-day progress."""
         def callback(current_day: int, max_days: int) -> None:
+            assert self._start_time is not None
             elapsed = time.time() - self._start_time
             print(f"    {run_type}: day {current_day}/{max_days} (elapsed: {self._format_time(elapsed)})", flush=True)
         return callback
@@ -895,7 +899,7 @@ class BalancedComparisonRunner:
             self._supabase_store.upsert(entry)
             logger.debug(f"Persisted run {run_result.run_id} to Supabase")
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to persist run to Supabase: {e}")
 
     def _write_comparison_csv(self) -> None:
@@ -1029,7 +1033,7 @@ def run_balanced_comparison_sweep(
     outside_mid_ratios: Sequence[Decimal],
     big_entity_share: Decimal = Decimal("0.25"),
     base_seed: int = 42,
-    default_handling: str = "fail-fast",
+    default_handling: str = "expel-agent",
     name_prefix: str = "Balanced Comparison",
 ) -> List[BalancedComparisonResult]:
     """

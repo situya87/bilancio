@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from bilancio.storage.models import RunStatus
 
@@ -97,4 +97,4 @@ class ExecutionResult:
     modal_call_id: Optional[str] = None
 
     # Computed metrics (from cloud execution)
-    metrics: Optional[Dict[str, any]] = None
+    metrics: Optional[Dict[str, Any]] = None

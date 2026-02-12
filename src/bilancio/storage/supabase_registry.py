@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Optional, List, Dict, Any, Set, TYPE_CHECKING, cast
 
 from .models import RegistryEntry, RunStatus
 
@@ -72,7 +72,7 @@ class SupabaseRegistryStore:
             self._client = get_supabase_client()
             self._initialized = True
 
-        return self._client
+        return self._client  # type: ignore[return-value]
 
     def upsert(self, entry: RegistryEntry) -> None:
         """Insert or update a registry entry.
@@ -114,7 +114,7 @@ class SupabaseRegistryStore:
 
             logger.debug(f"Upserted registry entry for run {entry.run_id}")
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to upsert registry entry {entry.run_id}: {e}")
 
     def get(self, experiment_id: str, run_id: str) -> Optional[RegistryEntry]:
@@ -136,10 +136,10 @@ class SupabaseRegistryStore:
             if not result.data:
                 return None
 
-            row = result.data[0]
+            row = cast(Dict[str, Any], result.data[0])
             return self._row_to_entry(row)
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to get registry entry {run_id}: {e}")
             return None
 
@@ -157,9 +157,9 @@ class SupabaseRegistryStore:
                 "job_id", experiment_id
             ).execute()
 
-            return [row["run_id"] for row in result.data]
+            return [cast(Dict[str, Any], row)["run_id"] for row in result.data]
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to list runs for {experiment_id}: {e}")
             return []
 
@@ -167,7 +167,7 @@ class SupabaseRegistryStore:
         self,
         experiment_id: str,
         key_fields: Optional[List[str]] = None
-    ) -> set:
+    ) -> Set[Any]:
         """Get set of completed parameter combinations.
 
         Used for sweep resumption to identify which parameter combinations
@@ -192,11 +192,12 @@ class SupabaseRegistryStore:
                 "job_id", experiment_id
             ).eq("status", "completed").execute()
 
-            completed = set()
-            for row in result.data:
-                key_values = []
+            completed: Set[Any] = set()
+            for raw_row in result.data:
+                row_dict = cast(Dict[str, Any], raw_row)
+                key_values: List[Any] = []
                 for field in key_fields:
-                    val = row.get(field)
+                    val = row_dict.get(field)
                     if val is not None:
                         # Convert Decimal to float for consistent hashing
                         if isinstance(val, (Decimal, str)):
@@ -211,7 +212,7 @@ class SupabaseRegistryStore:
 
             return completed
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(
                 f"Failed to get completed keys for {experiment_id}: {e}"
             )
@@ -244,9 +245,9 @@ class SupabaseRegistryStore:
 
             result = query.execute()
 
-            return [self._row_to_entry(row) for row in result.data]
+            return [self._row_to_entry(cast(Dict[str, Any], row)) for row in result.data]
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(
                 f"Failed to query registry for {experiment_id}: {e}"
             )

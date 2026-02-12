@@ -5,12 +5,12 @@ from __future__ import annotations
 import subprocess
 import json
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import click
 
 
-def get_volume_contents(volume_name: str = "bilancio-results") -> list[dict]:
+def get_volume_contents(volume_name: str = "bilancio-results") -> List[Dict[str, Any]]:
     """Get contents of Modal Volume as list of dicts."""
     result = subprocess.run(
         ["uv", "run", "modal", "volume", "ls", volume_name, "--json"],
@@ -19,7 +19,8 @@ def get_volume_contents(volume_name: str = "bilancio-results") -> list[dict]:
     )
     if result.returncode != 0:
         raise click.ClickException(f"Failed to list volume: {result.stderr}")
-    return json.loads(result.stdout)
+    contents: List[Dict[str, Any]] = json.loads(result.stdout)
+    return contents
 
 
 def delete_volume_path(volume_name: str, path: str) -> bool:
@@ -45,18 +46,18 @@ def parse_modal_date(date_str: str) -> datetime:
 
 
 @click.group()
-def volume():
+def volume() -> None:
     """Manage Modal Volume storage."""
     pass
 
 
 @volume.command("ls")
 @click.option("--volume", "volume_name", default="bilancio-results", help="Volume name")
-def list_volume(volume_name: str):
+def list_volume(volume_name: str) -> None:
     """List experiments in Modal Volume."""
     try:
         contents = get_volume_contents(volume_name)
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         raise click.ClickException(str(e))
 
     if not contents:
@@ -99,7 +100,7 @@ def cleanup(
     pattern: Optional[str],
     dry_run: bool,
     yes: bool,
-):
+) -> None:
     """Clean up old experiments from Modal Volume.
 
     Examples:
@@ -109,7 +110,7 @@ def cleanup(
     """
     try:
         contents = get_volume_contents(volume_name)
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         raise click.ClickException(str(e))
 
     # Filter directories only
@@ -196,7 +197,7 @@ def cleanup(
 @click.argument("experiment_id")
 @click.option("--volume", "volume_name", default="bilancio-results", help="Volume name")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
-def remove(experiment_id: str, volume_name: str, yes: bool):
+def remove(experiment_id: str, volume_name: str, yes: bool) -> None:
     """Remove a specific experiment from Modal Volume.
 
     Example:

@@ -4,6 +4,7 @@ from bilancio.engines.simulation import run_day
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.household import Household
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.policy import PolicyEngine
 from bilancio.ops.banking import deposit_cash, client_payment
@@ -41,7 +42,7 @@ def test_run_day_basic():
     payable_id = sys.new_contract_id("P")
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=150,
         denom="X",
         asset_holder_id="H2",
@@ -84,9 +85,9 @@ def test_run_day_basic():
     # Phase C: Check reserves transferred for cross-bank net
     # B1 owed B2: 80, should be settled with reserves
     b1_reserves = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B1"].asset_ids 
-                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     b2_reserves = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B2"].asset_ids 
-                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     assert b1_reserves == 420  # 500 - 80
     assert b2_reserves == 580  # 500 + 80
     
@@ -133,7 +134,7 @@ def test_overnight_settlement_next_day():
     run_day(sys)
     
     # Check overnight payable created
-    payables = [c for c in sys.state.contracts.values() if c.kind == "payable"]
+    payables = [c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE]
     assert len(payables) == 1
     overnight_payable = payables[0]
     assert overnight_payable.liability_issuer_id == "B1"
@@ -143,7 +144,7 @@ def test_overnight_settlement_next_day():
     
     # Check reserves unchanged on day 0 (insufficient)
     b1_reserves = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B1"].asset_ids 
-                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     assert b1_reserves == 30  # unchanged
     
     # Now add more reserves to B1 for next day settlement
@@ -153,14 +154,14 @@ def test_overnight_settlement_next_day():
     run_day(sys)
     
     # Check overnight payable settled and removed
-    payables_after = [c for c in sys.state.contracts.values() if c.kind == "payable"]
+    payables_after = [c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE]
     assert len(payables_after) == 0
     
     # Check reserves transferred on day 1
     b1_reserves_final = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B1"].asset_ids 
-                           if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                           if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     b2_reserves_final = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B2"].asset_ids 
-                           if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                           if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     assert b1_reserves_final == 130  # 230 - 100
     assert b2_reserves_final == 600  # 500 + 100
     
@@ -198,7 +199,7 @@ def test_policy_order_drives_payment_choice():
     payable_id = sys.new_contract_id("P")
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=80,
         denom="X",
         asset_holder_id="H2",
@@ -219,12 +220,12 @@ def test_policy_order_drives_payment_choice():
     
     # H1 cash should be reduced by 80
     h1_cash = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["H1"].asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h1_cash == 20  # 100 - 80
     
     # H2 should have received 80 cash (direct transfer)
     h2_cash = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["H2"].asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h2_cash == 80
     
     # H2 should have no deposits (received cash directly)
@@ -253,7 +254,7 @@ def test_policy_order_drives_payment_choice_default():
     payable_id = sys.new_contract_id("P")
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=80,
         denom="X",
         asset_holder_id="H2",
@@ -274,7 +275,7 @@ def test_policy_order_drives_payment_choice_default():
     
     # H1 cash should be unchanged
     h1_cash = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["H1"].asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h1_cash == 100  # unchanged
     
     # H2 should have received 80 as deposit (same bank transfer)
@@ -282,7 +283,7 @@ def test_policy_order_drives_payment_choice_default():
     
     # H2 should have no cash (received deposit)
     h2_cash = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["H2"].asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h2_cash == 0
     
     sys.assert_invariants()

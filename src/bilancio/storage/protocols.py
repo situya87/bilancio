@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol, Optional, List, Dict, Any, runtime_checkable
+from typing import Protocol, Optional, List, Dict, Any, Set, runtime_checkable
 
 from .models import RunResult, RegistryEntry
 
@@ -55,7 +55,7 @@ class RegistryStore(Protocol):
         self,
         experiment_id: str,
         key_fields: Optional[List[str]] = None
-    ) -> set:
+    ) -> Set[Any]:
         """Get set of completed parameter keys for resumption."""
         ...
 

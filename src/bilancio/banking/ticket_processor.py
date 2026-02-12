@@ -78,6 +78,8 @@ class TicketProcessor:
         if self._projection is None:
             self.refresh_projection()
 
+        assert self._projection is not None  # guaranteed by refresh_projection above
+
         # Compute cash-tightness L*
         cash_tightness = compute_cash_tightness(
             self._projection,
@@ -123,6 +125,8 @@ class TicketProcessor:
         if self.state.current_quote is None:
             self.refresh_quotes()
 
+        assert self.state.current_quote is not None  # guaranteed by refresh_quotes above
+
         # Stamp the ticket with current rates
         ticket.stamped_deposit_rate = self.state.current_quote.deposit_rate
         ticket.stamped_loan_rate = self.state.current_quote.loan_rate
@@ -134,8 +138,8 @@ class TicketProcessor:
             result = self._process_loan(ticket)
         elif ticket.ticket_type == TicketType.WITHDRAWAL:
             result = self._process_withdrawal(ticket)
-        else:
-            result = TicketResult(
+        else:  # pragma: no cover
+            result = TicketResult(  # type: ignore[unreachable]
                 ticket=ticket,
                 success=False,
                 message=f"Unknown ticket type: {ticket.ticket_type}",
@@ -164,6 +168,7 @@ class TicketProcessor:
         day = self.state.current_day
 
         # Create deposit cohort
+        assert ticket.stamped_deposit_rate is not None
         self.state.add_deposit_cohort(
             day=day,
             origin="payment",
@@ -202,6 +207,7 @@ class TicketProcessor:
         day = self.state.current_day
 
         # Create loan cohort
+        assert ticket.stamped_loan_rate is not None
         self.state.add_loan_cohort(
             day=day,
             amount=amount,
@@ -209,6 +215,7 @@ class TicketProcessor:
         )
 
         # Create loan-origin deposit cohort
+        assert ticket.stamped_deposit_rate is not None
         self.state.add_deposit_cohort(
             day=day,
             origin="loan",

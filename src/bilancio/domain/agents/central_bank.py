@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from bilancio.domain.agent import Agent
+from bilancio.domain.agent import Agent, AgentKind
 
 
 @dataclass
@@ -25,7 +25,7 @@ class CentralBank(Agent):
 
     # Override kind with default to satisfy dataclass field ordering
     # (fields with defaults must come after fields without defaults)
-    kind: str = field(default="central_bank")
+    kind: str = field(default=AgentKind.CENTRAL_BANK)
 
     # === Corridor Rates (2-day effective rates) ===
 

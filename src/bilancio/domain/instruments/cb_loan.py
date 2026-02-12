@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Optional
 
-from .base import Instrument
+from .base import Instrument, InstrumentKind
 
 
 @dataclass
@@ -32,8 +32,8 @@ class CBLoan(Instrument):
     # Day the loan was issued
     issuance_day: int = 0
 
-    def __post_init__(self):
-        self.kind = "cb_loan"
+    def __post_init__(self) -> None:
+        self.kind = InstrumentKind.CB_LOAN
 
     @property
     def maturity_day(self) -> int:

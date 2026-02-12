@@ -14,6 +14,7 @@ import html as _html
 import json
 import logging
 
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.engines.system import System
 from bilancio.analysis.visualization import build_t_account_rows
 from bilancio.analysis.balances import AgentBalance
@@ -30,7 +31,7 @@ def _load_css() -> str:
     asset_path = Path(__file__).with_name("assets").joinpath("export.css")
     try:
         return asset_path.read_text(encoding="utf-8")
-    except Exception:
+    except (FileNotFoundError, OSError):
         # Minimal fallback to keep the page readable if asset is missing.
         return "body{font-family:system-ui,Arial,sans-serif;padding:16px;background:#f5f5f5;color:#333}table{border-collapse:collapse;width:100%}th,td{border:1px solid #e5e7eb;padding:6px}tbody tr:nth-child(even){background:#fafafa}h1,h2,h3{margin:.5rem 0}"
 
@@ -72,13 +73,13 @@ def _safe_int_conversion(value: Any) -> Optional[int]:
             return None
         try:
             return int(s)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             raise ValueError(f"Invalid numeric value: {value}") from e
     # Objects with __int__
     if hasattr(value, "__int__"):
         try:
-            return int(value)  # type: ignore[arg-type]
-        except Exception as e:
+            return int(value)
+        except (ValueError, TypeError, ArithmeticError) as e:
             raise ValueError(f"Invalid numeric value: {value}") from e
     raise ValueError(f"Cannot convert {type(value)} to int")
 
@@ -95,12 +96,12 @@ def _format_amount(v: Any) -> str:
         # As a last resort, try float -> int formatting without erroring
         try:
             return f"{int(float(v)):,}"
-        except Exception:
+        except (ValueError, TypeError, OverflowError):
             return _html_escape(v)
 
 
-def _render_t_account_from_rows(title: str, assets_rows: List[dict], liabs_rows: List[dict]) -> str:
-    def tr(row: Optional[dict]) -> str:
+def _render_t_account_from_rows(title: str, assets_rows: List[Dict[str, Any]], liabs_rows: List[Dict[str, Any]]) -> str:
+    def tr(row: Optional[Dict[str, Any]]) -> str:
         if not row:
             return "<tr><td class=\"empty\" colspan=\"6\">—</td></tr>"
         qty = row.get('quantity')
@@ -117,8 +118,8 @@ def _render_t_account_from_rows(title: str, assets_rows: List[dict], liabs_rows:
             viv = _safe_int_conversion(val)
         except ValueError:
             viv = None
-        qty_s = "—" if qiv in (None, "") else f"{qiv:,}"
-        val_s = "—" if viv in (None, "") else f"{viv:,}"
+        qty_s = "—" if qiv is None else f"{qiv:,}"
+        val_s = "—" if viv is None else f"{viv:,}"
         return (
             f"<tr>"
             f"<td class=\"name\">{_html_escape(row.get('name',''))}</td>"
@@ -161,7 +162,7 @@ def _render_t_account(system: System, agent_id: str) -> str:
     agent = system.state.agents[agent_id]
     title = f"{agent.name or agent_id} [{agent_id}] ({agent.kind})"
     # Convert to dict rows for the row renderer
-    def to_row(r):
+    def to_row(r: Any) -> Dict[str, Any]:
         return {
             'name': getattr(r, 'name', ''),
             'quantity': getattr(r, 'quantity', None),
@@ -175,9 +176,9 @@ def _render_t_account(system: System, agent_id: str) -> str:
     return _render_t_account_from_rows(title, assets_rows, liabs_rows)
 
 
-def _build_rows_from_balance(balance: AgentBalance) -> (List[dict], List[dict]):
-    assets: List[dict] = []
-    liabs: List[dict] = []
+def _build_rows_from_balance(balance: AgentBalance) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    assets: List[Dict[str, Any]] = []
+    liabs: List[Dict[str, Any]] = []
 
     # Inventory (stocks owned)
     for sku, data in balance.inventory_by_sku.items():
@@ -211,14 +212,14 @@ def _build_rows_from_balance(balance: AgentBalance) -> (List[dict], List[dict]):
 
     # Financial assets by kind (skip non-financial kinds)
     for kind, amount in balance.assets_by_kind.items():
-        if kind == 'delivery_obligation':
+        if kind == InstrumentKind.DELIVERY_OBLIGATION:
             continue
         try:
             amount_i = _safe_int_conversion(amount)
         except ValueError:
             amount_i = None
         if amount_i and amount_i > 0:
-            assets.append({'name': kind, 'quantity': None, 'value_minor': amount_i, 'counterparty_name': '—', 'maturity': 'on-demand' if kind in ('cash','bank_deposit','reserve_deposit') else '—'})
+            assets.append({'name': kind, 'quantity': None, 'value_minor': amount_i, 'counterparty_name': '—', 'maturity': 'on-demand' if kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT, InstrumentKind.RESERVE_DEPOSIT) else '—'})
 
     # Non-financial liabilities
     for sku, data in balance.nonfinancial_liabilities_by_kind.items():
@@ -237,31 +238,31 @@ def _build_rows_from_balance(balance: AgentBalance) -> (List[dict], List[dict]):
 
     # Financial liabilities
     for kind, amount in balance.liabilities_by_kind.items():
-        if kind == 'delivery_obligation':
+        if kind == InstrumentKind.DELIVERY_OBLIGATION:
             continue
         try:
             amount_i = _safe_int_conversion(amount)
         except ValueError:
             amount_i = None
         if amount_i and amount_i > 0:
-            liabs.append({'name': kind, 'quantity': None, 'value_minor': amount_i, 'counterparty_name': '—', 'maturity': 'on-demand' if kind in ('cash','bank_deposit','reserve_deposit') else '—'})
+            liabs.append({'name': kind, 'quantity': None, 'value_minor': amount_i, 'counterparty_name': '—', 'maturity': 'on-demand' if kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT, InstrumentKind.RESERVE_DEPOSIT) else '—'})
 
     # Ordering similar to render layer
-    def asset_key(row):
+    def asset_key(row: Dict[str, Any]) -> tuple[Any, ...]:
         name = row['name']
         # inventory rows have quantity and cpty/maturity '—'
         if row['quantity'] is not None and row.get('counterparty_name') == '—':
             return (0, name)
         if name.endswith('receivable'):
             return (1, name)
-        order = {'cash':0,'bank_deposit':1,'reserve_deposit':2,'payable':3}
+        order = {InstrumentKind.CASH:0,InstrumentKind.BANK_DEPOSIT:1,InstrumentKind.RESERVE_DEPOSIT:2,InstrumentKind.PAYABLE:3}
         return (2, order.get(name, 99), name)
 
-    def liab_key(row):
+    def liab_key(row: Dict[str, Any]) -> tuple[Any, ...]:
         name = row['name']
         if name.endswith('obligation'):
             return (0, name)
-        order = {'payable':0,'bank_deposit':1,'reserve_deposit':2,'cash':3}
+        order = {InstrumentKind.PAYABLE:0,InstrumentKind.BANK_DEPOSIT:1,InstrumentKind.RESERVE_DEPOSIT:2,InstrumentKind.CASH:3}
         return (1, order.get(name, 99), name)
 
     assets.sort(key=asset_key)
@@ -382,7 +383,7 @@ def _render_events_table(title: str, events: List[Dict[str, Any]]) -> str:
 
 
 def _split_by_phases(day_events: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-    buckets = {"A": [], "B": [], "C": []}
+    buckets: Dict[str, List[Dict[str, Any]]] = {"A": [], "B": [], "C": []}
     current = "A"
     for e in day_events:
         k = e.get("kind")
@@ -395,7 +396,7 @@ def _split_by_phases(day_events: List[Dict[str, Any]]) -> Dict[str, List[Dict[st
         buckets[current].append(e)
     return buckets
 
-def _split_phase_b_into_subphases(events_b: List[Dict[str, Any]]) -> tuple:
+def _split_phase_b_into_subphases(events_b: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Split Phase B events into B1 (scheduled), B_Dealer, and B2 (settlements) using subphase markers.
 
     Returns:
@@ -443,7 +444,7 @@ def _build_network_json_data(
     from dataclasses import asdict
     from decimal import Decimal
 
-    def decimal_to_float(obj):
+    def decimal_to_float(obj: Any) -> float:
         """Convert Decimal to float for JSON serialization."""
         if isinstance(obj, Decimal):
             return float(obj)
@@ -751,7 +752,7 @@ def export_pretty_html(
     *,
     max_days: Optional[int] = None,
     quiet_days: Optional[int] = None,
-    initial_rows: Optional[Dict[str, Dict[str, List[dict]]]] = None,
+    initial_rows: Optional[Dict[str, Dict[str, List[Dict[str, Any]]]]] = None,
     initial_network_snapshot: Optional[Any] = None,
 ) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -765,8 +766,8 @@ def export_pretty_html(
     # Determine convergence robustly: check tail quiet days and open obligations
     def _has_open_obligations() -> bool:
         try:
-            return any(c.kind in ("payable", "delivery_obligation") for c in system.state.contracts.values())
-        except Exception:
+            return any(c.kind in (InstrumentKind.PAYABLE, InstrumentKind.DELIVERY_OBLIGATION) for c in system.state.contracts.values())
+        except (AttributeError, TypeError):
             return False
     has_open = _has_open_obligations()
     tail_quiet_ok = False
@@ -842,7 +843,7 @@ def export_pretty_html(
             html_parts.append(f'<script type="application/json" id="network-data">{network_json}</script>')
             html_parts.append(f'<script>{network_js}</script>')
             html_parts.append('</section>')
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Failed to generate network visualization: {e}", exc_info=True)
 
     # Day 0 (Setup)

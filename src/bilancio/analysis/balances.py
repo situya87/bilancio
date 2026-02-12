@@ -54,24 +54,24 @@ def agent_balance(system: System, agent_id: str) -> AgentBalance:
     """
     agent = system.state.agents[agent_id]
     
-    assets_by_kind = defaultdict(int)
-    liabilities_by_kind = defaultdict(int)
+    assets_by_kind: defaultdict[str, int] = defaultdict(int)
+    liabilities_by_kind: defaultdict[str, int] = defaultdict(int)
     total_financial_assets = 0
     total_financial_liabilities = 0
-    nonfinancial_assets_by_kind = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
+    nonfinancial_assets_by_kind: defaultdict[str, Dict[str, Any]] = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
     total_nonfinancial_value = Decimal('0')
-    nonfinancial_liabilities_by_kind = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
+    nonfinancial_liabilities_by_kind: defaultdict[str, Dict[str, Any]] = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
     total_nonfinancial_liability_value = Decimal('0')
-    inventory_by_sku = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
+    inventory_by_sku: defaultdict[str, Dict[str, Any]] = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
     total_inventory_value = Decimal('0')
-    
+
     # Sum up stocks (inventory)
     for stock_id in agent.stock_ids:
         stock = system.state.stocks[stock_id]
         inventory_by_sku[stock.sku]['quantity'] += stock.quantity
         inventory_by_sku[stock.sku]['value'] += stock.value
         total_inventory_value += stock.value
-    
+
     # Sum up assets
     for contract_id in agent.asset_ids:
         contract = system.state.contracts.get(contract_id)
@@ -90,7 +90,7 @@ def agent_balance(system: System, agent_id: str) -> AgentBalance:
             nonfinancial_assets_by_kind[sku]['quantity'] += contract.amount
 
             # Calculate value (always available now)
-            valued_amount = getattr(contract, 'valued_amount', Decimal('0'))
+            valued_amount: Any = getattr(contract, 'valued_amount', Decimal('0'))
             nonfinancial_assets_by_kind[sku]['value'] += valued_amount
             total_nonfinancial_value += valued_amount
 
@@ -110,14 +110,14 @@ def agent_balance(system: System, agent_id: str) -> AgentBalance:
             # Track non-financial liabilities with quantity and value
             sku = getattr(contract, 'sku', contract.kind)
             nonfinancial_liabilities_by_kind[sku]['quantity'] += contract.amount
-            
+
             # Calculate value (always available now)
             valued_amount = getattr(contract, 'valued_amount', Decimal('0'))
             nonfinancial_liabilities_by_kind[sku]['value'] += valued_amount
             total_nonfinancial_liability_value += valued_amount
-    
+
     net_financial = total_financial_assets - total_financial_liabilities
-    
+
     return AgentBalance(
         agent_id=agent_id,
         assets_by_kind=dict(assets_by_kind),
@@ -143,31 +143,31 @@ def system_trial_balance(system: System) -> TrialBalance:
     Returns:
         TrialBalance with system-wide totals and breakdowns by instrument kind
     """
-    assets_by_kind = defaultdict(int)
-    liabilities_by_kind = defaultdict(int)
+    assets_by_kind: defaultdict[str, int] = defaultdict(int)
+    liabilities_by_kind: defaultdict[str, int] = defaultdict(int)
     total_financial_assets = 0
     total_financial_liabilities = 0
-    nonfinancial_assets_by_kind = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
+    nonfinancial_assets_by_kind: defaultdict[str, Dict[str, Any]] = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
     total_nonfinancial_value = Decimal('0')
-    nonfinancial_liabilities_by_kind = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
+    nonfinancial_liabilities_by_kind: defaultdict[str, Dict[str, Any]] = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
     total_nonfinancial_liability_value = Decimal('0')
-    inventory_by_sku = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
+    inventory_by_sku: defaultdict[str, Dict[str, Any]] = defaultdict(lambda: {'quantity': 0, 'value': Decimal('0')})
     total_inventory_value = Decimal('0')
-    
+
     # Walk all stocks and sum by SKU
     for stock in system.state.stocks.values():
         inventory_by_sku[stock.sku]['quantity'] += stock.quantity
         inventory_by_sku[stock.sku]['value'] += stock.value
         total_inventory_value += stock.value
-    
+
     # Walk all contracts once and sum by kind for both sides
     for contract in system.state.contracts.values():
         # Asset side
         assets_by_kind[contract.kind] += contract.amount
-        
-        # Liability side  
+
+        # Liability side
         liabilities_by_kind[contract.kind] += contract.amount
-        
+
         # Check if it's financial (use getattr with default lambda)
         is_financial_func = getattr(contract, 'is_financial', lambda: True)
         if is_financial_func():
@@ -177,12 +177,12 @@ def system_trial_balance(system: System) -> TrialBalance:
             # Track non-financial liabilities (like delivery obligations) by SKU
             sku = getattr(contract, 'sku', contract.kind)
             nonfinancial_liabilities_by_kind[sku]['quantity'] += contract.amount
-            
+
             # Calculate value (always available now)
-            valued_amount = getattr(contract, 'valued_amount', Decimal('0'))
+            valued_amount: Any = getattr(contract, 'valued_amount', Decimal('0'))
             nonfinancial_liabilities_by_kind[sku]['value'] += valued_amount
             total_nonfinancial_liability_value += valued_amount
-    
+
     return TrialBalance(
         assets_by_kind=dict(assets_by_kind),
         liabilities_by_kind=dict(liabilities_by_kind),
@@ -197,7 +197,7 @@ def system_trial_balance(system: System) -> TrialBalance:
     )
 
 
-def as_rows(system: System) -> list[dict]:
+def as_rows(system: System) -> list[dict[str, Any]]:
     """Convert system balances to list of rows for tabular display.
     
     Args:

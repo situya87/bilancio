@@ -3,6 +3,7 @@ from bilancio.engines.system import System
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.household import Household
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.core.errors import ValidationError
 from bilancio.ops.banking import deposit_cash, withdraw_cash, client_payment
 
@@ -25,9 +26,9 @@ def test_deposit_cash():
     
     # Check cash moved H1→B1
     h1_cash = sum(sys.state.contracts[cid].amount for cid in h1.asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     b1_cash = sum(sys.state.contracts[cid].amount for cid in b1.asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h1_cash == 0
     assert b1_cash == 120
     
@@ -67,12 +68,12 @@ def test_withdraw_cash():
     
     # Check H1 cash +70
     h1_cash = sum(sys.state.contracts[cid].amount for cid in h1.asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h1_cash == 70
     
     # Check bank cash -70
     b1_cash = sum(sys.state.contracts[cid].amount for cid in b1.asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert b1_cash == 50
     
     # Check event logged
@@ -216,7 +217,7 @@ def test_insufficient_deposit_payment():
     assert sys.total_deposit("H1", "B1") == 30
     h1_from_sys = sys.state.agents["H1"]
     h1_cash = sum(sys.state.contracts[cid].amount for cid in h1_from_sys.asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h1_cash == 50
     
     # Re-run with allow_cash_fallback=True
@@ -228,13 +229,13 @@ def test_insufficient_deposit_payment():
     # H1 cash should be 20 (used 30 from 50)
     h1_from_sys = sys.state.agents["H1"]
     h1_cash = sum(sys.state.contracts[cid].amount for cid in h1_from_sys.asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h1_cash == 20
     
     # H2 should have 30 cash (from fallback) and 30 deposit (from H1's deposit)
     h2_from_sys = sys.state.agents["H2"]
     h2_cash = sum(sys.state.contracts[cid].amount for cid in h2_from_sys.asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h2_cash == 30  # from cash fallback
     assert sys.total_deposit("H2", "B2") == 30  # only the deposit portion
     

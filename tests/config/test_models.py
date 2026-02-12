@@ -249,12 +249,11 @@ class TestRunConfig:
         assert config.show.events == "summary"
         assert config.export.balances_csv == "out.csv"
     
-    def test_negative_max_days_rejected(self):
-        """Test that negative max_days is rejected."""
+    @pytest.mark.parametrize("field,value", [
+        ("max_days", -1),
+        ("quiet_days", -1),
+    ])
+    def test_negative_values_rejected(self, field, value):
+        """Test that negative values for numeric fields are rejected."""
         with pytest.raises(ValidationError):
-            RunConfig(max_days=-1)
-    
-    def test_negative_quiet_days_rejected(self):
-        """Test that negative quiet_days is rejected."""
-        with pytest.raises(ValidationError):
-            RunConfig(quiet_days=-1)
+            RunConfig(**{field: value})

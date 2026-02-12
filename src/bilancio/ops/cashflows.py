@@ -23,7 +23,7 @@ class CashFlow:
 class CashFlowStream:
     """Manages a collection of cash flows with basic operations."""
 
-    def __init__(self, flows: list[CashFlow] = None):
+    def __init__(self, flows: list[CashFlow] | None = None):
         """Initialize with an optional list of cash flows."""
         self.flows = flows or []
 

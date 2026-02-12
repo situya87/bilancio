@@ -1,12 +1,22 @@
 """Simulation engines for financial scenario analysis."""
 
+from __future__ import annotations
+
+import logging
 import random
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, TYPE_CHECKING
 
+from bilancio.core.errors import DefaultError, ValidationError
+from bilancio.domain.agent import AgentKind
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.engines.clearing import settle_intraday_nets
 from bilancio.engines.settlement import settle_due, rollover_settled_payables
 
+if TYPE_CHECKING:
+    from bilancio.engines.system import System
+
+logger = logging.getLogger(__name__)
 
 IMPACT_EVENTS = {
     "PayableSettled",
@@ -23,13 +33,13 @@ class DayReport:
     notes: str = ""
 
 
-def _impacted_today(system, day: int) -> int:
+def _impacted_today(system: System, day: int) -> int:
     return sum(1 for e in system.state.events if e.get("day") == day and e.get("kind") in IMPACT_EVENTS)
 
 
-def _has_open_obligations(system) -> bool:
+def _has_open_obligations(system: System) -> bool:
     for c in system.state.contracts.values():
-        if c.kind in ("payable", "delivery_obligation"):
+        if c.kind in (InstrumentKind.PAYABLE, InstrumentKind.DELIVERY_OBLIGATION):
             return True
     return False
 
@@ -123,7 +133,7 @@ class MonteCarloEngine:
         self.num_simulations = num_simulations
 
 
-def run_day(system, enable_dealer: bool = False):
+def run_day(system: System, enable_dealer: bool = False) -> None:
     """
     Run a single day's simulation with three phases.
 
@@ -141,6 +151,7 @@ def run_day(system, enable_dealer: bool = False):
     """
     current_day = system.state.day
     rollover_enabled = getattr(system.state, 'rollover_enabled', False)
+    logger.debug("run_day: day=%d phase=%s", current_day, system.state.phase)
 
     # Phase A: Log PhaseA event (reserved)
     system.log("PhaseA")
@@ -157,13 +168,13 @@ def run_day(system, enable_dealer: bool = False):
             agents = system.state.agents
             for action_dict in actions_today:
                 apply_action(system, action_dict, agents)
-    except Exception:
+    except (ValueError, ValidationError, DefaultError, KeyError, AttributeError):
         # Allow scheduled-action errors to bubble via apply_action's own error handling
         # but keep guard to ensure the simulation loop stability
         raise
 
     # SubphaseB_Dealer: Run dealer trading phase (optional)
-    if enable_dealer and hasattr(system.state, 'dealer_subsystem') and system.state.dealer_subsystem is not None:
+    if enable_dealer and system.state.dealer_subsystem is not None:
         system.log("SubphaseB_Dealer")
         # Lazy import to avoid circular dependencies
         from bilancio.engines.dealer_integration import run_dealer_trading_phase, sync_dealer_to_system
@@ -182,14 +193,16 @@ def run_day(system, enable_dealer: bool = False):
     # Plan 024: Rollover - create new payables for settled ones
     if rollover_enabled and settled_for_rollover:
         system.log("SubphaseB_Rollover")
-        rollover_settled_payables(system, current_day, settled_for_rollover)
+        dealer_active = (enable_dealer and system.state.dealer_subsystem is not None)
+        rollover_settled_payables(system, current_day, settled_for_rollover,
+                                  dealer_active=dealer_active)
 
     # Phase C: Clear intraday nets for the current day
     system.log("PhaseC")  # optional: helps timeline
     settle_intraday_nets(system, current_day)
 
     # Phase D: CB corridor maintenance (interest + loan repayment)
-    has_cb = any(agent.kind == "central_bank" for agent in system.state.agents.values())
+    has_cb = any(agent.kind == AgentKind.CENTRAL_BANK for agent in system.state.agents.values())
     if has_cb:
         system.credit_reserve_interest(current_day)
         for loan_id in system.get_cb_loans_due(current_day):
@@ -202,7 +215,7 @@ def run_day(system, enable_dealer: bool = False):
     system.state.day += 1
 
 
-def run_until_stable(system, max_days: int = 365, quiet_days: int = 2, enable_dealer: bool = False) -> list[DayReport]:
+def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, enable_dealer: bool = False) -> list[DayReport]:
     """
     Advance day by day until the system is stable:
     - No impactful events happen for `quiet_days` consecutive days, AND
@@ -241,4 +254,5 @@ def run_until_stable(system, max_days: int = 365, quiet_days: int = 2, enable_de
         if stability_condition:
             break
 
+    logger.info("simulation complete: %d days", system.state.day)
     return reports

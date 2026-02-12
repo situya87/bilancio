@@ -15,8 +15,11 @@ The kernel is the mathematical heart of the dealer system, computing:
 All arithmetic uses Decimal for precision - never float.
 """
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_FLOOR
+
+logger = logging.getLogger(__name__)
 
 from .models import DealerState, VBTState, Ticket
 
@@ -98,14 +101,14 @@ def recompute_dealer_state(
 
     # Step 3: Normal computation (M > M_MIN)
 
-    # V = Mid-valued inventory = M * a + C
+    # V = Mid-valued inventory = M * x + C = M * a * S + C
     # This is the dealer's "equity" valued at VBT mid
-    dealer.V = M * dealer.a + dealer.cash
+    dealer.V = M * dealer.x + dealer.cash
 
-    # K* = floor(V / M)
-    # Maximum number of tickets dealer can buy without borrowing
+    # K* = floor(V / (M * S))
+    # Maximum number of tickets dealer can fund without borrowing
     # Uses ROUND_FLOOR to ensure integer result
-    K_star_decimal = (dealer.V / M).quantize(Decimal(1), rounding=ROUND_FLOOR)
+    K_star_decimal = (dealer.V / (M * S)).quantize(Decimal(1), rounding=ROUND_FLOOR)
     dealer.K_star = int(K_star_decimal)
 
     # X* = S * K*
@@ -154,13 +157,17 @@ def recompute_dealer_state(
     # Step 6: Clipped quotes
     # a_c(x) = min(A, a(x))  (clip ask at outside ask)
     # b_c(x) = max(B, b(x))  (clip bid at outside bid)
-    dealer.ask = min(A, a_interior)
-    dealer.bid = max(B, b_interior)
+    # Zero-coupon claims pay at most face at maturity, so quotes are capped at par.
+    PAR = Decimal(1)
+    dealer.bid = min(max(B, b_interior), PAR)
+    # Ask is floored at bid to ensure non-negative spread:
+    # the dealer should never sell for less than it would buy.
+    dealer.ask = max(dealer.bid, min(A, a_interior, PAR))
 
     # Step 7: Pin detection
     # Dealer is "pinned" when its quote equals the outside quote
     # This signals that the dealer wants to route to VBT
-    dealer.is_pinned_ask = (dealer.ask == A)
+    dealer.is_pinned_ask = (dealer.ask >= A)
     dealer.is_pinned_bid = (dealer.bid == B)
 
 
@@ -184,7 +191,7 @@ def can_interior_buy(dealer: DealerState, params: KernelParams) -> bool:
     """
     S = params.S
     has_capacity = (dealer.x + S <= dealer.X_star)
-    has_cash = (dealer.cash >= dealer.bid)
+    has_cash = (dealer.cash >= dealer.bid * S)
     return has_capacity and has_cash
 
 

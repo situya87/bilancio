@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, List, Optional, Union
 
 from bilancio.analysis.balances import AgentBalance, agent_balance
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.engines.system import System
 from bilancio.analysis.visualization.common import (
     RICH_AVAILABLE,
@@ -162,7 +163,7 @@ def _display_rich_agent_balance(title: str, balance: AgentBalance) -> None:
         is_nonfinancial = False
         for sku in displayed_asset_skus:
             # This is a heuristic but works for current instrument types
-            if asset_type in ['delivery_obligation']:
+            if asset_type == InstrumentKind.DELIVERY_OBLIGATION:
                 is_nonfinancial = True
                 break
         
@@ -190,7 +191,7 @@ def _display_rich_agent_balance(title: str, balance: AgentBalance) -> None:
         # Skip if this is a non-financial type we already displayed
         is_nonfinancial = False
         for sku in displayed_liability_skus:
-            if liability_type in ['delivery_obligation']:
+            if liability_type == InstrumentKind.DELIVERY_OBLIGATION:
                 is_nonfinancial = True
                 break
         
@@ -286,7 +287,7 @@ def _display_simple_agent_balance(title: str, balance: AgentBalance) -> None:
     financial_asset_kinds = set()
     for asset_type in sorted(balance.assets_by_kind.keys()):
         # Skip non-financial types
-        is_nonfinancial = asset_type in ['delivery_obligation']
+        is_nonfinancial = asset_type == InstrumentKind.DELIVERY_OBLIGATION
         
         if not is_nonfinancial and asset_type not in financial_asset_kinds:
             name = asset_type
@@ -314,7 +315,7 @@ def _display_simple_agent_balance(title: str, balance: AgentBalance) -> None:
     financial_liability_kinds = set()
     for liability_type in sorted(balance.liabilities_by_kind.keys()):
         # Skip non-financial types
-        is_nonfinancial = liability_type in ['delivery_obligation']
+        is_nonfinancial = liability_type == InstrumentKind.DELIVERY_OBLIGATION
         
         if not is_nonfinancial and liability_type not in financial_liability_kinds:
             name = liability_type
@@ -408,7 +409,7 @@ def _display_rich_multiple_agent_balances(
         # Third: Add financial assets
         for asset_type in sorted(balance.assets_by_kind.keys()):
             # Skip non-financial types
-            if asset_type not in ['delivery_obligation']:
+            if asset_type != InstrumentKind.DELIVERY_OBLIGATION:
                 name = asset_type
                 if len(name) > 19:
                     name = name[:16] + "..."
@@ -438,7 +439,7 @@ def _display_rich_multiple_agent_balances(
         # Second: Add financial liabilities
         for liability_type in sorted(balance.liabilities_by_kind.keys()):
             # Skip non-financial types
-            if liability_type not in ['delivery_obligation']:
+            if liability_type != InstrumentKind.DELIVERY_OBLIGATION:
                 name = liability_type
                 if len(name) > 19:
                     name = name[:16] + "..."
@@ -558,7 +559,7 @@ def _display_simple_multiple_agent_balances(
         # Third: Add financial assets
         for asset_type in sorted(balance.assets_by_kind.keys()):
             # Skip non-financial types
-            if asset_type not in ['delivery_obligation']:
+            if asset_type != InstrumentKind.DELIVERY_OBLIGATION:
                 amount = _format_currency(balance.assets_by_kind[asset_type])
                 asset_name = asset_type
                 if len(asset_name + " " + amount) > col_width:
@@ -581,7 +582,7 @@ def _display_simple_multiple_agent_balances(
         # Second: Add financial liabilities
         for liability_type in sorted(balance.liabilities_by_kind.keys()):
             # Skip non-financial types
-            if liability_type not in ['delivery_obligation']:
+            if liability_type != InstrumentKind.DELIVERY_OBLIGATION:
                 amount = _format_currency(balance.liabilities_by_kind[liability_type])
                 liability_name = liability_type
                 if len(liability_name + " " + amount) > col_width:
@@ -638,7 +639,7 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
         lot = system.state.stocks[stock_id]
         try:
             value_minor = int(lot.value)
-        except Exception:
+        except (ValueError, TypeError):
             # Fallback for Decimals
             value_minor = int(float(lot.value))
         assets.append(BalanceRow(
@@ -652,19 +653,21 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
     # Precompute id->alias map for quick lookups
     try:
         id_to_alias = {cid: alias for alias, cid in (system.state.aliases or {}).items()}
-    except Exception:
+    except (AttributeError, TypeError):
         id_to_alias = {}
 
     # Contracts as assets (held by agent)
     for cid in agent.asset_ids:
-        c = system.state.contracts[cid]
-        if c.kind == "delivery_obligation":
+        c = system.state.contracts.get(cid)
+        if c is None:
+            continue  # Contract removed (e.g. during dealer trading)
+        if c.kind == InstrumentKind.DELIVERY_OBLIGATION:
             # Receivable goods
             # valued_amount is Decimal
             valued = getattr(c, 'valued_amount', None)
             try:
                 valued_minor = int(valued) if valued is not None else None
-            except Exception:
+            except (ValueError, TypeError):
                 valued_minor = int(float(valued)) if valued is not None else None
             counterparty = _format_agent(c.liability_issuer_id, system)
             maturity = f"Day {getattr(c, 'due_day', '—')}"
@@ -679,26 +682,28 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
         else:
             # Financial assets
             counterparty = _format_agent(c.liability_issuer_id, system)
-            maturity = "on-demand" if c.kind in ("cash", "bank_deposit", "reserve_deposit") else (
+            maturity = "on-demand" if c.kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT, InstrumentKind.RESERVE_DEPOSIT) else (
                 f"Day {getattr(c, 'due_day', '—')}" if hasattr(c, 'due_day') else "—"
             )
             assets.append(BalanceRow(
                 name=f"{c.kind}",
                 quantity=None,
                 value_minor=int(c.amount) if c.amount is not None else None,
-                counterparty_name=counterparty if c.kind != "cash" else "—",
+                counterparty_name=counterparty if c.kind != InstrumentKind.CASH else "—",
                 maturity=maturity,
                 id_or_alias=id_to_alias.get(cid, cid),
             ))
 
     # Contracts as liabilities (issued by agent)
     for cid in agent.liability_ids:
-        c = system.state.contracts[cid]
-        if c.kind == "delivery_obligation":
+        c = system.state.contracts.get(cid)
+        if c is None:
+            continue  # Contract removed (e.g. during dealer trading)
+        if c.kind == InstrumentKind.DELIVERY_OBLIGATION:
             valued = getattr(c, 'valued_amount', None)
             try:
                 valued_minor = int(valued) if valued is not None else None
-            except Exception:
+            except (ValueError, TypeError):
                 valued_minor = int(float(valued)) if valued is not None else None
             counterparty = _format_agent(c.asset_holder_id, system)
             maturity = f"Day {getattr(c, 'due_day', '—')}"
@@ -712,7 +717,7 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
             ))
         else:
             counterparty = _format_agent(c.asset_holder_id, system)
-            maturity = "on-demand" if c.kind in ("cash", "bank_deposit", "reserve_deposit") else (
+            maturity = "on-demand" if c.kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT, InstrumentKind.RESERVE_DEPOSIT) else (
                 f"Day {getattr(c, 'due_day', '—')}" if hasattr(c, 'due_day') else "—"
             )
             liabilities.append(BalanceRow(
@@ -725,10 +730,10 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
             ))
 
     # Ordering within each side
-    def sort_key_assets(row: BalanceRow):
+    def sort_key_assets(row: BalanceRow) -> tuple[int, Any, str]:
         # Inventory first (has quantity and counterparty '—' and maturity '—'),
         # then receivables (name ends with 'receivable'), then financial by kind order
-        financial_order = {"cash": 0, "bank_deposit": 1, "reserve_deposit": 2, "payable": 3}
+        financial_order: dict[str, int] = {InstrumentKind.CASH: 0, InstrumentKind.BANK_DEPOSIT: 1, InstrumentKind.RESERVE_DEPOSIT: 2, InstrumentKind.PAYABLE: 3}
         if row.quantity is not None and row.counterparty_name == "—":
             return (0, 0, row.name or "")
         if row.name.endswith("receivable"):
@@ -736,9 +741,9 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
             return (1, day_num, row.name)
         return (2, financial_order.get(row.name, 99), row.name)
 
-    def sort_key_liabs(row: BalanceRow):
+    def sort_key_liabs(row: BalanceRow) -> tuple[int, Any, str]:
         # Obligations (name ends with 'obligation') by due day, then financial by order
-        financial_order = {"payable": 0, "bank_deposit": 1, "reserve_deposit": 2, "cash": 3}
+        financial_order: dict[str, int] = {InstrumentKind.PAYABLE: 0, InstrumentKind.BANK_DEPOSIT: 1, InstrumentKind.RESERVE_DEPOSIT: 2, InstrumentKind.CASH: 3}
         if row.name.endswith("obligation"):
             day_num = parse_day_from_maturity(row.maturity)
             return (0, day_num, row.name)
@@ -748,6 +753,25 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
     liabilities.sort(key=sort_key_liabs)
 
     return TAccount(assets=assets, liabilities=liabilities)
+
+
+def _fmt_qty(r: Optional[BalanceRow]) -> str:
+    """Format quantity for a BalanceRow."""
+    return f"{r.quantity:,}" if (r and r.quantity is not None) else "—"
+
+
+def _fmt_val(r: Optional[BalanceRow]) -> str:
+    """Format value for a BalanceRow."""
+    if not r or r.value_minor is None:
+        return "—"
+    return _format_currency(int(r.value_minor))
+
+
+def _cells(r: Optional[BalanceRow]) -> tuple[str, str, str, str, str]:
+    """Return a 5-tuple of cell strings for a BalanceRow."""
+    if not r:
+        return ("", "", "", "", "")
+    return (r.name, _fmt_qty(r), _fmt_val(r), r.counterparty_name or "—", r.maturity or "—")
 
 
 def display_agent_t_account(system: System, agent_id: str, format: str = 'rich') -> None:
@@ -768,15 +792,8 @@ def display_agent_t_account(system: System, agent_id: str, format: str = 'rich')
         print("-" * len(header))
         for i in range(max_rows):
             a = acct.assets[i] if i < len(acct.assets) else None
-            l = acct.liabilities[i] if i < len(acct.liabilities) else None
-            def fmt_qty(r): return f"{r.quantity:,}" if (r and r.quantity is not None) else "—"
-            def fmt_val(r):
-                if not r or r.value_minor is None: return "—"
-                return _format_currency(int(r.value_minor))
-            def cells(r):
-                if not r: return ("", "", "", "", "")
-                return (r.name, fmt_qty(r), fmt_val(r), r.counterparty_name or "—", r.maturity or "—")
-            row = list(cells(a) + cells(l))
+            l_row = acct.liabilities[i] if i < len(acct.liabilities) else None
+            row = list(_cells(a) + _cells(l_row))
             print(" | ".join(str(x) for x in row))
 
 
@@ -785,21 +802,14 @@ def display_agent_t_account_renderable(system: System, agent_id: str) -> Rendera
     if not RICH_AVAILABLE:
         # Fallback to string
         acct = build_t_account_rows(system, agent_id)
-        lines = []
+        lines: list[str] = []
         columns = ["Name", "Qty", "Value", "Counterparty", "Maturity"]
         lines.append(" | ".join([f"Assets:{c}" for c in columns] + [f"Liabilities:{c}" for c in columns]))
         max_rows = max(len(acct.assets), len(acct.liabilities))
         for i in range(max_rows):
             a = acct.assets[i] if i < len(acct.assets) else None
-            l = acct.liabilities[i] if i < len(acct.liabilities) else None
-            def fmt_qty(r): return f"{r.quantity:,}" if (r and r.quantity is not None) else "—"
-            def fmt_val(r):
-                if not r or r.value_minor is None: return "—"
-                return _format_currency(int(r.value_minor))
-            def cells(r):
-                if not r: return ("", "", "", "", "")
-                return (r.name, fmt_qty(r), fmt_val(r), r.counterparty_name or "—", r.maturity or "—")
-            row = list(cells(a) + cells(l))
+            l_row = acct.liabilities[i] if i < len(acct.liabilities) else None
+            row = list(_cells(a) + _cells(l_row))
             lines.append(" | ".join(str(x) for x in row))
         return "\n".join(lines)
 
@@ -825,22 +835,14 @@ def display_agent_t_account_renderable(system: System, agent_id: str) -> Rendera
     table.add_column("Maturity", style="red", justify="right")
     try:
         table.row_styles = ["on #ffffff", "on #fff2cc"]
-    except Exception:
+    except (AttributeError, TypeError):
         pass
-
-    def fmt_qty(r): return f"{r.quantity:,}" if (r and r.quantity is not None) else "—"
-    def fmt_val(r):
-        if not r or r.value_minor is None: return "—"
-        return _format_currency(int(r.value_minor))
-    def cells(r):
-        if not r: return ("", "", "", "", "")
-        return (r.name, fmt_qty(r), fmt_val(r), r.counterparty_name or "—", r.maturity or "—")
 
     max_rows = max(len(acct.assets), len(acct.liabilities))
     for i in range(max_rows):
         a = acct.assets[i] if i < len(acct.assets) else None
-        l = acct.liabilities[i] if i < len(acct.liabilities) else None
-        table.add_row(*cells(a), *cells(l))
+        l_row = acct.liabilities[i] if i < len(acct.liabilities) else None
+        table.add_row(*_cells(a), *_cells(l_row))
     return table
 
 
@@ -972,7 +974,7 @@ def _create_rich_agent_balance_table(title: str, balance: AgentBalance) -> Table
         is_nonfinancial = False
         for sku in displayed_asset_skus:
             # This is a heuristic but works for current instrument types
-            if asset_type in ['delivery_obligation']:
+            if asset_type == InstrumentKind.DELIVERY_OBLIGATION:
                 is_nonfinancial = True
                 break
         
@@ -1000,7 +1002,7 @@ def _create_rich_agent_balance_table(title: str, balance: AgentBalance) -> Table
         # Skip if this is a non-financial type we already displayed
         is_nonfinancial = False
         for sku in displayed_liability_skus:
-            if liability_type in ['delivery_obligation']:
+            if liability_type == InstrumentKind.DELIVERY_OBLIGATION:
                 is_nonfinancial = True
                 break
         
@@ -1099,7 +1101,7 @@ def _create_compact_rich_balance_table(title: str, balance: AgentBalance) -> Tab
     # Third: Add financial assets
     for asset_type in sorted(balance.assets_by_kind.keys()):
         # Skip non-financial types
-        if asset_type not in ['delivery_obligation']:
+        if asset_type != InstrumentKind.DELIVERY_OBLIGATION:
             name = asset_type
             if len(name) > 19:
                 name = name[:16] + "..."
@@ -1129,7 +1131,7 @@ def _create_compact_rich_balance_table(title: str, balance: AgentBalance) -> Tab
     # Second: Add financial liabilities
     for liability_type in sorted(balance.liabilities_by_kind.keys()):
         # Skip non-financial types
-        if liability_type not in ['delivery_obligation']:
+        if liability_type != InstrumentKind.DELIVERY_OBLIGATION:
             name = liability_type
             if len(name) > 19:
                 name = name[:16] + "..."

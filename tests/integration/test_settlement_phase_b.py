@@ -4,6 +4,7 @@ from bilancio.engines.settlement import settle_due
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.household import Household
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.policy import PolicyEngine
 from bilancio.ops.banking import deposit_cash, client_payment
@@ -30,7 +31,7 @@ def test_phase_b_same_bank_settlement():
     payable_id = sys.new_contract_id("P")
     payable = Payable(
         id=payable_id,
-        kind="payable", 
+        kind=InstrumentKind.PAYABLE, 
         amount=150,
         denom="X",
         asset_holder_id="H2",
@@ -89,7 +90,7 @@ def test_phase_b_cross_bank_settlement_logs_client_payment():
     payable_id = sys.new_contract_id("P")
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=100, 
         denom="X",
         asset_holder_id="H2",
@@ -146,7 +147,7 @@ def test_phase_b_cash_fallback():
     payable_id = sys.new_contract_id("P")
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=100,
         denom="X",
         asset_holder_id="H2",
@@ -163,13 +164,13 @@ def test_phase_b_cash_fallback():
     
     # Check H1 cash reduced by 40 (100 - 60 from deposit)
     h1_cash = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["H1"].asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h1_cash == 40  # 80 - 40 used for payment
     
     # Check H2 has 60 deposit at B1 and 40 cash
     assert sys.total_deposit("H2", "B1") == 60  # from H1's deposit portion
     h2_cash = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["H2"].asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h2_cash == 40  # from H1's cash portion
     
     # Check payable was removed
@@ -198,7 +199,7 @@ def test_phase_b_default_on_insufficient_means():
     payable_id = sys.new_contract_id("P")
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=100,
         denom="X", 
         asset_holder_id="H2",
@@ -218,7 +219,7 @@ def test_phase_b_default_on_insufficient_means():
     # Check balances unchanged
     assert sys.total_deposit("H1", "B1") == 30
     h1_cash = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["H1"].asset_ids 
-                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == "cash")
+                  if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH)
     assert h1_cash == 20
     
     sys.assert_invariants()
@@ -241,7 +242,7 @@ def test_phase_b_bank_to_bank_reserves():
     payable_id = sys.new_contract_id("P")
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=200,
         denom="X",
         asset_holder_id="B2", 
@@ -255,12 +256,12 @@ def test_phase_b_bank_to_bank_reserves():
     
     # Check B1 reserves reduced by 200
     b1_reserves = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B1"].asset_ids 
-                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     assert b1_reserves == 300
     
     # Check B2 reserves increased by 200
     b2_reserves = sum(sys.state.contracts[cid].amount for cid in sys.state.agents["B2"].asset_ids 
-                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == "reserve_deposit")
+                      if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT)
     assert b2_reserves == 200
     
     # Check payable was removed

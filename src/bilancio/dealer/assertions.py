@@ -56,7 +56,7 @@ def assert_c1_double_entry(
         - Examples Doc Section 1.1 (C1. Double-entry and conservation)
         - Specification Section 6 (Event tables with mirrored entries)
     """
-    total_cash = sum(cash_changes.values())
+    total_cash: Decimal = sum(cash_changes.values(), Decimal(0))
     total_qty = sum(qty_changes.values())
 
     assert abs(total_cash) <= EPSILON_CASH, (
@@ -250,12 +250,12 @@ def assert_c5_equity_basis(
         - Examples Doc Section 1.5 (C5. Equity basis by role)
         - Specification Section 5.2 (Equity conventions)
     """
-    # Compute equity at VBT mid
-    equity_computed = dealer.cash + vbt.M * dealer.a
+    # Compute equity at VBT mid: V = C + M*x where x = a*S (face inventory)
+    equity_computed = dealer.cash + vbt.M * dealer.x
 
     assert abs(equity_computed - dealer.V) <= EPSILON_CASH, (
         f"C5 VIOLATION: Equity identity failed. "
-        f"Computed E = C + M*a = {dealer.cash} + {vbt.M}*{dealer.a} = {equity_computed}, "
+        f"Computed E = C + M*x = {dealer.cash} + {vbt.M}*{dealer.x} = {equity_computed}, "
         f"but dealer.V = {dealer.V}. "
         f"Difference: {abs(equity_computed - dealer.V)} (tolerance: {EPSILON_CASH}). "
         f"Bucket: {dealer.bucket_id}"

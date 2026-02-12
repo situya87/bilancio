@@ -14,7 +14,7 @@ import json
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -31,12 +31,12 @@ class EventLog:
     - VBT anchor updates
     """
 
-    events: list[dict] = field(default_factory=list)
+    events: List[Dict[str, Any]] = field(default_factory=list)
 
     # Indexed structures for efficient lookup
-    defaults_by_day: dict[int, list[dict]] = field(default_factory=dict)
-    trades_by_day: dict[int, list[dict]] = field(default_factory=dict)
-    settlements_by_day: dict[int, list[dict]] = field(default_factory=dict)
+    defaults_by_day: Dict[int, List[Dict[str, Any]]] = field(default_factory=dict)
+    trades_by_day: Dict[int, List[Dict[str, Any]]] = field(default_factory=dict)
+    settlements_by_day: Dict[int, List[Dict[str, Any]]] = field(default_factory=dict)
 
     def _serialize_value(self, value: Any) -> Any:
         """
@@ -52,7 +52,7 @@ class EventLog:
             return [self._serialize_value(v) for v in value]
         return value
 
-    def log(self, kind: str, day: int, **payload) -> None:
+    def log(self, kind: str, day: int, **payload: Any) -> None:
         """
         Append event to log with kind, day, and arbitrary payload.
 
@@ -394,7 +394,7 @@ class EventLog:
 
         return total_loss / total_face
 
-    def get_trades_for_day(self, day: int) -> list[dict]:
+    def get_trades_for_day(self, day: int) -> List[Dict[str, Any]]:
         """
         Get all trades that occurred on a given day.
 
@@ -406,7 +406,7 @@ class EventLog:
         """
         return self.trades_by_day.get(day, [])
 
-    def get_defaults_for_day(self, day: int) -> list[dict]:
+    def get_defaults_for_day(self, day: int) -> List[Dict[str, Any]]:
         """
         Get all defaults that occurred on a given day.
 
@@ -418,7 +418,7 @@ class EventLog:
         """
         return self.defaults_by_day.get(day, [])
 
-    def get_settlements_for_day(self, day: int) -> list[dict]:
+    def get_settlements_for_day(self, day: int) -> List[Dict[str, Any]]:
         """
         Get all settlements that occurred on a given day.
 
@@ -430,7 +430,7 @@ class EventLog:
         """
         return self.settlements_by_day.get(day, [])
 
-    def get_events_for_day(self, day: int) -> list[dict]:
+    def get_events_for_day(self, day: int) -> List[Dict[str, Any]]:
         """
         Get all events that occurred on a given day.
 
@@ -442,7 +442,7 @@ class EventLog:
         """
         return [event for event in self.events if event.get("day") == day]
 
-    def get_all_events(self) -> list[dict]:
+    def get_all_events(self) -> List[Dict[str, Any]]:
         """
         Get all events in chronological order.
 
@@ -465,7 +465,7 @@ class EventLog:
             for event in self.events:
                 f.write(json.dumps(event) + "\n")
 
-    def to_dataframe(self) -> "pd.DataFrame":
+    def to_dataframe(self) -> Any:
         """
         Convert events to pandas DataFrame for analysis.
 

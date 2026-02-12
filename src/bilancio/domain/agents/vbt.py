@@ -8,7 +8,7 @@ continue functioning even under stress.
 """
 from dataclasses import dataclass, field
 
-from bilancio.domain.agent import Agent
+from bilancio.domain.agent import Agent, AgentKind
 
 
 @dataclass
@@ -37,4 +37,4 @@ class VBT(Agent):
         ownership tracking during claim transfers.
     """
 
-    kind: str = field(default="vbt", init=False)
+    kind: str = field(default=AgentKind.VBT, init=False)

@@ -1,12 +1,21 @@
-"""Apply configuration to a Bilancio system."""
+"""Apply configuration to a Bilancio system.
 
-from typing import Dict, Any
+All union-attr errors in this module come from ``parse_action`` returning
+``Action`` (a Union of 12 Pydantic models).  The dispatcher already guards
+each branch with ``action.action == "…"`` so the attribute accesses are safe
+at runtime; the directive below silences mypy for this single error code.
+"""
+# mypy: disable-error-code="union-attr"
+
+from typing import Any, Dict
 from decimal import Decimal
 
 from bilancio.engines.system import System
+from bilancio.domain.agent import AgentKind
 from bilancio.domain.agents import Bank, Household, Firm, CentralBank, Treasury
 from bilancio.ops.banking import deposit_cash, withdraw_cash, client_payment
 from bilancio.domain.instruments.credit import Payable
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.core.errors import ValidationError
 from bilancio.core.atomic_tx import atomic
 
@@ -80,40 +89,40 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
         if action_type == "mint_reserves":
             instr_id = system.mint_reserves(
                 to_bank_id=action.to,
-                amount=action.amount,
-                alias=getattr(action, 'alias', None)
+                amount=int(action.amount),
+                alias=action.alias
             )
             # optional alias capture
-            if getattr(action, 'alias', None):
-                alias = action.alias
-                if alias in system.state.aliases:
-                    raise ValueError(f"Alias already exists: {alias}")
-                system.state.aliases[alias] = instr_id
-            
+            _alias: str | None = action.alias
+            if _alias is not None:
+                if _alias in system.state.aliases:
+                    raise ValueError(f"Alias already exists: {_alias}")
+                system.state.aliases[_alias] = instr_id
+
         elif action_type == "mint_cash":
             instr_id = system.mint_cash(
                 to_agent_id=action.to,
-                amount=action.amount,
-                alias=getattr(action, 'alias', None)
+                amount=int(action.amount),
+                alias=action.alias
             )
-            if getattr(action, 'alias', None):
-                alias = action.alias
-                if alias in system.state.aliases:
-                    raise ValueError(f"Alias already exists: {alias}")
-                system.state.aliases[alias] = instr_id
-            
+            _alias = action.alias
+            if _alias is not None:
+                if _alias in system.state.aliases:
+                    raise ValueError(f"Alias already exists: {_alias}")
+                system.state.aliases[_alias] = instr_id
+
         elif action_type == "transfer_reserves":
             system.transfer_reserves(
                 from_bank_id=action.from_bank,
                 to_bank_id=action.to_bank,
-                amount=action.amount
+                amount=int(action.amount)
             )
             
         elif action_type == "transfer_cash":
             system.transfer_cash(
                 from_agent_id=action.from_agent,
                 to_agent_id=action.to_agent,
-                amount=action.amount
+                amount=int(action.amount)
             )
             
         elif action_type == "deposit_cash":
@@ -121,7 +130,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 system=system,
                 customer_id=action.customer,
                 bank_id=action.bank,
-                amount=action.amount
+                amount=int(action.amount)
             )
             
         elif action_type == "withdraw_cash":
@@ -129,7 +138,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 system=system,
                 customer_id=action.customer,
                 bank_id=action.bank,
-                amount=action.amount
+                amount=int(action.amount)
             )
             
         elif action_type == "client_payment":
@@ -145,7 +154,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
             payee_bank = None
             
             # Check for existing deposits to determine banks
-            for bank_id in [a.id for a in agents.values() if a.kind == "bank"]:
+            for bank_id in [a.id for a in agents.values() if a.kind == AgentKind.BANK]:
                 if system.deposit_ids(action.payer, bank_id):
                     payer_bank = bank_id
                 if system.deposit_ids(action.payee, bank_id):
@@ -160,7 +169,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 payer_bank=payer_bank,
                 payee_id=action.payee,
                 payee_bank=payee_bank,
-                amount=action.amount
+                amount=int(action.amount)
             )
             
         elif action_type == "create_stock":
@@ -199,14 +208,14 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 quantity=action.quantity,
                 unit_price=action.unit_price,
                 due_day=action.due_day,
-                alias=getattr(action, 'alias', None)
+                alias=action.alias
             )
-            if getattr(action, 'alias', None):
-                alias = action.alias
-                if alias in system.state.aliases:
-                    raise ValueError(f"Alias already exists: {alias}")
-                system.state.aliases[alias] = instr_id
-            
+            _alias = action.alias
+            if _alias is not None:
+                if _alias in system.state.aliases:
+                    raise ValueError(f"Alias already exists: {_alias}")
+                system.state.aliases[_alias] = instr_id
+
         elif action_type == "create_payable":
             # Create a Payable instrument
             # Payable uses asset_holder_id (creditor) and liability_issuer_id (debtor)
@@ -215,13 +224,13 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
             # For now, we assume the YAML amounts are already in minor units
 
             # Plan 024: maturity_distance for rollover - defaults to due_day if not set
-            maturity_distance = getattr(action, 'maturity_distance', None)
+            maturity_distance = action.maturity_distance
             if maturity_distance is None:
                 maturity_distance = action.due_day
 
             payable = Payable(
                 id=system.new_contract_id("PAY"),
-                kind="payable",  # Will be set by __post_init__ but required by dataclass
+                kind=InstrumentKind.PAYABLE,  # Will be set by __post_init__ but required by dataclass
                 amount=int(action.amount),  # Assumes amount is already in minor units
                 denom="X",  # Default denomination - could be made configurable
                 asset_holder_id=action.to_agent,  # creditor holds the asset
@@ -231,11 +240,11 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
             )
             system.add_contract(payable)
             # optional alias capture
-            if getattr(action, 'alias', None):
-                alias = action.alias
-                if alias in system.state.aliases:
-                    raise ValueError(f"Alias already exists: {alias}")
-                system.state.aliases[alias] = payable.id
+            _alias = action.alias
+            if _alias is not None:
+                if _alias in system.state.aliases:
+                    raise ValueError(f"Alias already exists: {_alias}")
+                system.state.aliases[_alias] = payable.id
 
             # Log the event
             system.log("PayableCreated",
@@ -245,14 +254,14 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 due_day=action.due_day,
                 maturity_distance=maturity_distance,
                 payable_id=payable.id,
-                alias=getattr(action, 'alias', None)
+                alias=action.alias
             )
-        
+
         elif action_type == "transfer_claim":
             # Transfer claim (reassign asset holder) by alias or id (order-independent validation)
             data = action
-            alias = getattr(data, 'contract_alias', None)
-            explicit_id = getattr(data, 'contract_id', None)
+            alias = data.contract_alias
+            explicit_id = data.contract_id
             id_from_alias = None
             if alias is not None:
                 id_from_alias = system.state.aliases.get(alias)
@@ -294,12 +303,12 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
         else:
             raise ValueError(f"Unknown action type: {action_type}")
             
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, ValidationError) as e:
         # Add context to the error
         raise ValueError(f"Failed to apply {action_type}: {e}")
 
 
-def _collect_alias_from_action(action_model) -> str | None:
+def _collect_alias_from_action(action_model: object) -> str | None:
     return getattr(action_model, 'alias', None)
 
 
@@ -314,7 +323,7 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
     for act in config.initial_actions or []:
         try:
             m = parse_action(act)
-        except Exception:
+        except (ValueError, TypeError, KeyError):
             # malformed action will be caught elsewhere
             continue
         alias = _collect_alias_from_action(m)
@@ -324,8 +333,8 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
             alias_set.add(alias)
 
     # 2) Group scheduled by day preserving order
-    by_day: dict[int, list] = {}
-    for sa in getattr(config, 'scheduled_actions', []) or []:
+    by_day: dict[int, list[Dict[str, Any]]] = {}
+    for sa in config.scheduled_actions:
         by_day.setdefault(sa.day, []).append(sa.action)
 
     # 3) Validate day by day
@@ -333,11 +342,11 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
         for act in by_day[day]:
             try:
                 m = parse_action(act)
-            except Exception:
+            except (ValueError, TypeError, KeyError):
                 continue
             action_type = m.action
             if action_type == 'transfer_claim':
-                alias = getattr(m, 'contract_alias', None)
+                alias = m.contract_alias
                 if alias and alias not in alias_set:
                     raise ValueError(
                         f"Scheduled transfer_claim references unknown alias '{alias}' on day {day}. "
@@ -438,6 +447,20 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
                 buy_premium_multiplier=config.dealer.risk_assessment.buy_premium_multiplier,
             )
 
-        system.state.dealer_subsystem = initialize_dealer_subsystem(
-            system, dealer_ring_config, risk_params=risk_params
-        )
+        if config.balanced_dealer and config.balanced_dealer.enabled:
+            from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
+            system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
+                system,
+                dealer_ring_config,
+                face_value=config.balanced_dealer.face_value,
+                outside_mid_ratio=config.balanced_dealer.outside_mid_ratio,
+                vbt_share_per_bucket=config.balanced_dealer.vbt_share_per_bucket,
+                dealer_share_per_bucket=config.balanced_dealer.dealer_share_per_bucket,
+                mode=config.balanced_dealer.mode,
+                current_day=0,
+                risk_params=risk_params,
+            )
+        else:
+            system.state.dealer_subsystem = initialize_dealer_subsystem(
+                system, dealer_ring_config, risk_params=risk_params
+            )

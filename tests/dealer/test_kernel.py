@@ -355,20 +355,22 @@ class TestInteriorQuotes:
     """Test a(x) = p(x) + I/2, b(x) = p(x) - I/2."""
 
     def test_quotes_at_balanced(self):
-        """At x=2: a(2)=1.03, b(2)=0.97."""
+        """At x=2: a(2)=0.83, b(2)=0.77."""
         dealer, vbt, params = make_dealer_vbt(
             a=2,
             cash=Decimal(2),
-            M=Decimal(1),
+            M=Decimal("0.80"),
             O=Decimal("0.30"),
         )
 
-        # At balanced inventory (x=2), p(2) = M = 1.0
+        # V = 0.80*2 + 2 = 3.60, K* = floor(3.60/0.80) = 4, X* = 4
+        # At balanced inventory (x=2), p(2) = M = 0.80
+        # λ = S/(X*+S) = 1/5 = 0.2
         # I = λ*O = 0.2*0.30 = 0.06
-        # a(2) = p(2) + I/2 = 1.0 + 0.03 = 1.03
-        # b(2) = p(2) - I/2 = 1.0 - 0.03 = 0.97
+        # a(2) = p(2) + I/2 = 0.80 + 0.03 = 0.83
+        # b(2) = p(2) - I/2 = 0.80 - 0.03 = 0.77
 
-        assert dealer.midline == Decimal(1)
+        assert dealer.midline == Decimal("0.80")
         assert dealer.I == Decimal("0.06")
 
         # Since interior quotes aren't clipped in this case:
@@ -379,24 +381,24 @@ class TestInteriorQuotes:
         expected_bid = dealer.midline - half_I
 
         # Verify quotes (accounting for possible clipping)
-        # In this case, A = M + O/2 = 1.0 + 0.15 = 1.15
-        # B = M - O/2 = 1.0 - 0.15 = 0.85
-        # So a(2) = 1.03 < 1.15 = A (not clipped)
-        # And b(2) = 0.97 > 0.85 = B (not clipped)
+        # In this case, A = M + O/2 = 0.80 + 0.15 = 0.95
+        # B = M - O/2 = 0.80 - 0.15 = 0.65
+        # So a(2) = 0.83 < 0.95 = A (not clipped)
+        # And b(2) = 0.77 > 0.65 = B (not clipped)
 
         assert dealer.ask == expected_ask
         assert dealer.bid == expected_bid
 
-        # Check exact values from spec
-        assert dealer.ask == Decimal("1.03")
-        assert dealer.bid == Decimal("0.97")
+        # Check exact values
+        assert dealer.ask == Decimal("0.83")
+        assert dealer.bid == Decimal("0.77")
 
     def test_spread_equals_inside_width(self):
         """a(x) - b(x) = I."""
         dealer, vbt, params = make_dealer_vbt(
             a=2,
             cash=Decimal(2),
-            M=Decimal(1),
+            M=Decimal("0.80"),
             O=Decimal("0.30"),
         )
 
@@ -413,17 +415,17 @@ class TestClippedQuotes:
         dealer, vbt, params = make_dealer_vbt(
             a=2,
             cash=Decimal(2),
-            M=Decimal(1),
+            M=Decimal("0.80"),
             O=Decimal("0.30"),
         )
 
-        # A = M + O/2 = 1.0 + 0.15 = 1.15
-        # B = M - O/2 = 1.0 - 0.15 = 0.85
-        assert vbt.A == Decimal("1.15")
-        assert vbt.B == Decimal("0.85")
+        # A = M + O/2 = 0.80 + 0.15 = 0.95
+        # B = M - O/2 = 0.80 - 0.15 = 0.65
+        assert vbt.A == Decimal("0.95")
+        assert vbt.B == Decimal("0.65")
 
-        # a(2) = 1.03 < 1.15, so no clipping
-        # b(2) = 0.97 > 0.85, so no clipping
+        # a(2) = 0.83 < 0.95, so no clipping
+        # b(2) = 0.77 > 0.65, so no clipping
         assert dealer.ask < vbt.A
         assert dealer.bid > vbt.B
 
@@ -438,7 +440,7 @@ class TestClippedQuotes:
             dealer, vbt, params = make_dealer_vbt(
                 a=a,
                 cash=Decimal(2),
-                M=Decimal(1),
+                M=Decimal("0.80"),
                 O=Decimal("0.30"),
             )
 
@@ -455,7 +457,7 @@ class TestPinDetection:
         dealer, vbt, params = make_dealer_vbt(
             a=2,
             cash=Decimal(2),
-            M=Decimal(1),
+            M=Decimal("0.80"),
             O=Decimal("0.30"),
         )
 

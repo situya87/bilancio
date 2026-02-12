@@ -9,7 +9,7 @@ from decimal import Decimal, getcontext
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from bilancio.config.models import (
     RingExplorerGeneratorConfig,
@@ -350,10 +350,17 @@ def compile_ring_explorer_balanced(
             }
         })
 
+    # Track actual face after int truncation (apply.py uses int(amount))
+    # to ensure cash = face × M exactly (balanced starting position)
+    actual_vbt_face = {b: Decimal(0) for b in BUCKETS}
+    actual_dealer_face = {b: Decimal(0) for b in BUCKETS}
+
     # Create payables from traders to VBT (per bucket)
     for idx in range(params.n_agents):
         vbt_amount, bucket, due_day = trader_to_vbt[idx]
         if vbt_amount > Decimal("0.01"):  # Skip tiny amounts
+            truncated = Decimal(int(vbt_amount))  # Match int() in apply.py
+            actual_vbt_face[bucket] += truncated
             from_agent = f"H{idx + 1}"
             to_agent = f"vbt_{bucket}"
             initial_actions.append({
@@ -371,6 +378,8 @@ def compile_ring_explorer_balanced(
     for idx in range(params.n_agents):
         dealer_amount, bucket, due_day = trader_to_dealer[idx]
         if dealer_amount > Decimal("0.01"):  # Skip tiny amounts
+            truncated = Decimal(int(dealer_amount))  # Match int() in apply.py
+            actual_dealer_face[bucket] += truncated
             from_agent = f"H{idx + 1}"
             to_agent = f"dealer_{bucket}"
             initial_actions.append({
@@ -384,11 +393,11 @@ def compile_ring_explorer_balanced(
                 }
             })
 
-    # Mint cash to VBT and Dealer (market value of their holdings = balanced position)
-    # Market value = face_value_held × outside_mid_ratio
+    # Mint cash to VBT and Dealer: cash = actual face × M (balanced position)
+    # Uses truncated face to match int() rounding in apply.py
     for bucket in BUCKETS:
         # VBT cash
-        vbt_cash = vbt_holdings[bucket] * outside_mid_ratio
+        vbt_cash = actual_vbt_face[bucket] * outside_mid_ratio
         if vbt_cash > 0:
             initial_actions.append({
                 "mint_cash": {
@@ -399,7 +408,7 @@ def compile_ring_explorer_balanced(
             })
 
         # Dealer cash
-        dealer_cash = dealer_holdings[bucket] * outside_mid_ratio
+        dealer_cash = actual_dealer_face[bucket] * outside_mid_ratio
         if dealer_cash > 0:
             initial_actions.append({
                 "mint_cash": {
@@ -429,8 +438,8 @@ def compile_ring_explorer_balanced(
         "scheduled_actions": [],
         "run": {
             "mode": "until_stable",
-            "max_days": max(30, params.maturity.days + 5),
-            "quiet_days": 2,
+            "max_days": max(30, 3 * params.maturity.days),
+            "quiet_days": params.maturity.days + 1 if rollover_enabled else 2,
             "rollover_enabled": rollover_enabled,  # Plan 024: continuous rollover
             "show": {
                 "balances": [agent["id"] for agent in agents],

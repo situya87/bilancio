@@ -29,16 +29,16 @@ console = Console()
 
 def show_scenario_header_renderable(name: str, description: Optional[str] = None, agents: Optional[Any] = None) -> List[RenderableType]:
     """Return renderables for scenario header including agent list.
-    
+
     Args:
         name: Scenario name
         description: Optional scenario description
         agents: Optional list or dict of agent configs to display
-        
+
     Returns:
         List of renderables
     """
-    renderables = []
+    renderables: List[RenderableType] = []
     
     # Add scenario header panel
     header = Text(name, style="bold cyan")
@@ -116,7 +116,7 @@ def show_day_summary_renderable(
     if event_mode == "none":
         return []
 
-    renderables = []
+    renderables: List[RenderableType] = []
 
     # Show events
     if day is not None:
@@ -133,11 +133,11 @@ def show_day_summary_renderable(
                 renderables.extend(event_renderables)
             else:
                 # Summary mode - just count by type
-                event_counts = {}
+                event_counts_map: Dict[str, int] = {}
                 for event in events_for_day:
-                    event_type = event.get("kind", "Unknown")
-                    event_counts[event_type] = event_counts.get(event_type, 0) + 1
-                for event_type, count in sorted(event_counts.items()):
+                    event_type = str(event.get("kind", "Unknown"))
+                    event_counts_map[event_type] = event_counts_map.get(event_type, 0) + 1
+                for event_type, count in sorted(event_counts_map.items()):
                     renderables.append(Text(f"  • {event_type}: {count}"))
     else:
         # Show all recent events (initial view, typically setup/day 0)
@@ -156,11 +156,11 @@ def show_day_summary_renderable(
                 renderables.extend(event_renderables)
             else:
                 # Summary mode
-                event_counts = {}
+                event_counts_map2: Dict[str, int] = {}
                 for event in system.state.events:
-                    event_type = event.get("kind", "Unknown")
-                    event_counts[event_type] = event_counts.get(event_type, 0) + 1
-                for event_type, count in sorted(event_counts.items()):
+                    event_type = str(event.get("kind", "Unknown"))
+                    event_counts_map2[event_type] = event_counts_map2.get(event_type, 0) + 1
+                for event_type, count in sorted(event_counts_map2.items()):
                     renderables.append(Text(f"  • {event_type}: {count}"))
     
     # Show balances
@@ -186,7 +186,7 @@ def show_day_summary_renderable(
                     renderables.append(Text(""))  # spacing
             else:
                 # Show compact legacy tables side by side
-                balance_renderable = display_multiple_agent_balances_renderable(system, agent_ids, format="rich")
+                balance_renderable = display_multiple_agent_balances_renderable(system, agent_ids, format="rich")  # type: ignore[arg-type]
                 renderables.append(balance_renderable)
     else:
         # Show system trial balance

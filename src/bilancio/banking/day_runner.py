@@ -11,7 +11,7 @@ Implements the intraday structure from Section 6 of the specification:
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import List, Optional, Dict, Callable
+from typing import Any, List, Optional, Dict, Callable
 
 from bilancio.banking.types import Ticket, Quote
 from bilancio.banking.state import BankDealerState, CentralBankParams
@@ -27,7 +27,7 @@ class DayEvent:
     event_type: str
     description: str
     amount: int = 0
-    details: Optional[dict] = None
+    details: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -378,7 +378,7 @@ class MultiBankDayRunner:
 
         return results
 
-    def get_system_state(self) -> dict:
+    def get_system_state(self) -> Dict[str, Any]:
         """Get aggregate state across all banks."""
         total_reserves = 0
         total_deposits = 0

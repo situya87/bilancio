@@ -11,16 +11,6 @@ class ValidationError(BilancioError):
     pass
 
 
-class CalculationError(BilancioError):
-    """Raised when calculation operations fail."""
-    pass
-
-
-class ConfigurationError(BilancioError):
-    """Raised when configuration is invalid or missing."""
-    pass
-
-
 class DefaultError(BilancioError):
     """Raised when a debtor cannot settle their obligations."""
     pass

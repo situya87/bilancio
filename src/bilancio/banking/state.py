@@ -178,11 +178,11 @@ class BankDealerState:
                 ))
 
         # Loan repayments
-        for issuance_day, cohort in self.loan_cohorts.items():
-            if from_day <= cohort.maturity_day <= to_day:
+        for issuance_day, loan_cohort in self.loan_cohorts.items():
+            if from_day <= loan_cohort.maturity_day <= to_day:
                 legs.append(ScheduledLeg(
-                    day=cohort.maturity_day,
-                    amount=cohort.repayment_amount,  # Inflow
+                    day=loan_cohort.maturity_day,
+                    amount=loan_cohort.repayment_amount,  # Inflow
                     leg_type="loan_repay",
                     source_cohort=f"Loan_{issuance_day}",
                 ))
@@ -440,7 +440,7 @@ class BankDealerState:
     # Diagnostics
     # =========================================================================
 
-    def balance_sheet_summary(self) -> dict:
+    def balance_sheet_summary(self) -> Dict[str, object]:
         """Return a summary of the balance sheet for diagnostics."""
         return {
             "bank_id": self.bank_id,

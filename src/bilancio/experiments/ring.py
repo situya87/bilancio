@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from bilancio.analysis.metrics_computer import MetricsComputer
@@ -559,6 +559,17 @@ class RingSweepRunner:
                 dealer_section["risk_assessment"] = risk_section
             scenario["dealer"] = dealer_section
 
+            if self.balanced_mode:
+                scenario["balanced_dealer"] = {
+                    "enabled": True,
+                    "face_value": str(self.face_value),
+                    "outside_mid_ratio": str(self.outside_mid_ratio),
+                    "vbt_share_per_bucket": str(self.vbt_share_per_bucket),
+                    "dealer_share_per_bucket": str(self.dealer_share_per_bucket),
+                    "mode": "active",
+                    "rollover_enabled": self.rollover_enabled,
+                }
+
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
             scenario_run["default_handling"] = self.default_handling
@@ -811,6 +822,17 @@ class RingSweepRunner:
                 dealer_section["risk_assessment"] = risk_section
             scenario["dealer"] = dealer_section
 
+            if self.balanced_mode:
+                scenario["balanced_dealer"] = {
+                    "enabled": True,
+                    "face_value": str(self.face_value),
+                    "outside_mid_ratio": str(self.outside_mid_ratio),
+                    "vbt_share_per_bucket": str(self.vbt_share_per_bucket),
+                    "dealer_share_per_bucket": str(self.dealer_share_per_bucket),
+                    "mode": "active",
+                    "rollover_enabled": self.rollover_enabled,
+                }
+
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
             scenario_run["default_handling"] = self.default_handling
@@ -1001,7 +1023,7 @@ class RingSweepRunner:
         except ValueError:
             return str(absolute)
 
-    def _artifact_loader_for_result(self, result: ExecutionResult):
+    def _artifact_loader_for_result(self, result: ExecutionResult) -> Any:
         if result.storage_type == "modal_volume":
             return ModalVolumeArtifactLoader(base_path=result.storage_base)
         return LocalArtifactLoader(base_path=Path(result.storage_base))

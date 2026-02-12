@@ -1,6 +1,6 @@
 """Interactive wizard for creating Bilancio scenarios."""
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from pathlib import Path
 from typing import Optional
 from rich.console import Console

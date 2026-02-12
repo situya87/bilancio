@@ -15,6 +15,7 @@ import pytest
 from bilancio.engines.system import System
 from bilancio.engines.simulation import run_day
 from bilancio.domain.agents import CentralBank, Bank, Household, Firm
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.ops.banking import deposit_cash, client_payment
 from bilancio.analysis.balances import agent_balance
@@ -149,7 +150,7 @@ def system_with_events():
     payable_id = system.new_contract_id("P")
     payable = Payable(
         id=payable_id,
-        kind="payable",
+        kind=InstrumentKind.PAYABLE,
         amount=100,
         denom="X",
         asset_holder_id="HH02",

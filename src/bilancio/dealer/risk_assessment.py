@@ -7,9 +7,12 @@ This module enables traders to:
 3. Make rational buy/sell decisions based on price vs expected value
 """
 
+import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, List
+from typing import Any, Dict, List
+
+logger = logging.getLogger(__name__)
 
 from bilancio.core.ids import AgentId
 from .models import Ticket
@@ -34,7 +37,7 @@ class RiskAssessmentParams:
     base_risk_premium: Decimal = Decimal("0.02")  # 2% premium
     urgency_sensitivity: Decimal = Decimal("0.10")  # 10% sensitivity
     use_issuer_specific: bool = False
-    buy_premium_multiplier: Decimal = Decimal("2.0")  # Buyers need 2x premium
+    buy_premium_multiplier: Decimal = Decimal("1.0")  # Buyers use same premium as sellers
 
 
 class RiskAssessor:
@@ -111,9 +114,9 @@ class RiskAssessor:
 
         if not recent:
             # No recent data: assume uncertain default rate as prior
-            # 25% reflects genuine uncertainty with zero observations,
+            # 15% reflects moderate uncertainty with zero observations,
             # allowing initial trades at market prices before data arrives
-            return Decimal("0.25")
+            return Decimal("0.15")
 
         # Count defaults and total payments
         defaults = sum(1 for _, defaulted in recent if defaulted)
@@ -271,7 +274,7 @@ class RiskAssessor:
 
         return should_accept
 
-    def get_diagnostics(self, current_day: int) -> Dict[str, any]:
+    def get_diagnostics(self, current_day: int) -> Dict[str, Any]:
         """
         Get diagnostic information about risk assessor state.
 
