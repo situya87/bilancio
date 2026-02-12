@@ -58,7 +58,7 @@ def parse_day_from_maturity(maturity_str: Optional[str]) -> int:
         return math.inf  # type: ignore[return-value]
     try:
         return int(s[4:].strip())
-    except Exception:
+    except (ValueError, TypeError):
         return math.inf  # type: ignore[return-value]
 
 

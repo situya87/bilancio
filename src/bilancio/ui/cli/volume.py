@@ -57,7 +57,7 @@ def list_volume(volume_name: str) -> None:
     """List experiments in Modal Volume."""
     try:
         contents = get_volume_contents(volume_name)
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         raise click.ClickException(str(e))
 
     if not contents:
@@ -110,7 +110,7 @@ def cleanup(
     """
     try:
         contents = get_volume_contents(volume_name)
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         raise click.ClickException(str(e))
 
     # Filter directories only

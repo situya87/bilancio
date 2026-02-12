@@ -114,7 +114,7 @@ class SupabaseRegistryStore:
 
             logger.debug(f"Upserted registry entry for run {entry.run_id}")
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to upsert registry entry {entry.run_id}: {e}")
 
     def get(self, experiment_id: str, run_id: str) -> Optional[RegistryEntry]:
@@ -139,7 +139,7 @@ class SupabaseRegistryStore:
             row = cast(Dict[str, Any], result.data[0])
             return self._row_to_entry(row)
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to get registry entry {run_id}: {e}")
             return None
 
@@ -159,7 +159,7 @@ class SupabaseRegistryStore:
 
             return [cast(Dict[str, Any], row)["run_id"] for row in result.data]
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to list runs for {experiment_id}: {e}")
             return []
 
@@ -212,7 +212,7 @@ class SupabaseRegistryStore:
 
             return completed
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(
                 f"Failed to get completed keys for {experiment_id}: {e}"
             )
@@ -247,7 +247,7 @@ class SupabaseRegistryStore:
 
             return [self._row_to_entry(cast(Dict[str, Any], row)) for row in result.data]
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(
                 f"Failed to query registry for {experiment_id}: {e}"
             )

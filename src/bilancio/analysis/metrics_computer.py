@@ -219,12 +219,12 @@ class MetricsComputer:
             if "day" in evt and evt["day"] is not None:
                 try:
                     evt["day"] = int(evt["day"])
-                except Exception:
+                except (ValueError, TypeError):
                     pass
             if "due_day" in evt and evt["due_day"] is not None:
                 try:
                     evt["due_day"] = int(evt["due_day"])
-                except Exception:
+                except (ValueError, TypeError):
                     pass
             events.append(evt)
         return events
@@ -256,5 +256,5 @@ class MetricsComputer:
             return Decimal(int(val))
         try:
             return Decimal(str(val))
-        except Exception:
+        except (ValueError, ArithmeticError, TypeError):
             return Decimal("0")

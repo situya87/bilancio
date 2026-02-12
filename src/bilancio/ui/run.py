@@ -124,7 +124,7 @@ def run_scenario(
             for sa in config.scheduled_actions:
                 day = sa.day
                 system.state.scheduled_actions_by_day.setdefault(day, []).append(sa.action)
-    except Exception:
+    except (AttributeError, TypeError):
         # Keep robust even if config lacks scheduled actions
         pass
     
@@ -460,7 +460,7 @@ def run_step_mode(
             )
             break
             
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: top-level simulation loop
             show_error_panel(
                 error=e,
                 phase=f"day_{system.state.day}",
@@ -561,7 +561,7 @@ def run_until_stable_mode(
                 if check_invariants == "daily":
                     try:
                         system.assert_invariants()
-                    except Exception as e:
+                    except Exception as e:  # Intentionally broad: invariant checks
                         if not quiet_mode:
                             console.print(f"[yellow][!] Invariant check failed: {e}[/yellow]")
 
@@ -679,7 +679,7 @@ def run_until_stable_mode(
             }
         )
         
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level simulation handler
         show_error_panel(
             error=e,
             phase="simulation",

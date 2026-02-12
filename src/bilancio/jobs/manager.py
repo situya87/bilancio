@@ -313,7 +313,7 @@ class JobManager:
         if self.cloud_store is not None:
             try:
                 self.cloud_store.save_job(job)
-            except Exception as e:
+            except Exception as e:  # Intentionally broad: external service call
                 logger.warning(f"Failed to save job to cloud: {e}")
 
     def _save_event(self, event: JobEvent) -> None:
@@ -328,7 +328,7 @@ class JobManager:
         if self.cloud_store is not None:
             try:
                 self.cloud_store.save_event(event)
-            except Exception as e:
+            except Exception as e:  # Intentionally broad: external service call
                 logger.warning(f"Failed to save event to cloud: {e}")
 
     def _load_job(self, manifest_path: Path) -> Job:

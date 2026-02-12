@@ -639,7 +639,7 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
         lot = system.state.stocks[stock_id]
         try:
             value_minor = int(lot.value)
-        except Exception:
+        except (ValueError, TypeError):
             # Fallback for Decimals
             value_minor = int(float(lot.value))
         assets.append(BalanceRow(
@@ -653,7 +653,7 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
     # Precompute id->alias map for quick lookups
     try:
         id_to_alias = {cid: alias for alias, cid in (system.state.aliases or {}).items()}
-    except Exception:
+    except (AttributeError, TypeError):
         id_to_alias = {}
 
     # Contracts as assets (held by agent)
@@ -667,7 +667,7 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
             valued = getattr(c, 'valued_amount', None)
             try:
                 valued_minor = int(valued) if valued is not None else None
-            except Exception:
+            except (ValueError, TypeError):
                 valued_minor = int(float(valued)) if valued is not None else None
             counterparty = _format_agent(c.liability_issuer_id, system)
             maturity = f"Day {getattr(c, 'due_day', '—')}"
@@ -703,7 +703,7 @@ def build_t_account_rows(system: System, agent_id: str) -> TAccount:
             valued = getattr(c, 'valued_amount', None)
             try:
                 valued_minor = int(valued) if valued is not None else None
-            except Exception:
+            except (ValueError, TypeError):
                 valued_minor = int(float(valued)) if valued is not None else None
             counterparty = _format_agent(c.asset_holder_id, system)
             maturity = f"Day {getattr(c, 'due_day', '—')}"
@@ -835,7 +835,7 @@ def display_agent_t_account_renderable(system: System, agent_id: str) -> Rendera
     table.add_column("Maturity", style="red", justify="right")
     try:
         table.row_styles = ["on #ffffff", "on #fff2cc"]
-    except Exception:
+    except (AttributeError, TypeError):
         pass
 
     max_rows = max(len(acct.assets), len(acct.liabilities))

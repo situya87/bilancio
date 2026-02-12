@@ -31,7 +31,7 @@ def _load_css() -> str:
     asset_path = Path(__file__).with_name("assets").joinpath("export.css")
     try:
         return asset_path.read_text(encoding="utf-8")
-    except Exception:
+    except (FileNotFoundError, OSError):
         # Minimal fallback to keep the page readable if asset is missing.
         return "body{font-family:system-ui,Arial,sans-serif;padding:16px;background:#f5f5f5;color:#333}table{border-collapse:collapse;width:100%}th,td{border:1px solid #e5e7eb;padding:6px}tbody tr:nth-child(even){background:#fafafa}h1,h2,h3{margin:.5rem 0}"
 
@@ -73,13 +73,13 @@ def _safe_int_conversion(value: Any) -> Optional[int]:
             return None
         try:
             return int(s)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             raise ValueError(f"Invalid numeric value: {value}") from e
     # Objects with __int__
     if hasattr(value, "__int__"):
         try:
             return int(value)
-        except Exception as e:
+        except (ValueError, TypeError, ArithmeticError) as e:
             raise ValueError(f"Invalid numeric value: {value}") from e
     raise ValueError(f"Cannot convert {type(value)} to int")
 
@@ -96,7 +96,7 @@ def _format_amount(v: Any) -> str:
         # As a last resort, try float -> int formatting without erroring
         try:
             return f"{int(float(v)):,}"
-        except Exception:
+        except (ValueError, TypeError, OverflowError):
             return _html_escape(v)
 
 
@@ -767,7 +767,7 @@ def export_pretty_html(
     def _has_open_obligations() -> bool:
         try:
             return any(c.kind in (InstrumentKind.PAYABLE, InstrumentKind.DELIVERY_OBLIGATION) for c in system.state.contracts.values())
-        except Exception:
+        except (AttributeError, TypeError):
             return False
     has_open = _has_open_obligations()
     tail_quiet_ok = False
@@ -843,7 +843,7 @@ def export_pretty_html(
             html_parts.append(f'<script type="application/json" id="network-data">{network_json}</script>')
             html_parts.append(f'<script>{network_js}</script>')
             html_parts.append('</section>')
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Failed to generate network visualization: {e}", exc_info=True)
 
     # Day 0 (Setup)

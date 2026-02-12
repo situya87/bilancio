@@ -111,7 +111,7 @@ def list_jobs(
                     "Tip: Set BILANCIO_SUPABASE_* env vars to use --cloud."
                 )
                 return
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: top-level CLI handler
             raise click.ClickException(f"Failed to query jobs: {e}")
 
     if not jobs_list:
@@ -127,7 +127,7 @@ def list_jobs(
             store = SupabaseJobStore()
             job_ids = [j.job_id for j in jobs_list]
             run_counts = store.get_run_counts(job_ids)
-        except Exception:
+        except Exception:  # Intentionally broad: external service call
             pass  # Fall back to job.run_ids
 
     # Display jobs
@@ -191,7 +191,7 @@ def get_job(job_id: str, cloud: bool, local: Optional[Path]) -> None:
 
                 store = SupabaseJobStore()
                 job = store.get_job(job_id)
-        except Exception:
+        except Exception:  # Intentionally broad: external service call
             pass
 
         if job is None:
@@ -286,7 +286,7 @@ def list_runs(job_id: str, cloud: bool, status: Optional[str]) -> None:
         click.echo("-" * 80)
         click.echo(f"Total: {len(entries)} runs")
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         raise click.ClickException(f"Failed to query runs: {e}")
 
 
@@ -344,7 +344,7 @@ def show_metrics(job_id: str, cloud: bool) -> None:
             click.echo(f"  Min:    {min(phis):.4f}")
             click.echo(f"  Max:    {max(phis):.4f}")
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         raise click.ClickException(f"Failed to query metrics: {e}")
 
 
@@ -413,5 +413,5 @@ def visualize_job(
 
     except ValueError as e:
         raise click.ClickException(str(e))
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         raise click.ClickException(f"Failed to generate visualization: {e}")

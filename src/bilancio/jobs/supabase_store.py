@@ -61,7 +61,7 @@ class SupabaseJobStore:
         except ImportError:
             logger.warning("supabase_client module not found")
             return None
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service init
             logger.warning(f"Failed to initialize Supabase client: {e}")
             return None
 
@@ -111,7 +111,7 @@ class SupabaseJobStore:
 
             logger.debug(f"Saved job {job.job_id} to Supabase")
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to save job to Supabase: {e}")
 
     def save_event(self, event: JobEvent) -> None:
@@ -136,7 +136,7 @@ class SupabaseJobStore:
 
             logger.debug(f"Saved event {event.event_type} for job {event.job_id}")
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to save event to Supabase: {e}")
 
     def get_job(self, job_id: str) -> Optional[Job]:
@@ -166,7 +166,7 @@ class SupabaseJobStore:
 
             return self._row_to_job(response.data)
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to get job from Supabase: {e}")
             return None
 
@@ -206,7 +206,7 @@ class SupabaseJobStore:
 
             return [self._row_to_job(row) for row in response.data]
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to list jobs from Supabase: {e}")
             return []
 
@@ -242,7 +242,7 @@ class SupabaseJobStore:
 
             return counts
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to get run counts from Supabase: {e}")
             return {}
 
@@ -281,7 +281,7 @@ class SupabaseJobStore:
 
             logger.debug(f"Updated job {job_id} status to {status.value}")
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to update job status in Supabase: {e}")
 
     def _row_to_job(self, row: dict[str, Any]) -> Job:
@@ -379,6 +379,6 @@ class SupabaseJobStore:
 
             return events
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to get events from Supabase: {e}")
             return []

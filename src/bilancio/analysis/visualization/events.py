@@ -75,7 +75,7 @@ def display_events_table(events: List[Dict[str, Any]], group_by_day: bool = True
         # Alternate row shading for readability
         try:
             table.row_styles = ["on #ffffff", "on #e6f2ff"]
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
         for e in evs:
@@ -211,7 +211,7 @@ def display_events_table_renderable(events: List[Dict[str, Any]]) -> RenderableT
         table.add_column("Notes", justify="left")
         try:
             table.row_styles = ["on #ffffff", "on #e6f2ff"]
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
         for e in evs:

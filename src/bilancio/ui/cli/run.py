@@ -113,7 +113,7 @@ def run(scenario_file: Path,
         ))
         sys.exit(1)
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         console.print(Panel(
             f"[red]Unexpected error:[/red]\n{e}",
             title="Error",
@@ -188,7 +188,7 @@ def validate(scenario_file: Path) -> None:
         ))
         sys.exit(1)
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         console.print(Panel(
             f"[red]Validation error:[/red]\n{e}",
             title="Validation Failed",
@@ -214,7 +214,7 @@ def new(from_template: Optional[str], output: Path) -> None:
         create_scenario_wizard(output, from_template)
         console.print(f"[green]OK[/green] Created scenario file: {output}")
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         console.print(Panel(
             f"[red]Failed to create scenario:[/red]\n{e}",
             title="Error",

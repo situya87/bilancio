@@ -244,7 +244,7 @@ def save_run_to_supabase(
         # Log but don't fail - Supabase is optional
         print(f"Supabase not configured, skipping save for run {run_id}")
         return False
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: cloud execution wrapper
         # Log other errors but don't fail the run - Supabase save is secondary
         print(f"WARNING: Failed to save to Supabase: {e}")
         print(f"Run {run_id} completed but metrics not persisted to Supabase!")
@@ -387,7 +387,7 @@ def run_simulation(
             "metrics": metrics,  # Include computed metrics in return
         }
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: cloud execution wrapper
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         # Still commit to preserve any partial output
@@ -590,7 +590,7 @@ def compute_aggregate_metrics(
             else:
                 client.table("job_metrics").insert(job_metrics_row).execute()
             print(f"Saved job_metrics for {job_id}")
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             print(f"Warning: Failed to save job_metrics: {e}")
 
         # Update job status
@@ -611,7 +611,7 @@ def compute_aggregate_metrics(
             "comparisons": comparisons,
         }
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: cloud execution wrapper
         print(f"Failed to compute aggregate metrics: {e}")
         return {"status": "error", "error": str(e)}
 

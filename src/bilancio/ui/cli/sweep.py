@@ -220,7 +220,7 @@ def sweep_ring(
 
         console.print(f"[cyan]Job ID: {job.job_id}[/cyan]")
         manager.start_job(job.job_id)
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         console.print(f"[yellow]Warning: Job tracking initialization failed: {e}[/yellow]")
         manager = None
 
@@ -303,19 +303,19 @@ def sweep_ring(
                     "lhs_runs": lhs_count,
                     "frontier": frontier,
                 })
-            except Exception as e:
+            except Exception as e:  # Intentionally broad: top-level CLI handler
                 console.print(f"[yellow]Warning: Failed to complete job tracking: {e}[/yellow]")
 
         console.print(f"[green]Sweep complete.[/green] Registry: {registry_csv}")
         console.print(f"[green]Aggregated results: {results_csv}")
         console.print(f"[green]Dashboard: {dashboard_html}")
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         # Fail job on error
         if manager is not None:
             try:
                 manager.fail_job(job_id, str(e))
-            except Exception:
+            except Exception:  # Intentionally broad: must not mask original error
                 pass  # Don't let job tracking failure mask the original error
         raise
 
@@ -584,7 +584,7 @@ def sweep_balanced(
 
         click.echo(f"Job ID: {job.job_id}")
         manager.start_job(job.job_id)
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         click.echo(f"Warning: Job tracking initialization failed: {e}")
         manager = None
 
@@ -649,7 +649,7 @@ def sweep_balanced(
                             job_id, r.active_run_id,
                             modal_call_id=r.active_modal_call_id
                         )
-            except Exception as e:
+            except Exception as e:  # Intentionally broad: top-level CLI handler
                 click.echo(f"Warning: Failed to record run progress: {e}")
 
         # Print summary
@@ -664,7 +664,7 @@ def sweep_balanced(
                     "completed": completed,
                     "improved_with_trading": improved,
                 })
-            except Exception as e:
+            except Exception as e:  # Intentionally broad: top-level CLI handler
                 click.echo(f"Warning: Failed to complete job tracking: {e}")
 
         click.echo(f"\nBalanced comparison complete!")
@@ -673,12 +673,12 @@ def sweep_balanced(
         click.echo(f"  Improved with trading: {improved}")
         click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
 
-    except Exception as e:
+    except Exception as e:  # Intentionally broad: top-level CLI handler
         # Fail job on error
         if manager is not None:
             try:
                 manager.fail_job(job_id, str(e))
-            except Exception:
+            except Exception:  # Intentionally broad: must not mask original error
                 pass  # Don't let job tracking failure mask the original error
         raise
 

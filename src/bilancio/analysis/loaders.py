@@ -24,7 +24,7 @@ def _to_decimal(val: object) -> Decimal:
     # JSONL may encode Decimals as numbers or strings
     try:
         return Decimal(str(val))
-    except Exception:
+    except (ValueError, ArithmeticError, TypeError):
         return Decimal("0")
 
 
@@ -46,12 +46,12 @@ def read_events_jsonl(path: Path | str) -> Iterator[Dict[str, Any]]:
             if "day" in evt and evt["day"] is not None:
                 try:
                     evt["day"] = int(evt["day"])  # day indices are integers in the engine
-                except Exception:
+                except (ValueError, TypeError):
                     pass
             if "due_day" in evt and evt["due_day"] is not None:
                 try:
                     evt["due_day"] = int(evt["due_day"])  # due_day recorded on creation
-                except Exception:
+                except (ValueError, TypeError):
                     pass
             yield evt
 

@@ -98,7 +98,7 @@ def display_events_tables_by_phase_renderables(events: List[Dict[str, Any]], day
         table.add_column("Notes", justify="left")
         try:
             table.row_styles = ["on #ffffff", "on #e6f2ff"] if phase != "C" else ["on #ffffff", "on #fff2cc"]
-        except Exception:
+        except (AttributeError, TypeError):
             pass
         for e in rows:
             kind = str(e.get("kind", ""))
@@ -190,7 +190,7 @@ def _build_single_setup_table(events: List[Dict[str, Any]], day: Optional[int] =
     table.add_column("Notes", justify="left")
     try:
         table.row_styles = ["on #ffffff", "on #e6f2ff"]
-    except Exception:
+    except (AttributeError, TypeError):
         pass
     for e in rows:
         kind = str(e.get("kind", ""))

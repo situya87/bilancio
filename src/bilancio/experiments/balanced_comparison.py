@@ -285,7 +285,7 @@ class BalancedComparisonRunner:
                     from bilancio.storage.supabase_registry import SupabaseRegistryStore
                     self._supabase_store = SupabaseRegistryStore()
                     logger.info("Supabase registry enabled for run persistence")
-            except Exception as e:
+            except Exception as e:  # Intentionally broad: external service init
                 logger.warning(f"Failed to initialize Supabase registry: {e}")
 
         # Load existing results for resumption
@@ -323,7 +323,7 @@ class BalancedComparisonRunner:
                     len(self._completed_keys),
                     self.seed_counter,
                 )
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: sweep resumption
             logger.warning("Could not load existing results: %s", e)
 
     def _make_key(
@@ -618,7 +618,7 @@ class BalancedComparisonRunner:
             if all_run_ids:
                 try:
                     self.executor.compute_aggregate_metrics(all_run_ids)
-                except Exception as e:
+                except Exception as e:  # Intentionally broad: sweep orchestration
                     print(f"\nWarning: Aggregate metrics computation failed: {e}", flush=True)
                     print("Local comparison.csv is still available.", flush=True)
 
@@ -899,7 +899,7 @@ class BalancedComparisonRunner:
             self._supabase_store.upsert(entry)
             logger.debug(f"Persisted run {run_result.run_id} to Supabase")
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: external service call
             logger.warning(f"Failed to persist run to Supabase: {e}")
 
     def _write_comparison_csv(self) -> None:

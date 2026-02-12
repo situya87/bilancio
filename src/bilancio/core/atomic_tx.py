@@ -14,6 +14,6 @@ def atomic(system: System) -> Generator[None, None, None]:
     snapshot = copy.deepcopy(system.state)
     try:
         yield
-    except Exception:
+    except Exception:  # Intentionally broad: must rollback on any failure
         system.state = snapshot
         raise

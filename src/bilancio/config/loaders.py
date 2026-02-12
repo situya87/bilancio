@@ -179,7 +179,7 @@ def load_yaml(path: Path | str) -> ScenarioConfig:
 
         try:
             compiled = compile_generator(generator_spec, source_path=path)
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, AttributeError) as e:
             raise ValueError(f"Failed to compile generator '{generator_spec.generator}': {e}") from e
 
         data = preprocess_config(compiled)

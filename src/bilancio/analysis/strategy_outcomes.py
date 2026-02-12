@@ -64,7 +64,7 @@ def build_strategy_outcomes_by_run(experiment_root: Path) -> pd.DataFrame:
 
         try:
             rep = pd.read_csv(rep_path)
-        except Exception as e:
+        except (ValueError, KeyError, FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
             logger.warning("Failed to read %s: %s", rep_path, e)
             continue
 
@@ -233,42 +233,3 @@ def run_strategy_analysis(experiment_root: Path) -> tuple[Path, Path]:
     logger.info("Wrote %d rows to %s", len(overall_df), overall_path)
 
     return by_run_path, overall_path
-
-
-def main() -> None:
-    """CLI entry point for strategy outcomes analysis."""
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Analyze trading strategy outcomes across experiment runs"
-    )
-    parser.add_argument(
-        "--experiment",
-        type=Path,
-        required=True,
-        help="Path to experiment directory (containing aggregate/comparison.csv)",
-    )
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Enable verbose logging",
-    )
-
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(levelname)s: %(message)s",
-    )
-
-    by_run_path, overall_path = run_strategy_analysis(args.experiment)
-
-    if by_run_path.exists():
-        print(f"Strategy outcomes by run: {by_run_path}")
-        print(f"Strategy outcomes overall: {overall_path}")
-    else:
-        print("No output generated - check that repayment_events.csv files exist")
-
-
-if __name__ == "__main__":
-    main()

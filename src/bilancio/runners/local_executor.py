@@ -106,7 +106,7 @@ class LocalExecutor:
                 execution_time_ms=execution_time_ms,
             )
 
-        except Exception as e:
+        except Exception as e:  # Intentionally broad: execution wrapper
             execution_time_ms = int((time.time() - start_time) * 1000)
 
             # Still record what artifacts exist
