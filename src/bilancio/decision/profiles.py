@@ -20,6 +20,10 @@ class TraderProfile:
     aggressiveness: Decimal = Decimal("1.0")
     default_observability: Decimal = Decimal("1.0")
 
+    def __post_init__(self) -> None:
+        if not (1 <= self.planning_horizon <= 20):
+            raise ValueError("planning_horizon must be between 1 and 20")
+
     @property
     def base_risk_premium(self) -> Decimal:
         """Maps risk_aversion to base_risk_premium: 0.02 + 0.08 * risk_aversion."""
