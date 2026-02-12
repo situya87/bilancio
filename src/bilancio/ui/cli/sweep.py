@@ -521,6 +521,42 @@ def sweep_comparison(
     default=Decimal("0"),
     help='Trader informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0)',
 )
+@click.option(
+    '--risk-aversion',
+    type=Decimal,
+    default=Decimal("0"),
+    help='Trader risk aversion (0=risk-neutral, 1=max risk-averse, default: 0)',
+)
+@click.option(
+    '--planning-horizon',
+    type=int,
+    default=10,
+    help='Trader planning horizon in days (1-20, default: 10)',
+)
+@click.option(
+    '--aggressiveness',
+    type=Decimal,
+    default=Decimal("1.0"),
+    help='Buyer aggressiveness (0=conservative, 1=eager, default: 1.0)',
+)
+@click.option(
+    '--default-observability',
+    type=Decimal,
+    default=Decimal("1.0"),
+    help='Trader default observability (0=ignore, 1=full tracking, default: 1.0)',
+)
+@click.option(
+    '--vbt-mid-sensitivity',
+    type=Decimal,
+    default=Decimal("1.0"),
+    help='VBT mid price sensitivity to defaults (0=ignore, 1=full tracking, default: 1.0)',
+)
+@click.option(
+    '--vbt-spread-sensitivity',
+    type=Decimal,
+    default=Decimal("0.0"),
+    help='VBT spread sensitivity to defaults (0=fixed, 1=widen with defaults, default: 0.0)',
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -544,6 +580,12 @@ def sweep_balanced(
     risk_urgency: Decimal,
     alpha_vbt: Decimal,
     alpha_trader: Decimal,
+    risk_aversion: Decimal,
+    planning_horizon: int,
+    aggressiveness: Decimal,
+    default_observability: Decimal,
+    vbt_mid_sensitivity: Decimal,
+    vbt_spread_sensitivity: Decimal,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -647,6 +689,12 @@ def sweep_balanced(
         risk_assessment_config=risk_config,
         alpha_vbt=alpha_vbt,
         alpha_trader=alpha_trader,
+        risk_aversion=risk_aversion,
+        planning_horizon=planning_horizon,
+        aggressiveness=aggressiveness,
+        default_observability=default_observability,
+        vbt_mid_sensitivity=vbt_mid_sensitivity,
+        vbt_spread_sensitivity=vbt_spread_sensitivity,
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)

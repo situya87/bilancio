@@ -525,7 +525,7 @@ def _execute_buy_trade(
 def _build_eligible_sellers(
     subsystem: "DealerSubsystem",
     current_day: int,
-    horizon: int = 10,
+    horizon: int | None = None,
 ) -> List[str]:
     """Identify traders eligible to sell (have shortfall coming in next few days).
 
@@ -537,6 +537,8 @@ def _build_eligible_sellers(
     Returns:
         List of trader IDs eligible to sell
     """
+    if horizon is None:
+        horizon = subsystem.trader_profile.sell_horizon
     eligible_sellers = []
     for trader_id, trader in subsystem.traders.items():
         upcoming_shortfall = Decimal(0)
@@ -550,7 +552,7 @@ def _build_eligible_sellers(
 def _build_eligible_buyers(
     subsystem: "DealerSubsystem",
     current_day: int,
-    horizon: int = 5,
+    horizon: int | None = None,
 ) -> List[str]:
     """Identify traders eligible to buy (have surplus cash beyond needs).
 
@@ -565,13 +567,16 @@ def _build_eligible_buyers(
     Returns:
         List of trader IDs eligible to buy
     """
+    if horizon is None:
+        horizon = subsystem.trader_profile.buy_horizon
     eligible_buyers = []
     for trader_id, trader in subsystem.traders.items():
         total_upcoming_dues = Decimal(0)
         for day_offset in range(horizon + 1):
             total_upcoming_dues += trader.payment_due(current_day + day_offset)
         surplus = trader.cash - total_upcoming_dues
-        if surplus > 0:
+        threshold = subsystem.face_value * subsystem.trader_profile.surplus_threshold_factor
+        if surplus > threshold:
             eligible_buyers.append(trader_id)
     return eligible_buyers
 

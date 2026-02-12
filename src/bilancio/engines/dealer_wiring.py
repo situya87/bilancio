@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from bilancio.engines.system import System
     from bilancio.engines.dealer_integration import DealerSubsystem
+    from bilancio.decision.profiles import VBTProfile
 
 from bilancio.core.ids import AgentId, InstrId
 from bilancio.domain.agent import AgentKind
@@ -170,6 +171,9 @@ def _initialize_market_makers(
         vbt.recompute_quotes()
         subsystem.vbts[bucket_id] = vbt
 
+        # Store initial spread for spread_sensitivity computation
+        subsystem.initial_spread_by_bucket[bucket_id] = O
+
         # NOTE: Traders keep 100% of their tickets (no allocation to dealer/VBT)
         # Dealer/VBT will acquire inventory by buying from traders during trading
 
@@ -323,6 +327,7 @@ def _initialize_balanced_market_makers(
     dealer_tickets: Dict[str, List["Ticket"]],
     alpha_vbt: Decimal = Decimal("0"),
     kappa: Optional[Decimal] = None,
+    vbt_profile: Optional["VBTProfile"] = None,
 ) -> None:
     """Initialize VBT and Dealer states per bucket for balanced scenarios.
 
@@ -401,6 +406,9 @@ def _initialize_balanced_market_makers(
         )
         vbt.recompute_quotes()
         subsystem.vbts[bucket_id] = vbt
+
+        # Store initial spread for spread_sensitivity computation
+        subsystem.initial_spread_by_bucket[bucket_id] = O
 
         # Create Dealer state WITH inventory
         dealer = DealerState(
