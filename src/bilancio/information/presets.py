@@ -5,6 +5,11 @@ Mirrors the pattern in ``bilancio.decision.presets``.
 
 from decimal import Decimal
 
+from bilancio.information.hierarchy import (
+    CounterpartyAccess,
+    InstrumentAccess,
+    TransactionAccess,
+)
 from bilancio.information.levels import AccessLevel
 from bilancio.information.noise import (
     AggregateOnlyNoise,
@@ -65,6 +70,43 @@ LENDER_REALISTIC = InformationProfile(
     obligation_graph=CategoryAccess(AccessLevel.NONE),
     counterparty_connectivity=CategoryAccess(AccessLevel.NONE),
     cascade_risk=CategoryAccess(AccessLevel.NONE),
+)
+
+
+# ── LENDER_REALISTIC_V2 ─────────────────────────────────────────────
+# Same as LENDER_REALISTIC but constructed via from_hierarchy() to
+# demonstrate and validate the hierarchical construction path.
+LENDER_REALISTIC_V2 = InformationProfile.from_hierarchy(
+    counterparty=CounterpartyAccess(
+        cash=CategoryAccess(AccessLevel.NOISY, EstimationNoise(Decimal("0.15"))),
+        assets=CategoryAccess(AccessLevel.NOISY, AggregateOnlyNoise()),
+        liabilities=CategoryAccess(AccessLevel.NOISY, AggregateOnlyNoise()),
+        net_worth=CategoryAccess(AccessLevel.NOISY, EstimationNoise(Decimal("0.20"))),
+        liquidity_ratio=CategoryAccess(
+            AccessLevel.NOISY, EstimationNoise(Decimal("0.20"))
+        ),
+        settlement_history=CategoryAccess(
+            AccessLevel.NOISY, SampleNoise(Decimal("0.7"))
+        ),
+        default_history=CategoryAccess(
+            AccessLevel.NOISY, SampleNoise(Decimal("0.7"))
+        ),
+        track_record=CategoryAccess(AccessLevel.NOISY, SampleNoise(Decimal("0.7"))),
+        partial_settlement=CategoryAccess(AccessLevel.NOISY, AggregateOnlyNoise()),
+        avg_shortfall=CategoryAccess(AccessLevel.NOISY, AggregateOnlyNoise()),
+        connectivity=CategoryAccess(AccessLevel.NONE),
+    ),
+    instrument=InstrumentAccess(
+        dealer_quotes=CategoryAccess(AccessLevel.NONE),
+        vbt_anchors=CategoryAccess(AccessLevel.NONE),
+        price_trends=CategoryAccess(AccessLevel.NONE),
+        implied_default_prob=CategoryAccess(AccessLevel.NONE),
+    ),
+    transaction=TransactionAccess(
+        bilateral_history=CategoryAccess(AccessLevel.PERFECT),
+        obligation_graph=CategoryAccess(AccessLevel.NONE),
+        cascade_risk=CategoryAccess(AccessLevel.NONE),
+    ),
 )
 
 

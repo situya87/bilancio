@@ -174,6 +174,54 @@ class InformationService:
             return raw
         return self._apply_numeric_noise(raw, access_cfg.noise, day)
 
+    # ── Contextual view queries ────────────────────────────────────────
+
+    def system_view(self, day: int) -> "SystemView":
+        """Build a SystemView snapshot using configured access levels."""
+        from bilancio.information.views import SystemView
+
+        return SystemView(
+            day=day,
+            aggregate_default_rate=self.get_system_default_rate(day),
+            system_liquidity=self.get_system_liquidity(day),
+        )
+
+    def counterparty_view(
+        self, agent_id: str, day: int, horizon: int = 5
+    ) -> "CounterpartyView":
+        """Build a CounterpartyView snapshot for a single counterparty."""
+        from bilancio.information.views import CounterpartyView
+
+        return CounterpartyView(
+            agent_id=agent_id,
+            day=day,
+            cash=self.get_counterparty_cash(agent_id, day),
+            obligations=self.get_counterparty_obligations(agent_id, day, horizon),
+            net_worth=self.get_counterparty_net_worth(agent_id, day),
+            default_probability=self.get_default_probability(agent_id, day),
+        )
+
+    def instrument_view(self, day: int) -> "InstrumentView":
+        """Build an InstrumentView snapshot (sparse in Phase 1)."""
+        from bilancio.information.views import InstrumentView
+
+        return InstrumentView(day=day)
+
+    def transaction_view(
+        self, agent_id: str, day: int
+    ) -> "TransactionView":
+        """Build a TransactionView for a counterparty."""
+        from bilancio.information.views import TransactionView
+
+        return TransactionView(
+            agent_id=agent_id,
+            day=day,
+            bilateral_exposure=self.get_borrower_exposure(
+                self._observer_id, agent_id
+            ),
+            total_exposure=self.get_loan_exposure(self._observer_id),
+        )
+
     # ── Access resolution ─────────────────────────────────────────────
 
     def _resolve_access(
