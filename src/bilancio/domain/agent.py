@@ -35,3 +35,4 @@ class Agent:
     liability_ids: list[InstrId] = field(default_factory=list)
     stock_ids: list[InstrId] = field(default_factory=list)
     defaulted: bool = False
+    jurisdiction_id: str | None = None

@@ -65,5 +65,11 @@ class EventKind(str, Enum):
     SELL_REJECTED = "sell_rejected"
     BUY_REJECTED = "buy_rejected"
 
+    # ── Jurisdiction / FX events ──────────────────────────────────────
+    FX_CONVERSION = "FXConversion"
+    CAPITAL_CONTROL_BLOCKED = "CapitalControlBlocked"
+    CAPITAL_CONTROL_TAXED = "CapitalControlTaxed"
+    RESERVE_REQUIREMENT_BREACH = "ReserveRequirementBreach"
+
     def __str__(self) -> str:
         return self.value
