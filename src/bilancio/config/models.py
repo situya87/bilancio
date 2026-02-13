@@ -53,8 +53,8 @@ class CapitalControlRuleConfig(BaseModel):
     @field_validator("tax_rate")
     @classmethod
     def tax_rate_valid(cls, v: Decimal) -> Decimal:
-        if v < 0:
-            raise ValueError("tax_rate cannot be negative")
+        if v < 0 or v > 1:
+            raise ValueError("tax_rate must be between 0 and 1")
         return v
 
 

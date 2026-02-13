@@ -101,6 +101,10 @@ class ExchangeRatePair:
     rate: Decimal
     spread: Decimal = Decimal("0")
 
+    def __post_init__(self) -> None:
+        if self.rate <= 0:
+            raise ValueError("Exchange rate must be positive")
+
     @property
     def bid(self) -> Decimal:
         """Price at which the market buys the base currency."""

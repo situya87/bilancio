@@ -165,6 +165,20 @@ class TestExchangeRatePair:
         with pytest.raises(ValueError, match="neither base"):
             pair.convert(100, "GBP")
 
+    def test_rate_must_be_positive(self):
+        with pytest.raises(ValueError, match="positive"):
+            ExchangeRatePair(
+                base_currency="EUR",
+                quote_currency="USD",
+                rate=Decimal("0"),
+            )
+        with pytest.raises(ValueError, match="positive"):
+            ExchangeRatePair(
+                base_currency="EUR",
+                quote_currency="USD",
+                rate=Decimal("-1"),
+            )
+
 
 class TestFXMarket:
     def test_add_and_get_rate(self):
@@ -192,6 +206,23 @@ class TestFXMarket:
         # 1/1.10 ≈ 0.909...
         expected = Decimal("1") / Decimal("1.10")
         assert inverse.rate == expected
+
+    def test_auto_inversion_spread(self):
+        """Test that spread inversion formula produces accurate results."""
+        market = FXMarket()
+        pair = ExchangeRatePair(
+            base_currency="EUR",
+            quote_currency="USD",
+            rate=Decimal("1.10"),
+            spread=Decimal("0.02"),
+        )
+        market.add_rate(pair)
+        inverse = market.get_rate("USD", "EUR")
+        # Inverse spread formula: spread / rate^2
+        expected_spread = Decimal("0.02") / (Decimal("1.10") ** 2)
+        assert inverse.spread == expected_spread
+        # Verify bid < rate < ask
+        assert inverse.bid < inverse.rate < inverse.ask
 
     def test_same_currency_identity(self):
         market = FXMarket()
