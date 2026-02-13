@@ -5,6 +5,15 @@ can observe about the system, counterparties, and market conditions.
 Mirrors the pattern of ``bilancio.decision`` for behavioral profiles.
 """
 
+from bilancio.information.channels import (
+    Channel,
+    InstitutionalChannel,
+    MarketDerivedChannel,
+    NetworkDerivedChannel,
+    SelfDerivedChannel,
+    category_from_channel,
+    derive_noise,
+)
 from bilancio.information.hierarchy import (
     CounterpartyAccess,
     InstrumentAccess,
@@ -22,6 +31,7 @@ from bilancio.information.noise import (
 )
 from bilancio.information.profile import CategoryAccess, InformationProfile
 from bilancio.information.presets import (
+    LENDER_CHANNEL_BASED,
     LENDER_REALISTIC,
     LENDER_REALISTIC_V2,
     OMNISCIENT,
@@ -40,22 +50,30 @@ __all__ = [
     "AggregateOnlyNoise",
     "BilateralOnlyNoise",
     "CategoryAccess",
+    "Channel",
     "CounterpartyAccess",
     "CounterpartyView",
     "EstimationNoise",
     "InformationProfile",
     "InformationService",
+    "InstitutionalChannel",
     "InstrumentAccess",
     "InstrumentView",
+    "LENDER_CHANNEL_BASED",
     "LENDER_REALISTIC",
     "LENDER_REALISTIC_V2",
     "LagNoise",
+    "MarketDerivedChannel",
+    "NetworkDerivedChannel",
     "NoiseConfig",
     "OMNISCIENT",
     "SampleNoise",
+    "SelfDerivedChannel",
     "SystemAccess",
     "SystemView",
     "TRADER_BASIC",
     "TransactionAccess",
     "TransactionView",
+    "category_from_channel",
+    "derive_noise",
 ]
