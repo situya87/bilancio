@@ -14,8 +14,10 @@ import pytest
 from decimal import Decimal
 
 from bilancio.engines.simulation import (
+    DEFAULT_EVENTS,
     DayReport,
     MonteCarloEngine,
+    _defaults_today,
     _has_open_obligations,
     _impacted_today,
     run_day,
@@ -693,6 +695,92 @@ class TestRunUntilStable:
         assert reports[0].day == 10
         assert reports[1].day == 11
         assert sys.state.day == 12  # Advanced by 2 quiet days
+
+    def test_rollover_defaults_prevent_stability(self):
+        """With rollover, defaults reset the consecutive no-defaults counter."""
+        # Use expel-agent mode so defaults log events instead of raising
+        sys = System(default_mode="expel-agent")
+        sys.state.rollover_enabled = True
+        cb = CentralBank(id="CB", name="CB")
+        h1 = Household(id="H1", name="H1", kind="household")
+        h2 = Household(id="H2", name="H2", kind="household")
+        sys.add_agent(cb)
+        sys.add_agent(h1)
+        sys.add_agent(h2)
+
+        # H1 has NO cash — the payable will default
+        # Create payable due on day 1 with maturity_distance for rollover
+        payable = Payable(
+            id="P_DEF",
+            kind=InstrumentKind.PAYABLE,
+            amount=100,
+            denom="X",
+            asset_holder_id="H2",
+            liability_issuer_id="H1",
+            due_day=1,
+            maturity_distance=5,
+        )
+        sys.add_contract(payable)
+
+        # Run with quiet_days=2 and max_days=10
+        reports = run_until_stable(sys, max_days=10, quiet_days=2)
+
+        # Day 0: no default events (payable not due yet) → no_defaults=1
+        # Day 1: default occurs (H1 can't pay) → no_defaults reset to 0
+        # Day 2: quiet, no defaults → no_defaults=1
+        # Day 3: quiet, no defaults → no_defaults=2 → stable
+        # Total: 4 reports (days 0-3)
+
+        # Verify a default event occurred
+        default_events = [e for e in sys.state.events if e.get("kind") in DEFAULT_EVENTS]
+        assert len(default_events) >= 1, "Expected at least one default event"
+
+        # The simulation should NOT have stopped after just 2 days
+        # (day 0 quiet + day 1 quiet) because the default on day 1
+        # resets the counter
+        assert len(reports) > 2, "Defaults should prevent premature stability"
+
+    def test_rollover_settlements_dont_prevent_stability(self):
+        """In rollover mode, settlement events alone don't block stability."""
+        sys = System()
+        sys.state.rollover_enabled = True
+        cb = CentralBank(id="CB", name="CB")
+        h1 = Household(id="H1", name="H1", kind="household")
+        h2 = Household(id="H2", name="H2", kind="household")
+        sys.add_agent(cb)
+        sys.add_agent(h1)
+        sys.add_agent(h2)
+
+        sys.mint_cash("H1", 500)
+
+        # Create payable due on day 0 — will be settled successfully
+        payable = Payable(
+            id="P_SETTLE",
+            kind=InstrumentKind.PAYABLE,
+            amount=100,
+            denom="X",
+            asset_holder_id="H2",
+            liability_issuer_id="H1",
+            due_day=0,
+            maturity_distance=5,
+        )
+        sys.add_contract(payable)
+
+        # With quiet_days=2: settlements happen but no defaults
+        # Day 0: PayableSettled (impact event!) but no defaults → no_defaults=1
+        # Day 1: rollover payable may settle (impact) but no defaults → no_defaults=2 → stable
+        reports = run_until_stable(sys, max_days=10, quiet_days=2)
+
+        # Settlements should have occurred
+        settled = [e for e in sys.state.events if e.get("kind") == "PayableSettled"]
+        assert len(settled) >= 1, "Expected at least one settlement"
+
+        # No defaults should have occurred
+        default_events = [e for e in sys.state.events if e.get("kind") in DEFAULT_EVENTS]
+        assert len(default_events) == 0, "No defaults should occur with sufficient cash"
+
+        # Should stop quickly since no defaults (within quiet_days from start)
+        assert len(reports) <= 4, "Should stabilize quickly without defaults"
 
 
 # =============================================================================

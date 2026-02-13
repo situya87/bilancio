@@ -520,11 +520,12 @@ def run_until_stable_mode(
 
     try:
         # Run simulation day by day to capture correct balance snapshots
-        from bilancio.engines.simulation import run_day, _impacted_today, _has_open_obligations
+        from bilancio.engines.simulation import run_day, _impacted_today, _has_open_obligations, _defaults_today
         from bilancio.analysis.balances import agent_balance
 
         reports = []
         consecutive_quiet = 0
+        consecutive_no_defaults = 0
         days_data = []
 
         for _ in range(max_days):
@@ -532,6 +533,7 @@ def run_until_stable_mode(
             day_before = system.state.day
             run_day(system, enable_dealer=enable_dealer)
             impacted = _impacted_today(system, day_before)
+            defaults = _defaults_today(system, day_before)
 
             # Call progress callback if provided
             if progress_callback:
@@ -588,9 +590,10 @@ def run_until_stable_mode(
                 day_events = [e for e in system.state.events
                              if e.get("day") == day_before and e.get("phase") == "simulation"]
                 # Plan 024: stability check accounts for rollover mode
-                is_stable = consecutive_quiet >= quiet_days
-                if not system.state.rollover_enabled:
-                    is_stable = is_stable and not _has_open_obligations(system)
+                if system.state.rollover_enabled:
+                    is_stable = consecutive_no_defaults >= quiet_days
+                else:
+                    is_stable = consecutive_quiet >= quiet_days and not _has_open_obligations(system)
                 
                 # Capture current balance state for this day
                 day_balances: Dict[str, Any] = {}
@@ -650,11 +653,18 @@ def run_until_stable_mode(
             else:
                 consecutive_quiet = 0
 
-            # Plan 024: With rollover, we can never have "no open obligations"
-            # because debt continuously rolls over. Check stability based on quiet days only.
-            stability_condition = consecutive_quiet >= quiet_days
-            if not system.state.rollover_enabled:
-                stability_condition = stability_condition and not _has_open_obligations(system)
+            if defaults == 0:
+                consecutive_no_defaults += 1
+            else:
+                consecutive_no_defaults = 0
+
+            # Rollover mode: stability = no defaults for quiet_days consecutive days
+            # (settlements are expected and fine in rollover scenarios)
+            # Non-rollover: stability = no impact events + no open obligations
+            if system.state.rollover_enabled:
+                stability_condition = consecutive_no_defaults >= quiet_days
+            else:
+                stability_condition = consecutive_quiet >= quiet_days and not _has_open_obligations(system)
 
             if stability_condition:
                 console.print("[green]OK[/green] System reached stable state")
