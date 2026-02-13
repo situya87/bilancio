@@ -65,6 +65,12 @@ class EventKind(str, Enum):
     SELL_REJECTED = "sell_rejected"
     BUY_REJECTED = "buy_rejected"
 
+    # ── Non-bank lending events ────────────────────────────────────────
+    SUBPHASE_B_LENDING = "SubphaseB_Lending"
+    NONBANK_LOAN_CREATED = "NonBankLoanCreated"
+    NONBANK_LOAN_REPAID = "NonBankLoanRepaid"
+    NONBANK_LOAN_DEFAULTED = "NonBankLoanDefaulted"
+
     # ── Jurisdiction / FX events ──────────────────────────────────────
     FX_CONVERSION = "FXConversion"
     CAPITAL_CONTROL_BLOCKED = "CapitalControlBlocked"

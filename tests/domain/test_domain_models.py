@@ -59,7 +59,7 @@ class TestAgentKind:
         expected = {
             "CENTRAL_BANK", "BANK", "HOUSEHOLD", "TREASURY",
             "FIRM", "INVESTMENT_FUND", "INSURANCE_COMPANY",
-            "DEALER", "VBT",
+            "DEALER", "VBT", "NON_BANK_LENDER",
         }
         assert set(AgentKind.__members__.keys()) == expected
 
@@ -393,7 +393,7 @@ class TestInstrumentKind:
     def test_all_members_exist(self) -> None:
         expected = {
             "CASH", "BANK_DEPOSIT", "RESERVE_DEPOSIT",
-            "PAYABLE", "CB_LOAN", "DELIVERY_OBLIGATION",
+            "PAYABLE", "CB_LOAN", "NON_BANK_LOAN", "DELIVERY_OBLIGATION",
         }
         assert set(InstrumentKind.__members__.keys()) == expected
 

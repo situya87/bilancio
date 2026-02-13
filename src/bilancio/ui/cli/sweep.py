@@ -557,6 +557,17 @@ def sweep_comparison(
     default=Decimal("0.0"),
     help='VBT spread sensitivity to defaults (0=fixed, 1=widen with defaults, default: 0.0)',
 )
+@click.option(
+    '--enable-lender/--no-lender',
+    default=False,
+    help='Enable third comparison arm with non-bank lender (default: disabled)',
+)
+@click.option(
+    '--lender-share',
+    type=Decimal,
+    default=Decimal("0.10"),
+    help='Lender capital as fraction of system cash (default: 0.10)',
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -586,6 +597,8 @@ def sweep_balanced(
     default_observability: Decimal,
     vbt_mid_sensitivity: Decimal,
     vbt_spread_sensitivity: Decimal,
+    enable_lender: bool,
+    lender_share: Decimal,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -695,6 +708,8 @@ def sweep_balanced(
         default_observability=default_observability,
         vbt_mid_sensitivity=vbt_mid_sensitivity,
         vbt_spread_sensitivity=vbt_spread_sensitivity,
+        enable_lender=enable_lender,
+        lender_share=lender_share,
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)
