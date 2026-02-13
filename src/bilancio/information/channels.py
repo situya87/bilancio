@@ -120,6 +120,7 @@ _MAX_ERROR = Decimal("1.0")
 
 def _inv_sqrt(n: int) -> Decimal:
     """Return ``1 / sqrt(n)`` as a Decimal, clamped to [0.01, 1.0]."""
+    # str() avoids the imprecise float→Decimal conversion path
     raw = Decimal(str(1.0 / math.sqrt(n)))
     # Round to 2 decimal places for clean values
     rounded = raw.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -141,6 +142,12 @@ def derive_noise(channel: Channel) -> NoiseConfig:
     -------
     NoiseConfig
         The noise configuration implied by the channel's properties.
+
+    Notes
+    -----
+    For channels with multiple degradation modes (``MarketDerivedChannel``,
+    ``InstitutionalChannel``), the *dominant* mode is selected.  When both
+    modes produce equal error, staleness (``LagNoise``) wins the tie.
 
     Examples
     --------
