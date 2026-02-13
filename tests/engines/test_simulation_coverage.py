@@ -782,6 +782,58 @@ class TestRunUntilStable:
         # Should stop quickly since no defaults (within quiet_days from start)
         assert len(reports) <= 4, "Should stabilize quickly without defaults"
 
+    def test_rollover_mixed_defaults_and_settlements_same_day(self):
+        """A day with both a settlement and a default resets the no-defaults counter."""
+        # Use expel-agent mode so defaults log events instead of raising
+        sys = System(default_mode="expel-agent")
+        sys.state.rollover_enabled = True
+        cb = CentralBank(id="CB", name="CB")
+        h1 = Household(id="H1", name="H1", kind="household")
+        h2 = Household(id="H2", name="H2", kind="household")
+        h3 = Household(id="H3", name="H3", kind="household")
+        sys.add_agent(cb)
+        sys.add_agent(h1)
+        sys.add_agent(h2)
+        sys.add_agent(h3)
+
+        # H1 can pay → settlement; H3 cannot pay → default; both due day 1
+        sys.mint_cash("H1", 500)
+
+        p_ok = Payable(
+            id="P_OK",
+            kind=InstrumentKind.PAYABLE,
+            amount=100,
+            denom="X",
+            asset_holder_id="H2",
+            liability_issuer_id="H1",
+            due_day=1,
+            maturity_distance=5,
+        )
+        p_bad = Payable(
+            id="P_BAD",
+            kind=InstrumentKind.PAYABLE,
+            amount=200,
+            denom="X",
+            asset_holder_id="H1",
+            liability_issuer_id="H3",
+            due_day=1,
+            maturity_distance=5,
+        )
+        sys.add_contract(p_ok)
+        sys.add_contract(p_bad)
+
+        reports = run_until_stable(sys, max_days=10, quiet_days=2)
+
+        # Day 1 should have both a settlement and a default
+        settled = [e for e in sys.state.events if e.get("kind") == "PayableSettled"]
+        defaults = [e for e in sys.state.events if e.get("kind") in DEFAULT_EVENTS]
+        assert len(settled) >= 1, "Expected at least one settlement"
+        assert len(defaults) >= 1, "Expected at least one default"
+
+        # The default on day 1 should reset no_defaults counter, so
+        # simulation shouldn't stop at day 2 (day 0 quiet + day 1 mixed)
+        assert len(reports) > 2, "Mixed day with defaults should prevent premature stability"
+
 
 # =============================================================================
 # run_day Integration: Dealer Phase (disabled path)
