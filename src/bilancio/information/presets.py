@@ -17,6 +17,11 @@ from bilancio.information.noise import (
     SampleNoise,
 )
 from bilancio.information.profile import CategoryAccess, InformationProfile
+from bilancio.information.channels import (
+    NetworkDerivedChannel,
+    SelfDerivedChannel,
+    category_from_channel,
+)
 
 # ── OMNISCIENT ─────────────────────────────────────────────────────────
 # All fields PERFECT — backward-compatible default.
@@ -52,6 +57,54 @@ LENDER_REALISTIC = InformationProfile(
     ),
     counterparty_track_record=CategoryAccess(
         AccessLevel.NOISY, SampleNoise(Decimal("0.7"))
+    ),
+    counterparty_partial_settlement=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    counterparty_avg_shortfall=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    # IV. Bilateral — own data always perfect
+    bilateral_history=CategoryAccess(AccessLevel.PERFECT),
+    # V. Market Prices — lender not in secondary market
+    dealer_quotes=CategoryAccess(AccessLevel.NONE),
+    vbt_anchors=CategoryAccess(AccessLevel.NONE),
+    price_trends=CategoryAccess(AccessLevel.NONE),
+    implied_default_prob=CategoryAccess(AccessLevel.NONE),
+    # VII. Network — no access
+    obligation_graph=CategoryAccess(AccessLevel.NONE),
+    counterparty_connectivity=CategoryAccess(AccessLevel.NONE),
+    cascade_risk=CategoryAccess(AccessLevel.NONE),
+)
+
+
+# ── LENDER_CHANNEL_BASED ────────────────────────────────────────────────
+# Equivalent to LENDER_REALISTIC but noise values are *derived* from
+# channel properties instead of hand-tuned.  Structural constraints
+# (AggregateOnlyNoise, NONE, PERFECT) remain as direct CategoryAccess
+# because they describe *what form* the data takes, not signal quality.
+LENDER_CHANNEL_BASED = InformationProfile(
+    # I. Counterparty Balance Sheet
+    counterparty_cash=category_from_channel(SelfDerivedChannel(sample_size=44)),
+    counterparty_assets=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    counterparty_liabilities=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    counterparty_net_worth=category_from_channel(SelfDerivedChannel(sample_size=25)),
+    counterparty_liquidity_ratio=category_from_channel(
+        SelfDerivedChannel(sample_size=25)
+    ),
+    # II. Counterparty History — partial observation via network
+    counterparty_default_history=category_from_channel(
+        NetworkDerivedChannel(coverage=Decimal("0.7"))
+    ),
+    counterparty_settlement_history=category_from_channel(
+        NetworkDerivedChannel(coverage=Decimal("0.7"))
+    ),
+    counterparty_track_record=category_from_channel(
+        NetworkDerivedChannel(coverage=Decimal("0.7"))
     ),
     counterparty_partial_settlement=CategoryAccess(
         AccessLevel.NOISY, AggregateOnlyNoise()
