@@ -90,11 +90,8 @@ def run_rating_phase(
     rng = random.Random(current_day * 31337 + len(eligible))
     selected = rng.sample(eligible, min(n_to_rate, len(eligible)))
 
-    # Ensure rating_registry exists
-    registry = getattr(system.state, 'rating_registry', None)
-    if registry is None:
-        system.state.rating_registry = {}  # type: ignore[attr-defined]
-        registry = system.state.rating_registry  # type: ignore[attr-defined]
+    # rating_registry is declared on State with default_factory=dict
+    registry = system.state.rating_registry
 
     # Rate each selected agent
     ratings_published: Dict[str, str] = {}
