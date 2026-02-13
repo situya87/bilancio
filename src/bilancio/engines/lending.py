@@ -378,6 +378,18 @@ def _estimate_default_probs(
             probs[agent_id] = Decimal(str(p)) if p is not None else Decimal("0.15")
         return probs
 
+    # Try rating registry (institutional source)
+    rating_registry = getattr(system.state, 'rating_registry', None)
+    if rating_registry:
+        for agent_id, agent in system.state.agents.items():
+            if agent.defaulted:
+                probs[agent_id] = Decimal("1.0")
+            elif agent_id in rating_registry:
+                probs[agent_id] = rating_registry[agent_id]
+            else:
+                probs[agent_id] = Decimal("0.15")
+        return probs
+
     # Fallback: simple heuristic based on defaulted agents in the system
     n_agents = len(system.state.agents)
     n_defaulted = len(system.state.defaulted_agent_ids)

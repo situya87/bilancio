@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from bilancio.engines.system import System
 from bilancio.domain.agent import AgentKind
-from bilancio.domain.agents import Bank, Household, Firm, CentralBank, Treasury, NonBankLender
+from bilancio.domain.agents import Bank, Household, Firm, CentralBank, Treasury, NonBankLender, RatingAgency
 from bilancio.ops.banking import deposit_cash, withdraw_cash, client_payment
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.base import InstrumentKind
@@ -42,6 +42,7 @@ def create_agent(spec: AgentSpec) -> Any:
         "firm": Firm,
         "treasury": Treasury,
         "non_bank_lender": NonBankLender,
+        "rating_agency": RatingAgency,
     }
     
     agent_class = agent_classes.get(spec.kind)
@@ -49,9 +50,12 @@ def create_agent(spec: AgentSpec) -> Any:
         raise ValueError(f"Unknown agent kind: {spec.kind}")
     
     # Create agent with id, name, and kind
-    # Note: The agent classes set their own kind in __post_init__, but we pass it anyway
-    # for compatibility with the base Agent class
-    agent = agent_class(id=spec.id, name=spec.name, kind=spec.kind)
+    # Note: Some agent classes (NonBankLender, RatingAgency) set kind via
+    # field(default=..., init=False), so we try with kind first, then without.
+    try:
+        agent = agent_class(id=spec.id, name=spec.name, kind=spec.kind)
+    except TypeError:
+        agent = agent_class(id=spec.id, name=spec.name)
     jurisdiction = getattr(spec, "jurisdiction", None)
     if jurisdiction is not None:
         agent.jurisdiction_id = jurisdiction
@@ -624,4 +628,27 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
             maturity_days=config.lender.maturity_days,
             horizon=config.lender.horizon,
             information_profile=info_profile,
+        )
+
+    # Set up rating agency config if present in scenario
+    if config.rating_agency and config.rating_agency.enabled:
+        from bilancio.engines.rating import RatingConfig
+        from bilancio.decision.profiles import RatingProfile
+
+        rating_profile = RatingProfile(
+            lookback_window=config.rating_agency.lookback_window,
+            balance_sheet_weight=config.rating_agency.balance_sheet_weight,
+            history_weight=config.rating_agency.history_weight,
+            conservatism_bias=config.rating_agency.conservatism_bias,
+            coverage_fraction=config.rating_agency.coverage_fraction,
+        )
+
+        ra_info_profile = None
+        if config.rating_agency.info_profile == "realistic":
+            from bilancio.information.presets import RATING_AGENCY_REALISTIC
+            ra_info_profile = RATING_AGENCY_REALISTIC
+
+        system.state.rating_config = RatingConfig(
+            rating_profile=rating_profile,
+            information_profile=ra_info_profile,
         )

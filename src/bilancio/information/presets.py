@@ -18,6 +18,7 @@ from bilancio.information.noise import (
 )
 from bilancio.information.profile import CategoryAccess, InformationProfile
 from bilancio.information.channels import (
+    InstitutionalChannel,
     NetworkDerivedChannel,
     SelfDerivedChannel,
     category_from_channel,
@@ -191,6 +192,105 @@ TRADER_BASIC = InformationProfile(
     implied_default_prob=CategoryAccess(
         AccessLevel.NOISY, EstimationNoise(Decimal("0.10"))
     ),
+    # VII. Network — no access
+    obligation_graph=CategoryAccess(AccessLevel.NONE),
+    counterparty_connectivity=CategoryAccess(AccessLevel.NONE),
+    cascade_risk=CategoryAccess(AccessLevel.NONE),
+)
+
+
+# ── RATING_AGENCY_REALISTIC ─────────────────────────────────────────
+# Rating agency: good balance sheet access, good history, no market prices.
+RATING_AGENCY_REALISTIC = InformationProfile(
+    # I. Counterparty Balance Sheet — good access (NOISY 10%)
+    counterparty_cash=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.10"))
+    ),
+    counterparty_assets=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.10"))
+    ),
+    counterparty_liabilities=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.10"))
+    ),
+    counterparty_net_worth=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.10"))
+    ),
+    counterparty_liquidity_ratio=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.10"))
+    ),
+    # II. Counterparty History — good observation via sample
+    counterparty_default_history=CategoryAccess(
+        AccessLevel.NOISY, SampleNoise(Decimal("0.9"))
+    ),
+    counterparty_settlement_history=CategoryAccess(
+        AccessLevel.NOISY, SampleNoise(Decimal("0.9"))
+    ),
+    counterparty_track_record=CategoryAccess(
+        AccessLevel.NOISY, SampleNoise(Decimal("0.9"))
+    ),
+    counterparty_partial_settlement=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    counterparty_avg_shortfall=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    # IV. Bilateral — own data always perfect
+    bilateral_history=CategoryAccess(AccessLevel.PERFECT),
+    # V. Market Prices — rating agency not in secondary market
+    dealer_quotes=CategoryAccess(AccessLevel.NONE),
+    vbt_anchors=CategoryAccess(AccessLevel.NONE),
+    price_trends=CategoryAccess(AccessLevel.NONE),
+    implied_default_prob=CategoryAccess(AccessLevel.NONE),
+    # VII. Network — no access
+    obligation_graph=CategoryAccess(AccessLevel.NONE),
+    counterparty_connectivity=CategoryAccess(AccessLevel.NONE),
+    cascade_risk=CategoryAccess(AccessLevel.NONE),
+)
+
+
+# ── LENDER_WITH_RATINGS ─────────────────────────────────────────────
+# Like LENDER_REALISTIC but default history uses InstitutionalChannel
+# (from a rating agency) instead of network-derived observation.
+LENDER_WITH_RATINGS = InformationProfile(
+    # I. Counterparty Balance Sheet — noisy (same as LENDER_REALISTIC)
+    counterparty_cash=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.15"))
+    ),
+    counterparty_assets=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    counterparty_liabilities=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    counterparty_net_worth=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.20"))
+    ),
+    counterparty_liquidity_ratio=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.20"))
+    ),
+    # II. Counterparty History — institutional channel (rating agency)
+    counterparty_default_history=category_from_channel(
+        InstitutionalChannel(staleness_days=1, coverage=Decimal("0.8"))
+    ),
+    counterparty_settlement_history=CategoryAccess(
+        AccessLevel.NOISY, SampleNoise(Decimal("0.7"))
+    ),
+    counterparty_track_record=CategoryAccess(
+        AccessLevel.NOISY, SampleNoise(Decimal("0.7"))
+    ),
+    counterparty_partial_settlement=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    counterparty_avg_shortfall=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    # IV. Bilateral — own data always perfect
+    bilateral_history=CategoryAccess(AccessLevel.PERFECT),
+    # V. Market Prices — lender not in secondary market
+    dealer_quotes=CategoryAccess(AccessLevel.NONE),
+    vbt_anchors=CategoryAccess(AccessLevel.NONE),
+    price_trends=CategoryAccess(AccessLevel.NONE),
+    implied_default_prob=CategoryAccess(AccessLevel.NONE),
     # VII. Network — no access
     obligation_graph=CategoryAccess(AccessLevel.NONE),
     counterparty_connectivity=CategoryAccess(AccessLevel.NONE),

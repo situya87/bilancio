@@ -65,3 +65,38 @@ class VBTProfile:
 
     mid_sensitivity: Decimal = Decimal("1.0")
     spread_sensitivity: Decimal = Decimal("0.0")
+
+
+@dataclass(frozen=True)
+class RatingProfile:
+    """Behavioral profile for rating agency methodology.
+
+    Attributes:
+        lookback_window: Days of history to consider (1-30)
+        balance_sheet_weight: Weight for balance sheet component (0-1)
+        history_weight: Weight for default history component (0-1)
+        conservatism_bias: Additive bias toward higher default probs (0-0.2)
+        coverage_fraction: Fraction of eligible agents to rate each day (0-1)
+        no_data_prior: Default probability when no data is available (0-1)
+    """
+
+    lookback_window: int = 5
+    balance_sheet_weight: Decimal = Decimal("0.4")
+    history_weight: Decimal = Decimal("0.6")
+    conservatism_bias: Decimal = Decimal("0.02")
+    coverage_fraction: Decimal = Decimal("0.8")
+    no_data_prior: Decimal = Decimal("0.15")
+
+    def __post_init__(self) -> None:
+        if not (1 <= self.lookback_window <= 30):
+            raise ValueError("lookback_window must be between 1 and 30")
+        if not (Decimal("0") <= self.balance_sheet_weight <= Decimal("1")):
+            raise ValueError("balance_sheet_weight must be between 0 and 1")
+        if not (Decimal("0") <= self.history_weight <= Decimal("1")):
+            raise ValueError("history_weight must be between 0 and 1")
+        if not (Decimal("0") <= self.conservatism_bias <= Decimal("0.2")):
+            raise ValueError("conservatism_bias must be between 0 and 0.2")
+        if not (Decimal("0") < self.coverage_fraction <= Decimal("1")):
+            raise ValueError("coverage_fraction must be in (0, 1]")
+        if not (Decimal("0") < self.no_data_prior < Decimal("1")):
+            raise ValueError("no_data_prior must be in (0, 1)")

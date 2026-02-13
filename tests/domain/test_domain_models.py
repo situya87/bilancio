@@ -59,7 +59,7 @@ class TestAgentKind:
         expected = {
             "CENTRAL_BANK", "BANK", "HOUSEHOLD", "TREASURY",
             "FIRM", "INVESTMENT_FUND", "INSURANCE_COMPANY",
-            "DEALER", "VBT", "NON_BANK_LENDER",
+            "DEALER", "VBT", "NON_BANK_LENDER", "RATING_AGENCY",
         }
         assert set(AgentKind.__members__.keys()) == expected
 
