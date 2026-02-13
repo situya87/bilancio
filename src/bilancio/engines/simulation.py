@@ -25,6 +25,12 @@ IMPACT_EVENTS = {
     "InterbankOvernightCreated",
 }
 
+DEFAULT_EVENTS = {
+    "ObligationDefaulted",
+    "ObligationWrittenOff",
+    "AgentDefaulted",
+}
+
 
 @dataclass
 class DayReport:
@@ -35,6 +41,11 @@ class DayReport:
 
 def _impacted_today(system: System, day: int) -> int:
     return sum(1 for e in system.state.events if e.get("day") == day and e.get("kind") in IMPACT_EVENTS)
+
+
+def _defaults_today(system: System, day: int) -> int:
+    """Count default events that occurred on a given day."""
+    return sum(1 for e in system.state.events if e.get("day") == day and e.get("kind") in DEFAULT_EVENTS)
 
 
 def _has_open_obligations(system: System) -> bool:
@@ -231,6 +242,7 @@ def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, e
     """
     reports = []
     consecutive_quiet = 0
+    consecutive_no_defaults = 0
     start_day = system.state.day
     rollover_enabled = getattr(system.state, 'rollover_enabled', False)
 
@@ -238,6 +250,7 @@ def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, e
         day_before = system.state.day
         run_day(system, enable_dealer=enable_dealer)
         impacted = _impacted_today(system, day_before)
+        defaults = _defaults_today(system, day_before)
         reports.append(DayReport(day=day_before, impacted=impacted))
 
         if impacted == 0:
@@ -245,11 +258,18 @@ def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, e
         else:
             consecutive_quiet = 0
 
-        # With rollover enabled, we can never have no open obligations - always have debt rolling
-        # So we only check for stability without obligations when rollover is disabled
-        stability_condition = consecutive_quiet >= quiet_days
-        if not rollover_enabled:
-            stability_condition = stability_condition and not _has_open_obligations(system)
+        if defaults == 0:
+            consecutive_no_defaults += 1
+        else:
+            consecutive_no_defaults = 0
+
+        # Rollover mode: stability = no defaults for quiet_days consecutive days
+        # (settlements are expected and fine in rollover scenarios)
+        # Non-rollover: stability = no impact events + no open obligations
+        if rollover_enabled:
+            stability_condition = consecutive_no_defaults >= quiet_days
+        else:
+            stability_condition = consecutive_quiet >= quiet_days and not _has_open_obligations(system)
 
         if stability_condition:
             break
