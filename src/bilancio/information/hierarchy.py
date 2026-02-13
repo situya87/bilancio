@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from bilancio.information.levels import AccessLevel  # noqa: F401
 from bilancio.information.profile import CategoryAccess
 
 __all__ = [
