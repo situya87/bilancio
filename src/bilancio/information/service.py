@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import random
 from decimal import Decimal
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING
 
 from bilancio.information.levels import AccessLevel
 from bilancio.information.noise import (
@@ -29,6 +29,12 @@ from bilancio.information.profile import CategoryAccess, InformationProfile
 
 if TYPE_CHECKING:
     from bilancio.engines.system import System
+
+# ── Noise tuning constants ────────────────────────────────────────────
+# Fraction of value that each lag day adds as estimation error (σ per day).
+_LAG_ERROR_PER_DAY = 0.05
+# Damping factor for SampleNoise when applied to numeric aggregates.
+_SAMPLE_NOISE_DAMPING = 0.1
 
 
 class InformationService:
@@ -46,7 +52,7 @@ class InformationService:
         system: "System",
         profile: InformationProfile,
         observer_id: str,
-        rng: random.Random | None = None,
+        rng: Optional[random.Random] = None,
     ) -> None:
         self._system = system
         self._profile = profile
@@ -119,8 +125,10 @@ class InformationService:
         if access_cfg.level == AccessLevel.NONE:
             return None
         n_agents = len(self._system.state.agents)
+        if n_agents == 0:
+            return Decimal("0")
         n_defaulted = len(self._system.state.defaulted_agent_ids)
-        raw = Decimal(str(n_defaulted / max(n_agents, 1)))
+        raw = Decimal(str(n_defaulted / n_agents))
         if access_cfg.level == AccessLevel.PERFECT:
             return raw
         noisy = self._apply_decimal_noise(raw, access_cfg.noise, day)
@@ -154,7 +162,7 @@ class InformationService:
         raw = self._raw_net_worth(agent_id)
         if access.level == AccessLevel.PERFECT:
             return raw
-        return self._apply_numeric_noise(raw, access.noise, day)
+        return self._apply_numeric_noise(raw, access.noise, day, allow_negative=True)
 
     def get_system_liquidity(self, day: int) -> Optional[int]:
         """Get total cash in the system."""
@@ -179,28 +187,43 @@ class InformationService:
     # ── Noise application ─────────────────────────────────────────────
 
     def _apply_numeric_noise(
-        self, value: int, noise: Optional[NoiseConfig], day: int
+        self, value: int, noise: Optional[NoiseConfig], day: int,
+        *, allow_negative: bool = False,
     ) -> int:
-        """Apply noise to an integer value, returning noisy int >= 0."""
+        """Apply noise to an integer value.
+
+        By default the result is clamped to >= 0 (suitable for cash,
+        obligations, etc.).  Pass ``allow_negative=True`` for quantities
+        that can legitimately be negative (e.g. net worth).
+
+        The *day* parameter is reserved for future lag-based historical
+        lookups (once per-day snapshots are stored).
+        """
         if noise is None:
             return value
+        floor = None if allow_negative else 0
         if isinstance(noise, EstimationNoise):
             sigma = float(noise.error_fraction) * abs(value)
             noisy = value + self._rng.gauss(0, max(sigma, 0.01))
-            return max(0, int(round(noisy)))
+            result = int(round(noisy))
+            return result if floor is None else max(floor, result)
         if isinstance(noise, LagNoise):
-            # Approximate lag as estimation error proportional to lag days
-            sigma = float(noise.lag_days) * 0.05 * abs(value)
+            # Approximate lag as estimation error: σ = lag_days × _LAG_ERROR_PER_DAY × |value|
+            sigma = float(noise.lag_days) * _LAG_ERROR_PER_DAY * abs(value)
             noisy = value + self._rng.gauss(0, max(sigma, 0.01))
-            return max(0, int(round(noisy)))
+            result = int(round(noisy))
+            return result if floor is None else max(floor, result)
         if isinstance(noise, AggregateOnlyNoise):
             # Return aggregate (already is aggregate for these queries)
             return value
         if isinstance(noise, SampleNoise):
-            # For numeric values, add binomial-like noise
+            # Approximate partial observation of a numeric aggregate:
+            # scale by sample_rate and add damped Gaussian jitter.
             rate = float(noise.sample_rate)
-            adjusted = value * rate + self._rng.gauss(0, abs(value) * (1 - rate) * 0.1)
-            return max(0, int(round(adjusted)))
+            jitter = self._rng.gauss(0, abs(value) * (1 - rate) * _SAMPLE_NOISE_DAMPING)
+            adjusted = value * rate + jitter
+            result = int(round(adjusted))
+            return result if floor is None else max(floor, result)
         if isinstance(noise, BilateralOnlyNoise):
             # For numeric queries, return value as-is (filtering applies to event lists)
             return value
@@ -209,7 +232,11 @@ class InformationService:
     def _apply_decimal_noise(
         self, value: Decimal, noise: Optional[NoiseConfig], day: int
     ) -> Decimal:
-        """Apply noise to a Decimal value."""
+        """Apply noise to a Decimal value.
+
+        The *day* parameter is reserved for future lag-based historical
+        lookups (once per-day snapshots are stored).
+        """
         if noise is None:
             return value
         if isinstance(noise, EstimationNoise):
@@ -217,7 +244,7 @@ class InformationService:
             noisy = float(value) + self._rng.gauss(0, max(sigma, 0.001))
             return Decimal(str(round(noisy, 6)))
         if isinstance(noise, LagNoise):
-            sigma = float(noise.lag_days) * 0.05 * abs(float(value))
+            sigma = float(noise.lag_days) * _LAG_ERROR_PER_DAY * abs(float(value))
             noisy = float(value) + self._rng.gauss(0, max(sigma, 0.001))
             return Decimal(str(round(noisy, 6)))
         if isinstance(noise, SampleNoise):
@@ -298,7 +325,7 @@ class InformationService:
         # Fallback heuristic
         n_agents = len(self._system.state.agents)
         n_defaulted = len(self._system.state.defaulted_agent_ids)
-        base_rate = Decimal(str(n_defaulted / max(n_agents, 1)))
+        base_rate = Decimal(str(n_defaulted / n_agents)) if n_agents > 0 else Decimal("0")
 
         for agent_id, agent in self._system.state.agents.items():
             if agent.defaulted:

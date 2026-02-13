@@ -38,7 +38,9 @@ class CategoryAccess:
             )
 
 
-# Sentinel for "use default" (PERFECT with no noise)
+#: Default field value for InformationProfile — PERFECT access with no noise.
+#: Used as the default for all CategoryAccess fields so that an
+#: ``InformationProfile()`` with no arguments is fully omniscient.
 _DEFAULT = CategoryAccess()
 
 

@@ -311,6 +311,13 @@ class TestInformationServicePerfect:
         info = InformationService(system, OMNISCIENT, observer_id="NBL01")
         assert info.get_system_liquidity(0) == 10500
 
+    def test_get_counterparty_net_worth_perfect(self):
+        system = _build_system_for_info_tests(firm_cash=500, firm_payable_amount=1000)
+        info = InformationService(system, OMNISCIENT, observer_id="NBL01")
+        nw = info.get_counterparty_net_worth("F01", 0)
+        # F01 has 500 cash (asset) and 1000 payable (liability) → net worth = -500
+        assert nw == -500
+
 
 class TestInformationServiceNone:
     """Tests with NONE access level."""
@@ -338,6 +345,14 @@ class TestInformationServiceNone:
         )
         info = InformationService(system, profile, observer_id="NBL01")
         assert info.get_default_probability("F01", 0) is None
+
+    def test_none_returns_none_for_net_worth(self):
+        system = _build_system_for_info_tests(firm_cash=500, firm_payable_amount=1000)
+        profile = InformationProfile(
+            counterparty_net_worth=CategoryAccess(AccessLevel.NONE),
+        )
+        info = InformationService(system, profile, observer_id="NBL01")
+        assert info.get_counterparty_net_worth("F01", 0) is None
 
 
 class TestInformationServiceSelfAccess:
@@ -423,6 +438,28 @@ class TestInformationServiceNoisy:
             p = info.get_default_probability("F01", 0)
             assert p is not None
             assert Decimal("0") <= p <= Decimal("1")
+
+    def test_noisy_net_worth_returns_approximate_value(self):
+        """Noisy net worth should be close to but not always equal to true value."""
+        system = _build_system_for_info_tests(firm_cash=500, firm_payable_amount=1000)
+        profile = InformationProfile(
+            counterparty_net_worth=CategoryAccess(
+                AccessLevel.NOISY, EstimationNoise(Decimal("0.20"))
+            ),
+        )
+        values = []
+        for seed in range(100):
+            rng = random.Random(seed)
+            info = InformationService(system, profile, observer_id="NBL01", rng=rng)
+            v = info.get_counterparty_net_worth("F01", 0)
+            assert v is not None
+            values.append(v)
+
+        # True net worth is -500; mean should be in the neighborhood
+        mean = sum(values) / len(values)
+        assert -800 < mean < -200, f"Mean {mean} too far from -500"
+        # Noise should introduce variation
+        assert len(set(values)) > 1, "All values identical — noise not applied"
 
 
 # ═══════════════════════════════════════════════════════════════════════
