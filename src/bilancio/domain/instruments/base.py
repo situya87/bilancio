@@ -17,6 +17,7 @@ class InstrumentKind(str, Enum):
     RESERVE_DEPOSIT = "reserve_deposit"
     PAYABLE = "payable"
     CB_LOAN = "cb_loan"
+    NON_BANK_LOAN = "non_bank_loan"
     DELIVERY_OBLIGATION = "delivery_obligation"
 
     def __str__(self) -> str:

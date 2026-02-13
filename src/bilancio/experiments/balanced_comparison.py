@@ -98,6 +98,20 @@ class BalancedComparisonResult:
     dealer_passive_return: Optional[float] = None
     dealer_trading_incremental_pnl: Optional[float] = None
 
+    # E (Lender) metrics
+    delta_lender: Optional[Decimal] = None
+    phi_lender: Optional[Decimal] = None
+    lender_run_id: str = ""
+    lender_status: str = ""
+    n_defaults_lender: int = 0
+    cascade_fraction_lender: Optional[Decimal] = None
+    lender_modal_call_id: Optional[str] = None
+
+    # Lender-specific metrics
+    lender_total_pnl: Optional[float] = None
+    lender_total_return: Optional[float] = None
+    total_loans: Optional[int] = None
+
     @staticmethod
     def _compute_incremental_pnl(
         active_metrics: Optional[Dict[str, Any]],
@@ -143,6 +157,16 @@ class BalancedComparisonResult:
         if self.cascade_fraction_passive is None or self.cascade_fraction_active is None:
             return None
         return self.cascade_fraction_passive - self.cascade_fraction_active
+
+    @property
+    def lending_effect(self) -> Optional[Decimal]:
+        """Effect of lending = delta_passive - delta_lender.
+
+        Positive means lending reduced defaults.
+        """
+        if self.delta_passive is None or self.delta_lender is None:
+            return None
+        return self.delta_passive - self.delta_lender
 
 
 class BalancedComparisonConfig(BaseModel):
@@ -232,6 +256,16 @@ class BalancedComparisonConfig(BaseModel):
     vbt_mid_sensitivity: Decimal = Field(default=Decimal("1.0"), description="VBT mid price sensitivity to defaults (0-1)")
     vbt_spread_sensitivity: Decimal = Field(default=Decimal("0.0"), description="VBT spread sensitivity to defaults (0-1)")
 
+    # Non-bank lender parameters
+    enable_lender: bool = Field(default=False, description="Enable third comparison arm with non-bank lender")
+    lender_share: Decimal = Field(default=Decimal("0.10"), description="Lender capital as fraction of system cash")
+    lender_base_rate: Decimal = Field(default=Decimal("0.05"), description="Lender base interest rate")
+    lender_risk_premium_scale: Decimal = Field(default=Decimal("0.20"), description="Rate = base + scale × P(default)")
+    lender_max_single_exposure: Decimal = Field(default=Decimal("0.15"), description="Max fraction of capital to one borrower")
+    lender_max_total_exposure: Decimal = Field(default=Decimal("0.80"), description="Max fraction of capital deployed")
+    lender_maturity_days: int = Field(default=2, description="Loan term in days")
+    lender_horizon: int = Field(default=3, description="Look-ahead for upcoming obligations")
+
 
 class BalancedComparisonRunner:
     """
@@ -287,6 +321,16 @@ class BalancedComparisonRunner:
         "default_observability",
         "vbt_mid_sensitivity",
         "vbt_spread_sensitivity",
+        "delta_lender",
+        "lending_effect",
+        "phi_lender",
+        "lender_run_id",
+        "lender_status",
+        "n_defaults_lender",
+        "cascade_fraction_lender",
+        "lender_total_pnl",
+        "lender_total_return",
+        "total_loans",
     ]
 
     def __init__(
@@ -308,12 +352,15 @@ class BalancedComparisonRunner:
 
         self.passive_dir = self.base_dir / "passive"
         self.active_dir = self.base_dir / "active"
+        self.lender_dir = self.base_dir / "lender"
         self.aggregate_dir = self.base_dir / "aggregate"
 
         # Only create local directories if we're doing local processing
         if not self.skip_local_processing:
             self.passive_dir.mkdir(parents=True, exist_ok=True)
             self.active_dir.mkdir(parents=True, exist_ok=True)
+            if config.enable_lender:
+                self.lender_dir.mkdir(parents=True, exist_ok=True)
             self.aggregate_dir.mkdir(parents=True, exist_ok=True)
 
         self.comparison_results: List[BalancedComparisonResult] = []
@@ -491,6 +538,45 @@ class BalancedComparisonRunner:
             vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
         )
 
+    def _get_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+        """Get or create lender runner (lending enabled, no dealer trading)."""
+        return RingSweepRunner(
+            out_dir=self.base_dir / "lender",
+            name_prefix=f"{self.config.name_prefix} (Lender)",
+            n_agents=self.config.n_agents,
+            maturity_days=self.config.maturity_days,
+            Q_total=self.config.Q_total,
+            liquidity_mode=self.config.liquidity_mode,
+            liquidity_agent=None,
+            base_seed=self.config.base_seed,
+            default_handling=self.config.default_handling,
+            dealer_enabled=False,  # No dealer trading in lender mode
+            dealer_config=None,
+            balanced_mode=True,
+            face_value=self.config.face_value,
+            outside_mid_ratio=outside_mid_ratio,
+            big_entity_share=self.config.big_entity_share,
+            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
+            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            rollover_enabled=self.config.rollover_enabled,
+            detailed_dealer_logging=self.config.detailed_logging,
+            executor=self.executor,
+            quiet=self.config.quiet,
+            risk_assessment_enabled=self.config.risk_assessment_enabled,
+            risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            # Lender-specific: pass lender mode and config
+            lender_mode=True,
+            lender_share=self.config.lender_share,
+        )
+
     def run_all(self) -> List[BalancedComparisonResult]:
         """Execute all passive/active pairs and return comparison results.
 
@@ -505,6 +591,10 @@ class BalancedComparisonRunner:
 
     def _run_all_batch(self) -> List[BalancedComparisonResult]:
         """Execute all pairs using batch execution (parallel on Modal)."""
+        # Lender arm not yet optimized for batch - fall back to sequential
+        if self.config.enable_lender:
+            return self._run_all_sequential()
+
         total_pairs = (
             len(self.config.kappas)
             * len(self.config.concentrations)
@@ -858,6 +948,31 @@ class BalancedComparisonRunner:
         # Extract dealer metrics from active result
         dm = active_result.dealer_metrics or {}
 
+        # Run lender (optional third arm)
+        lender_result_data: Dict[str, Any] = {}
+        if self.config.enable_lender:
+            logger.info("  Running lender (with lending)...")
+            print("  Lender run:", flush=True)
+            lender_runner = self._get_lender_runner(outside_mid_ratio)
+            lender_result = lender_runner._execute_run(
+                phase="balanced_lender",
+                kappa=kappa,
+                concentration=concentration,
+                mu=mu,
+                monotonicity=monotonicity,
+                seed=seed,
+                progress_callback=self._make_progress_callback("lender"),
+            )
+            lender_result_data = {
+                "delta_lender": lender_result.delta_total,
+                "phi_lender": lender_result.phi_total,
+                "lender_run_id": lender_result.run_id,
+                "lender_status": "completed" if lender_result.delta_total is not None else "failed",
+                "n_defaults_lender": lender_result.n_defaults,
+                "cascade_fraction_lender": lender_result.cascade_fraction,
+                "lender_modal_call_id": lender_result.modal_call_id,
+            }
+
         result = BalancedComparisonResult(
             kappa=kappa,
             concentration=concentration,
@@ -899,6 +1014,7 @@ class BalancedComparisonRunner:
             dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
                 dm, passive_result.dealer_metrics,
             ),
+            **lender_result_data,
         )
 
         # Log comparison
@@ -1045,6 +1161,16 @@ class BalancedComparisonRunner:
                     "default_observability": str(result.default_observability),
                     "vbt_mid_sensitivity": str(result.vbt_mid_sensitivity),
                     "vbt_spread_sensitivity": str(result.vbt_spread_sensitivity),
+                    "delta_lender": str(result.delta_lender) if result.delta_lender is not None else "",
+                    "lending_effect": str(result.lending_effect) if result.lending_effect is not None else "",
+                    "phi_lender": str(result.phi_lender) if result.phi_lender is not None else "",
+                    "lender_run_id": result.lender_run_id,
+                    "lender_status": result.lender_status,
+                    "n_defaults_lender": str(result.n_defaults_lender),
+                    "cascade_fraction_lender": str(result.cascade_fraction_lender) if result.cascade_fraction_lender is not None else "",
+                    "lender_total_pnl": str(result.lender_total_pnl) if result.lender_total_pnl is not None else "",
+                    "lender_total_return": str(result.lender_total_return) if result.lender_total_return is not None else "",
+                    "total_loans": str(result.total_loans) if result.total_loans is not None else "",
                 }
                 writer.writerow(row)
 

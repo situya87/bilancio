@@ -191,6 +191,7 @@ def run_scenario(
 
     # Check if dealer subsystem is enabled
     enable_dealer = hasattr(system.state, 'dealer_subsystem') and system.state.dealer_subsystem is not None
+    enable_lender = hasattr(system.state, 'lender_config') and system.state.lender_config is not None
 
     if mode == "step":
         days_data = run_step_mode(
@@ -201,7 +202,8 @@ def run_scenario(
             check_invariants=check_invariants,
             scenario_name=config.name,
             t_account=t_account,
-            enable_dealer=enable_dealer
+            enable_dealer=enable_dealer,
+            enable_lender=enable_lender,
         )
     else:
         days_data = run_until_stable_mode(
@@ -214,6 +216,7 @@ def run_scenario(
             scenario_name=config.name,
             t_account=t_account,
             enable_dealer=enable_dealer,
+            enable_lender=enable_lender,
             progress_callback=progress_callback,
         )
     
@@ -332,7 +335,8 @@ def run_step_mode(
     check_invariants: str,
     scenario_name: str,
     t_account: bool = False,
-    enable_dealer: bool = False
+    enable_dealer: bool = False,
+    enable_lender: bool = False,
 ) -> List[Dict[str, Any]]:
     """Run simulation in step-by-step mode.
 
@@ -344,6 +348,7 @@ def run_step_mode(
         check_invariants: Invariant checking mode
         scenario_name: Name of the scenario for error context
         enable_dealer: If True, run dealer trading phase each day
+        enable_lender: If True, run lender phase each day
 
     Returns:
         List of day data dictionaries
@@ -362,7 +367,7 @@ def run_step_mode(
 
         try:
             # Run the next day
-            run_day(system, enable_dealer=enable_dealer)
+            run_day(system, enable_dealer=enable_dealer, enable_lender=enable_lender)
             from bilancio.engines.simulation import DayReport, _impacted_today, _has_open_obligations
             impacted = _impacted_today(system, day_before)
             day_report = DayReport(day=day_before, impacted=impacted)
@@ -495,6 +500,7 @@ def run_until_stable_mode(
     scenario_name: str,
     t_account: bool = False,
     enable_dealer: bool = False,
+    enable_lender: bool = False,
     progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> List[Dict[str, Any]]:
     """Run simulation until stable state is reached.
@@ -508,6 +514,7 @@ def run_until_stable_mode(
         check_invariants: Invariant checking mode
         scenario_name: Name of the scenario for error context
         enable_dealer: If True, run dealer trading phase each day
+        enable_lender: If True, run lender phase each day
         progress_callback: Optional callback(current_day, max_days) for progress tracking
 
     Returns:
@@ -531,7 +538,7 @@ def run_until_stable_mode(
         for _ in range(max_days):
             # Run the next day
             day_before = system.state.day
-            run_day(system, enable_dealer=enable_dealer)
+            run_day(system, enable_dealer=enable_dealer, enable_lender=enable_lender)
             impacted = _impacted_today(system, day_before)
             defaults = _defaults_today(system, day_before)
 

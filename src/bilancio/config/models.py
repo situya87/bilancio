@@ -118,7 +118,7 @@ class JurisdictionConfig(BaseModel):
 class AgentSpec(BaseModel):
     """Specification for an agent in the scenario."""
     id: str = Field(..., description="Unique identifier for the agent")
-    kind: Literal["central_bank", "bank", "household", "firm", "treasury"] = Field(
+    kind: Literal["central_bank", "bank", "household", "firm", "treasury", "non_bank_lender"] = Field(
         ..., description="Type of agent"
     )
     name: str = Field(..., description="Human-readable name for the agent")
@@ -770,6 +770,42 @@ class BalancedDealerConfig(BaseModel):
         return v
 
 
+class LenderScenarioConfig(BaseModel):
+    """Lender configuration within a scenario."""
+    enabled: bool = Field(default=False, description="Enable non-bank lender")
+    base_rate: Decimal = Field(default=Decimal("0.05"), description="Base interest rate")
+    risk_premium_scale: Decimal = Field(default=Decimal("0.20"), description="Risk premium multiplier")
+    max_single_exposure: Decimal = Field(default=Decimal("0.15"), description="Max exposure to single borrower")
+    max_total_exposure: Decimal = Field(default=Decimal("0.80"), description="Max total lending exposure")
+    maturity_days: int = Field(default=2, description="Loan maturity in days")
+    horizon: int = Field(default=3, description="Look-ahead horizon for obligations")
+
+    # Information access configuration
+    info_cash_visibility: Literal["none", "noisy", "perfect"] = Field(
+        default="perfect", description="Lender visibility of counterparty cash"
+    )
+    info_cash_noise: Decimal = Field(
+        default=Decimal("0.10"),
+        description="Estimation error fraction for counterparty cash (when noisy)"
+    )
+    info_liabilities_visibility: Literal["none", "noisy", "perfect"] = Field(
+        default="perfect", description="Lender visibility of counterparty liabilities"
+    )
+    info_history_visibility: Literal["none", "noisy", "perfect"] = Field(
+        default="perfect", description="Lender visibility of counterparty default history"
+    )
+    info_history_sample_rate: Decimal = Field(
+        default=Decimal("0.7"),
+        description="Sample rate for history observation (when noisy)"
+    )
+    info_network_visibility: Literal["none", "noisy", "perfect"] = Field(
+        default="none", description="Lender visibility of network topology"
+    )
+    info_market_visibility: Literal["none", "noisy", "perfect"] = Field(
+        default="none", description="Lender visibility of market prices"
+    )
+
+
 class ScenarioConfig(BaseModel):
     """Complete scenario configuration."""
     version: int = Field(1, description="Configuration version")
@@ -786,6 +822,10 @@ class ScenarioConfig(BaseModel):
     balanced_dealer: Optional[BalancedDealerConfig] = Field(
         None,
         description="Balanced dealer/mimic configuration for C vs D comparison"
+    )
+    lender: Optional[LenderScenarioConfig] = Field(
+        None,
+        description="Non-bank lender configuration"
     )
     jurisdictions: Optional[List[JurisdictionConfig]] = Field(
         None,

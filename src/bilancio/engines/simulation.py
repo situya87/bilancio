@@ -144,7 +144,7 @@ class MonteCarloEngine:
         self.num_simulations = num_simulations
 
 
-def run_day(system: System, enable_dealer: bool = False) -> None:
+def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = False) -> None:
     """
     Run a single day's simulation with three phases.
 
@@ -157,6 +157,7 @@ def run_day(system: System, enable_dealer: bool = False) -> None:
     Args:
         system: System instance to run the day for
         enable_dealer: If True, run dealer trading phase between scheduled actions and settlements
+        enable_lender: If True, run non-bank lending phase
 
     Note: Rollover is controlled by system.state.rollover_enabled (Plan 024)
     """
@@ -197,6 +198,13 @@ def run_day(system: System, enable_dealer: bool = False) -> None:
         # Sync dealer state back to main system
         sync_dealer_to_system(system.state.dealer_subsystem, system)
 
+    # SubphaseB_Lending: Non-bank lending phase (optional)
+    if enable_lender and system.state.lender_config is not None:
+        system.log("SubphaseB_Lending")
+        from bilancio.engines.lending import run_lending_phase
+        lending_events = run_lending_phase(system, current_day, system.state.lender_config)
+        system.state.events.extend(lending_events)
+
     # B2: Automated settlements due today
     system.log("SubphaseB2")
     settled_for_rollover = settle_due(system, current_day, rollover_enabled=rollover_enabled)
@@ -222,11 +230,17 @@ def run_day(system: System, enable_dealer: bool = False) -> None:
                 continue
             system.cb_repay_loan(loan_id, loan.liability_issuer_id)
 
+    # Non-bank loan repayment
+    has_lender = any(agent.kind == AgentKind.NON_BANK_LENDER for agent in system.state.agents.values())
+    if has_lender:
+        from bilancio.engines.lending import run_loan_repayments
+        run_loan_repayments(system, current_day)
+
     # Increment system day
     system.state.day += 1
 
 
-def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, enable_dealer: bool = False) -> list[DayReport]:
+def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, enable_dealer: bool = False, enable_lender: bool = False) -> list[DayReport]:
     """
     Advance day by day until the system is stable:
     - No impactful events happen for `quiet_days` consecutive days, AND
@@ -237,6 +251,7 @@ def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, e
         max_days: Maximum number of days to run
         quiet_days: Number of consecutive quiet days needed for stability
         enable_dealer: If True, run dealer trading phase each day
+        enable_lender: If True, run non-bank lending phase each day
 
     Note: Rollover is controlled by system.state.rollover_enabled (Plan 024)
     """
@@ -248,7 +263,7 @@ def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, e
 
     for _ in range(max_days):
         day_before = system.state.day
-        run_day(system, enable_dealer=enable_dealer)
+        run_day(system, enable_dealer=enable_dealer, enable_lender=enable_lender)
         impacted = _impacted_today(system, day_before)
         defaults = _defaults_today(system, day_before)
         reports.append(DayReport(day=day_before, impacted=impacted))

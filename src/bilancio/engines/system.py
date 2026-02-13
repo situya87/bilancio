@@ -14,6 +14,7 @@ from bilancio.domain.agent import Agent, AgentKind
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.instruments.base import Instrument, InstrumentKind
 from bilancio.domain.instruments.cb_loan import CBLoan
+from bilancio.domain.instruments.non_bank_loan import NonBankLoan
 from bilancio.domain.instruments.means_of_payment import Cash, ReserveDeposit
 from bilancio.domain.instruments.delivery import DeliveryObligation
 from bilancio.domain.goods import StockLot
@@ -48,6 +49,7 @@ class State:
     dealer_subsystem: Any = None
     jurisdictions: dict[str, Any] = field(default_factory=dict)  # str -> Jurisdiction
     fx_market: Any = None  # FXMarket instance
+    lender_config: Any = None
 
 class System:
     def __init__(self, policy: PolicyEngine | None = None, default_mode: str = "fail-fast"):
@@ -482,6 +484,226 @@ class System:
         due_loans = []
         for cid, contract in self.state.contracts.items():
             if contract.kind == InstrumentKind.CB_LOAN and isinstance(contract, CBLoan) and contract.is_due(day):
+                due_loans.append(cid)
+        return due_loans
+
+    # ---- Non-bank lending facility
+    def nonbank_lend_cash(
+        self,
+        lender_id: str,
+        borrower_id: str,
+        amount: int,
+        rate: Decimal,
+        day: int,
+        maturity_days: int = 2,
+        denom: str = "X",
+    ) -> str:
+        """Non-bank lender transfers existing cash to a borrower as a loan.
+
+        Unlike CB lending (which creates new reserves), this transfers
+        existing cash from the lender to the borrower.
+
+        Args:
+            lender_id: The lending agent
+            borrower_id: The borrowing agent
+            amount: Loan principal
+            rate: Interest rate
+            day: Current day (for maturity calculation)
+            maturity_days: Days until maturity
+            denom: Currency denomination
+
+        Returns:
+            The NonBankLoan instrument ID
+        """
+        # Find lender's cash and consume amount
+        remaining = amount
+        cash_ids = [
+            cid for cid in self.state.agents[lender_id].asset_ids
+            if cid in self.state.contracts
+            and self.state.contracts[cid].kind == InstrumentKind.CASH
+        ]
+
+        cb_id = self._central_bank_id()
+
+        with atomic(self):
+            # 1. Consume cash from lender
+            for cid in list(cash_ids):
+                instr = self.state.contracts.get(cid)
+                if instr is None:
+                    continue
+                take = min(instr.amount, remaining)
+                consume(self, cid, take)
+                remaining -= take
+                if remaining == 0:
+                    break
+
+            if remaining != 0:
+                raise ValidationError(
+                    f"Lender {lender_id} has insufficient cash: "
+                    f"needed {amount}, short by {remaining}"
+                )
+
+            # 2. Create new cash for borrower
+            cash_id = self.new_contract_id("C")
+            new_cash = Cash(
+                id=cash_id,
+                kind=InstrumentKind.CASH,
+                amount=amount,
+                denom=denom,
+                asset_holder_id=borrower_id,
+                liability_issuer_id=cb_id,
+            )
+            self.add_contract(new_cash)
+
+            # 3. Create the NonBankLoan (lender's asset, borrower's liability)
+            loan_id = self.new_contract_id("NBL")
+            loan = NonBankLoan(
+                id=loan_id,
+                kind=InstrumentKind.NON_BANK_LOAN,
+                amount=amount,
+                denom=denom,
+                asset_holder_id=lender_id,
+                liability_issuer_id=borrower_id,
+                rate=rate,
+                issuance_day=day,
+                maturity_days=maturity_days,
+            )
+            self.add_contract(loan)
+
+            self.log(
+                "NonBankLoanCreated",
+                lender_id=lender_id,
+                borrower_id=borrower_id,
+                amount=amount,
+                loan_id=loan_id,
+                cash_id=cash_id,
+                rate=str(rate),
+                maturity_day=day + maturity_days,
+            )
+
+        return loan_id
+
+    def nonbank_repay_loan(self, loan_id: str, borrower_id: str) -> bool:
+        """Borrower repays a non-bank loan with interest.
+
+        If borrower has sufficient cash, repays principal + interest.
+        If insufficient, the loan defaults (lender takes the loss).
+
+        Args:
+            loan_id: The NonBankLoan to repay
+            borrower_id: The borrowing agent
+
+        Returns:
+            True if repaid successfully, False if defaulted
+        """
+        if loan_id not in self.state.contracts:
+            raise ValidationError(f"Loan {loan_id} not found")
+
+        loan_instr = self.state.contracts[loan_id]
+        if loan_instr.kind != InstrumentKind.NON_BANK_LOAN:
+            raise ValidationError(f"{loan_id} is not a NonBankLoan")
+        if loan_instr.liability_issuer_id != borrower_id:
+            raise ValidationError(f"{borrower_id} is not the borrower of {loan_id}")
+
+        assert isinstance(loan_instr, NonBankLoan)
+        repayment_amount = loan_instr.repayment_amount
+        lender_id = loan_instr.asset_holder_id
+        principal = loan_instr.principal
+
+        # Check if borrower has enough cash
+        borrower_cash = sum(
+            c.amount for cid in self.state.agents[borrower_id].asset_ids
+            if (c := self.state.contracts.get(cid)) is not None
+            and c.kind == InstrumentKind.CASH
+        )
+
+        if borrower_cash < repayment_amount:
+            # Default: write off the loan
+            self._remove_loan(loan_id, lender_id, borrower_id)
+            self.log(
+                "NonBankLoanDefaulted",
+                loan_id=loan_id,
+                borrower_id=borrower_id,
+                lender_id=lender_id,
+                amount_owed=repayment_amount,
+                cash_available=borrower_cash,
+            )
+            return False
+
+        cb_id = self._central_bank_id()
+
+        with atomic(self):
+            # 1. Consume cash from borrower
+            remaining = repayment_amount
+            cash_ids = [
+                cid for cid in self.state.agents[borrower_id].asset_ids
+                if cid in self.state.contracts
+                and self.state.contracts[cid].kind == InstrumentKind.CASH
+            ]
+            for cid in list(cash_ids):
+                instr = self.state.contracts.get(cid)
+                if instr is None:
+                    continue
+                take = min(instr.amount, remaining)
+                consume(self, cid, take)
+                remaining -= take
+                if remaining == 0:
+                    break
+
+            # 2. Create cash for lender (the repayment)
+            cash_id = self.new_contract_id("C")
+            new_cash = Cash(
+                id=cash_id,
+                kind=InstrumentKind.CASH,
+                amount=repayment_amount,
+                denom=loan_instr.denom,
+                asset_holder_id=lender_id,
+                liability_issuer_id=cb_id,
+            )
+            self.add_contract(new_cash)
+
+            # 3. Remove the loan
+            self._remove_loan(loan_id, lender_id, borrower_id)
+
+            self.log(
+                "NonBankLoanRepaid",
+                loan_id=loan_id,
+                borrower_id=borrower_id,
+                lender_id=lender_id,
+                principal=principal,
+                interest=repayment_amount - principal,
+                total_repaid=repayment_amount,
+            )
+
+        return True
+
+    def _remove_loan(self, loan_id: str, lender_id: str, borrower_id: str) -> None:
+        """Remove a NonBankLoan from the system."""
+        self.state.agents[lender_id].asset_ids.remove(loan_id)
+        self.state.agents[borrower_id].liability_ids.remove(loan_id)
+
+        loan = self.state.contracts.get(loan_id)
+        if loan is not None:
+            due_day = loan.due_day
+            if due_day is not None:
+                bucket = self.state.contracts_by_due_day.get(due_day)
+                if bucket:
+                    try:
+                        bucket.remove(loan_id)
+                    except ValueError:
+                        pass
+                    if not bucket:
+                        del self.state.contracts_by_due_day[due_day]
+
+        del self.state.contracts[loan_id]
+
+    def get_nonbank_loans_due(self, day: int) -> list[str]:
+        """Get all NonBankLoans that are due on the given day."""
+        due_loans = []
+        for cid, contract in self.state.contracts.items():
+            if (contract.kind == InstrumentKind.NON_BANK_LOAN
+                    and isinstance(contract, NonBankLoan)
+                    and contract.is_due(day)):
                 due_loans.append(cid)
         return due_loans
 

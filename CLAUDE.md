@@ -1,4 +1,19 @@
 - Use implementation subagents (in parallel) to execute code changes whenever possible, but always review what the subagents wrote, find possible issues, and fix them if necessary.
+
+## New Agent Type Design Checklist
+
+When introducing a new agent type, you MUST explicitly define all four aspects before writing implementation code. Do not proceed until each is documented in the plan:
+
+1. **Instruments** — What instruments does it hold (assets) and issue (liabilities)? What are the contract terms (rate, maturity, etc.)? Update `InstrumentKind`, `policy.py`, and create the instrument dataclass.
+2. **Means of Payment** — What does it use to settle obligations? (Cash, reserves, deposits?) Define its `mop_rank` in `policy.py`.
+3. **Decision-Making Model** — How does it decide what actions to take each day? This must be a behavioral model with tunable parameters (e.g., risk aversion, planning horizon, aggressiveness), not a hard-coded formula. Create a profile dataclass (like `TraderProfile`) so the strategy can be configured per experiment.
+4. **Information Model** — What can the agent observe about the system? How does it collect and update its beliefs? Does it have its own risk assessor? Is there observability friction (can it see all defaults, or only some)? Does it learn from its own history (Bayesian updating)?
+5. **Capitalization** — How does it get its initial resources? Is it endowed at setup, or does it accumulate over time? What fraction of system resources does it receive (`lender_share`, `dealer_share`, etc.)?
+6. **Timing / Phase** — When does it act in the daily simulation cycle? Which subphase? Before or after settlement? Does ordering matter relative to other agents?
+7. **Failure Mode** — What happens when this agent defaults or can't meet obligations? Does it cascade? Is it systemically important? Can it be bailed out?
+8. **Interactions** — Which other agent types does it transact with? Are there bilateral constraints (e.g., "only lends to firms/households, not to banks")?
+
+Reference: The dealer/trader framework (`bilancio/decision/`) is the gold standard — it has `TraderProfile`, `VBTProfile`, and the `RiskAssessor` with configurable observability.
 - Always use `uv run` instead of `python` to run Python commands in this project
 - Remove all temporary test_ files when they're no longer needed
 - Store temporary test files in a gitignored temp/ folder instead of the project root

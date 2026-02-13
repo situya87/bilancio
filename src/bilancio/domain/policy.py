@@ -14,6 +14,8 @@ from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.means_of_payment import BankDeposit, Cash, ReserveDeposit
 from bilancio.domain.instruments.delivery import DeliveryObligation
+from bilancio.domain.instruments.non_bank_loan import NonBankLoan
+from bilancio.domain.agents.non_bank_lender import NonBankLender
 
 AgentType = type[Agent]
 InstrType = type[Instrument]
@@ -36,6 +38,7 @@ class PolicyEngine:
                 CBLoan:      (Bank,),             # banks issue (borrow from CB)
                 Payable:     (Agent,),            # any agent can issue a payable
                 DeliveryObligation: (Agent,),     # any agent can promise to deliver
+                NonBankLoan: (Agent,),            # any agent can be a borrower (issuer of liability)
             },
             holders={
                 Cash:            (Agent,),
@@ -44,6 +47,7 @@ class PolicyEngine:
                 CBLoan:          (CentralBank,),  # CB holds loans as assets
                 Payable:         (Agent,),
                 DeliveryObligation: (Agent,),         # any agent can hold a delivery claim
+                NonBankLoan:     (NonBankLender,),    # only non-bank lenders hold loans as assets
             },
             mop_rank={
                 AgentKind.HOUSEHOLD:    [InstrumentKind.BANK_DEPOSIT, InstrumentKind.CASH],
@@ -51,6 +55,7 @@ class PolicyEngine:
                 AgentKind.BANK:         [InstrumentKind.RESERVE_DEPOSIT],
                 AgentKind.TREASURY:     [InstrumentKind.RESERVE_DEPOSIT],
                 AgentKind.CENTRAL_BANK: [InstrumentKind.RESERVE_DEPOSIT],
+                AgentKind.NON_BANK_LENDER: [InstrumentKind.CASH],
             },
         )
 

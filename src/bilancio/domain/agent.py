@@ -1,3 +1,21 @@
+"""Agent domain model.
+
+New Agent Type Checklist
+========================
+When adding a new AgentKind, define these aspects in the plan:
+
+1. Instruments — What it holds (assets) and issues (liabilities).
+2. Means of Payment — What it uses to settle (mop_rank in policy.py).
+3. Decision-Making Model — Behavioral model with tunable parameters
+   (profile dataclass like TraderProfile), not a hard-coded formula.
+4. Information Model — What it can observe, how it updates beliefs,
+   whether it has its own risk assessor, observability friction, learning.
+5. Capitalization — How it gets initial resources, what share of system.
+6. Timing / Phase — When it acts in the daily simulation cycle.
+7. Failure Mode — What happens when it defaults, cascade risk.
+8. Interactions — Which agent types it transacts with, bilateral constraints.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -21,6 +39,7 @@ class AgentKind(str, Enum):
     INSURANCE_COMPANY = "insurance_company"
     DEALER = "dealer"
     VBT = "vbt"
+    NON_BANK_LENDER = "non_bank_lender"
     
     def __str__(self) -> str:
         return self.value

@@ -198,6 +198,7 @@ def compile_ring_explorer_balanced(
     dealer_share_per_bucket: Decimal = Decimal("0.125"),
     mode: str = "active",
     rollover_enabled: bool = True,
+    lender_share: Decimal = Decimal("0.10"),
     *,
     source_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
@@ -418,6 +419,23 @@ def compile_ring_explorer_balanced(
                 }
             })
 
+    # Add non-bank lender agent and cash (lender mode)
+    if mode == "lender":
+        agents.append({
+            "id": "lender",
+            "kind": "non_bank_lender",
+            "name": "Non-Bank Lender",
+        })
+        lender_cash = base_liquidity * lender_share
+        if lender_cash > 0:
+            initial_actions.append({
+                "mint_cash": {
+                    "to": "lender",
+                    "amount": lender_cash,
+                    "alias": "LIQ_lender",
+                }
+            })
+
     scenario_name = _render_scenario_name(config.name_prefix, params)
     scenario_name = f"{scenario_name} [Balanced {mode}]"
     description = _render_description(params)
@@ -458,6 +476,7 @@ def compile_ring_explorer_balanced(
             "dealer_share_per_bucket": float(dealer_share_per_bucket),
             "mode": mode,
             "rollover_enabled": rollover_enabled,
+            "lender_share": float(lender_share),
         },
     }
 

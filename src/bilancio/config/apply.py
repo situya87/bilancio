@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from bilancio.engines.system import System
 from bilancio.domain.agent import AgentKind
-from bilancio.domain.agents import Bank, Household, Firm, CentralBank, Treasury
+from bilancio.domain.agents import Bank, Household, Firm, CentralBank, Treasury, NonBankLender
 from bilancio.ops.banking import deposit_cash, withdraw_cash, client_payment
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.base import InstrumentKind
@@ -40,7 +40,8 @@ def create_agent(spec: AgentSpec) -> Any:
         "bank": Bank,
         "household": Household,
         "firm": Firm,
-        "treasury": Treasury
+        "treasury": Treasury,
+        "non_bank_lender": NonBankLender,
     }
     
     agent_class = agent_classes.get(spec.kind)
@@ -312,6 +313,69 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
         raise ValueError(f"Failed to apply {action_type}: {e}")
 
 
+def _build_lender_info_profile(lender_cfg: Any) -> Any:
+    """Build an InformationProfile from LenderScenarioConfig info_* fields.
+
+    Returns None when all visibilities are 'perfect' (OMNISCIENT default).
+    """
+    from bilancio.information.levels import AccessLevel
+    from bilancio.information.noise import (
+        AggregateOnlyNoise,
+        EstimationNoise,
+        SampleNoise,
+    )
+    from bilancio.information.profile import CategoryAccess, InformationProfile
+
+    # Check if all defaults → return None (OMNISCIENT)
+    all_perfect = (
+        lender_cfg.info_cash_visibility == "perfect"
+        and lender_cfg.info_liabilities_visibility == "perfect"
+        and lender_cfg.info_history_visibility == "perfect"
+        and lender_cfg.info_network_visibility == "none"
+        and lender_cfg.info_market_visibility == "none"
+    )
+    if all_perfect:
+        return None
+
+    def _make_access(visibility: str, noise_factory=None) -> CategoryAccess:
+        level = AccessLevel(visibility)
+        if level == AccessLevel.NOISY and noise_factory is not None:
+            return CategoryAccess(level=level, noise=noise_factory())
+        if level == AccessLevel.NOISY:
+            return CategoryAccess(level=level, noise=EstimationNoise())
+        return CategoryAccess(level=level)
+
+    cash_access = _make_access(
+        lender_cfg.info_cash_visibility,
+        lambda: EstimationNoise(lender_cfg.info_cash_noise),
+    )
+    liabilities_access = _make_access(
+        lender_cfg.info_liabilities_visibility,
+        lambda: AggregateOnlyNoise(),
+    )
+    history_access = _make_access(
+        lender_cfg.info_history_visibility,
+        lambda: SampleNoise(lender_cfg.info_history_sample_rate),
+    )
+    network_access = _make_access(lender_cfg.info_network_visibility)
+    market_access = _make_access(lender_cfg.info_market_visibility)
+
+    return InformationProfile(
+        counterparty_cash=cash_access,
+        counterparty_liabilities=liabilities_access,
+        counterparty_default_history=history_access,
+        counterparty_settlement_history=history_access,
+        counterparty_track_record=history_access,
+        obligation_graph=network_access,
+        counterparty_connectivity=network_access,
+        cascade_risk=network_access,
+        dealer_quotes=market_access,
+        vbt_anchors=market_access,
+        price_trends=market_access,
+        implied_default_prob=market_access,
+    )
+
+
 def _collect_alias_from_action(action_model: object) -> str | None:
     return getattr(action_model, 'alias', None)
 
@@ -547,3 +611,17 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
             system.state.dealer_subsystem = initialize_dealer_subsystem(
                 system, dealer_ring_config, risk_params=risk_params
             )
+
+    # Set up lender config if present in scenario
+    if config.lender and config.lender.enabled:
+        from bilancio.engines.lending import LendingConfig
+        info_profile = _build_lender_info_profile(config.lender)
+        system.state.lender_config = LendingConfig(
+            base_rate=config.lender.base_rate,
+            risk_premium_scale=config.lender.risk_premium_scale,
+            max_single_exposure=config.lender.max_single_exposure,
+            max_total_exposure=config.lender.max_total_exposure,
+            maturity_days=config.lender.maturity_days,
+            horizon=config.lender.horizon,
+            information_profile=info_profile,
+        )
