@@ -50,7 +50,11 @@ def create_agent(spec: AgentSpec) -> Any:
     # Create agent with id, name, and kind
     # Note: The agent classes set their own kind in __post_init__, but we pass it anyway
     # for compatibility with the base Agent class
-    return agent_class(id=spec.id, name=spec.name, kind=spec.kind)
+    agent = agent_class(id=spec.id, name=spec.name, kind=spec.kind)
+    jurisdiction = getattr(spec, "jurisdiction", None)
+    if jurisdiction is not None:
+        agent.jurisdiction_id = jurisdiction
+    return agent
 
 
 def apply_policy_overrides(system: System, overrides: Dict[str, Any]) -> None:
@@ -402,6 +406,67 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
 
     # Final invariant check outside of setup
     system.assert_invariants()
+
+    # Hydrate jurisdiction data from config into State
+    if config.jurisdictions:
+        from bilancio.domain.jurisdiction import (
+            BankingRules,
+            CapitalControlRule,
+            CapitalControls,
+            CapitalControlAction,
+            CapitalFlowPurpose,
+            ExchangeRatePair,
+            FXMarket,
+            InterbankSettlementMode,
+            Jurisdiction,
+        )
+
+        for jc in config.jurisdictions:
+            rules = BankingRules(
+                reserve_requirement_ratio=jc.banking_rules.reserve_requirement_ratio,
+                interbank_settlement_mode=InterbankSettlementMode(
+                    jc.banking_rules.interbank_settlement_mode
+                ),
+                deposit_convertibility=jc.banking_rules.deposit_convertibility,
+                cb_lending_enabled=jc.banking_rules.cb_lending_enabled,
+            )
+            cc_rules = [
+                CapitalControlRule(
+                    purpose=CapitalFlowPurpose(r.purpose),
+                    direction=r.direction,
+                    action=CapitalControlAction(r.action),
+                    tax_rate=r.tax_rate,
+                    description=r.description,
+                )
+                for r in jc.capital_controls.rules
+            ]
+            controls = CapitalControls(
+                rules=cc_rules,
+                default_action=CapitalControlAction(jc.capital_controls.default_action),
+            )
+            jurisdiction = Jurisdiction(
+                id=jc.id,
+                name=jc.name,
+                domestic_currency=jc.domestic_currency,
+                institutional_agent_ids=list(jc.institutional_agents),
+                banking_rules=rules,
+                capital_controls=controls,
+            )
+            system.state.jurisdictions[jc.id] = jurisdiction
+
+    if config.fx_rates:
+        from bilancio.domain.jurisdiction import ExchangeRatePair, FXMarket
+
+        fx_market = FXMarket()
+        for fxc in config.fx_rates:
+            pair = ExchangeRatePair(
+                base_currency=fxc.base_currency,
+                quote_currency=fxc.quote_currency,
+                rate=fxc.rate,
+                spread=fxc.spread,
+            )
+            fx_market.add_rate(pair)
+        system.state.fx_market = fx_market
 
     # Initialize dealer subsystem if configured
     if config.dealer and config.dealer.enabled:

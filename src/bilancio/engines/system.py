@@ -46,6 +46,8 @@ class State:
     # Index contracts by due_day for fast lookup (preserves insertion order)
     contracts_by_due_day: dict[int, list[str]] = field(default_factory=dict)
     dealer_subsystem: Any = None
+    jurisdictions: dict[str, Any] = field(default_factory=dict)  # str -> Jurisdiction
+    fx_market: Any = None  # FXMarket instance
 
 class System:
     def __init__(self, policy: PolicyEngine | None = None, default_mode: str = "fail-fast"):

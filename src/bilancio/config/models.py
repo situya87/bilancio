@@ -13,6 +13,108 @@ class PolicyOverrides(BaseModel):
     )
 
 
+class BankingRulesConfig(BaseModel):
+    """Banking rules configuration for a jurisdiction."""
+    reserve_requirement_ratio: Decimal = Field(
+        Decimal("0"), description="Reserve requirement ratio (0-1)"
+    )
+    interbank_settlement_mode: Literal["RTGS", "DNS", "HYBRID"] = Field(
+        "RTGS", description="Interbank settlement mode"
+    )
+    deposit_convertibility: bool = Field(
+        True, description="Whether deposits are convertible to cash"
+    )
+    cb_lending_enabled: bool = Field(
+        True, description="Whether central bank lending facility is available"
+    )
+
+    @field_validator("reserve_requirement_ratio")
+    @classmethod
+    def ratio_valid(cls, v: Decimal) -> Decimal:
+        if not (Decimal("0") <= v <= Decimal("1")):
+            raise ValueError("reserve_requirement_ratio must be between 0 and 1")
+        return v
+
+
+class CapitalControlRuleConfig(BaseModel):
+    """A single capital control rule."""
+    purpose: Literal["TRADE", "PORTFOLIO", "FDI", "INTERBANK", "REMITTANCE", "OTHER"] = Field(
+        ..., description="Capital flow purpose"
+    )
+    direction: Literal["inflow", "outflow", "both"] = Field(
+        ..., description="Flow direction"
+    )
+    action: Literal["ALLOW", "BLOCK", "TAX"] = Field(
+        ..., description="Action to take"
+    )
+    tax_rate: Decimal = Field(Decimal("0"), description="Tax rate (for TAX action)")
+    description: str = Field("", description="Human-readable description")
+
+    @field_validator("tax_rate")
+    @classmethod
+    def tax_rate_valid(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 1:
+            raise ValueError("tax_rate must be between 0 and 1")
+        return v
+
+
+class CapitalControlsConfig(BaseModel):
+    """Capital controls configuration for a jurisdiction."""
+    rules: List[CapitalControlRuleConfig] = Field(
+        default_factory=list, description="Ordered list of capital control rules"
+    )
+    default_action: Literal["ALLOW", "BLOCK", "TAX"] = Field(
+        "ALLOW", description="Default action when no rule matches"
+    )
+
+
+class ExchangeRatePairConfig(BaseModel):
+    """Configuration for an exchange rate pair."""
+    base_currency: str = Field(..., description="Base currency code")
+    quote_currency: str = Field(..., description="Quote currency code")
+    rate: Decimal = Field(..., description="Exchange rate (units of quote per unit of base)")
+    spread: Decimal = Field(Decimal("0"), description="Bid-ask spread")
+
+    @field_validator("rate")
+    @classmethod
+    def rate_positive(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("Exchange rate must be positive")
+        return v
+
+    @field_validator("spread")
+    @classmethod
+    def spread_non_negative(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("Spread cannot be negative")
+        return v
+
+    @model_validator(mode="after")
+    def currencies_differ(self) -> Self:
+        if self.base_currency == self.quote_currency:
+            raise ValueError("base_currency and quote_currency must differ")
+        return self
+
+
+class JurisdictionConfig(BaseModel):
+    """Configuration for a jurisdiction."""
+    id: str = Field(..., description="Unique jurisdiction identifier")
+    name: str = Field(..., description="Human-readable name")
+    domestic_currency: str = Field(..., description="Domestic currency code")
+    institutional_agents: List[str] = Field(
+        default_factory=list,
+        description="Agent IDs of institutional agents (CB, Treasury) in this jurisdiction"
+    )
+    banking_rules: BankingRulesConfig = Field(
+        default_factory=BankingRulesConfig,  # type: ignore[arg-type]
+        description="Banking regulations"
+    )
+    capital_controls: CapitalControlsConfig = Field(
+        default_factory=CapitalControlsConfig,  # type: ignore[arg-type]
+        description="Capital control rules"
+    )
+
+
 class AgentSpec(BaseModel):
     """Specification for an agent in the scenario."""
     id: str = Field(..., description="Unique identifier for the agent")
@@ -20,6 +122,7 @@ class AgentSpec(BaseModel):
         ..., description="Type of agent"
     )
     name: str = Field(..., description="Human-readable name for the agent")
+    jurisdiction: Optional[str] = Field(None, description="Jurisdiction this agent belongs to")
 
 
 class MintReserves(BaseModel):
@@ -684,6 +787,14 @@ class ScenarioConfig(BaseModel):
         None,
         description="Balanced dealer/mimic configuration for C vs D comparison"
     )
+    jurisdictions: Optional[List[JurisdictionConfig]] = Field(
+        None,
+        description="Jurisdiction definitions for multi-currency scenarios"
+    )
+    fx_rates: Optional[List[ExchangeRatePairConfig]] = Field(
+        None,
+        description="Exchange rate pairs for FX market"
+    )
     agents: List[AgentSpec] = Field(..., description="Agents in the scenario")
     initial_actions: List[Dict[str, Any]] = Field(
         default_factory=list,
@@ -709,6 +820,32 @@ class ScenarioConfig(BaseModel):
         if len(ids) != len(set(ids)):
             raise ValueError("Agent IDs must be unique")
         return v
+
+    @model_validator(mode="after")
+    def validate_jurisdiction_references(self) -> Self:
+        """Cross-check that agent jurisdiction refs and institutional_agents refs are valid."""
+        if not self.jurisdictions:
+            return self
+        jurisdiction_ids = {j.id for j in self.jurisdictions}
+        agent_ids = {a.id for a in self.agents}
+
+        # Check agent jurisdiction references point to defined jurisdictions
+        for agent in self.agents:
+            if agent.jurisdiction is not None and agent.jurisdiction not in jurisdiction_ids:
+                raise ValueError(
+                    f"Agent '{agent.id}' references unknown jurisdiction '{agent.jurisdiction}'. "
+                    f"Defined jurisdictions: {sorted(jurisdiction_ids)}"
+                )
+
+        # Check institutional_agents references point to defined agents
+        for j in self.jurisdictions:
+            for inst_id in j.institutional_agents:
+                if inst_id not in agent_ids:
+                    raise ValueError(
+                        f"Jurisdiction '{j.id}' references unknown institutional agent '{inst_id}'. "
+                        f"Defined agents: {sorted(agent_ids)}"
+                    )
+        return self
 
 
 class RingExplorerLiquidityAllocation(BaseModel):

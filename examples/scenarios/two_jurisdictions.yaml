@@ -1,0 +1,98 @@
+version: 1
+name: "Two-Jurisdiction Banking System (US + EU)"
+description: >
+  Demonstrates multi-jurisdiction configuration with distinct central banks,
+  banking regulations, capital controls, and FX rates.
+  NOTE: Settlement is NOT jurisdiction-aware yet; this scenario validates
+  that the config loads and the system initializes correctly.
+
+jurisdictions:
+  - id: US
+    name: United States
+    domestic_currency: USD
+    institutional_agents: [CB_US, T_US]
+    banking_rules:
+      reserve_requirement_ratio: "0.10"
+      interbank_settlement_mode: RTGS
+      cb_lending_enabled: true
+  - id: EU
+    name: European Union
+    domestic_currency: EUR
+    institutional_agents: [CB_EU, T_EU]
+    banking_rules:
+      reserve_requirement_ratio: "0.01"
+      interbank_settlement_mode: RTGS
+      cb_lending_enabled: true
+    capital_controls:
+      default_action: ALLOW
+      rules:
+        - purpose: PORTFOLIO
+          direction: inflow
+          action: TAX
+          tax_rate: "0.001"
+          description: "Tobin tax on portfolio inflows"
+
+fx_rates:
+  - base_currency: EUR
+    quote_currency: USD
+    rate: "1.10"
+    spread: "0.005"
+
+agents:
+  # US jurisdiction
+  - id: CB_US
+    kind: central_bank
+    name: Federal Reserve
+    jurisdiction: US
+  - id: T_US
+    kind: treasury
+    name: US Treasury
+    jurisdiction: US
+  - id: B_US
+    kind: bank
+    name: US Commercial Bank
+    jurisdiction: US
+  - id: F_US
+    kind: firm
+    name: US Corporation
+    jurisdiction: US
+
+  # EU jurisdiction
+  - id: CB_EU
+    kind: central_bank
+    name: European Central Bank
+    jurisdiction: EU
+  - id: T_EU
+    kind: treasury
+    name: EU Treasury
+    jurisdiction: EU
+  - id: B_EU
+    kind: bank
+    name: EU Commercial Bank
+    jurisdiction: EU
+  - id: F_EU
+    kind: firm
+    name: EU Corporation
+    jurisdiction: EU
+
+initial_actions:
+  # Seed US bank with reserves
+  - mint_reserves: {to: B_US, amount: 10000}
+
+  # Seed EU bank with reserves
+  - mint_reserves: {to: B_EU, amount: 8000}
+
+  # Give firms initial cash
+  - mint_cash: {to: F_US, amount: 5000}
+  - mint_cash: {to: F_EU, amount: 4000}
+
+  # Create domestic payables
+  - create_payable: {from: F_US, to: F_EU, amount: 1000, due_day: 3}
+
+run:
+  mode: until_stable
+  max_days: 10
+  quiet_days: 2
+  show:
+    balances: [CB_US, CB_EU, B_US, B_EU, F_US, F_EU]
+    events: detailed
