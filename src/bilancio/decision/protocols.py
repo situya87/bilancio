@@ -2,8 +2,8 @@
 
 Defines the four decision levels as Protocol classes with trivial
 default implementations that capture current hard-coded behavior.
-These are type contracts for Phase 3 integration — not yet wired
-into the lending or dealer engines.
+Wired into the lending engine via ``_resolve_protocols()`` in
+``engines/lending.py``.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ class FixedPortfolioStrategy:
     Captures current LendingConfig.max_total_exposure behavior.
     """
 
-    max_exposure_fraction: Decimal = Decimal("0.5")
+    max_exposure_fraction: Decimal = Decimal("0.80")
     base_return: Decimal = Decimal("0.05")
 
     def max_exposure(self, total_assets: int) -> int:
@@ -87,7 +87,7 @@ class FixedMaturitySelector:
     Captures current maturity_days in LendingConfig.
     """
 
-    maturity_days: int = 10
+    maturity_days: int = 2
 
     def select_maturity(self) -> int:
         return self.maturity_days
@@ -111,7 +111,7 @@ class LinearPricer:
     Captures current non-bank lender pricing rule.
     """
 
-    risk_premium_scale: Decimal = Decimal("0.5")
+    risk_premium_scale: Decimal = Decimal("0.20")
 
     def price(self, base_rate: Decimal, default_probability: Decimal) -> Decimal:
         return base_rate + self.risk_premium_scale * default_probability

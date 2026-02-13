@@ -41,7 +41,9 @@ class LendingConfig:
     transaction_pricer: Optional["TransactionPricer"] = None
 
 
-def _resolve_protocols(config: LendingConfig):
+def _resolve_protocols(
+    config: LendingConfig,
+) -> tuple["PortfolioStrategy", "CounterpartyScreener", "InstrumentSelector", "TransactionPricer"]:
     """Build effective protocols: explicit overrides or defaults from scalar params."""
     from bilancio.decision.protocols import (
         FixedPortfolioStrategy, ThresholdScreener,

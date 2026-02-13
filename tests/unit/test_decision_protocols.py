@@ -34,9 +34,9 @@ class TestFixedPortfolioStrategy:
     """Tests for FixedPortfolioStrategy default implementation."""
 
     def test_max_exposure_default(self):
-        """Default max_exposure_fraction=0.5 gives 50% of assets."""
+        """Default max_exposure_fraction=0.80 gives 80% of assets."""
         strategy = FixedPortfolioStrategy()
-        assert strategy.max_exposure(10000) == 5000
+        assert strategy.max_exposure(10000) == 8000
 
     def test_max_exposure_custom_fraction(self):
         """Custom fraction is applied correctly."""
@@ -100,9 +100,9 @@ class TestFixedMaturitySelector:
     """Tests for FixedMaturitySelector default implementation."""
 
     def test_default_maturity(self):
-        """Default maturity is 10 days."""
+        """Default maturity is 2 days."""
         selector = FixedMaturitySelector()
-        assert selector.select_maturity() == 10
+        assert selector.select_maturity() == 2
 
     def test_custom_maturity(self):
         """Custom maturity is returned."""
