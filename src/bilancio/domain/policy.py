@@ -56,6 +56,7 @@ class PolicyEngine:
                 AgentKind.TREASURY:     [InstrumentKind.RESERVE_DEPOSIT],
                 AgentKind.CENTRAL_BANK: [InstrumentKind.RESERVE_DEPOSIT],
                 AgentKind.NON_BANK_LENDER: [InstrumentKind.CASH],
+                AgentKind.RATING_AGENCY: [],  # No settlement activity
             },
         )
 

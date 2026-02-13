@@ -50,6 +50,8 @@ class State:
     jurisdictions: dict[str, Any] = field(default_factory=dict)  # str -> Jurisdiction
     fx_market: Any = None  # FXMarket instance
     lender_config: Any = None
+    rating_config: Any = None
+    rating_registry: dict = field(default_factory=dict)
 
 class System:
     def __init__(self, policy: PolicyEngine | None = None, default_mode: str = "fail-fast"):

@@ -118,7 +118,7 @@ class JurisdictionConfig(BaseModel):
 class AgentSpec(BaseModel):
     """Specification for an agent in the scenario."""
     id: str = Field(..., description="Unique identifier for the agent")
-    kind: Literal["central_bank", "bank", "household", "firm", "treasury", "non_bank_lender"] = Field(
+    kind: Literal["central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency"] = Field(
         ..., description="Type of agent"
     )
     name: str = Field(..., description="Human-readable name for the agent")
@@ -806,6 +806,19 @@ class LenderScenarioConfig(BaseModel):
     )
 
 
+class RatingAgencyScenarioConfig(BaseModel):
+    """Rating agency configuration within a scenario."""
+    enabled: bool = Field(default=False, description="Enable rating agency")
+    lookback_window: int = Field(default=5, description="Days of history to consider")
+    balance_sheet_weight: Decimal = Field(default=Decimal("0.4"), description="Weight for balance sheet component")
+    history_weight: Decimal = Field(default=Decimal("0.6"), description="Weight for history component")
+    conservatism_bias: Decimal = Field(default=Decimal("0.02"), description="Additive conservatism bias")
+    coverage_fraction: Decimal = Field(default=Decimal("0.8"), description="Fraction of agents to rate each day")
+    info_profile: Literal["omniscient", "realistic"] = Field(
+        default="realistic", description="Information profile for the agency"
+    )
+
+
 class ScenarioConfig(BaseModel):
     """Complete scenario configuration."""
     version: int = Field(1, description="Configuration version")
@@ -826,6 +839,10 @@ class ScenarioConfig(BaseModel):
     lender: Optional[LenderScenarioConfig] = Field(
         None,
         description="Non-bank lender configuration"
+    )
+    rating_agency: Optional[RatingAgencyScenarioConfig] = Field(
+        None,
+        description="Rating agency configuration"
     )
     jurisdictions: Optional[List[JurisdictionConfig]] = Field(
         None,

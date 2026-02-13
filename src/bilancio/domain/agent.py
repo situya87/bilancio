@@ -40,7 +40,8 @@ class AgentKind(str, Enum):
     DEALER = "dealer"
     VBT = "vbt"
     NON_BANK_LENDER = "non_bank_lender"
-    
+    RATING_AGENCY = "rating_agency"
+
     def __str__(self) -> str:
         return self.value
 
