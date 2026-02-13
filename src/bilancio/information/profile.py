@@ -104,3 +104,124 @@ class InformationProfile:
     counterparty_connectivity: CategoryAccess = _DEFAULT
     cascade_risk: CategoryAccess = _DEFAULT
     exposure_concentration: CategoryAccess = _DEFAULT  # Always PERFECT (own data)
+
+    # ── Hierarchical sub-profile properties ──────────────────────────
+
+    @property
+    def system(self) -> "SystemAccess":
+        """Level 1: System-wide information access."""
+        from bilancio.information.hierarchy import SystemAccess
+
+        return SystemAccess(
+            aggregate_default_rate=self.aggregate_default_rate,
+            system_liquidity=self.system_liquidity,
+            instrument_default_rate=self.instrument_default_rate,
+            instrument_bucket_default_rate=self.instrument_bucket_default_rate,
+            instrument_issuer_kind_rate=self.instrument_issuer_kind_rate,
+            instrument_recovery_rate=self.instrument_recovery_rate,
+        )
+
+    @property
+    def counterparty(self) -> "CounterpartyAccess":
+        """Level 2: Counterparty-specific information access."""
+        from bilancio.information.hierarchy import CounterpartyAccess
+
+        return CounterpartyAccess(
+            cash=self.counterparty_cash,
+            assets=self.counterparty_assets,
+            liabilities=self.counterparty_liabilities,
+            net_worth=self.counterparty_net_worth,
+            liquidity_ratio=self.counterparty_liquidity_ratio,
+            settlement_history=self.counterparty_settlement_history,
+            default_history=self.counterparty_default_history,
+            track_record=self.counterparty_track_record,
+            partial_settlement=self.counterparty_partial_settlement,
+            avg_shortfall=self.counterparty_avg_shortfall,
+            connectivity=self.counterparty_connectivity,
+        )
+
+    @property
+    def instrument(self) -> "InstrumentAccess":
+        """Level 3: Instrument/market information access."""
+        from bilancio.information.hierarchy import InstrumentAccess
+
+        return InstrumentAccess(
+            dealer_quotes=self.dealer_quotes,
+            vbt_anchors=self.vbt_anchors,
+            price_trends=self.price_trends,
+            implied_default_prob=self.implied_default_prob,
+        )
+
+    @property
+    def transaction(self) -> "TransactionAccess":
+        """Level 4: Counterparty x Instrument specific access."""
+        from bilancio.information.hierarchy import TransactionAccess
+
+        return TransactionAccess(
+            counterparty_instrument_history=self.counterparty_instrument_history,
+            counterparty_bucket_default_rate=self.counterparty_bucket_default_rate,
+            bilateral_history=self.bilateral_history,
+            own_exposure=self.own_exposure,
+            obligation_graph=self.obligation_graph,
+            cascade_risk=self.cascade_risk,
+            exposure_concentration=self.exposure_concentration,
+        )
+
+    @classmethod
+    def from_hierarchy(
+        cls,
+        system: Optional["SystemAccess"] = None,
+        counterparty: Optional["CounterpartyAccess"] = None,
+        instrument: Optional["InstrumentAccess"] = None,
+        transaction: Optional["TransactionAccess"] = None,
+    ) -> "InformationProfile":
+        """Construct an InformationProfile from hierarchical sub-profiles.
+
+        Any sub-profile that is ``None`` defaults to all-PERFECT access.
+        """
+        from bilancio.information.hierarchy import (
+            CounterpartyAccess,
+            InstrumentAccess,
+            SystemAccess,
+            TransactionAccess,
+        )
+
+        s = system or SystemAccess()
+        c = counterparty or CounterpartyAccess()
+        i = instrument or InstrumentAccess()
+        t = transaction or TransactionAccess()
+
+        return cls(
+            # System (VI + III)
+            aggregate_default_rate=s.aggregate_default_rate,
+            system_liquidity=s.system_liquidity,
+            instrument_default_rate=s.instrument_default_rate,
+            instrument_bucket_default_rate=s.instrument_bucket_default_rate,
+            instrument_issuer_kind_rate=s.instrument_issuer_kind_rate,
+            instrument_recovery_rate=s.instrument_recovery_rate,
+            # Counterparty (I + II + VII.connectivity)
+            counterparty_cash=c.cash,
+            counterparty_assets=c.assets,
+            counterparty_liabilities=c.liabilities,
+            counterparty_net_worth=c.net_worth,
+            counterparty_liquidity_ratio=c.liquidity_ratio,
+            counterparty_settlement_history=c.settlement_history,
+            counterparty_default_history=c.default_history,
+            counterparty_track_record=c.track_record,
+            counterparty_partial_settlement=c.partial_settlement,
+            counterparty_avg_shortfall=c.avg_shortfall,
+            counterparty_connectivity=c.connectivity,
+            # Instrument (V)
+            dealer_quotes=i.dealer_quotes,
+            vbt_anchors=i.vbt_anchors,
+            price_trends=i.price_trends,
+            implied_default_prob=i.implied_default_prob,
+            # Transaction (IV + VII)
+            counterparty_instrument_history=t.counterparty_instrument_history,
+            counterparty_bucket_default_rate=t.counterparty_bucket_default_rate,
+            bilateral_history=t.bilateral_history,
+            own_exposure=t.own_exposure,
+            obligation_graph=t.obligation_graph,
+            cascade_risk=t.cascade_risk,
+            exposure_concentration=t.exposure_concentration,
+        )
