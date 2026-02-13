@@ -14,6 +14,10 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from bilancio.engines.system import System
     from bilancio.information.profile import InformationProfile
+    from bilancio.decision.protocols import (
+        PortfolioStrategy, CounterpartyScreener,
+        InstrumentSelector, TransactionPricer,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +34,33 @@ class LendingConfig:
     min_shortfall: int = 1
     max_default_prob: Decimal = Decimal("0.50")
     information_profile: Optional["InformationProfile"] = None
+    # Decision protocol overrides (None = auto-construct from scalar params)
+    portfolio_strategy: Optional["PortfolioStrategy"] = None
+    counterparty_screener: Optional["CounterpartyScreener"] = None
+    instrument_selector: Optional["InstrumentSelector"] = None
+    transaction_pricer: Optional["TransactionPricer"] = None
+
+
+def _resolve_protocols(config: LendingConfig):
+    """Build effective protocols: explicit overrides or defaults from scalar params."""
+    from bilancio.decision.protocols import (
+        FixedPortfolioStrategy, ThresholdScreener,
+        FixedMaturitySelector, LinearPricer,
+    )
+    portfolio = config.portfolio_strategy or FixedPortfolioStrategy(
+        max_exposure_fraction=config.max_total_exposure,
+        base_return=config.base_rate,
+    )
+    screener = config.counterparty_screener or ThresholdScreener(
+        max_default_prob=config.max_default_prob,
+    )
+    selector = config.instrument_selector or FixedMaturitySelector(
+        maturity_days=config.maturity_days,
+    )
+    pricer = config.transaction_pricer or LinearPricer(
+        risk_premium_scale=config.risk_premium_scale,
+    )
+    return portfolio, screener, selector, pricer
 
 
 def run_lending_phase(
@@ -62,6 +93,7 @@ def run_lending_phase(
     from bilancio.domain.instruments.non_bank_loan import NonBankLoan
 
     config = lending_config or LendingConfig()
+    portfolio, screener, selector, pricer = _resolve_protocols(config)
     events: List[Dict[str, Any]] = []
 
     # Find the lender
@@ -93,7 +125,7 @@ def run_lending_phase(
     if initial_capital <= 0:
         return events
 
-    max_total = int(config.max_total_exposure * initial_capital)
+    max_total = portfolio.max_exposure(initial_capital)
     available = min(lender_cash, max_total - existing_loan_exposure)
     if available <= 0:
         return events
@@ -133,11 +165,12 @@ def run_lending_phase(
                 p_default = Decimal("0.15")  # Prior when unobservable
         else:
             p_default = default_probs.get(agent_id, Decimal("0.15"))
-        if p_default > config.max_default_prob:
+        if not screener.is_eligible(p_default):
             continue
 
         # Price the loan
-        rate = config.base_rate + config.risk_premium_scale * p_default
+        base_rate = portfolio.target_return()
+        rate = pricer.price(base_rate, p_default)
 
         # Check per-borrower exposure limit (own data — always perfect)
         if info is not None:
@@ -183,7 +216,7 @@ def run_lending_phase(
                 amount=loan_amount,
                 rate=opp["rate"],
                 day=current_day,
-                maturity_days=config.maturity_days,
+                maturity_days=selector.select_maturity(),
             )
             remaining_capital -= loan_amount
             events.append({
