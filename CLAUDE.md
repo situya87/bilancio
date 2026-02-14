@@ -12,6 +12,7 @@ When introducing a new agent type, you MUST explicitly define all four aspects b
 6. **Timing / Phase** — When does it act in the daily simulation cycle? Which subphase? Before or after settlement? Does ordering matter relative to other agents?
 7. **Failure Mode** — What happens when this agent defaults or can't meet obligations? Does it cascade? Is it systemically important? Can it be bailed out?
 8. **Interactions** — Which other agent types does it transact with? Are there bilateral constraints (e.g., "only lends to firms/households, not to banks")?
+9. **State Synchronization** — If the new agent modifies shared state (e.g., agent cash) in its phase, identify ALL other phases that read/write the same state. Ensure synchronization points (like `_sync_trader_cash_from_system`) capture the latest values BEFORE computing deltas. Test the cross-phase interaction explicitly.
 
 Reference: The dealer/trader framework (`bilancio/decision/`) is the gold standard — it has `TraderProfile`, `VBTProfile`, and the `RiskAssessor` with configurable observability.
 - Always use `uv run` instead of `python` to run Python commands in this project

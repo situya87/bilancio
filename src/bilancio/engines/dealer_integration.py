@@ -540,13 +540,16 @@ def run_dealer_trading_phase(
         >>> for event in events:
         ...     print(f"Trade: {event['trader']} {event['side']} at {event['price']}")
     """
+    # Always sync trader cash from main system so that
+    # _sync_trader_cash_to_system (called later in sync_dealer_to_system)
+    # sees the current cash and computes delta=0 when no trades occurred.
+    # Without this, lending-phase cash changes get erroneously reversed.
+    _sync_trader_cash_from_system(subsystem, system)
+
     if not subsystem.enabled:
         return []
 
     events: List[dict[str, object]] = []
-
-    # Phase 0: Sync trader cash from main system
-    _sync_trader_cash_from_system(subsystem, system)
 
     # Phase 0.5: Clean up tickets whose payables were removed
     _cleanup_orphaned_tickets(subsystem, system)
