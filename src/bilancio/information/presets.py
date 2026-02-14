@@ -20,6 +20,7 @@ from bilancio.information.profile import CategoryAccess, InformationProfile
 from bilancio.information.channels import (
     ChannelBinding,
     InstitutionalChannel,
+    MarketDerivedChannel,
     NetworkDerivedChannel,
     SelfDerivedChannel,
     category_from_channel,
@@ -362,6 +363,46 @@ LENDER_RATINGS_BOUND = InformationProfile(
             "default_prob", "system_heuristic",
             SelfDerivedChannel(sample_size=10),
             priority=1,
+        ),
+    ),
+)
+
+
+# ── DEALER_MARKET_OBSERVER ────────────────────────────────────────
+# Dealer/market-maker: observes VBT quotes through a MarketDerived
+# channel (currently PERFECT — degradable for future experiments),
+# has PERFECT access to settlement history (feeds its RiskAssessor),
+# and no direct access to counterparty balance sheets.
+DEALER_MARKET_OBSERVER = InformationProfile(
+    # I. Counterparty Balance Sheet — no direct access
+    counterparty_cash=CategoryAccess(AccessLevel.NONE),
+    counterparty_assets=CategoryAccess(AccessLevel.NONE),
+    counterparty_liabilities=CategoryAccess(AccessLevel.NONE),
+    counterparty_net_worth=CategoryAccess(AccessLevel.NONE),
+    counterparty_liquidity_ratio=CategoryAccess(AccessLevel.NONE),
+    # II. Counterparty History — perfect (feeds RiskAssessor)
+    counterparty_default_history=CategoryAccess(AccessLevel.PERFECT),
+    counterparty_settlement_history=CategoryAccess(AccessLevel.PERFECT),
+    counterparty_track_record=CategoryAccess(AccessLevel.PERFECT),
+    counterparty_partial_settlement=CategoryAccess(AccessLevel.PERFECT),
+    counterparty_avg_shortfall=CategoryAccess(AccessLevel.PERFECT),
+    # IV. Bilateral — own data always perfect
+    bilateral_history=CategoryAccess(AccessLevel.PERFECT),
+    # V. Market Prices — core dealer capability
+    dealer_quotes=CategoryAccess(AccessLevel.PERFECT),
+    vbt_anchors=CategoryAccess(AccessLevel.PERFECT),
+    price_trends=CategoryAccess(AccessLevel.PERFECT),
+    implied_default_prob=CategoryAccess(AccessLevel.PERFECT),
+    # VII. Network — no access
+    obligation_graph=CategoryAccess(AccessLevel.NONE),
+    counterparty_connectivity=CategoryAccess(AccessLevel.NONE),
+    cascade_risk=CategoryAccess(AccessLevel.NONE),
+    # Channel binding: VBT quotes observed through market channel
+    channel_bindings=(
+        ChannelBinding(
+            "vbt_quotes", "market_observation",
+            MarketDerivedChannel(market_thickness=50, staleness_days=0),
+            priority=0,
         ),
     ),
 )

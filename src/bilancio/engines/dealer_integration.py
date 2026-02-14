@@ -168,6 +168,9 @@ class DealerSubsystem:
     # Initial spread per bucket (for spread_sensitivity computation)
     initial_spread_by_bucket: Dict[str, Decimal] = field(default_factory=dict)
 
+    # VBT pricing model (optional — when None, uses inline logic for backward compat)
+    vbt_pricing_model: Any = None
+
 
 def _get_agent_cash(system: System, agent_id: str) -> Decimal:
     """
@@ -427,6 +430,15 @@ def initialize_balanced_dealer_subsystem(
         subsystem.trader_profile = trader_profile
     if vbt_profile is not None:
         subsystem.vbt_profile = vbt_profile
+
+    # Construct VBT pricing model from config params
+    from bilancio.decision.valuers import CreditAdjustedVBTPricing
+    effective_vbt_profile = vbt_profile or VBTProfile()
+    subsystem.vbt_pricing_model = CreditAdjustedVBTPricing(
+        outside_mid_ratio=outside_mid_ratio,
+        mid_sensitivity=effective_vbt_profile.mid_sensitivity,
+        spread_sensitivity=effective_vbt_profile.spread_sensitivity,
+    )
 
     # Initialize risk assessor if params provided
     if risk_params:

@@ -132,6 +132,22 @@ class InstrumentValuer(Protocol):
     def value(self, ticket: Any, day: int) -> Any: ...
 
 
+
+# ── Level 6: VBT Pricing Model ───────────────────────────────────
+
+@runtime_checkable
+class VBTPricingModel(Protocol):
+    """Computes mid-price and spread for VBT dealer quoting."""
+
+    def compute_mid(self, p_default: Decimal, initial_prior: Decimal) -> Decimal:
+        """Credit-adjusted mid price given observed default probability."""
+        ...
+
+    def compute_spread(self, base_spread: Decimal, p_default: Decimal) -> Decimal:
+        """Bid–ask spread, possibly widened by credit risk."""
+        ...
+
+
 __all__ = [
     "PortfolioStrategy",
     "FixedPortfolioStrategy",
@@ -142,4 +158,5 @@ __all__ = [
     "TransactionPricer",
     "LinearPricer",
     "InstrumentValuer",
+    "VBTPricingModel",
 ]
