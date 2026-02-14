@@ -25,5 +25,10 @@ class SimulationHalt(DefaultError):
 
 
 class ConfigurationError(BilancioError, ValueError):
-    """Raised when scenario configuration is invalid."""
+    """Raised when scenario configuration is invalid.
+
+    Inherits from both BilancioError and ValueError so that existing
+    ``except ValueError`` handlers (e.g. in apply_action's error wrapping)
+    continue to catch configuration errors without modification.
+    """
     pass

@@ -28,19 +28,17 @@ def retry_transient(
     def decorator(fn: F) -> F:
         @wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_exc: BaseException | None = None
-            for attempt in range(max_retries + 1):
+            for attempt in range(max_retries):
                 try:
                     return fn(*args, **kwargs)
                 except retryable as exc:
-                    last_exc = exc
-                    if attempt < max_retries:
-                        delay = base_delay * (2 ** attempt)
-                        logger.warning(
-                            "%s failed (attempt %d/%d): %s — retrying in %.1fs",
-                            fn.__qualname__, attempt + 1, max_retries + 1, exc, delay,
-                        )
-                        time.sleep(delay)
-            raise last_exc  # type: ignore[misc]
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(
+                        "%s failed (attempt %d/%d): %s — retrying in %.1fs",
+                        fn.__qualname__, attempt + 1, max_retries + 1, exc, delay,
+                    )
+                    time.sleep(delay)
+            # Final attempt — let any exception propagate
+            return fn(*args, **kwargs)
         return wrapper  # type: ignore[return-value]
     return decorator
