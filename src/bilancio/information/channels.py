@@ -110,6 +110,10 @@ Channel = Union[
 ]
 
 
+#: Known source identifiers for channel bindings.
+KNOWN_SOURCES = frozenset({"dealer_risk_assessor", "rating_registry", "system_heuristic"})
+
+
 @dataclass(frozen=True)
 class ChannelBinding:
     """Binds an information category to a specific data source.
@@ -120,9 +124,9 @@ class ChannelBinding:
 
     Attributes:
         category: Information category, e.g. ``"default_prob"``.
-        source: Data source identifier — one of
-            ``"dealer_risk_assessor"``, ``"rating_registry"``,
-            ``"system_heuristic"``.
+        source: Data source identifier — one of the values in
+            ``KNOWN_SOURCES``: ``"dealer_risk_assessor"``,
+            ``"rating_registry"``, ``"system_heuristic"``.
         channel: Channel describing noise / quality properties
             of this source.
         priority: Lower number is tried first (default 0).

@@ -226,6 +226,26 @@ class TestServiceBindings:
         # Heuristic is tried first (priority 0) → 0.05
         assert p == Decimal("0.05")
 
+    def test_unknown_source_skipped(self):
+        """Unknown source names are skipped, falling through to next binding."""
+        system = _build_system(with_rating_registry=True)
+        profile = InformationProfile(
+            channel_bindings=(
+                ChannelBinding(
+                    "default_prob", "nonexistent_source",
+                    SelfDerivedChannel(), priority=0,
+                ),
+                ChannelBinding(
+                    "default_prob", "rating_registry",
+                    InstitutionalChannel(), priority=1,
+                ),
+            ),
+        )
+        info = InformationService(system, profile, observer_id="NBL01")
+        p = info.get_default_probability("F01", 0)
+        # Unknown source skipped → falls to registry → 0.10
+        assert p == Decimal("0.10")
+
 
 # ── 4. Service without bindings uses legacy waterfall ──────────────
 

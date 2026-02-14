@@ -12,8 +12,11 @@ Design rules:
 
 from __future__ import annotations
 
+import logging
 import random
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 from typing import Dict, Optional, TYPE_CHECKING
 
 from bilancio.information.levels import AccessLevel
@@ -424,6 +427,7 @@ class InformationService:
             return self._default_prob_from_registry(current_day)
         if source == "system_heuristic":
             return self._default_prob_heuristic(current_day)
+        logger.debug("Unknown default-prob source %r — skipped", source)
         return None
 
     def _default_prob_from_dealer(

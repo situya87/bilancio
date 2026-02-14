@@ -359,7 +359,7 @@ def _estimate_default_probs(
     system: "System",
     current_day: int,
     log_estimates: bool = False,
-    channel_bindings: tuple = (),
+    channel_bindings: "tuple[Any, ...]" = (),
 ) -> Dict[str, Decimal]:
     """Estimate default probability per agent.
 
