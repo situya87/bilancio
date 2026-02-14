@@ -10,12 +10,15 @@ This module enables traders to:
 import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any, Dict, List
+from typing import Any, Dict, List, TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
 from bilancio.core.ids import AgentId
 from .models import Ticket
+
+if TYPE_CHECKING:
+    from bilancio.information.estimates import Estimate
 
 
 @dataclass
@@ -159,7 +162,8 @@ class RiskAssessor:
             Expected payoff from holding (in same units as face value)
         """
         if self.instrument_valuer is not None:
-            return self.instrument_valuer.value_decimal(ticket, current_day)
+            result: Decimal = self.instrument_valuer.value_decimal(ticket, current_day)
+            return result
         p_default = self.estimate_default_prob(ticket.issuer_id, current_day)
         ev = (Decimal(1) - p_default) * ticket.face
         return ev
@@ -220,7 +224,8 @@ class RiskAssessor:
         ``value()`` method instead of using the built-in formula.
         """
         if self.instrument_valuer is not None:
-            return self.instrument_valuer.value(ticket, current_day)
+            ev_est: Estimate = self.instrument_valuer.value(ticket, current_day)
+            return ev_est
         from bilancio.information.estimates import Estimate
 
         value = self.expected_value(ticket, current_day)

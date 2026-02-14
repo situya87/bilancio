@@ -36,9 +36,9 @@ def compute_intraday_nets(system: System, day: int) -> dict[tuple[str, str], int
     """
     nets: defaultdict[tuple[str, str], int] = defaultdict(int)
 
-    # Scan events for ClientPayment events from today
-    for event in system.state.events:
-        if event.get("kind") == "ClientPayment" and event.get("day") == day:
+    # Use indexed events for O(1) day lookup instead of O(n) full scan
+    for event in system.state.events_by_day.get(day, []):
+        if event.get("kind") == "ClientPayment":
             debtor_bank = str(event.get("payer_bank", ""))
             creditor_bank = str(event.get("payee_bank", ""))
             amount = cast(int, event.get("amount", 0))

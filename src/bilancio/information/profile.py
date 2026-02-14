@@ -16,6 +16,12 @@ from bilancio.information.noise import NoiseConfig
 
 if TYPE_CHECKING:
     from bilancio.information.channels import ChannelBinding
+    from bilancio.information.hierarchy import (
+        SystemAccess,
+        CounterpartyAccess,
+        InstrumentAccess,
+        TransactionAccess,
+    )
 
 
 @dataclass(frozen=True)

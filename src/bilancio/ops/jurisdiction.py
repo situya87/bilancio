@@ -78,7 +78,8 @@ def fx_convert(fx_market: Any, amount: int, from_currency: str, to_currency: str
     """
     if from_currency == to_currency:
         return amount
-    return fx_market.convert(amount, from_currency, to_currency)
+    result: int = fx_market.convert(amount, from_currency, to_currency)
+    return result
 
 
 def check_capital_controls(

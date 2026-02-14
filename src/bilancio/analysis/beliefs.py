@@ -236,7 +236,7 @@ def export_estimates_jsonl(
 
 def _serialize_dict(d: dict[str, Any]) -> dict[str, Any]:
     """Serialize a dict, converting Decimals to strings."""
-    result = {}
+    result: dict[str, Any] = {}
     for k, v in d.items():
         if isinstance(v, Decimal):
             result[k] = str(v)

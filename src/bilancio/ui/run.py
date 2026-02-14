@@ -11,7 +11,7 @@ from rich.table import Table
 
 from bilancio.engines.system import System
 from bilancio.engines.simulation import run_day, run_until_stable
-from bilancio.core.errors import ValidationError, DefaultError
+from bilancio.core.errors import ValidationError, DefaultError, SimulationHalt
 from bilancio.config import load_yaml, apply_to_system
 from bilancio.export.writers import write_balances_csv, write_events_jsonl
 
@@ -456,7 +456,7 @@ def run_step_mode(
                 console.print("[green]OK[/green] System reached stable state")
                 break
                 
-        except DefaultError as e:
+        except (DefaultError, SimulationHalt) as e:
             show_error_panel(
                 error=e,
                 phase=f"day_{system.state.day}",
@@ -467,7 +467,7 @@ def run_step_mode(
                 }
             )
             break
-            
+
         except ValidationError as e:
             show_error_panel(
                 error=e,
@@ -479,7 +479,7 @@ def run_step_mode(
                 }
             )
             break
-            
+
         except Exception as e:  # Intentionally broad: top-level simulation loop
             show_error_panel(
                 error=e,
@@ -490,7 +490,7 @@ def run_step_mode(
                 }
             )
             break
-    
+
     # Show final summary
     console.print("\n[bold]Simulation Complete[/bold]")
     console.print(show_simulation_summary_renderable(system))
@@ -691,7 +691,7 @@ def run_until_stable_mode(
         else:
             console.print("[yellow][!][/yellow] Maximum days reached without stable state")
         
-    except DefaultError as e:
+    except (DefaultError, SimulationHalt) as e:
         show_error_panel(
             error=e,
             phase="simulation",
@@ -701,7 +701,7 @@ def run_until_stable_mode(
                 "phase": system.state.phase
             }
         )
-        
+
     except ValidationError as e:
         show_error_panel(
             error=e,

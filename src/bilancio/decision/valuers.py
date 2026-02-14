@@ -74,7 +74,8 @@ class CoverageRatioValuer:
     def value_decimal(self, ticket: Any, day: int) -> Decimal:
         """Fast path: (1 - P_default) × face."""
         p = self._p_default(ticket.issuer_id)
-        return (Decimal(1) - p) * ticket.face
+        face: Decimal = ticket.face
+        return (Decimal(1) - p) * face
 
     def value(self, ticket: Any, day: int) -> Estimate:
         """Full path: Estimate with provenance."""

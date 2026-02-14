@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from bilancio.analysis.metrics_computer import MetricsComputer
