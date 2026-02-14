@@ -181,7 +181,7 @@ def run_lending_phase(
         if profile is not None:
             # Compute coverage ratio: (cash + receivables) / upcoming_obligations
             receivables = _get_receivables_due_within(system, agent_id, current_day, profile.planning_horizon)
-            total_resources = agent_cash + receivables
+            total_resources = max(agent_cash + receivables, 0)
             coverage = Decimal(str(total_resources)) / Decimal(str(max(upcoming_due, 1)))
             # Blend kappa-based prior with coverage ratio
             p_default = profile.base_default_estimate * (Decimal("1") / max(coverage, Decimal("0.01")))

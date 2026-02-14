@@ -491,11 +491,11 @@ def _distribute_pro_rata_recovery(system: System, agent_id: str) -> None:
     if total_claims <= 0:
         return
 
-    # Distribute cash pro-rata to each creditor
+    # Distribute cash pro-rata to each creditor (round to avoid truncation loss)
     recovery_details: list[dict[str, object]] = []
     total_distributed = 0
     for creditor_id, claim_amount in claims:
-        share = int((claim_amount / total_claims) * total_cash)
+        share = round((claim_amount / total_claims) * total_cash)
         if share <= 0:
             continue
         try:

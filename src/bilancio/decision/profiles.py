@@ -125,6 +125,10 @@ class LenderProfile:
     max_loan_maturity: int = 10
 
     def __post_init__(self) -> None:
+        if self.kappa <= Decimal("0"):
+            raise ValueError("kappa must be positive")
+        if self.profit_target < Decimal("0"):
+            raise ValueError("profit_target cannot be negative")
         if not (1 <= self.planning_horizon <= 20):
             raise ValueError("planning_horizon must be between 1 and 20")
         if not (Decimal("0") <= self.risk_aversion <= Decimal("1")):
