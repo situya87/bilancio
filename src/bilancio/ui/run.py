@@ -118,6 +118,9 @@ def run_scenario(
     # Plan 024: Enable rollover if configured
     system.state.rollover_enabled = config.run.rollover_enabled
 
+    # Plan 034: Enable estimate logging if configured
+    system.state.estimate_logging_enabled = config.run.estimate_logging
+
     # Stage scheduled actions into system state (Phase B1 execution by day)
     try:
         if getattr(config, 'scheduled_actions', None):
