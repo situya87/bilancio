@@ -60,6 +60,7 @@ class System:
         self.policy = policy or PolicyEngine.default()
         self.state = State()
         self.default_mode = default_mode
+        logger.info("System initialized (default_mode=%s)", default_mode)
 
     # ---- ID helpers
     def new_agent_id(self, prefix: str = "A") -> AgentId: return new_id(prefix)
@@ -140,6 +141,7 @@ class System:
         assert_all_stock_ids_owned(self)
         assert_no_negative_stocks(self)
         assert_no_duplicate_stock_refs(self)
+        logger.debug("invariants OK (agents=%d, contracts=%d)", len(self.state.agents), len(self.state.contracts))
 
     # ---- bootstrap helper
     def bootstrap_cb(self, cb: Agent) -> None:

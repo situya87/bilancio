@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from bilancio.core.errors import ValidationError
@@ -8,6 +9,8 @@ from bilancio.domain.instruments.base import Instrument, InstrumentKind
 
 if TYPE_CHECKING:
     from bilancio.engines.system import System
+
+logger = logging.getLogger(__name__)
 
 
 def fungible_key(instr: Instrument) -> tuple[str, str, str, str]:
@@ -50,6 +53,7 @@ def split(system: System, instr_id: str, amount: int) -> str:
         **extra_fields
     )
     system.add_contract(twin)  # attaches to holder/issuer lists too
+    logger.debug("split %s: %d off -> %s (remaining=%d)", instr_id, amount, twin_id, instr.amount)
     return twin_id
 
 def merge(system: System, a_id: str, b_id: str) -> str:
@@ -60,6 +64,7 @@ def merge(system: System, a_id: str, b_id: str) -> str:
     if fungible_key(a) != fungible_key(b):
         raise ValidationError("instruments are not fungible-compatible")
     a.amount += b.amount
+    logger.debug("merge %s + %s -> %s (new amount=%d)", a_id, b_id, a_id, a.amount)
     # detach b from registries
     holder = system.state.agents[b.asset_holder_id]
     issuer = system.state.agents[b.liability_issuer_id]
@@ -74,6 +79,7 @@ def consume(system: System, instr_id: str, amount: int) -> None:
     if amount <= 0 or amount > instr.amount:
         raise ValidationError("invalid consume amount")
     instr.amount -= amount
+    logger.debug("consume %s: amount=%d (remaining=%d)", instr_id, amount, instr.amount)
     if instr.amount == 0:
         holder = system.state.agents[instr.asset_holder_id]
         issuer = system.state.agents[instr.liability_issuer_id]

@@ -7,6 +7,7 @@ at runtime; the directive below silences mypy for this single error code.
 """
 # mypy: disable-error-code="union-attr"
 
+import logging
 from typing import Any, Dict
 from decimal import Decimal
 
@@ -21,6 +22,8 @@ from bilancio.core.atomic_tx import atomic
 
 from .models import ScenarioConfig, AgentSpec
 from .loaders import parse_action
+
+logger = logging.getLogger(__name__)
 
 
 def create_agent(spec: AgentSpec) -> Any:
@@ -59,6 +62,7 @@ def create_agent(spec: AgentSpec) -> Any:
     jurisdiction = getattr(spec, "jurisdiction", None)
     if jurisdiction is not None:
         agent.jurisdiction_id = jurisdiction
+    logger.debug("created agent %s (kind=%s)", spec.id, spec.kind)
     return agent
 
 
@@ -93,7 +97,8 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
     # Parse the action
     action = parse_action(action_dict)
     action_type = action.action
-    
+    logger.debug("applying action: %s", action_type)
+
     try:
         if action_type == "mint_reserves":
             instr_id = system.mint_reserves(
@@ -452,6 +457,7 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
         ValidationError: If system invariants are violated
     """
     agents = {}
+    logger.info("applying scenario: %d agents, %d initial actions", len(config.agents), len(config.initial_actions))
 
     # Use setup context for all initialization
     with system.setup():
@@ -463,6 +469,7 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
 
         # Apply policy overrides
         if config.policy_overrides:
+            logger.debug("applying policy overrides")
             apply_policy_overrides(system, config.policy_overrides.model_dump())
 
         # Execute initial actions
@@ -474,6 +481,7 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
 
     # Final invariant check outside of setup
     system.assert_invariants()
+    logger.info("scenario applied successfully")
 
     # Hydrate jurisdiction data from config into State
     if config.jurisdictions:
