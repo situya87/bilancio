@@ -40,6 +40,7 @@ from typing import Dict, List, Optional, Any, TYPE_CHECKING
 import random
 
 if TYPE_CHECKING:
+    from bilancio.decision.protocols import VBTPricingModel
     from bilancio.engines.system import System
 
 from bilancio.core.ids import AgentId, InstrId
@@ -169,7 +170,7 @@ class DealerSubsystem:
     initial_spread_by_bucket: Dict[str, Decimal] = field(default_factory=dict)
 
     # VBT pricing model (optional — when None, uses inline logic for backward compat)
-    vbt_pricing_model: Any = None
+    vbt_pricing_model: Optional["VBTPricingModel"] = None
 
 
 def _get_agent_cash(system: System, agent_id: str) -> Decimal:

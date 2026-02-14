@@ -196,7 +196,7 @@ def _update_vbt_credit_mids(subsystem: "DealerSubsystem", current_day: int) -> N
     # Use system-wide default estimate (no specific issuer)
     p_default = subsystem.risk_assessor.estimate_default_prob("_system_", current_day)
 
-    pricing_model = getattr(subsystem, "vbt_pricing_model", None)
+    pricing_model = subsystem.vbt_pricing_model
 
     if pricing_model is not None:
         # Delegate to the VBT's own pricing heuristic
