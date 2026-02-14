@@ -18,6 +18,26 @@ class EventKind(str, Enum):
     SUBPHASE_B2 = "SubphaseB2"
     SUBPHASE_B_DEALER = "SubphaseB_Dealer"
     SUBPHASE_B_ROLLOVER = "SubphaseB_Rollover"
+    SUBPHASE_B_RATING = "SubphaseB_Rating"
+
+    # ── Bootstrap / setup events ─────────────────────────────────────
+    BOOTSTRAP_CB = "BootstrapCB"
+
+    # ── Cash events ──────────────────────────────────────────────────
+    CASH_MINTED = "CashMinted"
+    CASH_RETIRED = "CashRetired"
+    CASH_TRANSFERRED = "CashTransferred"
+
+    # ── Reserves events ──────────────────────────────────────────────
+    RESERVES_MINTED = "ReservesMinted"
+    RESERVES_TRANSFERRED = "ReservesTransferred"
+    RESERVES_TO_CASH = "ReservesToCash"
+    CASH_TO_RESERVES = "CashToReserves"
+    RESERVE_INTEREST_CREDITED = "ReserveInterestCredited"
+
+    # ── Central bank loan events ─────────────────────────────────────
+    CB_LOAN_CREATED = "CBLoanCreated"
+    CB_LOAN_REPAID = "CBLoanRepaid"
 
     # ── Payable / settlement events ──────────────────────────────────
     PAYABLE_CREATED = "PayableCreated"
@@ -25,9 +45,12 @@ class EventKind(str, Enum):
     PAYABLE_ROLLED_OVER = "PayableRolledOver"
     PARTIAL_SETTLEMENT = "PartialSettlement"
     ROLLOVER_PARTIAL = "RolloverPartial"
+    OBLIGATION_SETTLED = "ObligationSettled"
 
     # ── Delivery obligation events ───────────────────────────────────
+    DELIVERY_OBLIGATION_CREATED = "DeliveryObligationCreated"
     DELIVERY_OBLIGATION_SETTLED = "DeliveryObligationSettled"
+    DELIVERY_OBLIGATION_CANCELLED = "DeliveryObligationCancelled"
 
     # ── Default handling ─────────────────────────────────────────────
     OBLIGATION_DEFAULTED = "ObligationDefaulted"
@@ -55,9 +78,11 @@ class EventKind(str, Enum):
     CLAIM_TRANSFERRED = "ClaimTransferred"
 
     # ── Stock events ─────────────────────────────────────────────────
+    STOCK_CREATED = "StockCreated"
     STOCK_SPLIT = "StockSplit"
     STOCK_MERGED = "StockMerged"
     STOCK_CONSUMED = "StockConsumed"
+    STOCK_TRANSFERRED = "StockTransferred"
 
     # ── Dealer / secondary-market events ─────────────────────────────
     CLAIM_TRANSFERRED_DEALER = "ClaimTransferredDealer"
@@ -70,6 +95,9 @@ class EventKind(str, Enum):
     NONBANK_LOAN_CREATED = "NonBankLoanCreated"
     NONBANK_LOAN_REPAID = "NonBankLoanRepaid"
     NONBANK_LOAN_DEFAULTED = "NonBankLoanDefaulted"
+
+    # ── Rating agency events ──────────────────────────────────────────
+    RATINGS_PUBLISHED = "RatingsPublished"
 
     # ── Jurisdiction / FX events ──────────────────────────────────────
     FX_CONVERSION = "FXConversion"

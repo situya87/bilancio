@@ -663,6 +663,7 @@ def _settle_single_payable(
 
         _remove_contract(system, payable.id)
         alias = get_alias_for_id(system, payable.id)
+        logger.debug("payable settled: %s, debtor=%s, creditor=%s, amount=%d", payable.id, debtor.id, creditor.id, payable_amount)
         system.log(
             EventKind.PAYABLE_SETTLED,
             pid=payable.id,
@@ -694,6 +695,7 @@ def _handle_payable_default(
     rollover_enabled: bool,
 ) -> bool:
     """Handle a payable that couldn't be fully settled. Returns False (not settled)."""
+    logger.warning("payable default: %s, debtor=%s, shortfall=%d", payable.id, debtor.id, remaining)
     if _get_default_mode(system) == DEFAULT_MODE_FAIL_FAST:
         raise DefaultError(f"Insufficient funds to settle payable {payable.id}: {remaining} still owed")
 
@@ -760,11 +762,12 @@ def settle_due(system: System, day: int, *, rollover_enabled: bool = False) -> l
     Returns:
         List of settled payable info for rollover: [(debtor_id, creditor_id, amount, maturity_distance)]
     """
-    logger.debug("settle_due: processing day %d", day)
+    due_list = list(due_payables(system, day))
+    logger.info("settle_due: day %d, %d payable(s) due", day, len(due_list))
     settled_for_rollover = []
     risk_assessor = _get_risk_assessor(system)
 
-    for payable_instr in list(due_payables(system, day)):
+    for payable_instr in due_list:
         if payable_instr.id not in system.state.contracts:
             continue
         assert isinstance(payable_instr, Payable)
@@ -811,6 +814,7 @@ def rollover_settled_payables(system: System, day: int, settled_payables: list[t
             if c.due_day is not None and c.due_day > max_due_day:
                 max_due_day = c.due_day
 
+    logger.debug("rollover: day %d, %d payable(s) to roll, max_due_day=%d", day, len(settled_payables), max_due_day)
     new_payable_ids = []
     for debtor_id, creditor_id, amount, maturity_distance in settled_payables:
         # Skip if either party has defaulted
