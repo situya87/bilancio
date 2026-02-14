@@ -95,6 +95,7 @@ addopts = [
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "regression: end-to-end simulation regression tests (run with '-m regression')",
 ]
 
 [tool.mypy]
