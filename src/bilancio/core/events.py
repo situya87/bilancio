@@ -95,6 +95,7 @@ class EventKind(str, Enum):
     NONBANK_LOAN_CREATED = "NonBankLoanCreated"
     NONBANK_LOAN_REPAID = "NonBankLoanRepaid"
     NONBANK_LOAN_DEFAULTED = "NonBankLoanDefaulted"
+    PRO_RATA_RECOVERY = "ProRataRecovery"
 
     # ── Rating agency events ──────────────────────────────────────────
     RATINGS_PUBLISHED = "RatingsPublished"

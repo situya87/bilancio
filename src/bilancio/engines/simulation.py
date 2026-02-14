@@ -236,6 +236,15 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
         if system.state.estimate_logging_enabled:
             _log_rating_estimates(system, current_day)
 
+    # SubphaseB_Lending: Non-bank lending phase (optional)
+    # Runs BEFORE dealer trading so firms can borrow to cover shortfalls
+    # before deciding whether to sell claims on the secondary market.
+    if enable_lender and system.state.lender_config is not None:
+        system.log("SubphaseB_Lending")
+        from bilancio.engines.lending import run_lending_phase
+        lending_events = run_lending_phase(system, current_day, system.state.lender_config)
+        system.state.events.extend(lending_events)
+
     # SubphaseB_Dealer: Run dealer trading phase (optional)
     if enable_dealer and system.state.dealer_subsystem is not None:
         system.log("SubphaseB_Dealer")
@@ -252,13 +261,6 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
         # Log dealer risk estimates if enabled
         if system.state.estimate_logging_enabled:
             _log_dealer_estimates(system, current_day)
-
-    # SubphaseB_Lending: Non-bank lending phase (optional)
-    if enable_lender and system.state.lender_config is not None:
-        system.log("SubphaseB_Lending")
-        from bilancio.engines.lending import run_lending_phase
-        lending_events = run_lending_phase(system, current_day, system.state.lender_config)
-        system.state.events.extend(lending_events)
 
     # B2: Automated settlements due today
     system.log("SubphaseB2")

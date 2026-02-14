@@ -13,6 +13,7 @@ from bilancio.domain.agent import Agent, AgentKind
 from bilancio.domain.instruments.base import Instrument, InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.delivery import DeliveryObligation
+from bilancio.domain.instruments.non_bank_loan import NonBankLoan
 from bilancio.ops.banking import client_payment
 from bilancio.ops.aliases import get_alias_for_id
 
@@ -449,6 +450,84 @@ def _reconnect_ring(system: System, defaulted_agent_id: str, successor_id: str, 
     }
 
 
+def _distribute_pro_rata_recovery(system: System, agent_id: str) -> None:
+    """Distribute a defaulting agent's remaining cash to creditors proportionally.
+
+    Before liabilities are written off, any cash the agent still holds is
+    divided among all creditors (payable holders and non-bank loan lenders)
+    in proportion to each creditor's outstanding claim.
+
+    Args:
+        system: The System instance
+        agent_id: ID of the defaulting agent whose cash will be distributed
+    """
+    agent = system.state.agents.get(agent_id)
+    if agent is None:
+        return
+
+    # Sum all CASH instruments held by the defaulting agent
+    total_cash = 0
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is not None and contract.kind == InstrumentKind.CASH:
+            total_cash += contract.amount
+
+    if total_cash <= 0:
+        return
+
+    # Collect all outstanding liabilities (payables + NonBankLoans)
+    claims: list[tuple[str, int]] = []  # (creditor_id, claim_amount)
+    for contract in system.state.contracts.values():
+        if contract.liability_issuer_id != agent_id:
+            continue
+        if contract.kind == InstrumentKind.PAYABLE and isinstance(contract, Payable):
+            creditor_id = contract.effective_creditor
+            claims.append((creditor_id, contract.amount))
+        elif contract.kind == InstrumentKind.NON_BANK_LOAN and isinstance(contract, NonBankLoan):
+            creditor_id = contract.asset_holder_id
+            claims.append((creditor_id, contract.repayment_amount))
+
+    total_claims = sum(amount for _, amount in claims)
+    if total_claims <= 0:
+        return
+
+    # Distribute cash pro-rata to each creditor (round to avoid truncation loss)
+    recovery_details: list[dict[str, object]] = []
+    total_distributed = 0
+    for creditor_id, claim_amount in claims:
+        share = round((claim_amount / total_claims) * total_cash)
+        if share <= 0:
+            continue
+        try:
+            system.transfer_cash(from_agent_id=agent_id, to_agent_id=creditor_id, amount=share)
+            total_distributed += share
+            recovery_details.append({
+                "creditor": creditor_id,
+                "claim": claim_amount,
+                "recovery": share,
+            })
+        except (ValidationError, Exception):
+            logger.debug(
+                "pro-rata transfer failed: agent=%s creditor=%s share=%d",
+                agent_id, creditor_id, share,
+            )
+
+    if total_distributed > 0:
+        system.log(
+            EventKind.PRO_RATA_RECOVERY,
+            agent=agent_id,
+            total_cash=total_cash,
+            total_claims=total_claims,
+            total_distributed=total_distributed,
+            num_creditors=len(recovery_details),
+            details=recovery_details,
+        )
+        logger.info(
+            "pro-rata recovery: agent=%s distributed=%d/%d to %d creditors",
+            agent_id, total_distributed, total_cash, len(recovery_details),
+        )
+
+
 def _expel_agent(
     system: System,
     agent_id: str,
@@ -465,9 +544,10 @@ def _expel_agent(
     1. Guard: no-op in fail-fast mode or if already defaulted.
     2. Raises SimulationHalt if the agent is the central bank.
     3. Marks the agent as defaulted and adds to defaulted_agent_ids.
-    4. Writes off all outstanding liabilities issued by the agent.
-    5. Cancels scheduled actions referencing the agent or its contracts.
-    6. If all non-CB agents have defaulted, raises SimulationHalt
+    4. Distributes remaining cash to creditors pro-rata (recovery).
+    5. Writes off all outstanding liabilities issued by the agent.
+    6. Cancels scheduled actions referencing the agent or its contracts.
+    7. If all non-CB agents have defaulted, raises SimulationHalt
        (system collapse).
     """
     if _get_default_mode(system) != DEFAULT_MODE_EXPEL:
@@ -496,6 +576,9 @@ def _expel_agent(
         shortfall=trigger_shortfall,
         mode=_get_default_mode(system),
     )
+
+    # Distribute remaining cash to creditors pro-rata before writing off liabilities
+    _distribute_pro_rata_recovery(system, agent_id)
 
     cancelled_contract_ids = set(cancelled_contract_ids or [])
     cancelled_aliases = set(cancelled_aliases or [])

@@ -353,7 +353,7 @@ class BalancedComparisonRunner:
 
         self.passive_dir = self.base_dir / "passive"
         self.active_dir = self.base_dir / "active"
-        self.lender_dir = self.base_dir / "lender"
+        self.lender_dir = self.base_dir / "nbfi"
         self.aggregate_dir = self.base_dir / "aggregate"
 
         # Only create local directories if we're doing local processing
@@ -576,6 +576,52 @@ class BalancedComparisonRunner:
             # Lender-specific: pass lender mode and config
             lender_mode=True,
             lender_share=self.config.lender_share,
+            balanced_mode_override="lender",
+        )
+
+    def _get_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+        """Get NBFI runner (lending enabled, no dealer, NBFI gets all VBT/dealer liquidity).
+
+        In NBFI mode, VBT/Dealer get zero cash, all their liquidity goes to NBFI.
+        This uses balanced_mode_override="nbfi" so the scenario compiler allocates
+        cash accordingly.
+        """
+        return RingSweepRunner(
+            out_dir=self.base_dir / "nbfi",
+            name_prefix=f"{self.config.name_prefix} (NBFI)",
+            n_agents=self.config.n_agents,
+            maturity_days=self.config.maturity_days,
+            Q_total=self.config.Q_total,
+            liquidity_mode=self.config.liquidity_mode,
+            liquidity_agent=None,
+            base_seed=self.config.base_seed,
+            default_handling=self.config.default_handling,
+            dealer_enabled=False,  # No dealer trading in NBFI mode
+            dealer_config=None,
+            balanced_mode=True,
+            face_value=self.config.face_value,
+            outside_mid_ratio=outside_mid_ratio,
+            big_entity_share=self.config.big_entity_share,
+            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
+            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            rollover_enabled=self.config.rollover_enabled,
+            detailed_dealer_logging=self.config.detailed_logging,
+            executor=self.executor,
+            quiet=self.config.quiet,
+            risk_assessment_enabled=self.config.risk_assessment_enabled,
+            risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            # NBFI mode: lender enabled, override mode to "nbfi"
+            lender_mode=True,
+            lender_share=self.config.lender_share,
+            balanced_mode_override="nbfi",
         )
 
     def run_all(self) -> List[BalancedComparisonResult]:
@@ -949,20 +995,20 @@ class BalancedComparisonRunner:
         # Extract dealer metrics from active result
         dm = active_result.dealer_metrics or {}
 
-        # Run lender (optional third arm)
+        # Run lender (optional third arm — NBFI mode)
         lender_result_data: Dict[str, Any] = {}
         if self.config.enable_lender:
-            logger.info("  Running lender (with lending)...")
-            print("  Lender run:", flush=True)
-            lender_runner = self._get_lender_runner(outside_mid_ratio)
-            lender_result = lender_runner._execute_run(
-                phase="balanced_lender",
+            logger.info("  Running NBFI lender...")
+            print("  NBFI run:", flush=True)
+            nbfi_runner = self._get_nbfi_runner(outside_mid_ratio)
+            lender_result = nbfi_runner._execute_run(
+                phase="balanced_nbfi",
                 kappa=kappa,
                 concentration=concentration,
                 mu=mu,
                 monotonicity=monotonicity,
                 seed=seed,
-                progress_callback=self._make_progress_callback("lender"),
+                progress_callback=self._make_progress_callback("nbfi"),
             )
             lender_result_data = {
                 "delta_lender": lender_result.delta_total,

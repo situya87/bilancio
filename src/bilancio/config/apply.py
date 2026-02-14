@@ -627,7 +627,35 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
     # Set up lender config if present in scenario
     if config.lender and config.lender.enabled:
         from bilancio.engines.lending import LendingConfig
+        from bilancio.decision.profiles import LenderProfile
         info_profile = _build_lender_info_profile(config.lender)
+
+        # Build LenderProfile if kappa-aware lending is configured
+        lender_profile = None
+        if config.lender.kappa is not None:
+            lender_profile = LenderProfile(
+                kappa=config.lender.kappa,
+                risk_aversion=config.lender.risk_aversion,
+                planning_horizon=config.lender.planning_horizon,
+                profit_target=config.lender.profit_target,
+                max_loan_maturity=config.lender.max_loan_maturity or config.lender.maturity_days,
+            )
+
+        # Compute max_ring_maturity from existing payables and scheduled actions
+        max_ring_maturity: int | None = None
+        from bilancio.domain.instruments.base import InstrumentKind
+        for contract in system.state.contracts.values():
+            if contract.kind == InstrumentKind.PAYABLE and contract.due_day is not None:
+                if max_ring_maturity is None or contract.due_day > max_ring_maturity:
+                    max_ring_maturity = contract.due_day
+        for actions in system.state.scheduled_actions_by_day.values():
+            for action in actions:
+                cp = action.get("create_payable")
+                if isinstance(cp, dict):
+                    dd = cp.get("due_day")
+                    if isinstance(dd, int) and (max_ring_maturity is None or dd > max_ring_maturity):
+                        max_ring_maturity = dd
+
         system.state.lender_config = LendingConfig(
             base_rate=config.lender.base_rate,
             risk_premium_scale=config.lender.risk_premium_scale,
@@ -636,6 +664,8 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
             maturity_days=config.lender.maturity_days,
             horizon=config.lender.horizon,
             information_profile=info_profile,
+            lender_profile=lender_profile,
+            max_ring_maturity=max_ring_maturity,
         )
 
     # Set up rating agency config if present in scenario

@@ -262,6 +262,7 @@ class RingSweepRunner:
         vbt_spread_sensitivity: Decimal = Decimal("0.0"),
         lender_mode: bool = False,
         lender_share: Decimal = Decimal("0.10"),
+        balanced_mode_override: Optional[str] = None,
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -298,6 +299,7 @@ class RingSweepRunner:
         self.vbt_spread_sensitivity = vbt_spread_sensitivity
         self.lender_mode = lender_mode
         self.lender_share = lender_share
+        self.balanced_mode_override = balanced_mode_override
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -554,7 +556,7 @@ class RingSweepRunner:
                 big_entity_share=self.big_entity_share,  # DEPRECATED
                 vbt_share_per_bucket=self.vbt_share_per_bucket,
                 dealer_share_per_bucket=self.dealer_share_per_bucket,
-                mode="lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive"),
+                mode=self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
                 lender_share=self.lender_share,
                 rollover_enabled=self.rollover_enabled,
                 source_path=None,
@@ -589,7 +591,7 @@ class RingSweepRunner:
                     "outside_mid_ratio": str(self.outside_mid_ratio),
                     "vbt_share_per_bucket": str(self.vbt_share_per_bucket),
                     "dealer_share_per_bucket": str(self.dealer_share_per_bucket),
-                    "mode": "lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive"),
+                    "mode": self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
                     "rollover_enabled": self.rollover_enabled,
                     "alpha_vbt": str(self.alpha_vbt),
                     "alpha_trader": str(self.alpha_trader),
@@ -610,7 +612,11 @@ class RingSweepRunner:
                     "max_single_exposure": "0.15",
                     "max_total_exposure": "0.80",
                     "maturity_days": 2,
-                    "horizon": 3,
+                    "horizon": 5,
+                    "kappa": str(kappa),  # LenderProfile: kappa-aware pricing
+                    "risk_aversion": "0.3",
+                    "planning_horizon": 5,
+                    "profit_target": "0.05",
                 }
 
         if self.default_handling:
@@ -630,7 +636,7 @@ class RingSweepRunner:
                 L0 += action["mint_cash"]["amount"]
 
         # Determine regime for logging (Plan 022)
-        regime = "lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")
+        regime = self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive"))
 
         # Build RunOptions from scenario configuration (Plan 027)
         options = RunOptions(
@@ -840,7 +846,7 @@ class RingSweepRunner:
                 big_entity_share=self.big_entity_share,
                 vbt_share_per_bucket=self.vbt_share_per_bucket,
                 dealer_share_per_bucket=self.dealer_share_per_bucket,
-                mode="lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive"),
+                mode=self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
                 lender_share=self.lender_share,
                 rollover_enabled=self.rollover_enabled,
                 source_path=None,
@@ -875,7 +881,7 @@ class RingSweepRunner:
                     "outside_mid_ratio": str(self.outside_mid_ratio),
                     "vbt_share_per_bucket": str(self.vbt_share_per_bucket),
                     "dealer_share_per_bucket": str(self.dealer_share_per_bucket),
-                    "mode": "lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive"),
+                    "mode": self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
                     "rollover_enabled": self.rollover_enabled,
                     "alpha_vbt": str(self.alpha_vbt),
                     "alpha_trader": str(self.alpha_trader),
@@ -896,7 +902,11 @@ class RingSweepRunner:
                     "max_single_exposure": "0.15",
                     "max_total_exposure": "0.80",
                     "maturity_days": 2,
-                    "horizon": 3,
+                    "horizon": 5,
+                    "kappa": str(kappa),  # LenderProfile: kappa-aware pricing
+                    "risk_aversion": "0.3",
+                    "planning_horizon": 5,
+                    "profit_target": "0.05",
                 }
 
         if self.default_handling:
@@ -916,7 +926,7 @@ class RingSweepRunner:
             if "mint_cash" in action:
                 L0 += action["mint_cash"]["amount"]
 
-        regime = "lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")
+        regime = self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive"))
 
         options = RunOptions(
             mode="until_stable",
