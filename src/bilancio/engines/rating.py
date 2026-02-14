@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from bilancio.engines.system import System
     from bilancio.decision.profiles import RatingProfile
     from bilancio.information.profile import InformationProfile
+    from bilancio.information.estimates import Estimate
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,8 @@ def _compute_rating(
     current_day: int,
     profile: "RatingProfile",
     system: "System",
-) -> Decimal:
+    return_estimate: bool = False,
+) -> "Decimal | Estimate":
     """Compute a default probability rating for a single agent.
 
     Combines:
@@ -201,8 +203,37 @@ def _compute_rating(
         combined = profile.no_data_prior
 
     # Add conservatism bias and clamp
+    combined_before_bias = combined
     result = combined + profile.conservatism_bias
-    return max(Decimal("0.01"), min(Decimal("0.99"), result))
+    clamped = max(Decimal("0.01"), min(Decimal("0.99"), result))
+
+    if not return_estimate:
+        return clamped
+
+    from bilancio.information.estimates import Estimate
+
+    return Estimate(
+        value=clamped,
+        estimator_id="rating_agency",
+        target_id=agent_id,
+        target_type="agent",
+        estimation_day=current_day,
+        method="coverage_ratio_plus_history",
+        inputs={
+            "net_worth": net_worth,
+            "obligations": obligations,
+            "coverage_ratio": str(coverage) if obligations and obligations > 0 and net_worth is not None else None,
+            "bs_score": str(bs_score),
+            "hist_score": str(hist_score),
+            "combined_before_bias": str(combined_before_bias),
+        },
+        metadata={
+            "balance_sheet_weight": str(profile.balance_sheet_weight),
+            "history_weight": str(profile.history_weight),
+            "conservatism_bias": str(profile.conservatism_bias),
+            "lookback_window": profile.lookback_window,
+        },
+    )
 
 
 def _raw_net_worth(system: "System", agent_id: str) -> int:

@@ -29,6 +29,7 @@ from bilancio.information.profile import CategoryAccess, InformationProfile
 
 if TYPE_CHECKING:
     from bilancio.engines.system import System
+    from bilancio.information.estimates import Estimate
 
 # ── Noise tuning constants ────────────────────────────────────────────
 # Fraction of value that each lag day adds as estimation error (σ per day).
@@ -115,6 +116,55 @@ class InformationService:
         # Apply noise to probability (clamp to [0, 1])
         noisy = self._apply_decimal_noise(raw, access.noise, day)
         return max(Decimal("0"), min(Decimal("1"), noisy))
+
+    def get_default_probability_detail(
+        self, agent_id: str, day: int,
+    ) -> "Optional[Estimate]":
+        """Return an Estimate wrapping get_default_probability() with provenance.
+
+        Returns None when access is NONE (same as get_default_probability).
+        """
+        from bilancio.information.estimates import Estimate
+
+        access = self._resolve_access(
+            self._profile.counterparty_default_history, agent_id
+        )
+        if access.level == AccessLevel.NONE:
+            return None
+
+        value = self.get_default_probability(agent_id, day)
+        if value is None:
+            return None
+
+        # Determine channel source
+        dealer_sub = self._system.state.dealer_subsystem
+        if (
+            dealer_sub is not None
+            and hasattr(dealer_sub, "risk_assessor")
+            and dealer_sub.risk_assessor is not None
+        ):
+            channel_source = "dealer_risk_assessor"
+        elif getattr(self._system.state, "rating_registry", None):
+            channel_source = "rating_registry"
+        else:
+            channel_source = "system_heuristic"
+
+        return Estimate(
+            value=value,
+            estimator_id=self._observer_id,
+            target_id=agent_id,
+            target_type="agent",
+            estimation_day=day,
+            method="information_service_default_prob",
+            inputs={
+                "channel_source": channel_source,
+                "access_level": access.level.value,
+                "noise_applied": access.level == AccessLevel.NOISY,
+            },
+            metadata={
+                "observer_id": self._observer_id,
+            },
+        )
 
     def get_system_default_rate(self, day: int) -> Optional[Decimal]:
         """Get the aggregate system-wide default rate.
