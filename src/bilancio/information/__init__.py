@@ -32,6 +32,7 @@ from bilancio.information.noise import (
 )
 from bilancio.information.profile import CategoryAccess, InformationProfile
 from bilancio.information.presets import (
+    DEALER_MARKET_OBSERVER,
     LENDER_CHANNEL_BASED,
     LENDER_RATINGS_BOUND,
     LENDER_REALISTIC,
@@ -57,6 +58,7 @@ __all__ = [
     "ChannelBinding",
     "CounterpartyAccess",
     "CounterpartyView",
+    "DEALER_MARKET_OBSERVER",
     "Estimate",
     "EstimationNoise",
     "InformationProfile",

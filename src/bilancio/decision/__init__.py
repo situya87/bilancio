@@ -16,8 +16,13 @@ from bilancio.decision.protocols import (
     PortfolioStrategy,
     ThresholdScreener,
     TransactionPricer,
+    VBTPricingModel,
 )
-from bilancio.decision.valuers import CoverageRatioValuer, EVHoldValuer
+from bilancio.decision.valuers import (
+    CoverageRatioValuer,
+    CreditAdjustedVBTPricing,
+    EVHoldValuer,
+)
 
 __all__ = [
     "AGGRESSIVE",
@@ -25,6 +30,7 @@ __all__ = [
     "CAUTIOUS",
     "CounterpartyScreener",
     "CoverageRatioValuer",
+    "CreditAdjustedVBTPricing",
     "EVHoldValuer",
     "FixedMaturitySelector",
     "FixedPortfolioStrategy",
@@ -36,5 +42,6 @@ __all__ = [
     "ThresholdScreener",
     "TraderProfile",
     "TransactionPricer",
+    "VBTPricingModel",
     "VBTProfile",
 ]

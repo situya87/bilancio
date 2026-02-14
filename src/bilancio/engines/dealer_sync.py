@@ -185,15 +185,8 @@ def _pool_desk_cash(subsystem: "DealerSubsystem") -> None:
 def _update_vbt_credit_mids(subsystem: "DealerSubsystem", current_day: int) -> None:
     """Update VBT mid prices to reflect the risk assessor's current default estimate.
 
-    The VBT is a credit-aware long-term holder.  Its mid M should equal
-    ``outside_mid_ratio × (1 − P_default)`` so that ask prices sit below
-    par and rational buyers can participate.
-
-    When mid_sensitivity < 1.0, M is blended toward its initial value,
-    damping the response to observed defaults.
-
-    When spread_sensitivity > 0.0, O widens proportionally to the observed
-    default probability.
+    When a VBT pricing model is attached to the subsystem, delegates to it.
+    Otherwise falls back to inline computation for backward compatibility.
 
     Called once per day before dealer quote recomputation.
     """
@@ -202,25 +195,38 @@ def _update_vbt_credit_mids(subsystem: "DealerSubsystem", current_day: int) -> N
 
     # Use system-wide default estimate (no specific issuer)
     p_default = subsystem.risk_assessor.estimate_default_prob("_system_", current_day)
-    raw_M = subsystem.outside_mid_ratio * (Decimal(1) - p_default)
 
-    # Blend toward initial M based on mid_sensitivity
-    initial_prior = subsystem.risk_assessor.params.initial_prior
-    initial_M = subsystem.outside_mid_ratio * (Decimal(1) - initial_prior)
-    sens = subsystem.vbt_profile.mid_sensitivity
-    new_M = initial_M + sens * (raw_M - initial_M)
+    pricing_model = subsystem.vbt_pricing_model
 
-    spread_sens = subsystem.vbt_profile.spread_sensitivity
+    if pricing_model is not None:
+        # Delegate to the VBT's own pricing heuristic
+        initial_prior = subsystem.risk_assessor.params.initial_prior
+        new_M = pricing_model.compute_mid(p_default, initial_prior)
 
-    for bucket_id, vbt in subsystem.vbts.items():
-        vbt.M = new_M
-
-        # Update spread if spread_sensitivity > 0
-        if spread_sens > 0:
+        for bucket_id, vbt in subsystem.vbts.items():
+            vbt.M = new_M
             base_O = subsystem.initial_spread_by_bucket.get(bucket_id, vbt.O)
-            vbt.O = base_O * (Decimal(1) + spread_sens * p_default)
+            vbt.O = pricing_model.compute_spread(base_O, p_default)
+            vbt.recompute_quotes()
+    else:
+        # Legacy inline logic (backward compatibility)
+        raw_M = subsystem.outside_mid_ratio * (Decimal(1) - p_default)
+        initial_prior = subsystem.risk_assessor.params.initial_prior
+        initial_M = subsystem.outside_mid_ratio * (Decimal(1) - initial_prior)
+        sens = subsystem.vbt_profile.mid_sensitivity
+        new_M = initial_M + sens * (raw_M - initial_M)
 
-        vbt.recompute_quotes()
+        spread_sens = subsystem.vbt_profile.spread_sensitivity
+
+        for bucket_id, vbt in subsystem.vbts.items():
+            vbt.M = new_M
+
+            # Update spread if spread_sensitivity > 0
+            if spread_sens > 0:
+                base_O = subsystem.initial_spread_by_bucket.get(bucket_id, vbt.O)
+                vbt.O = base_O * (Decimal(1) + spread_sens * p_default)
+
+            vbt.recompute_quotes()
 
 
 def _sync_trader_cash_from_system(

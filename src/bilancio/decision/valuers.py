@@ -1,7 +1,8 @@
-"""Concrete InstrumentValuer implementations.
+"""Concrete InstrumentValuer and VBTPricingModel implementations.
 
-EVHoldValuer    — wraps RiskAssessor (delegation, zero new math)
-CoverageRatioValuer — uses a rating registry for default probabilities
+EVHoldValuer            — wraps RiskAssessor (delegation, zero new math)
+CoverageRatioValuer     — uses a rating registry for default probabilities
+CreditAdjustedVBTPricing — default VBT pricing: M = outside_mid_ratio × (1 − P_default)
 """
 
 from __future__ import annotations
@@ -99,4 +100,50 @@ class CoverageRatioValuer:
         )
 
 
-__all__ = ["EVHoldValuer", "CoverageRatioValuer"]
+
+# ── CreditAdjustedVBTPricing ─────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class CreditAdjustedVBTPricing:
+    """Default VBT pricing: M = outside_mid_ratio × (1 − P_default).
+
+    The outside_mid_ratio is a property of this model — it represents
+    the VBT's valuation anchor, not an externally injected parameter.
+
+    When mid_sensitivity < 1, M is blended toward its initial value
+    (computed from initial_prior), damping the response to observed defaults.
+
+    When spread_sensitivity > 0, the base spread widens proportionally
+    to the observed default probability.
+    """
+
+    outside_mid_ratio: Decimal = Decimal("0.75")
+    mid_sensitivity: Decimal = Decimal("1.0")
+    spread_sensitivity: Decimal = Decimal("0.0")
+
+    def compute_mid(self, p_default: Decimal, initial_prior: Decimal) -> Decimal:
+        """Compute credit-adjusted mid price.
+
+        Formula: blend initial_M toward raw_M based on mid_sensitivity.
+        - raw_M = outside_mid_ratio × (1 - p_default)
+        - initial_M = outside_mid_ratio × (1 - initial_prior)
+        - result = initial_M + mid_sensitivity × (raw_M - initial_M)
+        """
+        raw_M = self.outside_mid_ratio * (Decimal(1) - p_default)
+        initial_M = self.outside_mid_ratio * (Decimal(1) - initial_prior)
+        return initial_M + self.mid_sensitivity * (raw_M - initial_M)
+
+    def compute_spread(self, base_spread: Decimal, p_default: Decimal) -> Decimal:
+        """Compute adjusted spread.
+
+        When spread_sensitivity > 0:
+            spread = base_spread × (1 + spread_sensitivity × p_default)
+        Otherwise returns base_spread unchanged.
+        """
+        if self.spread_sensitivity > 0:
+            return base_spread * (Decimal(1) + self.spread_sensitivity * p_default)
+        return base_spread
+
+
+__all__ = ["EVHoldValuer", "CoverageRatioValuer", "CreditAdjustedVBTPricing"]
