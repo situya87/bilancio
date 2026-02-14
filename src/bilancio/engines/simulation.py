@@ -7,7 +7,7 @@ import random
 from dataclasses import dataclass
 from typing import Any, Protocol, TYPE_CHECKING
 
-from bilancio.core.errors import DefaultError, ValidationError
+from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
 from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.engines.clearing import settle_intraday_nets
@@ -220,7 +220,7 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
             agents = system.state.agents
             for action_dict in actions_today:
                 apply_action(system, action_dict, agents)
-    except (ValueError, ValidationError, DefaultError, KeyError, AttributeError):
+    except (ValueError, ValidationError, DefaultError, SimulationHalt, KeyError, AttributeError):
         # Allow scheduled-action errors to bubble via apply_action's own error handling
         # but keep guard to ensure the simulation loop stability
         raise

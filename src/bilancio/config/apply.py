@@ -17,7 +17,7 @@ from bilancio.domain.agents import Bank, Household, Firm, CentralBank, Treasury,
 from bilancio.ops.banking import deposit_cash, withdraw_cash, client_payment
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.base import InstrumentKind
-from bilancio.core.errors import ValidationError
+from bilancio.core.errors import ConfigurationError, ValidationError
 from bilancio.core.atomic_tx import atomic
 
 from .models import ScenarioConfig, AgentSpec
@@ -50,7 +50,7 @@ def create_agent(spec: AgentSpec) -> Any:
     
     agent_class = agent_classes.get(spec.kind)
     if not agent_class:
-        raise ValueError(f"Unknown agent kind: {spec.kind}")
+        raise ConfigurationError(f"Unknown agent kind: {spec.kind}")
     
     # Create agent with id, name, and kind
     # Note: Some agent classes (NonBankLender, RatingAgency) set kind via
@@ -315,7 +315,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
             
             # Log the event
         else:
-            raise ValueError(f"Unknown action type: {action_type}")
+            raise ConfigurationError(f"Unknown action type: {action_type}")
             
     except (ValueError, TypeError, KeyError, ValidationError) as e:
         # Add context to the error
@@ -346,7 +346,7 @@ def _build_lender_info_profile(lender_cfg: Any) -> Any:
     if all_perfect:
         return None
 
-    def _make_access(visibility: str, noise_factory=None) -> CategoryAccess:
+    def _make_access(visibility: str, noise_factory: Any = None) -> CategoryAccess:
         level = AccessLevel(visibility)
         if level == AccessLevel.NOISY and noise_factory is not None:
             return CategoryAccess(level=level, noise=noise_factory())

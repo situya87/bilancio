@@ -280,7 +280,7 @@ def run_simulation(
     import time
     from pathlib import Path
 
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
     start_time = time.time()
 

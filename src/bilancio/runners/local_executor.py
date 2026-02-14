@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Dict, Any
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 from bilancio.runners.models import RunOptions, ExecutionResult
 from bilancio.storage.models import RunStatus

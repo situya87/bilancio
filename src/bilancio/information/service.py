@@ -33,6 +33,12 @@ from bilancio.information.profile import CategoryAccess, InformationProfile
 if TYPE_CHECKING:
     from bilancio.engines.system import System
     from bilancio.information.estimates import Estimate
+    from bilancio.information.views import (
+        SystemView,
+        CounterpartyView,
+        InstrumentView,
+        TransactionView,
+    )
 
 # ── Noise tuning constants ────────────────────────────────────────────
 # Fraction of value that each lag day adds as estimation error (σ per day).
@@ -317,7 +323,7 @@ class InformationService:
         if isinstance(noise, BilateralOnlyNoise):
             # For numeric queries, return value as-is (filtering applies to event lists)
             return value
-        return value
+        return value  # type: ignore[unreachable]
 
     def _apply_decimal_noise(
         self, value: Decimal, noise: Optional[NoiseConfig], day: int
@@ -343,7 +349,7 @@ class InformationService:
             return Decimal(str(round(adjusted, 6)))
         if isinstance(noise, (AggregateOnlyNoise, BilateralOnlyNoise)):
             return value
-        return value
+        return value  # type: ignore[unreachable]
 
     # ── Raw data accessors ────────────────────────────────────────────
 

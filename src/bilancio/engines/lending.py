@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
+from bilancio.core.errors import ValidationError
+
 if TYPE_CHECKING:
     from bilancio.engines.system import System
     from bilancio.information.profile import InformationProfile
@@ -166,6 +168,7 @@ def run_lending_phase(
             if p_default is None:
                 p_default = Decimal("0.15")  # Prior when unobservable
         else:
+            assert default_probs is not None
             p_default = default_probs.get(agent_id, Decimal("0.15"))
         if not screener.is_eligible(p_default):
             continue
@@ -235,7 +238,7 @@ def run_lending_phase(
                 "Loan created: %s -> %s, amount=%d, rate=%s",
                 lender_id, opp["borrower_id"], loan_amount, opp["rate"],
             )
-        except Exception as e:
+        except (ValidationError, ValueError, KeyError) as e:
             logger.warning("Failed to create loan to %s: %s", opp["borrower_id"], e)
             continue
 
@@ -270,7 +273,7 @@ def run_loan_repayments(system: "System", current_day: int) -> List[Dict[str, An
                 "borrower_id": borrower_id,
                 "repaid": repaid,
             })
-        except Exception as e:
+        except (ValidationError, ValueError, KeyError) as e:
             logger.warning("Loan repayment failed for %s: %s", loan_id, e)
 
     return events

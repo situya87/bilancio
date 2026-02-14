@@ -101,7 +101,9 @@ def run_rating_phase(
         if agent.defaulted:
             p_default = Decimal("1.0")
         else:
-            p_default = _compute_rating(info, agent_id, current_day, profile, system)
+            _rating_result = _compute_rating(info, agent_id, current_day, profile, system)
+            assert isinstance(_rating_result, Decimal)
+            p_default = _rating_result
 
         registry[agent_id] = p_default
         ratings_published[agent_id] = str(p_default)

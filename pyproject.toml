@@ -111,6 +111,10 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 
+[[tool.mypy.overrides]]
+module = ["pandas.*", "plotly.*", "xkcdpass.*", "yaml.*"]
+ignore_missing_imports = true
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

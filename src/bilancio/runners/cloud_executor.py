@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from bilancio.runners.models import ExecutionResult, RunOptions
+from bilancio.runners.retry import retry_transient
 from bilancio.storage.models import RunStatus
 
 
@@ -77,6 +78,7 @@ class CloudExecutor:
             )
         return self._run_simulation
 
+    @retry_transient()
     def execute(
         self,
         scenario_config: Dict[str, Any],
@@ -239,6 +241,7 @@ class CloudExecutor:
             result["seed"] = options.seed
         return result
 
+    @retry_transient(max_retries=2)
     def _download_run_artifacts(
         self,
         run_id: str,

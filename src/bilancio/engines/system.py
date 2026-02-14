@@ -1,3 +1,10 @@
+"""Core System coordinator and State container for bilancio simulations.
+
+System is the central coordinator that manages all agents, contracts,
+stocks, and events.  State encapsulates the full simulation state and
+provides indexed lookups (contracts_by_due_day, events_by_day,
+scheduled_actions_by_day) for efficient daily processing.
+"""
 from __future__ import annotations
 
 import logging
@@ -31,6 +38,7 @@ class State:
     contracts: dict[InstrId, Instrument] = field(default_factory=dict)
     stocks: dict[InstrId, StockLot] = field(default_factory=dict)
     events: list[dict[str, object]] = field(default_factory=list)
+    events_by_day: dict[int, list[dict[str, object]]] = field(default_factory=dict)
     day: int = 0
     cb_cash_outstanding: int = 0
     cb_reserves_outstanding: int = 0
@@ -51,8 +59,8 @@ class State:
     fx_market: Any = None  # FXMarket instance
     lender_config: Any = None
     rating_config: Any = None
-    rating_registry: dict = field(default_factory=dict)
-    estimate_log: list = field(default_factory=list)
+    rating_registry: dict[str, Any] = field(default_factory=dict)
+    estimate_log: list[Any] = field(default_factory=list)
     estimate_logging_enabled: bool = False
 
 class System:
@@ -107,7 +115,9 @@ class System:
 
     # ---- events
     def log(self, kind: str, **payload: object) -> None:
-        self.state.events.append({"kind": kind, "day": self.state.day, "phase": self.state.phase, **payload})
+        event = {"kind": kind, "day": self.state.day, "phase": self.state.phase, **payload}
+        self.state.events.append(event)
+        self.state.events_by_day.setdefault(self.state.day, []).append(event)
 
     def log_estimate(self, estimate: object) -> None:
         """Append an Estimate to the log if logging is enabled."""

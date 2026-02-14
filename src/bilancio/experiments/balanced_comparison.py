@@ -124,7 +124,8 @@ class BalancedComparisonResult:
         active_pnl = (active_metrics or {}).get("dealer_total_pnl")
         passive_pnl = (passive_metrics or {}).get("dealer_total_pnl")
         if active_pnl is not None and passive_pnl is not None:
-            return active_pnl - passive_pnl
+            result: float = active_pnl - passive_pnl
+            return result
         return None
 
     @property

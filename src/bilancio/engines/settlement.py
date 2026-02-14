@@ -7,7 +7,7 @@ from collections.abc import Generator
 from typing import TYPE_CHECKING, Any
 
 from bilancio.core.atomic_tx import atomic
-from bilancio.core.errors import DefaultError, ValidationError
+from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
 from bilancio.core.events import EventKind
 from bilancio.domain.agent import Agent, AgentKind
 from bilancio.domain.instruments.base import Instrument, InstrumentKind
@@ -76,6 +76,7 @@ def due_delivery_obligations(system: System, day: int) -> Generator[Instrument, 
 
 def _pay_with_deposits(system: System, debtor_id: str, creditor_id: str, amount: int) -> int:
     """Pay using bank deposits. Returns amount actually paid."""
+    logger.debug("_pay_with_deposits: debtor=%s creditor=%s amount=%d", debtor_id, creditor_id, amount)
     debtor_deposit_ids = []
     for cid in system.state.agents[debtor_id].asset_ids:
         contract = system.state.contracts.get(cid)
@@ -124,6 +125,7 @@ def _pay_with_deposits(system: System, debtor_id: str, creditor_id: str, amount:
 
 def _pay_with_cash(system: System, debtor_id: str, creditor_id: str, amount: int) -> int:
     """Pay using cash. Returns amount actually paid."""
+    logger.debug("_pay_with_cash: debtor=%s creditor=%s amount=%d", debtor_id, creditor_id, amount)
     debtor_cash_ids = []
     for cid in system.state.agents[debtor_id].asset_ids:
         contract = system.state.contracts.get(cid)
@@ -150,6 +152,7 @@ def _pay_with_cash(system: System, debtor_id: str, creditor_id: str, amount: int
 
 def _pay_bank_to_bank_with_reserves(system: System, debtor_bank_id: str, creditor_bank_id: str, amount: int) -> int:
     """Pay using reserves between banks. Returns amount actually paid."""
+    logger.debug("_pay_bank_to_bank_with_reserves: debtor=%s creditor=%s amount=%d", debtor_bank_id, creditor_bank_id, amount)
     if debtor_bank_id == creditor_bank_id:
         return 0
 
@@ -286,6 +289,7 @@ def _cancel_scheduled_actions_for_agent(
     cancelled_aliases = cancelled_aliases or set()
     if not system.state.scheduled_actions_by_day:
         return
+    logger.debug("_cancel_scheduled_actions_for_agent: agent=%s", agent_id)
 
     for day, actions in list(system.state.scheduled_actions_by_day.items()):
         remaining = []
@@ -455,7 +459,17 @@ def _expel_agent(
     cancelled_contract_ids: set[str] | None = None,
     cancelled_aliases: set[str] | None = None,
 ) -> None:
-    """Mark an agent as defaulted, write off obligations, and cancel future actions."""
+    """Expel a defaulted agent from the simulation.
+
+    Sequence:
+    1. Guard: no-op in fail-fast mode or if already defaulted.
+    2. Raises SimulationHalt if the agent is the central bank.
+    3. Marks the agent as defaulted and adds to defaulted_agent_ids.
+    4. Writes off all outstanding liabilities issued by the agent.
+    5. Cancels scheduled actions referencing the agent or its contracts.
+    6. If all non-CB agents have defaulted, raises SimulationHalt
+       (system collapse).
+    """
     if _get_default_mode(system) != DEFAULT_MODE_EXPEL:
         return
 
@@ -467,7 +481,7 @@ def _expel_agent(
         return
 
     if agent.kind == AgentKind.CENTRAL_BANK:
-        raise DefaultError("Central bank cannot default")
+        raise SimulationHalt("Central bank cannot default", halt_kind="cb_default")
 
     agent.defaulted = True
     system.state.defaulted_agent_ids.add(agent_id)
@@ -520,18 +534,21 @@ def _expel_agent(
             system.state.aliases.pop(contract_alias, None)
 
     _cancel_scheduled_actions_for_agent(system, agent_id, cancelled_contract_ids, cancelled_aliases)
+    logger.warning("agent %s expelled: cancelled %d contracts, %d aliases", agent_id, len(cancelled_contract_ids), len(cancelled_aliases))
 
     # If every non-central-bank agent has defaulted, halt the simulation with a DefaultError.
     if all(
         (ag.kind == AgentKind.CENTRAL_BANK) or ag.defaulted
         for ag in system.state.agents.values()
     ):
-        raise DefaultError("All non-central-bank agents have defaulted")
+        raise SimulationHalt("All non-central-bank agents have defaulted", halt_kind="system_collapse")
 
 
 def settle_due_delivery_obligations(system: System, day: int) -> None:
     """Settle all delivery obligations due today using stock operations."""
-    for obligation_instr in list(due_delivery_obligations(system, day)):
+    due_list = list(due_delivery_obligations(system, day))
+    logger.info("settle_due_delivery_obligations: day %d, %d obligation(s) due", day, len(due_list))
+    for obligation_instr in due_list:
         if obligation_instr.id not in system.state.contracts:
             continue
         assert isinstance(obligation_instr, DeliveryObligation)
@@ -621,7 +638,19 @@ def _settle_single_payable(
     risk_assessor: Any,
     rollover_enabled: bool,
 ) -> tuple[bool, tuple[str, str, int, int] | None]:
-    """Settle a single payable. Returns (settled_ok, rollover_info_or_None)."""
+    """Settle a single payable using the settlement waterfall.
+
+    Attempts payment in the order defined by policy.settlement_order():
+    deposits → cash → reserves.  Each method is tried in sequence until
+    the full amount is covered.  All mutations are wrapped in an atomic
+    block so partial payments roll back on failure.
+
+    Returns:
+        (True, rollover_info) on full settlement, where rollover_info is
+        (debtor_id, creditor_id, amount, maturity_distance) or None.
+        (False, None) on default — the payable is written off and the
+        debtor is expelled.
+    """
     debtor = system.state.agents[payable.liability_issuer_id]
     if debtor.defaulted:
         return True, None  # skip silently
@@ -629,6 +658,7 @@ def _settle_single_payable(
     creditor_id = payable.effective_creditor
     creditor = system.state.agents[creditor_id]
     order = system.policy.settlement_order(debtor)
+    logger.debug("_settle_single_payable: payable=%s debtor=%s creditor=%s amount=%d order=%s", payable.id, debtor.id, creditor_id, payable.amount, [str(m) for m in order])
 
     remaining = payable.amount
     payments_summary: list[dict[str, object]] = []
@@ -694,7 +724,20 @@ def _handle_payable_default(
     risk_assessor: Any,
     rollover_enabled: bool,
 ) -> bool:
-    """Handle a payable that couldn't be fully settled. Returns False (not settled)."""
+    """Handle a payable that could not be fully settled (default cascade).
+
+    Sequence:
+    1. In fail-fast mode, raises DefaultError immediately.
+    2. Logs PARTIAL_SETTLEMENT if any payment was made.
+    3. Logs OBLIGATION_DEFAULTED for the shortfall.
+    4. Removes the payable contract.
+    5. Expels the debtor (_expel_agent), which writes off all remaining
+       obligations and cancels scheduled actions.
+    6. Updates the risk assessor with the default observation.
+    7. If rollover is enabled, reconnects the ring around the expelled agent.
+
+    Always returns False (settlement failed).
+    """
     logger.warning("payable default: %s, debtor=%s, shortfall=%d", payable.id, debtor.id, remaining)
     if _get_default_mode(system) == DEFAULT_MODE_FAIL_FAST:
         raise DefaultError(f"Insufficient funds to settle payable {payable.id}: {remaining} still owed")
@@ -783,6 +826,75 @@ def settle_due(system: System, day: int, *, rollover_enabled: bool = False) -> l
     return settled_for_rollover
 
 
+def _rollover_single_payable(
+    system: System,
+    debtor_id: str,
+    creditor_id: str,
+    amount: int,
+    maturity_distance: int,
+    new_due_day: int,
+    dealer_active: bool,
+) -> str | None:
+    """Create a single rolled-over payable and optionally transfer cash.
+
+    Returns the new payable ID on success, or None if either party
+    has defaulted or is missing.
+    """
+    debtor = system.state.agents.get(debtor_id)
+    creditor = system.state.agents.get(creditor_id)
+
+    if debtor is None or debtor.defaulted:
+        logger.debug("rollover: skipping debtor=%s (defaulted or missing)", debtor_id)
+        return None
+    if creditor is None or creditor.defaulted:
+        logger.debug("rollover: skipping creditor=%s (defaulted or missing)", creditor_id)
+        return None
+
+    with atomic(system):
+        new_payable = Payable(
+            id=system.new_contract_id("PAY"),
+            kind=InstrumentKind.PAYABLE,
+            amount=amount,
+            denom="X",
+            asset_holder_id=creditor_id,
+            liability_issuer_id=debtor_id,
+            due_day=new_due_day,
+            maturity_distance=maturity_distance,
+        )
+        system.add_contract(new_payable)
+
+        is_financial_creditor = creditor_id.startswith("vbt_") or creditor_id.startswith("dealer_")
+        if not dealer_active or is_financial_creditor:
+            cash_transferred = _pay_with_cash(system, creditor_id, debtor_id, amount)
+        else:
+            cash_transferred = 0
+
+        if cash_transferred != amount and (not dealer_active or is_financial_creditor):
+            system.log(
+                EventKind.ROLLOVER_PARTIAL,
+                debtor=debtor_id,
+                creditor=creditor_id,
+                amount=amount,
+                cash_transferred=cash_transferred,
+                new_due_day=new_due_day,
+                payable_id=new_payable.id,
+                cash_transfer=True,
+            )
+        else:
+            system.log(
+                EventKind.PAYABLE_ROLLED_OVER,
+                debtor=debtor_id,
+                creditor=creditor_id,
+                amount=amount,
+                new_due_day=new_due_day,
+                maturity_distance=maturity_distance,
+                payable_id=new_payable.id,
+                cash_transfer=(not dealer_active or is_financial_creditor),
+            )
+
+    return new_payable.id
+
+
 def rollover_settled_payables(system: System, day: int, settled_payables: list[tuple[str, str, int, int]], dealer_active: bool = False) -> list[str]:
     """Create new payables for successfully settled ones (continuous issuance via rollover).
 
@@ -806,76 +918,21 @@ def rollover_settled_payables(system: System, day: int, settled_payables: list[t
     Returns:
         List of new payable IDs created by rollover
     """
-    # Compute max due_day across all current payables in the system.
-    # Rolled-over payables queue after this, preventing synchronized waves.
-    max_due_day = day  # Floor: at minimum, use current day
+    max_due_day = day
     for c in system.state.contracts.values():
         if c.kind == InstrumentKind.PAYABLE and isinstance(c, Payable):
             if c.due_day is not None and c.due_day > max_due_day:
                 max_due_day = c.due_day
 
     logger.debug("rollover: day %d, %d payable(s) to roll, max_due_day=%d", day, len(settled_payables), max_due_day)
-    new_payable_ids = []
+    new_payable_ids: list[str] = []
     for debtor_id, creditor_id, amount, maturity_distance in settled_payables:
-        # Skip if either party has defaulted
-        debtor = system.state.agents.get(debtor_id)
-        creditor = system.state.agents.get(creditor_id)
-
-        if debtor is None or debtor.defaulted:
-            continue
-        if creditor is None or creditor.defaulted:
-            continue
-
         new_due_day = max_due_day + maturity_distance
-
-        with atomic(system):
-            # 1. Create new payable with same amount and ΔT
-            new_payable = Payable(
-                id=system.new_contract_id("PAY"),
-                kind=InstrumentKind.PAYABLE,
-                amount=amount,
-                denom="X",
-                asset_holder_id=creditor_id,  # creditor holds the asset
-                liability_issuer_id=debtor_id,  # debtor issues the liability
-                due_day=new_due_day,
-                maturity_distance=maturity_distance,
-            )
-            system.add_contract(new_payable)
-            new_payable_ids.append(new_payable.id)
-
-            # Model C: no cash transfer for real-economy relationships
-            # Model A: cash transfer for financial intermediaries (VBT/Dealer)
-            is_financial_creditor = creditor_id.startswith("vbt_") or creditor_id.startswith("dealer_")
-            if not dealer_active or is_financial_creditor:
-                # 2. Transfer cash from creditor to debtor (new issuance)
-                cash_transferred = _pay_with_cash(system, creditor_id, debtor_id, amount)
-            else:
-                # Model C: skip cash transfer for trader payables
-                cash_transferred = 0
-
-            if cash_transferred != amount and (not dealer_active or is_financial_creditor):
-                # Creditor doesn't have enough cash - this shouldn't happen in normal rollover
-                # but handle gracefully
-                system.log(
-                    EventKind.ROLLOVER_PARTIAL,
-                    debtor=debtor_id,
-                    creditor=creditor_id,
-                    amount=amount,
-                    cash_transferred=cash_transferred,
-                    new_due_day=new_due_day,
-                    payable_id=new_payable.id,
-                    cash_transfer=True,
-                )
-            else:
-                system.log(
-                    EventKind.PAYABLE_ROLLED_OVER,
-                    debtor=debtor_id,
-                    creditor=creditor_id,
-                    amount=amount,
-                    new_due_day=new_due_day,
-                    maturity_distance=maturity_distance,
-                    payable_id=new_payable.id,
-                    cash_transfer=(not dealer_active or is_financial_creditor),
-                )
+        pid = _rollover_single_payable(
+            system, debtor_id, creditor_id, amount, maturity_distance,
+            new_due_day, dealer_active,
+        )
+        if pid is not None:
+            new_payable_ids.append(pid)
 
     return new_payable_ids
