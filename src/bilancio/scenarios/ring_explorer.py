@@ -394,11 +394,25 @@ def compile_ring_explorer_balanced(
                 }
             })
 
-    # Mint cash to VBT and Dealer: cash = actual face × M (balanced position)
+    # Compute total VBT+Dealer liquidity for NBFI allocation
+    total_vbt_dealer_liquidity = Decimal(0)
+    for bucket in BUCKETS:
+        total_vbt_dealer_liquidity += actual_vbt_face[bucket] * outside_mid_ratio
+        total_vbt_dealer_liquidity += actual_dealer_face[bucket] * outside_mid_ratio
+
+    # Cash scaling factor for VBT/Dealer (reduced in nbfi/nbfi_dealer modes)
+    if mode == "nbfi":
+        vbt_dealer_cash_scale = Decimal("0")  # NBFI gets everything
+    elif mode == "nbfi_dealer":
+        vbt_dealer_cash_scale = Decimal("0.5")  # 50/50 split
+    else:
+        vbt_dealer_cash_scale = Decimal("1")  # Normal modes
+
+    # Mint cash to VBT and Dealer: cash = actual face × M × scale (balanced position)
     # Uses truncated face to match int() rounding in apply.py
     for bucket in BUCKETS:
         # VBT cash
-        vbt_cash = actual_vbt_face[bucket] * outside_mid_ratio
+        vbt_cash = actual_vbt_face[bucket] * outside_mid_ratio * vbt_dealer_cash_scale
         if vbt_cash > 0:
             initial_actions.append({
                 "mint_cash": {
@@ -409,7 +423,7 @@ def compile_ring_explorer_balanced(
             })
 
         # Dealer cash
-        dealer_cash = actual_dealer_face[bucket] * outside_mid_ratio
+        dealer_cash = actual_dealer_face[bucket] * outside_mid_ratio * vbt_dealer_cash_scale
         if dealer_cash > 0:
             initial_actions.append({
                 "mint_cash": {
@@ -419,14 +433,21 @@ def compile_ring_explorer_balanced(
                 }
             })
 
-    # Add non-bank lender agent and cash (lender mode)
-    if mode == "lender":
+    # Add non-bank lender agent and cash (lender/nbfi/nbfi_dealer modes)
+    if mode in ("lender", "nbfi", "nbfi_dealer"):
         agents.append({
             "id": "lender",
             "kind": "non_bank_lender",
             "name": "Non-Bank Lender",
         })
-        lender_cash = base_liquidity * lender_share
+        if mode == "lender":
+            lender_cash = base_liquidity * lender_share
+        elif mode == "nbfi":
+            lender_cash = total_vbt_dealer_liquidity  # 100% of VBT+dealer cash
+        elif mode == "nbfi_dealer":
+            lender_cash = total_vbt_dealer_liquidity * Decimal("0.5")  # 50% of VBT+dealer cash
+        else:
+            lender_cash = Decimal(0)
         if lender_cash > 0:
             initial_actions.append({
                 "mint_cash": {

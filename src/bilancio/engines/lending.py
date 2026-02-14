@@ -16,6 +16,7 @@ from bilancio.core.errors import ValidationError
 if TYPE_CHECKING:
     from bilancio.engines.system import System
     from bilancio.information.profile import InformationProfile
+    from bilancio.decision.profiles import LenderProfile
     from bilancio.decision.protocols import (
         PortfolioStrategy, CounterpartyScreener,
         InstrumentSelector, TransactionPricer,
@@ -36,6 +37,8 @@ class LendingConfig:
     min_shortfall: int = 1
     max_default_prob: Decimal = Decimal("0.50")
     information_profile: Optional["InformationProfile"] = None
+    lender_profile: Optional["LenderProfile"] = None
+    max_ring_maturity: Optional[int] = None  # computed at ring creation time
     # Decision protocol overrides (None = auto-construct from scalar params)
     portfolio_strategy: Optional["PortfolioStrategy"] = None
     counterparty_screener: Optional["CounterpartyScreener"] = None
@@ -97,6 +100,7 @@ def run_lending_phase(
     from bilancio.domain.instruments.non_bank_loan import NonBankLoan
 
     config = lending_config or LendingConfig()
+    profile = config.lender_profile
     portfolio, screener, selector, pricer = _resolve_protocols(config)
     events: List[Dict[str, Any]] = []
 
@@ -173,9 +177,28 @@ def run_lending_phase(
         if not screener.is_eligible(p_default):
             continue
 
+        # If LenderProfile available, use kappa-aware pricing
+        if profile is not None:
+            # Compute coverage ratio: (cash + receivables) / upcoming_obligations
+            receivables = _get_receivables_due_within(system, agent_id, current_day, profile.planning_horizon)
+            total_resources = agent_cash + receivables
+            coverage = Decimal(str(total_resources)) / Decimal(str(max(upcoming_due, 1)))
+            # Blend kappa-based prior with coverage ratio
+            p_default = profile.base_default_estimate * (Decimal("1") / max(coverage, Decimal("0.01")))
+            p_default = max(Decimal("0.01"), min(Decimal("0.95"), p_default))
+
         # Price the loan
-        base_rate = portfolio.target_return()
-        rate = pricer.price(base_rate, p_default)
+        if profile is not None:
+            base_rate = profile.profit_target
+            rate = base_rate + profile.risk_premium_scale * p_default
+        else:
+            base_rate = portfolio.target_return()
+            rate = pricer.price(base_rate, p_default)
+
+        # Borrow-vs-sell: skip this loan if selling is cheaper
+        selling_cost = _expected_selling_cost(system, agent_id, current_day)
+        if selling_cost is not None and selling_cost < rate:
+            continue  # Selling a claim is cheaper than borrowing
 
         # Check per-borrower exposure limit (own data — always perfect)
         if info is not None:
@@ -215,13 +238,16 @@ def run_lending_phase(
             continue
 
         try:
+            effective_maturity = selector.select_maturity()
+            if profile is not None and config.max_ring_maturity is not None:
+                effective_maturity = min(profile.max_loan_maturity, config.max_ring_maturity)
             loan_id = system.nonbank_lend_cash(
                 lender_id=lender_id,
                 borrower_id=opp["borrower_id"],
                 amount=loan_amount,
                 rate=opp["rate"],
                 day=current_day,
-                maturity_days=selector.select_maturity(),
+                maturity_days=effective_maturity,
             )
             remaining_capital -= loan_amount
             events.append({
@@ -355,6 +381,69 @@ def _get_upcoming_obligations(
                 total += contract.amount
             elif isinstance(contract, NonBankLoan):
                 total += contract.repayment_amount
+    return total
+
+
+def _expected_selling_cost(system: "System", agent_id: str, current_day: int) -> Optional[Decimal]:
+    """Estimate the haircut from selling a claim on the secondary market.
+
+    Returns the expected cost as a fraction (e.g., 0.15 = 15% haircut),
+    or None if no dealer is available (can't sell).
+    """
+    dealer_sub = system.state.dealer_subsystem
+    if dealer_sub is None:
+        return None  # No dealer → can't sell
+
+    # Find the agent's cheapest-to-sell payable (receivable = asset payable)
+    from bilancio.domain.instruments.base import InstrumentKind
+    agent = system.state.agents.get(agent_id)
+    if agent is None:
+        return None
+
+    best_haircut: Optional[Decimal] = None
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None or contract.kind != InstrumentKind.PAYABLE:
+            continue
+        if contract.due_day is None or contract.due_day <= current_day:
+            continue
+        # Get dealer bid price for this claim
+        debtor_id = contract.liability_issuer_id
+        if not hasattr(dealer_sub, 'risk_assessor') or dealer_sub.risk_assessor is None:
+            continue
+        p_default = dealer_sub.risk_assessor.estimate_default_prob(debtor_id, current_day)
+        if p_default is None:
+            p_default = Decimal("0.15")
+        else:
+            p_default = Decimal(str(p_default))
+        # VBT credit-adjusted mid: M = outside_mid_ratio × (1 - P_default)
+        # Bid = M - spread/2. Haircut = 1 - bid_price_ratio
+        # Approximate: haircut ≈ P_default + spread/2
+        spread = Decimal("0.05")  # typical dealer spread
+        haircut = p_default + spread / 2
+        haircut = max(Decimal("0.01"), min(Decimal("0.99"), haircut))
+        if best_haircut is None or haircut < best_haircut:
+            best_haircut = haircut
+
+    return best_haircut
+
+
+def _get_receivables_due_within(
+    system: "System", agent_id: str, current_day: int, horizon: int
+) -> int:
+    """Get total receivables (asset payables) due within horizon days."""
+    from bilancio.domain.instruments.base import InstrumentKind
+    total = 0
+    agent = system.state.agents.get(agent_id)
+    if agent is None:
+        return 0
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None or contract.kind != InstrumentKind.PAYABLE:
+            continue
+        due_day = contract.due_day
+        if due_day is not None and current_day <= due_day <= current_day + horizon:
+            total += contract.amount
     return total
 
 

@@ -1,0 +1,82 @@
+# Example: Kalecki Ring with NBFI Lender
+# This scenario demonstrates a 5-agent Kalecki ring where an NBFI lender
+# provides cash loans to agents facing payment shortfalls.
+#
+# Key concepts:
+# - κ (kappa) = 0.5: System is liquidity-stressed (more debt than cash)
+# - NBFI uses kappa-aware pricing: base default estimate = 1/(1+κ)
+# - Firms compare borrowing vs selling and choose the cheaper option
+# - On default, remaining cash is distributed pro-rata to all creditors
+#
+# Run with: uv run bilancio run examples/scenarios/simple_nbfi.yaml --max-days 5
+
+version: 1
+name: "NBFI Lending Demo"
+description: "5-agent ring with non-bank lender providing liquidity"
+
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: Agent 1
+  - id: H2
+    kind: household
+    name: Agent 2
+  - id: H3
+    kind: household
+    name: Agent 3
+  - id: H4
+    kind: household
+    name: Agent 4
+  - id: H5
+    kind: household
+    name: Agent 5
+  - id: lender
+    kind: non_bank_lender
+    name: Non-Bank Lender
+
+initial_actions:
+  # Seed cash — kappa=0.5 means L0 = 500 for Q=1000
+  - mint_cash: { to: H1, amount: 100, alias: LIQ_H1 }
+  - mint_cash: { to: H2, amount: 100, alias: LIQ_H2 }
+  - mint_cash: { to: H3, amount: 100, alias: LIQ_H3 }
+  - mint_cash: { to: H4, amount: 100, alias: LIQ_H4 }
+  - mint_cash: { to: H5, amount: 100, alias: LIQ_H5 }
+  # NBFI gets extra liquidity
+  - mint_cash: { to: lender, amount: 300, alias: LIQ_lender }
+  # Ring payables — each agent owes the next
+  - create_payable: { from: H1, to: H2, amount: 200, due_day: 2, alias: P_H1_H2 }
+  - create_payable: { from: H2, to: H3, amount: 200, due_day: 2, alias: P_H2_H3 }
+  - create_payable: { from: H3, to: H4, amount: 200, due_day: 3, alias: P_H3_H4 }
+  - create_payable: { from: H4, to: H5, amount: 200, due_day: 3, alias: P_H4_H5 }
+  - create_payable: { from: H5, to: H1, amount: 200, due_day: 3, alias: P_H5_H1 }
+
+scheduled_actions: []
+
+# Enable NBFI lending with kappa-aware profile
+lender:
+  enabled: true
+  base_rate: "0.05"
+  risk_premium_scale: "0.20"
+  max_single_exposure: "0.30"
+  max_total_exposure: "0.80"
+  maturity_days: 3
+  horizon: 3
+  kappa: "0.5"
+  risk_aversion: "0.3"
+  planning_horizon: 5
+  profit_target: "0.05"
+
+run:
+  mode: until_stable
+  max_days: 10
+  quiet_days: 2
+  default_handling: expel-agent
+  show:
+    balances: [H1, H2, H3, H4, H5, lender]
+    events: detailed
+  export:
+    balances_csv: out/balances.csv
+    events_jsonl: out/events.jsonl

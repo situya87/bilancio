@@ -679,9 +679,9 @@ class BalancedDealerConfig(BaseModel):
         default=True,
         description="Enable continuous rollover of matured claims"
     )
-    mode: Literal["passive", "active"] = Field(
+    mode: Literal["passive", "active", "lender", "nbfi", "nbfi_dealer"] = Field(
         default="active",
-        description="passive = C (mimics don't trade), active = D (dealers can trade)"
+        description="passive = C (mimics), active = D (dealers), lender/nbfi/nbfi_dealer = with NBFI lending"
     )
     alpha_vbt: Decimal = Field(
         default=Decimal("0"),
@@ -783,6 +783,13 @@ class LenderScenarioConfig(BaseModel):
     max_total_exposure: Decimal = Field(default=Decimal("0.80"), description="Max total lending exposure")
     maturity_days: int = Field(default=2, description="Loan maturity in days")
     horizon: int = Field(default=3, description="Look-ahead horizon for obligations")
+
+    # LenderProfile behavioral parameters
+    kappa: Optional[Decimal] = Field(default=None, description="System liquidity ratio for default estimation (if None, uses system kappa)")
+    risk_aversion: Decimal = Field(default=Decimal("0.3"), description="Lender risk aversion (0=aggressive, 1=conservative)")
+    planning_horizon: int = Field(default=5, description="Days to look ahead for coverage analysis")
+    profit_target: Decimal = Field(default=Decimal("0.05"), description="Target return rate on loans")
+    max_loan_maturity: Optional[int] = Field(default=None, description="Max loan maturity (None = use ring maturity)")
 
     # Information access configuration
     info_cash_visibility: Literal["none", "noisy", "perfect"] = Field(

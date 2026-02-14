@@ -1,4 +1,4 @@
-"""Frozen dataclasses for trader and VBT behavioral profiles."""
+"""Frozen dataclasses for trader, VBT, rating, and lender behavioral profiles."""
 
 from dataclasses import dataclass
 from decimal import Decimal
@@ -100,3 +100,44 @@ class RatingProfile:
             raise ValueError("coverage_fraction must be in (0, 1]")
         if not (Decimal("0") < self.no_data_prior < Decimal("1")):
             raise ValueError("no_data_prior must be in (0, 1)")
+
+
+@dataclass(frozen=True)
+class LenderProfile:
+    """Behavioral profile for NBFI lender decision-making.
+
+    The lender uses kappa (system liquidity ratio) as a prior for default
+    estimation, then adjusts based on each borrower's balance-sheet
+    coverage ratio.
+
+    Attributes:
+        kappa: System liquidity ratio (L0/S1), used for base default estimate
+        risk_aversion: 0=aggressive lending, 1=conservative (widens risk premium)
+        planning_horizon: Days to look ahead for obligations (1-20)
+        profit_target: Target return rate on loans
+        max_loan_maturity: Maximum loan term in days
+    """
+
+    kappa: Decimal = Decimal("1.0")
+    risk_aversion: Decimal = Decimal("0.3")
+    planning_horizon: int = 5
+    profit_target: Decimal = Decimal("0.05")
+    max_loan_maturity: int = 10
+
+    def __post_init__(self) -> None:
+        if not (1 <= self.planning_horizon <= 20):
+            raise ValueError("planning_horizon must be between 1 and 20")
+        if not (Decimal("0") <= self.risk_aversion <= Decimal("1")):
+            raise ValueError("risk_aversion must be between 0 and 1")
+        if not (self.max_loan_maturity >= 1):
+            raise ValueError("max_loan_maturity must be >= 1")
+
+    @property
+    def base_default_estimate(self) -> Decimal:
+        """Kappa-informed base default rate: p ~ 1/(1+kappa)."""
+        return Decimal("1") / (Decimal("1") + self.kappa)
+
+    @property
+    def risk_premium_scale(self) -> Decimal:
+        """Higher risk aversion -> higher premium: 0.1 + 0.4 * risk_aversion."""
+        return Decimal("0.1") + self.risk_aversion * Decimal("0.4")
