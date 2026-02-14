@@ -11,20 +11,25 @@ from bilancio.decision.protocols import (
     FixedMaturitySelector,
     FixedPortfolioStrategy,
     InstrumentSelector,
+    InstrumentValuer,
     LinearPricer,
     PortfolioStrategy,
     ThresholdScreener,
     TransactionPricer,
 )
+from bilancio.decision.valuers import CoverageRatioValuer, EVHoldValuer
 
 __all__ = [
     "AGGRESSIVE",
     "BASELINE",
     "CAUTIOUS",
     "CounterpartyScreener",
+    "CoverageRatioValuer",
+    "EVHoldValuer",
     "FixedMaturitySelector",
     "FixedPortfolioStrategy",
     "InstrumentSelector",
+    "InstrumentValuer",
     "LinearPricer",
     "PortfolioStrategy",
     "RatingProfile",

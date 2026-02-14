@@ -51,14 +51,18 @@ class RiskAssessor:
     rational trading decisions.
     """
 
-    def __init__(self, params: RiskAssessmentParams):
+    def __init__(self, params: RiskAssessmentParams, instrument_valuer: Any = None):
         """
         Initialize risk assessor.
 
         Args:
             params: Risk assessment parameters
+            instrument_valuer: Optional InstrumentValuer to delegate
+                expected_value / expected_value_detail calls to.
+                When None (default), built-in logic is used.
         """
         self.params = params
+        self.instrument_valuer = instrument_valuer
 
         # Track system-wide default history: (day, issuer_id, defaulted)
         self.payment_history: List[tuple[int, AgentId, bool]] = []
@@ -144,6 +148,9 @@ class RiskAssessor:
 
         EV = (1 - P(default)) * face_value
 
+        When an ``instrument_valuer`` is injected, delegates to it instead
+        of using the built-in formula.
+
         Args:
             ticket: Ticket (receivable) to value
             current_day: Current simulation day
@@ -151,6 +158,8 @@ class RiskAssessor:
         Returns:
             Expected payoff from holding (in same units as face value)
         """
+        if self.instrument_valuer is not None:
+            return self.instrument_valuer.value_decimal(ticket, current_day)
         p_default = self.estimate_default_prob(ticket.issuer_id, current_day)
         ev = (Decimal(1) - p_default) * ticket.face
         return ev
@@ -205,7 +214,13 @@ class RiskAssessor:
     def expected_value_detail(
         self, ticket: Ticket, current_day: int, estimator_id: str = "system",
     ) -> "Estimate":
-        """Return an Estimate wrapping expected_value() with provenance."""
+        """Return an Estimate wrapping expected_value() with provenance.
+
+        When an ``instrument_valuer`` is injected, delegates to its
+        ``value()`` method instead of using the built-in formula.
+        """
+        if self.instrument_valuer is not None:
+            return self.instrument_valuer.value(ticket, current_day)
         from bilancio.information.estimates import Estimate
 
         value = self.expected_value(ticket, current_day)

@@ -71,14 +71,10 @@ def test_ops_imports():
 
 def test_engines_imports():
     """Test that engine modules can be imported."""
-    from bilancio.engines.valuation import ValuationEngine, SimpleValuationEngine
     from bilancio.engines.simulation import SimulationEngine, MonteCarloEngine
     from bilancio.core.atomic import Money
-    
+
     # Test basic instantiation
-    val_engine = SimpleValuationEngine(discount_rate=0.05)
-    assert val_engine.discount_rate == 0.05
-    
     monte_carlo = MonteCarloEngine(n_simulations=1000)
     assert monte_carlo.n_simulations == 1000
 

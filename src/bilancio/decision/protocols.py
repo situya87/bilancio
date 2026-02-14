@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 # ── Level 1: Portfolio Strategy ─────────────────────────────────────
@@ -117,6 +117,21 @@ class LinearPricer:
         return base_rate + self.risk_premium_scale * default_probability
 
 
+# ── Level 5: Instrument Valuer ─────────────────────────────────────
+
+@runtime_checkable
+class InstrumentValuer(Protocol):
+    """Values a tradable instrument — an agent's belief about worth.
+
+    Two-method protocol:
+    - value_decimal(): fast path returning bare Decimal (backward-compat)
+    - value(): full path returning Estimate with provenance
+    """
+
+    def value_decimal(self, ticket: Any, day: int) -> Decimal: ...
+    def value(self, ticket: Any, day: int) -> Any: ...
+
+
 __all__ = [
     "PortfolioStrategy",
     "FixedPortfolioStrategy",
@@ -126,4 +141,5 @@ __all__ = [
     "FixedMaturitySelector",
     "TransactionPricer",
     "LinearPricer",
+    "InstrumentValuer",
 ]
