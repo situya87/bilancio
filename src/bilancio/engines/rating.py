@@ -156,6 +156,7 @@ def _compute_rating(
     from bilancio.decision.profiles import RatingProfile
 
     # ── Balance sheet component ──
+    coverage = None  # assigned below only when obligations > 0
     if info is not None:
         net_worth = info.get_counterparty_net_worth(agent_id, current_day)
         obligations = info.get_counterparty_obligations(agent_id, current_day, profile.lookback_window)
@@ -190,7 +191,7 @@ def _compute_rating(
         hist_score = hist_prob if hist_prob is not None else profile.no_data_prior
     else:
         # Omniscient: use raw default probs
-        hist_score = _raw_default_prob_for_agent(system, agent_id)
+        hist_score = _raw_default_prob_for_agent(system, agent_id, current_day)
 
     # ── Weighted combination ──
     total_weight = profile.balance_sheet_weight + profile.history_weight
@@ -222,7 +223,7 @@ def _compute_rating(
         inputs={
             "net_worth": net_worth,
             "obligations": obligations,
-            "coverage_ratio": str(coverage) if obligations and obligations > 0 and net_worth is not None else None,
+            "coverage_ratio": str(coverage) if coverage is not None else None,
             "bs_score": str(bs_score),
             "hist_score": str(hist_score),
             "combined_before_bias": str(combined_before_bias),
@@ -267,7 +268,7 @@ def _raw_total_liabilities(system: "System", agent_id: str) -> int:
     return total
 
 
-def _raw_default_prob_for_agent(system: "System", agent_id: str) -> Decimal:
+def _raw_default_prob_for_agent(system: "System", agent_id: str, current_day: int = 0) -> Decimal:
     """Get raw default probability for a single agent.
 
     Uses dealer risk assessor if available, otherwise falls back to
@@ -284,7 +285,7 @@ def _raw_default_prob_for_agent(system: "System", agent_id: str) -> Decimal:
         and hasattr(dealer_sub, "risk_assessor")
         and dealer_sub.risk_assessor is not None
     ):
-        p = dealer_sub.risk_assessor.estimate_default_prob(agent_id)
+        p = dealer_sub.risk_assessor.estimate_default_prob(agent_id, current_day)
         return Decimal(str(p)) if p is not None else Decimal("0.15")
 
     # Fallback: system-wide heuristic

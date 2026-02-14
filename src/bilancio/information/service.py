@@ -414,7 +414,7 @@ class InformationService:
                 if agent.defaulted:
                     probs[agent_id] = Decimal("1.0")
                     continue
-                p = assessor.estimate_default_prob(agent_id)
+                p = assessor.estimate_default_prob(agent_id, current_day)
                 probs[agent_id] = (
                     Decimal(str(p)) if p is not None else Decimal("0.15")
                 )

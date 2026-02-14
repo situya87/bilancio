@@ -381,7 +381,7 @@ def _estimate_default_probs(
                 system.log_estimate(est)
                 probs[agent_id] = est.value
             else:
-                p = assessor.estimate_default_prob(agent_id)
+                p = assessor.estimate_default_prob(agent_id, current_day)
                 probs[agent_id] = Decimal(str(p)) if p is not None else Decimal("0.15")
         return probs
 
