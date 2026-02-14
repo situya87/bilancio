@@ -18,6 +18,7 @@ from bilancio.information.noise import (
 )
 from bilancio.information.profile import CategoryAccess, InformationProfile
 from bilancio.information.channels import (
+    ChannelBinding,
     InstitutionalChannel,
     NetworkDerivedChannel,
     SelfDerivedChannel,
@@ -295,4 +296,72 @@ LENDER_WITH_RATINGS = InformationProfile(
     obligation_graph=CategoryAccess(AccessLevel.NONE),
     counterparty_connectivity=CategoryAccess(AccessLevel.NONE),
     cascade_risk=CategoryAccess(AccessLevel.NONE),
+)
+
+
+# ── LENDER_RATINGS_BOUND ─────────────────────────────────────────
+# Like LENDER_WITH_RATINGS but with explicit channel bindings that
+# declare the lender's preferred information source order.
+# Instead of the hard-coded waterfall, this preset says:
+#   1. Use rating_registry first (institutional source)
+#   2. Fall back to system_heuristic if no registry
+# The dealer_risk_assessor is intentionally excluded — this lender
+# relies on the rating agency, not the dealer's internal model.
+LENDER_RATINGS_BOUND = InformationProfile(
+    # I. Counterparty Balance Sheet — noisy (same as LENDER_WITH_RATINGS)
+    counterparty_cash=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.15"))
+    ),
+    counterparty_assets=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    counterparty_liabilities=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    counterparty_net_worth=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.20"))
+    ),
+    counterparty_liquidity_ratio=CategoryAccess(
+        AccessLevel.NOISY, EstimationNoise(Decimal("0.20"))
+    ),
+    # II. Counterparty History — institutional channel (rating agency)
+    counterparty_default_history=category_from_channel(
+        InstitutionalChannel(staleness_days=1, coverage=Decimal("0.8"))
+    ),
+    counterparty_settlement_history=CategoryAccess(
+        AccessLevel.NOISY, SampleNoise(Decimal("0.7"))
+    ),
+    counterparty_track_record=CategoryAccess(
+        AccessLevel.NOISY, SampleNoise(Decimal("0.7"))
+    ),
+    counterparty_partial_settlement=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    counterparty_avg_shortfall=CategoryAccess(
+        AccessLevel.NOISY, AggregateOnlyNoise()
+    ),
+    # IV. Bilateral — own data always perfect
+    bilateral_history=CategoryAccess(AccessLevel.PERFECT),
+    # V. Market Prices — lender not in secondary market
+    dealer_quotes=CategoryAccess(AccessLevel.NONE),
+    vbt_anchors=CategoryAccess(AccessLevel.NONE),
+    price_trends=CategoryAccess(AccessLevel.NONE),
+    implied_default_prob=CategoryAccess(AccessLevel.NONE),
+    # VII. Network — no access
+    obligation_graph=CategoryAccess(AccessLevel.NONE),
+    counterparty_connectivity=CategoryAccess(AccessLevel.NONE),
+    cascade_risk=CategoryAccess(AccessLevel.NONE),
+    # Channel bindings: rating_registry first, then heuristic
+    channel_bindings=(
+        ChannelBinding(
+            "default_prob", "rating_registry",
+            InstitutionalChannel(staleness_days=1, coverage=Decimal("0.8")),
+            priority=0,
+        ),
+        ChannelBinding(
+            "default_prob", "system_heuristic",
+            SelfDerivedChannel(sample_size=10),
+            priority=1,
+        ),
+    ),
 )

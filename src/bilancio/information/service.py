@@ -12,8 +12,11 @@ Design rules:
 
 from __future__ import annotations
 
+import logging
 import random
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 from typing import Dict, Optional, TYPE_CHECKING
 
 from bilancio.information.levels import AccessLevel
@@ -136,18 +139,7 @@ class InformationService:
         if value is None:
             return None
 
-        # Determine channel source
-        dealer_sub = self._system.state.dealer_subsystem
-        if (
-            dealer_sub is not None
-            and hasattr(dealer_sub, "risk_assessor")
-            and dealer_sub.risk_assessor is not None
-        ):
-            channel_source = "dealer_risk_assessor"
-        elif getattr(self._system.state, "rating_registry", None):
-            channel_source = "rating_registry"
-        else:
-            channel_source = "system_heuristic"
+        channel_source = self._active_default_prob_source()
 
         return Estimate(
             value=value,
@@ -398,45 +390,97 @@ class InformationService:
         return total
 
     def _raw_default_probs(self, current_day: int) -> Dict[str, Decimal]:
-        """Get raw default probability estimates."""
-        probs: Dict[str, Decimal] = {}
+        """Get raw default probability estimates.
 
-        # Try dealer risk assessor first
+        When the profile declares channel bindings for ``"default_prob"``,
+        sources are tried in binding priority order.  Otherwise the legacy
+        waterfall (dealer -> registry -> heuristic) is used.
+        """
+        bindings = [
+            b for b in self._profile.channel_bindings
+            if b.category == "default_prob"
+        ]
+        if bindings:
+            for binding in sorted(bindings, key=lambda b: b.priority):
+                result = self._try_default_prob_source(binding.source, current_day)
+                if result is not None:
+                    return result
+            # All declared sources unavailable — final fallback
+            return self._default_prob_heuristic(current_day)
+
+        # No bindings: legacy waterfall for backward compatibility
+        return (
+            self._default_prob_from_dealer(current_day)
+            or self._default_prob_from_registry(current_day)
+            or self._default_prob_heuristic(current_day)
+        )
+
+    # ── Default-prob source methods ────────────────────────────────────
+
+    def _try_default_prob_source(
+        self, source: str, current_day: int,
+    ) -> Optional[Dict[str, Decimal]]:
+        """Dispatch to a named default-prob source. Returns None if unavailable."""
+        if source == "dealer_risk_assessor":
+            return self._default_prob_from_dealer(current_day)
+        if source == "rating_registry":
+            return self._default_prob_from_registry(current_day)
+        if source == "system_heuristic":
+            return self._default_prob_heuristic(current_day)
+        logger.debug("Unknown default-prob source %r — skipped", source)
+        return None
+
+    def _default_prob_from_dealer(
+        self, current_day: int,
+    ) -> Optional[Dict[str, Decimal]]:
+        """Use the dealer subsystem's RiskAssessor for default probs."""
         dealer_sub = self._system.state.dealer_subsystem
         if (
-            dealer_sub is not None
-            and hasattr(dealer_sub, "risk_assessor")
-            and dealer_sub.risk_assessor is not None
+            dealer_sub is None
+            or not hasattr(dealer_sub, "risk_assessor")
+            or dealer_sub.risk_assessor is None
         ):
-            assessor = dealer_sub.risk_assessor
-            for agent_id in self._system.state.agents:
-                agent = self._system.state.agents[agent_id]
-                if agent.defaulted:
-                    probs[agent_id] = Decimal("1.0")
-                    continue
-                p = assessor.estimate_default_prob(agent_id, current_day)
-                probs[agent_id] = (
-                    Decimal(str(p)) if p is not None else Decimal("0.15")
-                )
-            return probs
+            return None
+        probs: Dict[str, Decimal] = {}
+        assessor = dealer_sub.risk_assessor
+        for agent_id in self._system.state.agents:
+            agent = self._system.state.agents[agent_id]
+            if agent.defaulted:
+                probs[agent_id] = Decimal("1.0")
+                continue
+            p = assessor.estimate_default_prob(agent_id, current_day)
+            probs[agent_id] = (
+                Decimal(str(p)) if p is not None else Decimal("0.15")
+            )
+        return probs
 
-        # Try rating registry (institutional source)
-        rating_registry = getattr(self._system.state, 'rating_registry', None)
-        if rating_registry:
-            for agent_id, agent in self._system.state.agents.items():
-                if agent.defaulted:
-                    probs[agent_id] = Decimal("1.0")
-                elif agent_id in rating_registry:
-                    probs[agent_id] = rating_registry[agent_id]
-                else:
-                    probs[agent_id] = Decimal("0.15")
-            return probs
+    def _default_prob_from_registry(
+        self, current_day: int,
+    ) -> Optional[Dict[str, Decimal]]:
+        """Use the rating registry for default probs."""
+        rating_registry = getattr(self._system.state, "rating_registry", None)
+        if not rating_registry:
+            return None
+        probs: Dict[str, Decimal] = {}
+        for agent_id, agent in self._system.state.agents.items():
+            if agent.defaulted:
+                probs[agent_id] = Decimal("1.0")
+            elif agent_id in rating_registry:
+                probs[agent_id] = rating_registry[agent_id]
+            else:
+                probs[agent_id] = Decimal("0.15")
+        return probs
 
-        # Fallback heuristic
+    def _default_prob_heuristic(
+        self, current_day: int,
+    ) -> Dict[str, Decimal]:
+        """System-wide heuristic: base_rate + margin."""
+        probs: Dict[str, Decimal] = {}
         n_agents = len(self._system.state.agents)
         n_defaulted = len(self._system.state.defaulted_agent_ids)
-        base_rate = Decimal(str(n_defaulted / n_agents)) if n_agents > 0 else Decimal("0")
-
+        base_rate = (
+            Decimal(str(n_defaulted / n_agents)) if n_agents > 0 else Decimal("0")
+        )
         for agent_id, agent in self._system.state.agents.items():
             if agent.defaulted:
                 probs[agent_id] = Decimal("1.0")
@@ -446,6 +490,39 @@ class InformationService:
                     min(Decimal("0.99"), base_rate + Decimal("0.05")),
                 )
         return probs
+
+    def _active_default_prob_source(self) -> str:
+        """Determine which source is active for provenance tracking."""
+        bindings = [
+            b for b in self._profile.channel_bindings
+            if b.category == "default_prob"
+        ]
+        if bindings:
+            for binding in sorted(bindings, key=lambda b: b.priority):
+                if self._source_available(binding.source):
+                    return binding.source
+            return "system_heuristic"
+        # Legacy waterfall
+        if self._source_available("dealer_risk_assessor"):
+            return "dealer_risk_assessor"
+        if self._source_available("rating_registry"):
+            return "rating_registry"
+        return "system_heuristic"
+
+    def _source_available(self, source: str) -> bool:
+        """Check whether a named source is available in the current system."""
+        if source == "dealer_risk_assessor":
+            ds = self._system.state.dealer_subsystem
+            return (
+                ds is not None
+                and hasattr(ds, "risk_assessor")
+                and ds.risk_assessor is not None
+            )
+        if source == "rating_registry":
+            return bool(getattr(self._system.state, "rating_registry", None))
+        if source == "system_heuristic":
+            return True
+        return False
 
     def _raw_loan_exposure(self, lender_id: str) -> int:
         """Get raw total loan exposure."""

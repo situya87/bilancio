@@ -110,6 +110,34 @@ Channel = Union[
 ]
 
 
+#: Known source identifiers for channel bindings.
+KNOWN_SOURCES = frozenset({"dealer_risk_assessor", "rating_registry", "system_heuristic"})
+
+
+@dataclass(frozen=True)
+class ChannelBinding:
+    """Binds an information category to a specific data source.
+
+    When an agent's InformationProfile includes channel bindings,
+    the InformationService follows them (by priority) instead of
+    the hard-coded source waterfall.
+
+    Attributes:
+        category: Information category, e.g. ``"default_prob"``.
+        source: Data source identifier — one of the values in
+            ``KNOWN_SOURCES``: ``"dealer_risk_assessor"``,
+            ``"rating_registry"``, ``"system_heuristic"``.
+        channel: Channel describing noise / quality properties
+            of this source.
+        priority: Lower number is tried first (default 0).
+    """
+
+    category: str
+    source: str
+    channel: Channel
+    priority: int = 0
+
+
 # ── Error-per-lag-day constant (matches service.py) ─────────────────────
 _LAG_ERROR_PER_DAY = Decimal("0.05")
 

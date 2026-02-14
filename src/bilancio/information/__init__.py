@@ -7,6 +7,7 @@ Mirrors the pattern of ``bilancio.decision`` for behavioral profiles.
 
 from bilancio.information.channels import (
     Channel,
+    ChannelBinding,
     InstitutionalChannel,
     MarketDerivedChannel,
     NetworkDerivedChannel,
@@ -32,6 +33,7 @@ from bilancio.information.noise import (
 from bilancio.information.profile import CategoryAccess, InformationProfile
 from bilancio.information.presets import (
     LENDER_CHANNEL_BASED,
+    LENDER_RATINGS_BOUND,
     LENDER_REALISTIC,
     LENDER_REALISTIC_V2,
     OMNISCIENT,
@@ -52,6 +54,7 @@ __all__ = [
     "BilateralOnlyNoise",
     "CategoryAccess",
     "Channel",
+    "ChannelBinding",
     "CounterpartyAccess",
     "CounterpartyView",
     "Estimate",
@@ -62,6 +65,7 @@ __all__ = [
     "InstrumentAccess",
     "InstrumentView",
     "LENDER_CHANNEL_BASED",
+    "LENDER_RATINGS_BOUND",
     "LENDER_REALISTIC",
     "LENDER_REALISTIC_V2",
     "LagNoise",
