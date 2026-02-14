@@ -356,57 +356,122 @@ def _get_upcoming_obligations(
 
 
 def _estimate_default_probs(
-    system: "System", current_day: int, log_estimates: bool = False,
+    system: "System",
+    current_day: int,
+    log_estimates: bool = False,
+    channel_bindings: tuple = (),
 ) -> Dict[str, Decimal]:
     """Estimate default probability per agent.
+
+    When *channel_bindings* are provided, sources are tried in priority
+    order.  Otherwise the legacy waterfall (dealer → registry → heuristic)
+    is used.
 
     Reuses dealer subsystem's RiskAssessor if available,
     otherwise uses a simple heuristic based on default history.
     """
-    probs: Dict[str, Decimal] = {}
+    if channel_bindings:
+        bindings = sorted(
+            [b for b in channel_bindings if b.category == "default_prob"],
+            key=lambda b: b.priority,
+        )
+        for binding in bindings:
+            result = _try_default_prob_source(
+                system, current_day, binding.source, log_estimates,
+            )
+            if result is not None:
+                return result
+        # All declared sources unavailable — heuristic fallback
+        return _default_prob_heuristic(system, current_day)
 
-    # Try to use the dealer subsystem's risk assessor
+    # No bindings: legacy waterfall
+    return (
+        _default_prob_from_dealer(system, current_day, log_estimates)
+        or _default_prob_from_registry(system, current_day)
+        or _default_prob_heuristic(system, current_day)
+    )
+
+
+def _try_default_prob_source(
+    system: "System",
+    current_day: int,
+    source: str,
+    log_estimates: bool = False,
+) -> Optional[Dict[str, Decimal]]:
+    """Dispatch to a named default-prob source."""
+    if source == "dealer_risk_assessor":
+        return _default_prob_from_dealer(system, current_day, log_estimates)
+    if source == "rating_registry":
+        return _default_prob_from_registry(system, current_day)
+    if source == "system_heuristic":
+        return _default_prob_heuristic(system, current_day)
+    return None
+
+
+def _default_prob_from_dealer(
+    system: "System",
+    current_day: int,
+    log_estimates: bool = False,
+) -> Optional[Dict[str, Decimal]]:
+    """Use the dealer subsystem's RiskAssessor for default probs."""
     dealer_sub = system.state.dealer_subsystem
-    if dealer_sub is not None and hasattr(dealer_sub, 'risk_assessor') and dealer_sub.risk_assessor is not None:
-        assessor = dealer_sub.risk_assessor
-        for agent_id in system.state.agents:
-            agent = system.state.agents[agent_id]
-            if agent.defaulted:
-                probs[agent_id] = Decimal("1.0")
-                continue
-            if log_estimates and hasattr(assessor, 'estimate_default_prob_detail'):
-                est = assessor.estimate_default_prob_detail(
-                    agent_id, current_day, estimator_id="lender",
-                )
-                system.log_estimate(est)
-                probs[agent_id] = est.value
-            else:
-                p = assessor.estimate_default_prob(agent_id, current_day)
-                probs[agent_id] = Decimal(str(p)) if p is not None else Decimal("0.15")
-        return probs
+    if (
+        dealer_sub is None
+        or not hasattr(dealer_sub, "risk_assessor")
+        or dealer_sub.risk_assessor is None
+    ):
+        return None
+    probs: Dict[str, Decimal] = {}
+    assessor = dealer_sub.risk_assessor
+    for agent_id in system.state.agents:
+        agent = system.state.agents[agent_id]
+        if agent.defaulted:
+            probs[agent_id] = Decimal("1.0")
+            continue
+        if log_estimates and hasattr(assessor, "estimate_default_prob_detail"):
+            est = assessor.estimate_default_prob_detail(
+                agent_id, current_day, estimator_id="lender",
+            )
+            system.log_estimate(est)
+            probs[agent_id] = est.value
+        else:
+            p = assessor.estimate_default_prob(agent_id, current_day)
+            probs[agent_id] = Decimal(str(p)) if p is not None else Decimal("0.15")
+    return probs
 
-    # Try rating registry (institutional source)
-    rating_registry = getattr(system.state, 'rating_registry', None)
-    if rating_registry:
-        for agent_id, agent in system.state.agents.items():
-            if agent.defaulted:
-                probs[agent_id] = Decimal("1.0")
-            elif agent_id in rating_registry:
-                probs[agent_id] = rating_registry[agent_id]
-            else:
-                probs[agent_id] = Decimal("0.15")
-        return probs
 
-    # Fallback: simple heuristic based on defaulted agents in the system
+def _default_prob_from_registry(
+    system: "System", current_day: int,
+) -> Optional[Dict[str, Decimal]]:
+    """Use the rating registry for default probs."""
+    rating_registry = getattr(system.state, "rating_registry", None)
+    if not rating_registry:
+        return None
+    probs: Dict[str, Decimal] = {}
+    for agent_id, agent in system.state.agents.items():
+        if agent.defaulted:
+            probs[agent_id] = Decimal("1.0")
+        elif agent_id in rating_registry:
+            probs[agent_id] = rating_registry[agent_id]
+        else:
+            probs[agent_id] = Decimal("0.15")
+    return probs
+
+
+def _default_prob_heuristic(
+    system: "System", current_day: int,
+) -> Dict[str, Decimal]:
+    """System-wide heuristic: base_rate + margin."""
+    probs: Dict[str, Decimal] = {}
     n_agents = len(system.state.agents)
     n_defaulted = len(system.state.defaulted_agent_ids)
     base_rate = Decimal(str(n_defaulted / max(n_agents, 1)))
-
     for agent_id, agent in system.state.agents.items():
         if agent.defaulted:
             probs[agent_id] = Decimal("1.0")
         else:
-            # Use system-wide base + small per-agent noise
-            probs[agent_id] = max(Decimal("0.01"), min(Decimal("0.99"), base_rate + Decimal("0.05")))
-
+            probs[agent_id] = max(
+                Decimal("0.01"),
+                min(Decimal("0.99"), base_rate + Decimal("0.05")),
+            )
     return probs

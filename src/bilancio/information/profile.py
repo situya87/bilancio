@@ -9,10 +9,13 @@ experiments.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from bilancio.information.levels import AccessLevel
 from bilancio.information.noise import NoiseConfig
+
+if TYPE_CHECKING:
+    from bilancio.information.channels import ChannelBinding
 
 
 @dataclass(frozen=True)
@@ -105,6 +108,9 @@ class InformationProfile:
     cascade_risk: CategoryAccess = _DEFAULT
     exposure_concentration: CategoryAccess = _DEFAULT  # Always PERFECT (own data)
 
+    # ── Channel Bindings (optional) ──────────────────────────────────
+    channel_bindings: tuple[ChannelBinding, ...] = ()
+
     # ── Hierarchical sub-profile properties ──────────────────────────
 
     @property
@@ -174,6 +180,7 @@ class InformationProfile:
         counterparty: Optional["CounterpartyAccess"] = None,
         instrument: Optional["InstrumentAccess"] = None,
         transaction: Optional["TransactionAccess"] = None,
+        channel_bindings: tuple[ChannelBinding, ...] = (),
     ) -> "InformationProfile":
         """Construct an InformationProfile from hierarchical sub-profiles.
 
@@ -224,4 +231,5 @@ class InformationProfile:
             obligation_graph=t.obligation_graph,
             cascade_risk=t.cascade_risk,
             exposure_concentration=t.exposure_concentration,
+            channel_bindings=channel_bindings,
         )

@@ -403,6 +403,8 @@ class TestLenderChannelBased:
         from dataclasses import fields
 
         for f in fields(realistic):
+            if f.name == "channel_bindings":
+                continue
             r_ca = getattr(realistic, f.name)
             c_ca = getattr(channel_based, f.name)
             assert r_ca.level == c_ca.level, (
@@ -414,6 +416,8 @@ class TestLenderChannelBased:
         from dataclasses import fields
 
         for f in fields(realistic):
+            if f.name == "channel_bindings":
+                continue
             r_ca = getattr(realistic, f.name)
             c_ca = getattr(channel_based, f.name)
             if r_ca.noise is None:
