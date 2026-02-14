@@ -437,6 +437,10 @@ class RunConfig(BaseModel):
         False,
         description="Enable continuous rollover of settled payables (Plan 024)"
     )
+    estimate_logging: bool = Field(
+        False,
+        description="Enable logging of Estimate objects (rating, dealer risk) to system estimate_log"
+    )
     show: ShowConfig = Field(default_factory=ShowConfig)  # type: ignore[arg-type]
     export: ExportConfig = Field(default_factory=ExportConfig)  # type: ignore[arg-type]
 

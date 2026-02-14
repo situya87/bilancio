@@ -144,6 +144,45 @@ class MonteCarloEngine:
         self.num_simulations = num_simulations
 
 
+def _log_rating_estimates(system: "System", current_day: int) -> None:
+    """Log rating agency estimates to the estimate log."""
+    from bilancio.information.estimates import Estimate
+
+    rating_registry = getattr(system.state, "rating_registry", None)
+    if not rating_registry:
+        return
+
+    for agent_id, p_default in rating_registry.items():
+        est = Estimate(
+            value=p_default,
+            estimator_id="rating_agency",
+            target_id=agent_id,
+            target_type="agent",
+            estimation_day=current_day,
+            method="rating_agency_published",
+            inputs={"source": "rating_registry"},
+        )
+        system.log_estimate(est)
+
+
+def _log_dealer_estimates(system: "System", current_day: int) -> None:
+    """Log dealer risk assessor estimates to the estimate log."""
+    from bilancio.information.estimates import Estimate
+
+    dealer_sub = system.state.dealer_subsystem
+    if dealer_sub is None or dealer_sub.risk_assessor is None:
+        return
+
+    assessor = dealer_sub.risk_assessor
+    for agent_id, agent in system.state.agents.items():
+        if agent.defaulted:
+            continue
+        est = assessor.estimate_default_prob_detail(
+            agent_id, current_day, estimator_id="dealer_risk_assessor",
+        )
+        system.log_estimate(est)
+
+
 def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = False, enable_rating: bool = False) -> None:
     """
     Run a single day's simulation with three phases.
@@ -193,6 +232,10 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
         rating_events = run_rating_phase(system, current_day, system.state.rating_config)
         system.state.events.extend(rating_events)
 
+        # Log rating estimates if enabled
+        if system.state.estimate_logging_enabled:
+            _log_rating_estimates(system, current_day)
+
     # SubphaseB_Dealer: Run dealer trading phase (optional)
     if enable_dealer and system.state.dealer_subsystem is not None:
         system.log("SubphaseB_Dealer")
@@ -205,6 +248,10 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
 
         # Sync dealer state back to main system
         sync_dealer_to_system(system.state.dealer_subsystem, system)
+
+        # Log dealer risk estimates if enabled
+        if system.state.estimate_logging_enabled:
+            _log_dealer_estimates(system, current_day)
 
     # SubphaseB_Lending: Non-bank lending phase (optional)
     if enable_lender and system.state.lender_config is not None:
