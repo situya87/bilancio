@@ -356,7 +356,7 @@ def _get_upcoming_obligations(
 
 
 def _estimate_default_probs(
-    system: "System", current_day: int
+    system: "System", current_day: int, log_estimates: bool = False,
 ) -> Dict[str, Decimal]:
     """Estimate default probability per agent.
 
@@ -374,8 +374,15 @@ def _estimate_default_probs(
             if agent.defaulted:
                 probs[agent_id] = Decimal("1.0")
                 continue
-            p = assessor.estimate_default_prob(agent_id)
-            probs[agent_id] = Decimal(str(p)) if p is not None else Decimal("0.15")
+            if log_estimates and hasattr(assessor, 'estimate_default_prob_detail'):
+                est = assessor.estimate_default_prob_detail(
+                    agent_id, current_day, estimator_id="lender",
+                )
+                system.log_estimate(est)
+                probs[agent_id] = est.value
+            else:
+                p = assessor.estimate_default_prob(agent_id, current_day)
+                probs[agent_id] = Decimal(str(p)) if p is not None else Decimal("0.15")
         return probs
 
     # Try rating registry (institutional source)

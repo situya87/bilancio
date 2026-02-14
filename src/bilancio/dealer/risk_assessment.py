@@ -155,6 +155,82 @@ class RiskAssessor:
         ev = (Decimal(1) - p_default) * ticket.face
         return ev
 
+    def estimate_default_prob_detail(
+        self, issuer_id: AgentId, current_day: int, estimator_id: str = "system",
+    ) -> "Estimate":
+        """Return an Estimate wrapping estimate_default_prob() with provenance."""
+        from bilancio.information.estimates import Estimate
+
+        value = self.estimate_default_prob(issuer_id, current_day)
+
+        window_start = current_day - self.params.lookback_window
+
+        if self.params.use_issuer_specific and issuer_id in self.issuer_history:
+            recent = [
+                (d, defaulted)
+                for d, defaulted in self.issuer_history[issuer_id]
+                if d >= window_start
+            ]
+        else:
+            recent = [
+                (d, defaulted)
+                for d, _, defaulted in self.payment_history
+                if d >= window_start
+            ]
+
+        defaults_count = sum(1 for _, defaulted in recent if defaulted)
+        total_observations = len(recent)
+        used_prior = total_observations == 0
+
+        return Estimate(
+            value=value,
+            estimator_id=estimator_id,
+            target_id=str(issuer_id),
+            target_type="agent",
+            estimation_day=current_day,
+            method="bayesian_default_prob",
+            inputs={
+                "defaults_count": defaults_count,
+                "total_observations": total_observations,
+                "used_prior": used_prior,
+            },
+            metadata={
+                "lookback_window": self.params.lookback_window,
+                "smoothing_alpha": str(self.params.smoothing_alpha),
+                "initial_prior": str(self.params.initial_prior),
+                "default_observability": str(self.params.default_observability),
+            },
+        )
+
+    def expected_value_detail(
+        self, ticket: Ticket, current_day: int, estimator_id: str = "system",
+    ) -> "Estimate":
+        """Return an Estimate wrapping expected_value() with provenance."""
+        from bilancio.information.estimates import Estimate
+
+        value = self.expected_value(ticket, current_day)
+        p_default_est = self.estimate_default_prob_detail(
+            ticket.issuer_id, current_day, estimator_id,
+        )
+
+        return Estimate(
+            value=value,
+            estimator_id=estimator_id,
+            target_id=str(ticket.id),
+            target_type="instrument",
+            estimation_day=current_day,
+            method="ev_hold",
+            inputs={
+                "p_default_estimate": p_default_est,
+                "face_value": str(ticket.face),
+            },
+            metadata={
+                "issuer_id": str(ticket.issuer_id),
+                "maturity_day": ticket.maturity_day,
+                "bucket_id": str(ticket.bucket_id),
+            },
+        )
+
     def compute_effective_threshold(
         self, cash: Decimal, shortfall: Decimal, asset_value: Decimal
     ) -> Decimal:

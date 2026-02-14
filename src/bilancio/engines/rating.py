@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from bilancio.engines.system import System
     from bilancio.decision.profiles import RatingProfile
     from bilancio.information.profile import InformationProfile
+    from bilancio.information.estimates import Estimate
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,8 @@ def _compute_rating(
     current_day: int,
     profile: "RatingProfile",
     system: "System",
-) -> Decimal:
+    return_estimate: bool = False,
+) -> "Decimal | Estimate":
     """Compute a default probability rating for a single agent.
 
     Combines:
@@ -154,6 +156,7 @@ def _compute_rating(
     from bilancio.decision.profiles import RatingProfile
 
     # ── Balance sheet component ──
+    coverage = None  # assigned below only when obligations > 0
     if info is not None:
         net_worth = info.get_counterparty_net_worth(agent_id, current_day)
         obligations = info.get_counterparty_obligations(agent_id, current_day, profile.lookback_window)
@@ -188,7 +191,7 @@ def _compute_rating(
         hist_score = hist_prob if hist_prob is not None else profile.no_data_prior
     else:
         # Omniscient: use raw default probs
-        hist_score = _raw_default_prob_for_agent(system, agent_id)
+        hist_score = _raw_default_prob_for_agent(system, agent_id, current_day)
 
     # ── Weighted combination ──
     total_weight = profile.balance_sheet_weight + profile.history_weight
@@ -201,8 +204,37 @@ def _compute_rating(
         combined = profile.no_data_prior
 
     # Add conservatism bias and clamp
+    combined_before_bias = combined
     result = combined + profile.conservatism_bias
-    return max(Decimal("0.01"), min(Decimal("0.99"), result))
+    clamped = max(Decimal("0.01"), min(Decimal("0.99"), result))
+
+    if not return_estimate:
+        return clamped
+
+    from bilancio.information.estimates import Estimate
+
+    return Estimate(
+        value=clamped,
+        estimator_id="rating_agency",
+        target_id=agent_id,
+        target_type="agent",
+        estimation_day=current_day,
+        method="coverage_ratio_plus_history",
+        inputs={
+            "net_worth": net_worth,
+            "obligations": obligations,
+            "coverage_ratio": str(coverage) if coverage is not None else None,
+            "bs_score": str(bs_score),
+            "hist_score": str(hist_score),
+            "combined_before_bias": str(combined_before_bias),
+        },
+        metadata={
+            "balance_sheet_weight": str(profile.balance_sheet_weight),
+            "history_weight": str(profile.history_weight),
+            "conservatism_bias": str(profile.conservatism_bias),
+            "lookback_window": profile.lookback_window,
+        },
+    )
 
 
 def _raw_net_worth(system: "System", agent_id: str) -> int:
@@ -236,7 +268,7 @@ def _raw_total_liabilities(system: "System", agent_id: str) -> int:
     return total
 
 
-def _raw_default_prob_for_agent(system: "System", agent_id: str) -> Decimal:
+def _raw_default_prob_for_agent(system: "System", agent_id: str, current_day: int = 0) -> Decimal:
     """Get raw default probability for a single agent.
 
     Uses dealer risk assessor if available, otherwise falls back to
@@ -253,7 +285,7 @@ def _raw_default_prob_for_agent(system: "System", agent_id: str) -> Decimal:
         and hasattr(dealer_sub, "risk_assessor")
         and dealer_sub.risk_assessor is not None
     ):
-        p = dealer_sub.risk_assessor.estimate_default_prob(agent_id)
+        p = dealer_sub.risk_assessor.estimate_default_prob(agent_id, current_day)
         return Decimal(str(p)) if p is not None else Decimal("0.15")
 
     # Fallback: system-wide heuristic

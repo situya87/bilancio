@@ -38,6 +38,7 @@ from bilancio.information.presets import (
     TRADER_BASIC,
 )
 from bilancio.information.service import InformationService
+from bilancio.information.estimates import Estimate
 from bilancio.information.views import (
     CounterpartyView,
     InstrumentView,
@@ -53,6 +54,7 @@ __all__ = [
     "Channel",
     "CounterpartyAccess",
     "CounterpartyView",
+    "Estimate",
     "EstimationNoise",
     "InformationProfile",
     "InformationService",

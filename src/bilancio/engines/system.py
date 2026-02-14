@@ -52,6 +52,8 @@ class State:
     lender_config: Any = None
     rating_config: Any = None
     rating_registry: dict = field(default_factory=dict)
+    estimate_log: list = field(default_factory=list)
+    estimate_logging_enabled: bool = False
 
 class System:
     def __init__(self, policy: PolicyEngine | None = None, default_mode: str = "fail-fast"):
@@ -105,6 +107,11 @@ class System:
     # ---- events
     def log(self, kind: str, **payload: object) -> None:
         self.state.events.append({"kind": kind, "day": self.state.day, "phase": self.state.phase, **payload})
+
+    def log_estimate(self, estimate: object) -> None:
+        """Append an Estimate to the log if logging is enabled."""
+        if self.state.estimate_logging_enabled:
+            self.state.estimate_log.append(estimate)
 
     # ---- invariants (MVP)
     def assert_invariants(self) -> None:
