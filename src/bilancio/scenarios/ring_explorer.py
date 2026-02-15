@@ -194,8 +194,8 @@ def compile_ring_explorer_balanced(
     face_value: Decimal = Decimal("20"),
     outside_mid_ratio: Decimal = Decimal("0.75"),
     big_entity_share: Decimal = Decimal("0.25"),  # DEPRECATED
-    vbt_share_per_bucket: Decimal = Decimal("0.25"),
-    dealer_share_per_bucket: Decimal = Decimal("0.125"),
+    vbt_share_per_bucket: Decimal = Decimal("0.20"),
+    dealer_share_per_bucket: Decimal = Decimal("0.05"),
     mode: str = "active",
     rollover_enabled: bool = True,
     lender_share: Decimal = Decimal("0.10"),

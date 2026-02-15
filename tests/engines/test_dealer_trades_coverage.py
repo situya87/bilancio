@@ -836,8 +836,8 @@ class TestInterleavedOrderFlow:
         )
         assert len(events) == 0
 
-    def test_cash_neutrality_constraint(self):
-        """Buy cash cannot exceed sell cash (cash neutrality)."""
+    def test_independent_order_flow(self):
+        """Sellers and buyers process independently (no cash neutrality)."""
         subsystem = _make_subsystem(dealer_tickets=5, dealer_cash=Decimal(50))
 
         # Set up traders: some want to sell, some want to buy
@@ -862,5 +862,5 @@ class TestInterleavedOrderFlow:
             subsystem, system, 5,
             ["seller1"], ["buyer1"], events,
         )
-        # Should execute without errors
+        # Both sellers and buyers should be processed
         assert isinstance(events, list)

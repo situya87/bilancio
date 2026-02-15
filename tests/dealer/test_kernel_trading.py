@@ -718,15 +718,17 @@ class TestExecuteCustomerBuyPassthrough:
         assert dealer.cash == cash_before
         assert len(dealer.inventory) == inv_before
 
-    def test_passthrough_buy_no_vbt_inventory_raises(self):
+    def test_passthrough_buy_no_vbt_inventory_returns_not_executed(self):
+        """When VBT has no inventory for passthrough buy, return not-executed."""
         params = KernelParams()
         dealer = _make_dealer(n_tickets=0, cash=Decimal(5))
         vbt = _make_vbt(M=Decimal(1), O=Decimal("0.30"), n_tickets=0)
         recompute_dealer_state(dealer, vbt, params)
 
         executor = TradeExecutor(params)
-        with pytest.raises(ValueError, match="VBT has no inventory"):
-            executor.execute_customer_buy(dealer, vbt, buyer_id="buyer")
+        result = executor.execute_customer_buy(dealer, vbt, buyer_id="buyer")
+        assert not result.executed
+        assert result.is_passthrough is True
 
     def test_passthrough_buy_vbt_cash_increases(self):
         params = KernelParams()

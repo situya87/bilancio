@@ -68,16 +68,18 @@ class TradeExecutor:
         - Specification Section 8.6: Feasibility checks
     """
 
-    def __init__(self, params: KernelParams, rng: random.Random | None = None):
+    def __init__(self, params: KernelParams, rng: random.Random | None = None, layoff_threshold: Decimal = Decimal("0")):
         """
         Initialize trade executor.
 
         Args:
             params: Kernel parameters including ticket size S
             rng: Optional random number generator (default: new Random instance)
+            layoff_threshold: Inventory ratio below which VBT injects cash into dealer (0 = disabled)
         """
         self.params = params
         self.rng = rng or random.Random()
+        self.layoff_threshold = layoff_threshold
 
     def execute_customer_sell(
         self,
@@ -124,6 +126,19 @@ class TradeExecutor:
         is_interior = can_interior_buy(dealer, self.params)
         logger.debug("customer_sell: ticket=%s customer=%s interior=%s",
                       ticket.id, customer_id, is_interior)
+
+        # VBT credit facility: when dealer can't buy interior and inventory
+        # is below layoff threshold, VBT injects cash to expand dealer capacity.
+        # Economically: repo/credit facility from VBT to market maker.
+        if not is_interior and self.layoff_threshold > 0:
+            inventory_ratio = Decimal(dealer.a) / max(1, dealer.K_star) if dealer.K_star > 0 else Decimal(0)
+            if inventory_ratio < self.layoff_threshold:
+                needed_cash = dealer.bid * self.params.S
+                if vbt.cash >= needed_cash:
+                    vbt.cash -= needed_cash
+                    dealer.cash += needed_cash
+                    recompute_dealer_state(dealer, vbt, self.params)
+                    is_interior = can_interior_buy(dealer, self.params)
 
         if is_interior:
             # Event 1: Interior execution at dealer bid
@@ -307,13 +322,9 @@ class TradeExecutor:
                 dealer_snapshot = deepcopy(dealer)
 
             # Select ticket from VBT inventory
-            # VBT must have inventory to provide - if not, this is a configuration error
+            # If VBT has no inventory, the buy cannot proceed
             if not vbt.inventory:
-                raise ValueError(
-                    f"VBT has no inventory to provide for passthrough buy. "
-                    f"Bucket: {vbt.bucket_id}. "
-                    f"This indicates insufficient VBT capitalization or configuration error."
-                )
+                return ExecutionResult(executed=False, price=Decimal(0), is_passthrough=True)
 
             ticket = self._select_ticket_to_sell(vbt.inventory, issuer_preference)
 

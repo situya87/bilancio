@@ -139,6 +139,7 @@ class DealerRingConfig:
     # Simulation control
     max_days: int = 30
     enable_vbt_anchor_updates: bool = True
+    layoff_threshold: Decimal = Decimal("0.7")
 
 
 class DealerRingSimulation:

@@ -589,18 +589,14 @@ def _execute_interleaved_order_flow(
     eligible_buyers: List[str],
     events: List[dict[str, object]],
 ) -> None:
-    """Execute interleaved sell/buy order flow in batches.
+    """Execute order flow: all sellers first, then all buyers independently.
 
-    Sellers and buyers alternate in batches of BATCH_SIZE.
-    Sellers go first (urgent liquidity needs), then buyers, repeating
-    until both lists are exhausted.
-
-    Cash neutrality: total buy cash cannot exceed total sell cash,
-    preventing the dealer from being a net cash drain on the ring.
+    Sellers go first (urgent liquidity needs), then buyers independently.
+    Dealers are independently capitalized, so buys do not need prior sells
+    to accumulate cash.
     """
     from bilancio.engines.dealer_integration import _get_agent_cash
 
-    BATCH_SIZE = 10
     subsystem.rng.shuffle(eligible_sellers)
     subsystem.rng.shuffle(eligible_buyers)
 
@@ -612,20 +608,10 @@ def _execute_interleaved_order_flow(
     for bucket_id, vbt in subsystem.vbts.items():
         dealer_budgets[vbt.agent_id] = _get_agent_cash(system, vbt.agent_id)
 
-    seller_idx = 0
-    buyer_idx = 0
-    sell_cash = Decimal(0)  # Cumulative cash injected by sells
-    buy_cash = Decimal(0)   # Cumulative cash drained by buys
+    # --- Process all sellers (urgent liquidity needs) ---
+    for trader_id in eligible_sellers:
+        _execute_sell_trade(subsystem, trader_id, current_day, events, dealer_budgets)
 
-    while seller_idx < len(eligible_sellers) or buyer_idx < len(eligible_buyers):
-        # --- Seller batch ---
-        for trader_id in eligible_sellers[seller_idx:seller_idx + BATCH_SIZE]:
-            sell_cash += _execute_sell_trade(subsystem, trader_id, current_day, events, dealer_budgets)
-        seller_idx += BATCH_SIZE
-
-        # --- Buyer batch (constrained by cash neutrality) ---
-        for trader_id in eligible_buyers[buyer_idx:buyer_idx + BATCH_SIZE]:
-            if buy_cash >= sell_cash:
-                break  # Would drain more cash than sells injected
-            buy_cash += _execute_buy_trade(subsystem, trader_id, current_day, events, dealer_budgets)
-        buyer_idx += BATCH_SIZE
+    # --- Process all buyers independently ---
+    for trader_id in eligible_buyers:
+        _execute_buy_trade(subsystem, trader_id, current_day, events, dealer_budgets)

@@ -41,8 +41,8 @@ class TestBalancedDealerConfig:
         assert cfg.face_value == Decimal("20")
         assert cfg.outside_mid_ratio == Decimal("0.75")
         assert cfg.big_entity_share == Decimal("0.25")
-        assert cfg.vbt_share_per_bucket == Decimal("0.25")
-        assert cfg.dealer_share_per_bucket == Decimal("0.125")
+        assert cfg.vbt_share_per_bucket == Decimal("0.20")
+        assert cfg.dealer_share_per_bucket == Decimal("0.05")
         assert cfg.rollover_enabled is True
         assert cfg.mode == "active"
 
