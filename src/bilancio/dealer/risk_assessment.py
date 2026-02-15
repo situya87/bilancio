@@ -29,18 +29,22 @@ class RiskAssessmentParams:
     Attributes:
         lookback_window: Number of days to look back for default history
         smoothing_alpha: Laplace smoothing parameter (handles small samples)
-        base_risk_premium: Minimum premium required to sell (fraction of face value)
+        base_risk_premium: Seller premium (fraction of face value).
+            Default 0: selling converts uncertainty to certainty, so no premium needed.
         urgency_sensitivity: How much liquidity urgency reduces threshold
         use_issuer_specific: If True, track per-issuer rates; if False, use system-wide
         buy_premium_multiplier: Buyers require higher premium than sellers
+        buy_risk_premium: Buyer premium (fraction of face value).
+            Default 0.01: buyers demand a premium for taking on default risk.
     """
 
     lookback_window: int = 5
     smoothing_alpha: Decimal = Decimal("1.0")
-    base_risk_premium: Decimal = Decimal("0.02")  # 2% premium
+    base_risk_premium: Decimal = Decimal("0")  # Seller premium: 0 (selling converts uncertainty to certainty)
     urgency_sensitivity: Decimal = Decimal("0.10")  # 10% sensitivity
     use_issuer_specific: bool = False
     buy_premium_multiplier: Decimal = Decimal("1.0")  # Buyers use same premium as sellers
+    buy_risk_premium: Decimal = Decimal("0.01")  # Buyer premium: 1%
     default_observability: Decimal = Decimal("1.0")  # 0=ignore observed defaults, 1=full tracking
     initial_prior: Decimal = Decimal("0.15")  # No-history default prior (can be overridden by informedness)
 
@@ -371,7 +375,7 @@ class RiskAssessor:
         dealer_cost = dealer_ask * ticket.face
 
         # For buying, use higher threshold (bid-ask asymmetry)
-        buy_threshold = self.params.base_risk_premium * self.params.buy_premium_multiplier
+        buy_threshold = self.params.buy_risk_premium
         threshold_absolute = buy_threshold * ticket.face
 
         # Accept if expected value exceeds cost by at least threshold

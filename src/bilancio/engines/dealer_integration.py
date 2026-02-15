@@ -169,6 +169,9 @@ class DealerSubsystem:
     # Initial spread per bucket (for spread_sensitivity computation)
     initial_spread_by_bucket: Dict[str, Decimal] = field(default_factory=dict)
 
+    # Base spread per bucket (for per-bucket daily VBT spread updates)
+    base_spread_by_bucket: Dict[str, Decimal] = field(default_factory=dict)
+
     # VBT pricing model (optional — when None, uses inline logic for backward compat)
     vbt_pricing_model: Optional["VBTPricingModel"] = None
 
@@ -393,26 +396,24 @@ def initialize_balanced_dealer_subsystem(
     Returns:
         Initialized DealerSubsystem ready for trading (or holding if passive)
     """
-    # Override risk_params from trader_profile if provided
-    if trader_profile is not None and risk_params is not None:
-        from dataclasses import replace as dc_replace
-        risk_params = dc_replace(
-            risk_params,
-            base_risk_premium=trader_profile.base_risk_premium,
-            buy_premium_multiplier=trader_profile.buy_premium_multiplier,
-            default_observability=trader_profile.default_observability,
-        )
+    # Compute shared kappa-informed prior (replaces alpha blending).
+    # Both VBT and traders use the same prior to prevent adverse selection.
+    from bilancio.dealer.priors import kappa_informed_prior
+    if kappa is not None:
+        shared_prior = kappa_informed_prior(kappa)
+    else:
+        shared_prior = Decimal("0.15")
 
-    # Compute blended trader prior if informedness is enabled.
-    # Formula: blended = (1 - α_trader) × 0.15 + α_trader × 1/(1+κ)
-    # With α=0: naive prior (backward compatible). With α=1: fully κ-informed.
-    if alpha_trader > 0 and kappa is not None and risk_params is not None:
+    # Override risk_params from trader_profile and shared prior
+    if risk_params is not None:
         from dataclasses import replace as dc_replace
-        naive_prior = Decimal("0.15")
-        # Safe: kappa is validated > 0 so (1 + kappa) > 1, no division-by-zero.
-        informed_prior = Decimal(1) / (Decimal(1) + kappa)
-        blended_prior = (Decimal(1) - alpha_trader) * naive_prior + alpha_trader * informed_prior
-        risk_params = dc_replace(risk_params, initial_prior=blended_prior)
+        overrides: dict = {"initial_prior": shared_prior}
+        if trader_profile is not None:
+            overrides["base_risk_premium"] = trader_profile.base_risk_premium
+            overrides["buy_risk_premium"] = trader_profile.buy_risk_premium
+            overrides["buy_premium_multiplier"] = trader_profile.buy_premium_multiplier
+            overrides["default_observability"] = trader_profile.default_observability
+        risk_params = dc_replace(risk_params, **overrides)
 
     subsystem = DealerSubsystem(
         bucket_configs=dealer_config.buckets,
@@ -436,7 +437,6 @@ def initialize_balanced_dealer_subsystem(
     from bilancio.decision.valuers import CreditAdjustedVBTPricing
     effective_vbt_profile = vbt_profile or VBTProfile()
     subsystem.vbt_pricing_model = CreditAdjustedVBTPricing(
-        outside_mid_ratio=outside_mid_ratio,
         mid_sensitivity=effective_vbt_profile.mid_sensitivity,
         spread_sensitivity=effective_vbt_profile.spread_sensitivity,
     )
@@ -462,11 +462,9 @@ def initialize_balanced_dealer_subsystem(
 
     # Step 2: Initialize VBT and Dealer states per bucket (with inventory)
     _initialize_balanced_market_makers(
-        subsystem, system, dealer_config, outside_mid_ratio,
+        subsystem, system, dealer_config,
         vbt_tickets, dealer_tickets,
-        alpha_vbt=alpha_vbt,
-        kappa=kappa,
-        vbt_profile=vbt_profile,
+        shared_prior=shared_prior,
     )
 
     # Step 3: Initialize traders (regular household agents, skip VBT/Dealer/big)

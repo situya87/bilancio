@@ -282,7 +282,7 @@ class RingSweepRunner:
         self.risk_assessment_config = risk_assessment_config
         self.balanced_mode = balanced_mode
         self.face_value = face_value or Decimal("20")
-        self.outside_mid_ratio = outside_mid_ratio or Decimal("0.75")
+        self.outside_mid_ratio = outside_mid_ratio or Decimal("1.0")
         self.big_entity_share = big_entity_share or Decimal("0.25")  # DEPRECATED
         self.vbt_share_per_bucket = vbt_share_per_bucket or Decimal("0.25")
         self.dealer_share_per_bucket = dealer_share_per_bucket or Decimal("0.125")
@@ -559,6 +559,7 @@ class RingSweepRunner:
                 mode=self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
                 lender_share=self.lender_share,
                 rollover_enabled=self.rollover_enabled,
+                kappa=kappa,
                 source_path=None,
             )
         else:
@@ -849,6 +850,7 @@ class RingSweepRunner:
                 mode=self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
                 lender_share=self.lender_share,
                 rollover_enabled=self.rollover_enabled,
+                kappa=kappa,
                 source_path=None,
             )
         else:

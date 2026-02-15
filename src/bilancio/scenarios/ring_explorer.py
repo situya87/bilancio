@@ -199,6 +199,7 @@ def compile_ring_explorer_balanced(
     mode: str = "active",
     rollover_enabled: bool = True,
     lender_share: Decimal = Decimal("0.10"),
+    kappa: Optional[Decimal] = None,
     *,
     source_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
@@ -394,11 +395,19 @@ def compile_ring_explorer_balanced(
                 }
             })
 
+    # Compute cash ratio for VBT/Dealer: use kappa-informed prior if available,
+    # otherwise fall back to outside_mid_ratio for backward compatibility.
+    if kappa is not None:
+        from bilancio.dealer.priors import kappa_informed_prior
+        cash_ratio = Decimal(1) - kappa_informed_prior(kappa)
+    else:
+        cash_ratio = outside_mid_ratio
+
     # Compute total VBT+Dealer liquidity for NBFI allocation
     total_vbt_dealer_liquidity = Decimal(0)
     for bucket in BUCKETS:
-        total_vbt_dealer_liquidity += actual_vbt_face[bucket] * outside_mid_ratio
-        total_vbt_dealer_liquidity += actual_dealer_face[bucket] * outside_mid_ratio
+        total_vbt_dealer_liquidity += actual_vbt_face[bucket] * cash_ratio
+        total_vbt_dealer_liquidity += actual_dealer_face[bucket] * cash_ratio
 
     # Cash scaling factor for VBT/Dealer (reduced in nbfi/nbfi_dealer modes)
     if mode == "nbfi":
@@ -408,11 +417,12 @@ def compile_ring_explorer_balanced(
     else:
         vbt_dealer_cash_scale = Decimal("1")  # Normal modes
 
-    # Mint cash to VBT and Dealer: cash = actual face × M × scale (balanced position)
+    # Mint cash to VBT and Dealer: cash = actual face × cash_ratio × scale (balanced position)
     # Uses truncated face to match int() rounding in apply.py
+    # cash_ratio = (1 - P_prior) when kappa provided, else outside_mid_ratio
     for bucket in BUCKETS:
         # VBT cash
-        vbt_cash = actual_vbt_face[bucket] * outside_mid_ratio * vbt_dealer_cash_scale
+        vbt_cash = actual_vbt_face[bucket] * cash_ratio * vbt_dealer_cash_scale
         if vbt_cash > 0:
             initial_actions.append({
                 "mint_cash": {
@@ -423,7 +433,7 @@ def compile_ring_explorer_balanced(
             })
 
         # Dealer cash
-        dealer_cash = actual_dealer_face[bucket] * outside_mid_ratio * vbt_dealer_cash_scale
+        dealer_cash = actual_dealer_face[bucket] * cash_ratio * vbt_dealer_cash_scale
         if dealer_cash > 0:
             initial_actions.append({
                 "mint_cash": {

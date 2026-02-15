@@ -840,10 +840,11 @@ class TestRiskAssessmentParamsDefaults:
         p = RiskAssessmentParams()
         assert p.lookback_window == 5
         assert p.smoothing_alpha == Decimal("1.0")
-        assert p.base_risk_premium == Decimal("0.02")
+        assert p.base_risk_premium == Decimal("0")  # Seller premium = 0
         assert p.urgency_sensitivity == Decimal("0.10")
         assert p.use_issuer_specific is False
         assert p.buy_premium_multiplier == Decimal("1.0")
+        assert p.buy_risk_premium == Decimal("0.01")  # Buyer premium = 0.01
 
 
 class TestUpdateHistory:
@@ -1130,15 +1131,13 @@ class TestShouldBuy:
         )
         assert accept is False
 
-    def test_multiplier_raises_threshold(self):
-        """buy_premium_multiplier > 1 makes buying harder."""
+    def test_higher_buy_premium_raises_threshold(self):
+        """Higher buy_risk_premium makes buying harder."""
         params_low = RiskAssessmentParams(
-            base_risk_premium=Decimal("0.05"),
-            buy_premium_multiplier=Decimal("1.0"),
+            buy_risk_premium=Decimal("0.05"),
         )
         params_high = RiskAssessmentParams(
-            base_risk_premium=Decimal("0.05"),
-            buy_premium_multiplier=Decimal("3.0"),
+            buy_risk_premium=Decimal("0.15"),
         )
         a_low = RiskAssessor(params_low)
         a_high = RiskAssessor(params_high)
@@ -1163,18 +1162,17 @@ class TestShouldBuy:
         assert buy_high is False
 
     def test_should_buy_ignores_urgency(self):
-        """should_buy uses base_risk_premium * multiplier, not urgency-adjusted."""
+        """should_buy uses buy_risk_premium, not urgency-adjusted."""
         assessor = RiskAssessor(
             RiskAssessmentParams(
-                base_risk_premium=Decimal("0.05"),
-                buy_premium_multiplier=Decimal("1.0"),
+                buy_risk_premium=Decimal("0.05"),
                 urgency_sensitivity=Decimal("0.50"),
             )
         )
         t = _make_ticket(face=Decimal(1))
-        # Buy threshold = base_risk_premium * multiplier = 0.05
+        # Buy threshold = buy_risk_premium = 0.05
         # Not affected by urgency_sensitivity
-        # EV = 0.75, need EV >= ask + 0.05 => ask <= 0.70
+        # EV = 0.85 (p_default=0.15), need EV >= ask + 0.05 => ask <= 0.80
         result = assessor.should_buy(
             ticket=t, dealer_ask=Decimal("0.70"), current_day=1,
             trader_cash=Decimal(100), trader_shortfall=Decimal(90),  # high urgency, ignored

@@ -205,7 +205,11 @@ def _update_vbt_credit_mids(subsystem: "DealerSubsystem", current_day: int) -> N
 
         for bucket_id, vbt in subsystem.vbts.items():
             vbt.M = new_M
-            base_O = subsystem.initial_spread_by_bucket.get(bucket_id, vbt.O)
+            # Per-bucket base spread for daily update (falls back to initial_spread)
+            base_O = subsystem.base_spread_by_bucket.get(
+                bucket_id,
+                subsystem.initial_spread_by_bucket.get(bucket_id, vbt.O),
+            )
             vbt.O = pricing_model.compute_spread(base_O, p_default)
             vbt.recompute_quotes()
     else:

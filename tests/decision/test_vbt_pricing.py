@@ -31,7 +31,7 @@ class TestProtocolConformance:
     def test_frozen(self):
         pricing = CreditAdjustedVBTPricing()
         with pytest.raises(AttributeError):
-            pricing.outside_mid_ratio = Decimal("0.5")  # type: ignore[misc]
+            pricing.mid_sensitivity = Decimal("0.5")  # type: ignore[misc]
 
 
 # ── 2. compute_mid() math ────────────────────────────────────────
@@ -39,58 +39,54 @@ class TestProtocolConformance:
 
 class TestComputeMid:
     def test_no_defaults(self):
-        """When p_default == initial_prior, M = outside_mid_ratio × (1 - prior)."""
-        pricing = CreditAdjustedVBTPricing(outside_mid_ratio=Decimal("0.75"))
+        """When p_default == initial_prior, M = 1 - prior."""
+        pricing = CreditAdjustedVBTPricing()
         prior = Decimal("0.15")
         M = pricing.compute_mid(p_default=prior, initial_prior=prior)
-        expected = Decimal("0.75") * (Decimal(1) - Decimal("0.15"))
-        assert M == expected  # 0.6375
+        expected = Decimal(1) - Decimal("0.15")
+        assert M == expected  # 0.85
 
     def test_zero_defaults(self):
-        """With p_default=0 and full sensitivity, M = outside_mid_ratio."""
+        """With p_default=0 and full sensitivity, M = 1."""
         pricing = CreditAdjustedVBTPricing(
-            outside_mid_ratio=Decimal("0.80"),
             mid_sensitivity=Decimal("1.0"),
         )
         M = pricing.compute_mid(p_default=Decimal(0), initial_prior=Decimal("0.15"))
-        # raw_M = 0.80 × 1.0 = 0.80
-        # initial_M = 0.80 × 0.85 = 0.68
-        # result = 0.68 + 1.0 × (0.80 - 0.68) = 0.80
-        assert M == Decimal("0.80")
+        # raw_M = 1 - 0 = 1.0
+        # initial_M = 1 - 0.15 = 0.85
+        # result = 0.85 + 1.0 × (1.0 - 0.85) = 1.0
+        assert M == Decimal("1.0")
 
     def test_high_defaults(self):
         """With high p_default, M is reduced."""
         pricing = CreditAdjustedVBTPricing(
-            outside_mid_ratio=Decimal("0.75"),
             mid_sensitivity=Decimal("1.0"),
         )
         M = pricing.compute_mid(p_default=Decimal("0.50"), initial_prior=Decimal("0.15"))
-        # raw_M = 0.75 × 0.50 = 0.375
-        # initial_M = 0.75 × 0.85 = 0.6375
-        # result = 0.6375 + 1.0 × (0.375 - 0.6375) = 0.375
-        assert M == Decimal("0.375")
+        # raw_M = 1 - 0.50 = 0.50
+        # initial_M = 1 - 0.15 = 0.85
+        # result = 0.85 + 1.0 × (0.50 - 0.85) = 0.50
+        assert M == Decimal("0.50")
 
     def test_sensitivity_zero_ignores_defaults(self):
         """With mid_sensitivity=0, M stays at initial value."""
         pricing = CreditAdjustedVBTPricing(
-            outside_mid_ratio=Decimal("0.75"),
             mid_sensitivity=Decimal("0"),
         )
         M = pricing.compute_mid(p_default=Decimal("0.80"), initial_prior=Decimal("0.15"))
-        # initial_M = 0.75 × 0.85 = 0.6375
+        # initial_M = 1 - 0.15 = 0.85
         # With sensitivity=0, M = initial_M always
-        expected = Decimal("0.75") * Decimal("0.85")
+        expected = Decimal("0.85")
         assert M == expected
 
     def test_sensitivity_half(self):
         """With mid_sensitivity=0.5, M is blended halfway."""
         pricing = CreditAdjustedVBTPricing(
-            outside_mid_ratio=Decimal("1.0"),
             mid_sensitivity=Decimal("0.5"),
         )
         M = pricing.compute_mid(p_default=Decimal("0.40"), initial_prior=Decimal("0.20"))
-        # raw_M = 1.0 × 0.60 = 0.60
-        # initial_M = 1.0 × 0.80 = 0.80
+        # raw_M = 1 - 0.40 = 0.60
+        # initial_M = 1 - 0.20 = 0.80
         # result = 0.80 + 0.5 × (0.60 - 0.80) = 0.80 - 0.10 = 0.70
         assert M == Decimal("0.70")
 
@@ -109,8 +105,8 @@ class TestComputeSpread:
         """With spread_sensitivity > 0, spread widens with defaults."""
         pricing = CreditAdjustedVBTPricing(spread_sensitivity=Decimal("1.0"))
         O = pricing.compute_spread(Decimal("0.30"), Decimal("0.20"))
-        # 0.30 × (1 + 1.0 × 0.20) = 0.30 × 1.20 = 0.36
-        assert O == Decimal("0.360")
+        # 0.30 + 1.0 × 0.20 = 0.50
+        assert O == Decimal("0.50")
 
     def test_no_defaults_no_widening(self):
         """With p_default=0, spread stays at base even with sensitivity."""
@@ -123,17 +119,13 @@ class TestComputeSpread:
 
 
 class TestDefaults:
-    def test_default_outside_mid_ratio(self):
-        pricing = CreditAdjustedVBTPricing()
-        assert pricing.outside_mid_ratio == Decimal("0.75")
-
     def test_default_mid_sensitivity(self):
         pricing = CreditAdjustedVBTPricing()
         assert pricing.mid_sensitivity == Decimal("1.0")
 
     def test_default_spread_sensitivity(self):
         pricing = CreditAdjustedVBTPricing()
-        assert pricing.spread_sensitivity == Decimal("0.0")
+        assert pricing.spread_sensitivity == Decimal("0.6")
 
 
 # ── 5. Integration: _update_vbt_credit_mids delegation ───────────
@@ -170,7 +162,6 @@ class TestUpdateVBTCreditMidsDelegation:
 
         if with_pricing_model:
             subsystem.vbt_pricing_model = CreditAdjustedVBTPricing(
-                outside_mid_ratio=Decimal("0.75"),
                 mid_sensitivity=Decimal("1.0"),
                 spread_sensitivity=Decimal("0.0"),
             )
@@ -179,47 +170,37 @@ class TestUpdateVBTCreditMidsDelegation:
 
         return subsystem
 
-    def test_model_matches_inline(self):
-        """Pricing model produces same M values as inline logic."""
+    def test_model_updates_mid_and_spread(self):
+        """Pricing model correctly updates M and spread via delegation."""
         from bilancio.engines.dealer_sync import _update_vbt_credit_mids
 
-        sub_model = self._build_subsystem(with_pricing_model=True)
-        sub_inline = self._build_subsystem(with_pricing_model=False)
+        sub = self._build_subsystem(with_pricing_model=True)
+        _update_vbt_credit_mids(sub, current_day=0)
 
-        _update_vbt_credit_mids(sub_model, current_day=0)
-        _update_vbt_credit_mids(sub_inline, current_day=0)
-
+        # With initial_prior=0.15, no history → p_default=0.15
+        # M = 1 - 0.15 = 0.85
         for bucket in ("short", "mid"):
-            assert sub_model.vbts[bucket].M == sub_inline.vbts[bucket].M
-            assert sub_model.vbts[bucket].O == sub_inline.vbts[bucket].O
-            assert sub_model.vbts[bucket].A == sub_inline.vbts[bucket].A
-            assert sub_model.vbts[bucket].B == sub_inline.vbts[bucket].B
+            assert sub.vbts[bucket].M == Decimal("0.85")
+            # spread_sensitivity=0 → spread stays at base (0.30)
+            assert sub.vbts[bucket].O == Decimal("0.30")
 
-    def test_model_matches_with_spread_sensitivity(self):
-        """Same results with spread_sensitivity enabled."""
+    def test_model_with_spread_sensitivity(self):
+        """With spread_sensitivity > 0, spreads widen additively."""
         from bilancio.engines.dealer_sync import _update_vbt_credit_mids
-        from bilancio.decision.profiles import VBTProfile as VBTProfileCls
 
-        sub_model = self._build_subsystem(with_pricing_model=True)
-        sub_inline = self._build_subsystem(with_pricing_model=False)
-
-        # Enable spread sensitivity on both
-        sub_model.vbt_pricing_model = CreditAdjustedVBTPricing(
-            outside_mid_ratio=Decimal("0.75"),
-            mid_sensitivity=Decimal("1.0"),
-            spread_sensitivity=Decimal("0.5"),
-        )
-        sub_inline.vbt_profile = VBTProfileCls(
+        sub = self._build_subsystem(with_pricing_model=True)
+        sub.vbt_pricing_model = CreditAdjustedVBTPricing(
             mid_sensitivity=Decimal("1.0"),
             spread_sensitivity=Decimal("0.5"),
         )
 
-        _update_vbt_credit_mids(sub_model, current_day=0)
-        _update_vbt_credit_mids(sub_inline, current_day=0)
+        _update_vbt_credit_mids(sub, current_day=0)
 
+        # p_default=0.15 (from prior), M = 1 - 0.15 = 0.85
+        # spread = 0.30 + 0.5 × 0.15 = 0.375
         for bucket in ("short", "mid"):
-            assert sub_model.vbts[bucket].M == sub_inline.vbts[bucket].M
-            assert sub_model.vbts[bucket].O == sub_inline.vbts[bucket].O
+            assert sub.vbts[bucket].M == Decimal("0.85")
+            assert sub.vbts[bucket].O == Decimal("0.375")
 
     def test_no_risk_assessor_skips(self):
         """Without risk_assessor, function returns early."""
@@ -274,7 +255,6 @@ class TestInitializationWiring:
         )
         assert sub.vbt_pricing_model is not None
         assert isinstance(sub.vbt_pricing_model, CreditAdjustedVBTPricing)
-        assert sub.vbt_pricing_model.outside_mid_ratio == Decimal("0.80")
 
     def test_pricing_model_uses_vbt_profile(self):
         from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
