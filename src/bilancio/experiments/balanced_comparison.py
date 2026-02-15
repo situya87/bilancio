@@ -204,8 +204,8 @@ class BalancedComparisonConfig(BaseModel):
     # Balanced dealer parameters (Plan 024)
     face_value: Decimal = Field(default=Decimal("20"), description="Face value S (cashflow at maturity)")
     outside_mid_ratios: List[Decimal] = Field(
-        default_factory=lambda: [Decimal("1.0"), Decimal("0.9"), Decimal("0.8"), Decimal("0.75"), Decimal("0.5")],
-        description="M/S ratios to sweep"
+        default_factory=lambda: [Decimal("1.0")],
+        description="M/S ratios to sweep (kept for backward compat; VBT pricing now uses kappa-informed prior)"
     )
     big_entity_share: Decimal = Field(default=Decimal("0.25"), description="DEPRECATED - use vbt/dealer shares")
     vbt_share_per_bucket: Decimal = Field(

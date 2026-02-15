@@ -460,8 +460,8 @@ def sweep_comparison(
 @click.option(
     "--outside-mid-ratios",
     type=str,
-    default="1.0,0.9,0.8,0.75,0.5",
-    help="Comma-separated M/S ratios to sweep",
+    default="1.0",
+    help="Comma-separated M/S ratios to sweep (VBT pricing now uses kappa-informed prior)",
 )
 @click.option(
     "--big-entity-share",

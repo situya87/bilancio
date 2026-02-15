@@ -89,6 +89,8 @@ from bilancio.engines.dealer_sync import (
     _capture_system_state_snapshot,
     _sync_payable_ownership,
     _sync_trader_cash_to_system,
+    _sync_dealer_vbt_cash_from_system,
+    _sync_dealer_vbt_cash_to_system,
 )
 
 
@@ -159,6 +161,9 @@ class DealerSubsystem:
     alpha_trader: Decimal = Decimal(0)
     kappa: Optional[Decimal] = None
 
+    # VBT credit facility: inventory ratio below which VBT injects cash
+    layoff_threshold: Decimal = Decimal("0.7")
+
     # Serial counter for ticket IDs (continues from initialization)
     _ticket_serial_counter: int = 0
 
@@ -168,6 +173,9 @@ class DealerSubsystem:
 
     # Initial spread per bucket (for spread_sensitivity computation)
     initial_spread_by_bucket: Dict[str, Decimal] = field(default_factory=dict)
+
+    # Base spread per bucket (for per-bucket daily VBT spread updates)
+    base_spread_by_bucket: Dict[str, Decimal] = field(default_factory=dict)
 
     # VBT pricing model (optional — when None, uses inline logic for backward compat)
     vbt_pricing_model: Optional["VBTPricingModel"] = None
@@ -350,8 +358,8 @@ def initialize_balanced_dealer_subsystem(
     face_value: Decimal = Decimal("20"),
     outside_mid_ratio: Decimal = Decimal("0.75"),
     big_entity_share: Decimal = Decimal("0.25"),  # DEPRECATED
-    vbt_share_per_bucket: Decimal = Decimal("0.25"),
-    dealer_share_per_bucket: Decimal = Decimal("0.125"),
+    vbt_share_per_bucket: Decimal = Decimal("0.20"),
+    dealer_share_per_bucket: Decimal = Decimal("0.05"),
     mode: str = "active",
     current_day: int = 0,
     risk_params: RiskAssessmentParams | None = None,
@@ -365,8 +373,8 @@ def initialize_balanced_dealer_subsystem(
     Initialize dealer subsystem for balanced scenarios (C vs D comparison).
 
     Per PDF specification (Plan 024):
-    - VBT agents START with 25% of claims per maturity bucket + matching cash
-    - Dealer agents START with 12.5% of claims per maturity bucket + matching cash
+    - VBT agents START with 20% of claims per maturity bucket + matching cash
+    - Dealer agents START with 5% of claims per maturity bucket + matching cash
     - For mode="passive": trading is disabled (entities just hold)
     - For mode="active": trading is enabled as normal
 
@@ -393,26 +401,24 @@ def initialize_balanced_dealer_subsystem(
     Returns:
         Initialized DealerSubsystem ready for trading (or holding if passive)
     """
-    # Override risk_params from trader_profile if provided
-    if trader_profile is not None and risk_params is not None:
-        from dataclasses import replace as dc_replace
-        risk_params = dc_replace(
-            risk_params,
-            base_risk_premium=trader_profile.base_risk_premium,
-            buy_premium_multiplier=trader_profile.buy_premium_multiplier,
-            default_observability=trader_profile.default_observability,
-        )
+    # Compute shared kappa-informed prior (replaces alpha blending).
+    # Both VBT and traders use the same prior to prevent adverse selection.
+    from bilancio.dealer.priors import kappa_informed_prior
+    if kappa is not None:
+        shared_prior = kappa_informed_prior(kappa)
+    else:
+        shared_prior = Decimal("0.15")
 
-    # Compute blended trader prior if informedness is enabled.
-    # Formula: blended = (1 - α_trader) × 0.15 + α_trader × 1/(1+κ)
-    # With α=0: naive prior (backward compatible). With α=1: fully κ-informed.
-    if alpha_trader > 0 and kappa is not None and risk_params is not None:
+    # Override risk_params from trader_profile and shared prior
+    if risk_params is not None:
         from dataclasses import replace as dc_replace
-        naive_prior = Decimal("0.15")
-        # Safe: kappa is validated > 0 so (1 + kappa) > 1, no division-by-zero.
-        informed_prior = Decimal(1) / (Decimal(1) + kappa)
-        blended_prior = (Decimal(1) - alpha_trader) * naive_prior + alpha_trader * informed_prior
-        risk_params = dc_replace(risk_params, initial_prior=blended_prior)
+        overrides: dict = {"initial_prior": shared_prior}
+        if trader_profile is not None:
+            overrides["base_risk_premium"] = trader_profile.base_risk_premium
+            overrides["buy_risk_premium"] = trader_profile.buy_risk_premium
+            overrides["buy_premium_multiplier"] = trader_profile.buy_premium_multiplier
+            overrides["default_observability"] = trader_profile.default_observability
+        risk_params = dc_replace(risk_params, **overrides)
 
     subsystem = DealerSubsystem(
         bucket_configs=dealer_config.buckets,
@@ -436,7 +442,6 @@ def initialize_balanced_dealer_subsystem(
     from bilancio.decision.valuers import CreditAdjustedVBTPricing
     effective_vbt_profile = vbt_profile or VBTProfile()
     subsystem.vbt_pricing_model = CreditAdjustedVBTPricing(
-        outside_mid_ratio=outside_mid_ratio,
         mid_sensitivity=effective_vbt_profile.mid_sensitivity,
         spread_sensitivity=effective_vbt_profile.spread_sensitivity,
     )
@@ -448,8 +453,8 @@ def initialize_balanced_dealer_subsystem(
     # Step 0: Ensure dealer/VBT agents exist in main system
     _ensure_dealer_vbt_agents(system, dealer_config.buckets)
 
-    # Initialize trade executor
-    subsystem.executor = TradeExecutor(subsystem.params, subsystem.rng)
+    # Initialize trade executor (with layoff threshold for VBT credit facility)
+    subsystem.executor = TradeExecutor(subsystem.params, subsystem.rng, layoff_threshold=subsystem.layoff_threshold)
 
     # Step 1: Convert Payables to Tickets
     serial_counter = _convert_payables_to_tickets(subsystem, system, current_day)
@@ -462,11 +467,9 @@ def initialize_balanced_dealer_subsystem(
 
     # Step 2: Initialize VBT and Dealer states per bucket (with inventory)
     _initialize_balanced_market_makers(
-        subsystem, system, dealer_config, outside_mid_ratio,
+        subsystem, system, dealer_config,
         vbt_tickets, dealer_tickets,
-        alpha_vbt=alpha_vbt,
-        kappa=kappa,
-        vbt_profile=vbt_profile,
+        shared_prior=shared_prior,
     )
 
     # Step 3: Initialize traders (regular household agents, skip VBT/Dealer/big)
@@ -540,11 +543,12 @@ def run_dealer_trading_phase(
         >>> for event in events:
         ...     print(f"Trade: {event['trader']} {event['side']} at {event['price']}")
     """
-    # Always sync trader cash from main system so that
-    # _sync_trader_cash_to_system (called later in sync_dealer_to_system)
+    # Always sync cash from main system so that the corresponding
+    # _sync_*_to_system (called later in sync_dealer_to_system)
     # sees the current cash and computes delta=0 when no trades occurred.
-    # Without this, lending-phase cash changes get erroneously reversed.
+    # Without this, other-phase cash changes get erroneously reversed.
     _sync_trader_cash_from_system(subsystem, system)
+    _sync_dealer_vbt_cash_from_system(subsystem, system)
 
     if not subsystem.enabled:
         return []
@@ -728,3 +732,9 @@ def sync_dealer_to_system(
 
     # Step 2: Sync trader cash balances
     _sync_trader_cash_to_system(subsystem, system)
+
+    # Step 3: Sync dealer/VBT cash balances
+    # The VBT credit facility and normal trading modify dealer/VBT cash within
+    # the subsystem. These changes must be reflected in the main system to
+    # maintain the CB cash invariant.
+    _sync_dealer_vbt_cash_to_system(subsystem, system)

@@ -789,8 +789,8 @@ class TestBalancedDealerConfig:
         assert bdc.face_value == Decimal("20")
         assert bdc.outside_mid_ratio == Decimal("0.75")
         assert bdc.big_entity_share == Decimal("0.25")
-        assert bdc.vbt_share_per_bucket == Decimal("0.25")
-        assert bdc.dealer_share_per_bucket == Decimal("0.125")
+        assert bdc.vbt_share_per_bucket == Decimal("0.20")
+        assert bdc.dealer_share_per_bucket == Decimal("0.05")
         assert bdc.rollover_enabled is True
         assert bdc.mode == "active"
 

@@ -281,5 +281,5 @@ def test_diagnostics():
 
     assert diag["total_payment_history_size"] == 10
     assert diag["lookback_window"] == 3
-    assert diag["base_risk_premium"] == 0.02
+    assert diag["base_risk_premium"] == 0.0  # Seller premium = 0
     assert "system_default_rate" in diag

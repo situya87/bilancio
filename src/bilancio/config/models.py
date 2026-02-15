@@ -645,13 +645,13 @@ class BalancedDealerConfig(BaseModel):
     Key concepts:
     - face_value (S): Cashflow at maturity, default 20
     - outside_mid_ratio (ρ): M/S ratio where M is the outside mid price
-    - vbt_share_per_bucket: VBT holds 25% of claims per maturity bucket
-    - dealer_share_per_bucket: Dealer holds 12.5% of claims per maturity bucket
+    - vbt_share_per_bucket: VBT holds 20% of claims per maturity bucket
+    - dealer_share_per_bucket: Dealer holds 5% of claims per maturity bucket
     - mode: "passive" for mimics (C), "active" for dealers (D)
 
     Per PDF specification (Plan 024):
-    - VBT-like passive holder: ~25% of total claims per maturity + equal cash
-    - Dealer-like passive holder: ~12.5% of total claims per maturity + equal cash
+    - VBT-like passive holder: ~20% of total claims per maturity + equal cash
+    - Dealer-like passive holder: ~5% of total claims per maturity + equal cash
     """
 
     enabled: bool = Field(default=False, description="Whether balanced mode is active")
@@ -668,12 +668,12 @@ class BalancedDealerConfig(BaseModel):
         description="Fraction of trader debt allocated to big entities (β) - DEPRECATED, use vbt/dealer shares"
     )
     vbt_share_per_bucket: Decimal = Field(
-        default=Decimal("0.25"),
-        description="VBT holds 25% of claims per maturity bucket"
+        default=Decimal("0.20"),
+        description="VBT holds 20% of claims per maturity bucket"
     )
     dealer_share_per_bucket: Decimal = Field(
-        default=Decimal("0.125"),
-        description="Dealer holds 12.5% of claims per maturity bucket"
+        default=Decimal("0.05"),
+        description="Dealer holds 5% of claims per maturity bucket"
     )
     rollover_enabled: bool = Field(
         default=True,

@@ -205,7 +205,11 @@ def _update_vbt_credit_mids(subsystem: "DealerSubsystem", current_day: int) -> N
 
         for bucket_id, vbt in subsystem.vbts.items():
             vbt.M = new_M
-            base_O = subsystem.initial_spread_by_bucket.get(bucket_id, vbt.O)
+            # Per-bucket base spread for daily update (falls back to initial_spread)
+            base_O = subsystem.base_spread_by_bucket.get(
+                bucket_id,
+                subsystem.initial_spread_by_bucket.get(bucket_id, vbt.O),
+            )
             vbt.O = pricing_model.compute_spread(base_O, p_default)
             vbt.recompute_quotes()
     else:
@@ -461,7 +465,10 @@ def _sync_trader_cash_to_system(
 
     Compares trader.cash in the dealer subsystem to the actual cash in the
     main system and applies the delta as minting (if trader gained cash)
-    or burning (if trader spent cash).
+    or retiring (if trader spent cash).
+
+    Uses ``system.mint_cash`` / ``system.retire_cash`` to maintain the CB
+    cash invariant (cb_cash_outstanding == total system cash).
     """
     from bilancio.engines.dealer_integration import _get_agent_cash
 
@@ -471,30 +478,70 @@ def _sync_trader_cash_to_system(
         delta = dealer_cash - main_system_cash
 
         if delta > 0:
-            # Trader gained cash from selling tickets - mint cash to them
-            # This represents money coming from outside the system (dealer/VBT)
             system.mint_cash(to_agent_id=trader_id, amount=round(delta))
         elif delta < 0:
-            # Trader spent cash buying tickets - need to reduce their cash
-            # Find and reduce their cash contracts
-            agent = system.state.agents.get(trader_id)
-            if agent:
-                # Cap burn at available cash to prevent negative balances
-                remaining_to_burn = min(abs(delta), main_system_cash)
-                for contract_id in list(agent.asset_ids):
-                    if remaining_to_burn <= 0:
-                        break
-                    contract = system.state.contracts.get(contract_id)
-                    if contract and contract.kind == InstrumentKind.CASH:
-                        if contract.amount <= remaining_to_burn:
-                            # Remove entire contract
-                            remaining_to_burn -= contract.amount
-                            agent.asset_ids.remove(contract_id)
-                            del system.state.contracts[contract_id]
-                        else:
-                            # Reduce contract amount
-                            contract.amount -= round(remaining_to_burn)
-                            remaining_to_burn = Decimal(0)
+            burn_amount = round(min(abs(delta), main_system_cash))
+            if burn_amount > 0:
+                system.retire_cash(from_agent_id=trader_id, amount=burn_amount)
+
+
+def _sync_dealer_vbt_cash_from_system(
+    subsystem: "DealerSubsystem",
+    system: "System",
+) -> None:
+    """Sync dealer and VBT cash balances from the main system into the subsystem.
+
+    Ensures dealer/VBT entities have up-to-date cash before trading begins.
+    Settlement may have paid cash to dealer/VBT agents (from matured payables),
+    so we must read the latest values to avoid stale-delta bugs.
+
+    Only syncs for agents that exist in the main system (balanced mode).
+    Basic-mode dealer/VBT agents live only in the subsystem.
+    """
+    from bilancio.engines.dealer_integration import _get_agent_cash
+
+    for entities in (subsystem.dealers, subsystem.vbts):
+        for _bucket_id, entity in entities.items():
+            agent = system.state.agents.get(entity.agent_id)
+            if agent is None:
+                continue  # Agent not in main system (basic mode); skip
+            entity.cash = _get_agent_cash(system, entity.agent_id)
+
+
+def _sync_dealer_vbt_cash_to_system(
+    subsystem: "DealerSubsystem",
+    system: "System",
+) -> None:
+    """Sync dealer and VBT cash from subsystem back to the main system.
+
+    The VBT credit facility and normal trading modify dealer/VBT cash within
+    the subsystem. These changes must be reflected in the main system to
+    maintain the CB cash invariant (total system cash == cb_cash_outstanding).
+
+    Uses ``system.mint_cash`` / ``system.retire_cash`` to keep
+    ``cb_cash_outstanding`` consistent with actual system cash.
+
+    Only syncs for agents that exist in the main system (balanced mode).
+    Basic-mode dealer/VBT agents live only in the subsystem.
+    """
+    from bilancio.engines.dealer_integration import _get_agent_cash
+
+    for entities in (subsystem.dealers, subsystem.vbts):
+        for _bucket_id, entity in entities.items():
+            agent_id = entity.agent_id
+            agent = system.state.agents.get(agent_id)
+            if agent is None:
+                continue  # Agent not in main system (basic mode); skip
+            main_cash = _get_agent_cash(system, agent_id)
+            subsystem_cash = entity.cash
+            delta = subsystem_cash - main_cash
+
+            if delta > 0:
+                system.mint_cash(to_agent_id=agent_id, amount=round(delta))
+            elif delta < 0:
+                burn_amount = round(min(abs(delta), main_cash))
+                if burn_amount > 0:
+                    system.retire_cash(from_agent_id=agent_id, amount=burn_amount)
 
 
 def _capture_dealer_snapshots(

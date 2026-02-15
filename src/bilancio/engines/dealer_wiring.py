@@ -322,52 +322,37 @@ def _initialize_balanced_market_makers(
     subsystem: "DealerSubsystem",
     system: System,
     dealer_config: DealerRingConfig,
-    outside_mid_ratio: Decimal,
     vbt_tickets: Dict[str, List["Ticket"]],
     dealer_tickets: Dict[str, List["Ticket"]],
-    alpha_vbt: Decimal = Decimal("0"),
-    kappa: Optional[Decimal] = None,
-    vbt_profile: Optional["VBTProfile"] = None,
+    shared_prior: Decimal = Decimal("0.15"),
 ) -> None:
     """Initialize VBT and Dealer states per bucket for balanced scenarios.
 
     Unlike the standard initialization (empty inventory), balanced scenarios
     start VBTs and dealers WITH inventory allocated by the scenario generator.
 
+    Uses per-bucket base spreads (short=0.04, mid=0.08, long=0.12) with
+    additive credit risk widening.
+
     Args:
         subsystem: Dealer subsystem to populate
         system: Main System instance (for reading agent cash)
         dealer_config: Dealer ring configuration
-        outside_mid_ratio: M/S ratio for VBT anchors
         vbt_tickets: Pre-categorized VBT tickets per bucket
         dealer_tickets: Pre-categorized dealer tickets per bucket
+        shared_prior: Kappa-informed default prior shared by VBT and traders
     """
     from bilancio.engines.dealer_integration import _get_agent_cash
 
-    # VBT mid reflects credit risk: M = ratio × (1 - P_default_prior).
-    # The default prior can be blended with the kappa-implied default rate
-    # when informedness (alpha_vbt) is enabled.
-    #
-    # Formula:
-    #   informed_prior(κ) = 1 / (1 + κ)
-    #   blended_prior = (1 - α_vbt) × 0.15 + α_vbt × informed_prior(κ)
-    #   M = outside_mid_ratio × (1 - blended_prior)
-    #
-    # With α_vbt=0 (default): uses naive 0.15 prior (backward compatible).
-    # With α_vbt=1: fully informed pricing based on κ.
-    naive_prior = Decimal("0.15")
-    if subsystem.risk_assessor:
-        # Use the risk assessor's actual no-history prior (may already be blended for traders)
-        naive_prior = subsystem.risk_assessor.estimate_default_prob("_system_", 0)
+    # Per-bucket base spreads: term risk premium
+    BASE_SPREAD_BY_BUCKET = {
+        "short": Decimal("0.04"),
+        "mid": Decimal("0.08"),
+        "long": Decimal("0.12"),
+    }
 
-    if alpha_vbt > 0 and kappa is not None:
-        # Safe: kappa is validated > 0 so (1 + kappa) > 1, no division-by-zero.
-        informed_prior = Decimal(1) / (Decimal(1) + kappa)
-        blended_prior = (Decimal(1) - alpha_vbt) * naive_prior + alpha_vbt * informed_prior
-    else:
-        blended_prior = naive_prior
-
-    credit_adjusted_mid = outside_mid_ratio * (Decimal(1) - blended_prior)
+    # VBT mid = pure credit discount: M = 1 - P_prior
+    credit_adjusted_mid = Decimal(1) - shared_prior
 
     for bucket_config in subsystem.bucket_configs:
         bucket_id = bucket_config.name
@@ -382,16 +367,20 @@ def _initialize_balanced_market_makers(
         vbt_cash = _get_agent_cash(system, f"vbt_{bucket_id}")
         dealer_cash = _get_agent_cash(system, f"dealer_{bucket_id}")
 
-        # Create VBT state WITH inventory
-        # M incorporates credit risk; O scales with credit-informed widening
+        # M = 1 - P_prior (pure credit discount, no arbitrary haircut)
         M = credit_adjusted_mid
-        # Spread widens with credit risk when informedness is enabled:
-        # O = 0.50 × outside_mid_ratio × (1 + α_vbt × informed_prior(κ))
-        if alpha_vbt > 0 and kappa is not None:
-            informed_prior_for_spread = Decimal(1) / (Decimal(1) + kappa)
-            O = Decimal("0.50") * outside_mid_ratio * (Decimal(1) + alpha_vbt * informed_prior_for_spread)
+
+        # Per-bucket spread: base_spread + spread_sensitivity × P_prior
+        # spread_sensitivity is from the VBT pricing model (default 0.6)
+        base_O = BASE_SPREAD_BY_BUCKET.get(bucket_id, Decimal("0.08"))
+        pricing_model = subsystem.vbt_pricing_model
+        if pricing_model is not None:
+            O = pricing_model.compute_spread(base_O, shared_prior)
         else:
-            O = Decimal("0.50") * outside_mid_ratio  # Spread anchored to par ratio
+            O = base_O + Decimal("0.6") * shared_prior
+
+        # Store base spread for daily per-bucket VBT updates
+        subsystem.base_spread_by_bucket[bucket_id] = base_O
 
         vbt = VBTState(
             bucket_id=bucket_id,

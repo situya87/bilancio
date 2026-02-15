@@ -282,10 +282,10 @@ class RingSweepRunner:
         self.risk_assessment_config = risk_assessment_config
         self.balanced_mode = balanced_mode
         self.face_value = face_value or Decimal("20")
-        self.outside_mid_ratio = outside_mid_ratio or Decimal("0.75")
+        self.outside_mid_ratio = outside_mid_ratio or Decimal("1.0")
         self.big_entity_share = big_entity_share or Decimal("0.25")  # DEPRECATED
-        self.vbt_share_per_bucket = vbt_share_per_bucket or Decimal("0.25")
-        self.dealer_share_per_bucket = dealer_share_per_bucket or Decimal("0.125")
+        self.vbt_share_per_bucket = vbt_share_per_bucket or Decimal("0.20")
+        self.dealer_share_per_bucket = dealer_share_per_bucket or Decimal("0.05")
         self.rollover_enabled = rollover_enabled
         self.detailed_dealer_logging = detailed_dealer_logging  # Plan 022
         self.quiet = quiet  # Plan 030: suppress verbose output
@@ -483,6 +483,31 @@ class RingSweepRunner:
         label: Optional[str] = None,
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> RingRunSummary:
+        # Pre-simulation trade viability check for active runs
+        if phase in ("active", "treatment") and self.balanced_mode:
+            import logging
+            _viability_logger = logging.getLogger(__name__)
+            try:
+                from bilancio.specification.trade_viability import check_trade_viability
+                report = check_trade_viability(
+                    kappa=kappa,
+                    face_value=self.face_value,
+                    n_agents=self.n_agents,
+                    dealer_share=self.dealer_share_per_bucket,
+                    vbt_share=self.vbt_share_per_bucket,
+                    layoff_threshold=Decimal("0.7"),
+                    buy_premium=Decimal("0.01"),
+                    maturity_days=self.maturity_days,
+                    outside_mid_ratio=self.outside_mid_ratio,
+                )
+                if not report.all_viable:
+                    _viability_logger.warning(
+                        "Trade viability check failed for kappa=%s: %s",
+                        kappa, report.diagnostics,
+                    )
+            except Exception as exc:
+                _viability_logger.debug("Viability check skipped: %s", exc)
+
         run_uuid = uuid.uuid4().hex[:12]
         run_id = f"{phase}_{label}_{run_uuid}" if label else f"{phase}_{run_uuid}"
         run_dir = self.runs_dir / run_id
@@ -559,6 +584,7 @@ class RingSweepRunner:
                 mode=self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
                 lender_share=self.lender_share,
                 rollover_enabled=self.rollover_enabled,
+                kappa=kappa,
                 source_path=None,
             )
         else:
@@ -849,6 +875,7 @@ class RingSweepRunner:
                 mode=self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
                 lender_share=self.lender_share,
                 rollover_enabled=self.rollover_enabled,
+                kappa=kappa,
                 source_path=None,
             )
         else:

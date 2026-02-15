@@ -26,8 +26,13 @@ class TraderProfile:
 
     @property
     def base_risk_premium(self) -> Decimal:
-        """Maps risk_aversion to base_risk_premium: 0.02 + 0.08 * risk_aversion."""
-        return Decimal("0.02") + Decimal("0.08") * self.risk_aversion
+        """Seller premium: always 0 (selling converts uncertainty to certainty)."""
+        return Decimal("0")
+
+    @property
+    def buy_risk_premium(self) -> Decimal:
+        """Buyer premium: 0.01 + 0.02 * risk_aversion."""
+        return Decimal("0.01") + Decimal("0.02") * self.risk_aversion
 
     @property
     def buy_premium_multiplier(self) -> Decimal:

@@ -718,15 +718,17 @@ class TestExecuteCustomerBuyPassthrough:
         assert dealer.cash == cash_before
         assert len(dealer.inventory) == inv_before
 
-    def test_passthrough_buy_no_vbt_inventory_raises(self):
+    def test_passthrough_buy_no_vbt_inventory_returns_not_executed(self):
+        """When VBT has no inventory for passthrough buy, return not-executed."""
         params = KernelParams()
         dealer = _make_dealer(n_tickets=0, cash=Decimal(5))
         vbt = _make_vbt(M=Decimal(1), O=Decimal("0.30"), n_tickets=0)
         recompute_dealer_state(dealer, vbt, params)
 
         executor = TradeExecutor(params)
-        with pytest.raises(ValueError, match="VBT has no inventory"):
-            executor.execute_customer_buy(dealer, vbt, buyer_id="buyer")
+        result = executor.execute_customer_buy(dealer, vbt, buyer_id="buyer")
+        assert not result.executed
+        assert result.is_passthrough is True
 
     def test_passthrough_buy_vbt_cash_increases(self):
         params = KernelParams()
@@ -840,10 +842,11 @@ class TestRiskAssessmentParamsDefaults:
         p = RiskAssessmentParams()
         assert p.lookback_window == 5
         assert p.smoothing_alpha == Decimal("1.0")
-        assert p.base_risk_premium == Decimal("0.02")
+        assert p.base_risk_premium == Decimal("0")  # Seller premium = 0
         assert p.urgency_sensitivity == Decimal("0.10")
         assert p.use_issuer_specific is False
         assert p.buy_premium_multiplier == Decimal("1.0")
+        assert p.buy_risk_premium == Decimal("0.01")  # Buyer premium = 0.01
 
 
 class TestUpdateHistory:
@@ -1130,15 +1133,13 @@ class TestShouldBuy:
         )
         assert accept is False
 
-    def test_multiplier_raises_threshold(self):
-        """buy_premium_multiplier > 1 makes buying harder."""
+    def test_higher_buy_premium_raises_threshold(self):
+        """Higher buy_risk_premium makes buying harder."""
         params_low = RiskAssessmentParams(
-            base_risk_premium=Decimal("0.05"),
-            buy_premium_multiplier=Decimal("1.0"),
+            buy_risk_premium=Decimal("0.05"),
         )
         params_high = RiskAssessmentParams(
-            base_risk_premium=Decimal("0.05"),
-            buy_premium_multiplier=Decimal("3.0"),
+            buy_risk_premium=Decimal("0.15"),
         )
         a_low = RiskAssessor(params_low)
         a_high = RiskAssessor(params_high)
@@ -1163,18 +1164,17 @@ class TestShouldBuy:
         assert buy_high is False
 
     def test_should_buy_ignores_urgency(self):
-        """should_buy uses base_risk_premium * multiplier, not urgency-adjusted."""
+        """should_buy uses buy_risk_premium, not urgency-adjusted."""
         assessor = RiskAssessor(
             RiskAssessmentParams(
-                base_risk_premium=Decimal("0.05"),
-                buy_premium_multiplier=Decimal("1.0"),
+                buy_risk_premium=Decimal("0.05"),
                 urgency_sensitivity=Decimal("0.50"),
             )
         )
         t = _make_ticket(face=Decimal(1))
-        # Buy threshold = base_risk_premium * multiplier = 0.05
+        # Buy threshold = buy_risk_premium = 0.05
         # Not affected by urgency_sensitivity
-        # EV = 0.75, need EV >= ask + 0.05 => ask <= 0.70
+        # EV = 0.85 (p_default=0.15), need EV >= ask + 0.05 => ask <= 0.80
         result = assessor.should_buy(
             ticket=t, dealer_ask=Decimal("0.70"), current_day=1,
             trader_cash=Decimal(100), trader_shortfall=Decimal(90),  # high urgency, ignored

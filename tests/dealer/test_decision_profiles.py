@@ -16,7 +16,11 @@ class TestTraderProfileDefaults:
 
     def test_default_base_risk_premium(self):
         tp = TraderProfile()
-        assert tp.base_risk_premium == Decimal("0.02")
+        assert tp.base_risk_premium == Decimal("0")  # Seller premium = 0
+
+    def test_default_buy_risk_premium(self):
+        tp = TraderProfile()
+        assert tp.buy_risk_premium == Decimal("0.01")  # Buyer premium = 0.01
 
     def test_default_buy_premium_multiplier(self):
         tp = TraderProfile()
@@ -41,15 +45,19 @@ class TestTraderProfileDefaults:
 
 class TestTraderProfileProperties:
 
-    def test_risk_aversion_increases_premium(self):
+    def test_risk_aversion_seller_premium_always_zero(self):
         tp = TraderProfile(risk_aversion=Decimal("0.5"))
-        # 0.02 + 0.08 * 0.5 = 0.06
-        assert tp.base_risk_premium == Decimal("0.06")
+        assert tp.base_risk_premium == Decimal("0")  # Always 0 regardless of risk aversion
 
-    def test_max_risk_aversion_premium(self):
+    def test_risk_aversion_increases_buy_premium(self):
+        tp = TraderProfile(risk_aversion=Decimal("0.5"))
+        # 0.01 + 0.02 * 0.5 = 0.02
+        assert tp.buy_risk_premium == Decimal("0.02")
+
+    def test_max_risk_aversion_buy_premium(self):
         tp = TraderProfile(risk_aversion=Decimal("1"))
-        # 0.02 + 0.08 * 1 = 0.10
-        assert tp.base_risk_premium == Decimal("0.10")
+        # 0.01 + 0.02 * 1 = 0.03
+        assert tp.buy_risk_premium == Decimal("0.03")
 
     def test_risk_aversion_increases_buy_multiplier(self):
         tp = TraderProfile(risk_aversion=Decimal("0.5"))
