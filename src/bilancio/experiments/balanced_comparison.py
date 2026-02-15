@@ -112,6 +112,15 @@ class BalancedComparisonResult:
     lender_total_return: Optional[float] = None
     total_loans: Optional[int] = None
 
+    # F (Dealer+Lender) metrics
+    delta_dealer_lender: Optional[Decimal] = None
+    phi_dealer_lender: Optional[Decimal] = None
+    dealer_lender_run_id: str = ""
+    dealer_lender_status: str = ""
+    n_defaults_dealer_lender: int = 0
+    cascade_fraction_dealer_lender: Optional[Decimal] = None
+    dealer_lender_modal_call_id: Optional[str] = None
+
     @staticmethod
     def _compute_incremental_pnl(
         active_metrics: Optional[Dict[str, Any]],
@@ -168,6 +177,16 @@ class BalancedComparisonResult:
         if self.delta_passive is None or self.delta_lender is None:
             return None
         return self.delta_passive - self.delta_lender
+
+    @property
+    def combined_effect(self) -> Optional[Decimal]:
+        """Effect of combined dealer+lender = delta_passive - delta_dealer_lender.
+
+        Positive means the combination reduced defaults.
+        """
+        if self.delta_passive is None or self.delta_dealer_lender is None:
+            return None
+        return self.delta_passive - self.delta_dealer_lender
 
 
 class BalancedComparisonConfig(BaseModel):
@@ -259,6 +278,10 @@ class BalancedComparisonConfig(BaseModel):
 
     # Non-bank lender parameters
     enable_lender: bool = Field(default=False, description="Enable third comparison arm with non-bank lender")
+    enable_dealer_lender: bool = Field(
+        default=False,
+        description="Enable fourth arm: dealer trading + non-bank lending combined"
+    )
     lender_share: Decimal = Field(default=Decimal("0.10"), description="Lender capital as fraction of system cash")
     lender_base_rate: Decimal = Field(default=Decimal("0.05"), description="Lender base interest rate")
     lender_risk_premium_scale: Decimal = Field(default=Decimal("0.20"), description="Rate = base + scale × P(default)")
@@ -332,6 +355,13 @@ class BalancedComparisonRunner:
         "lender_total_pnl",
         "lender_total_return",
         "total_loans",
+        "delta_dealer_lender",
+        "combined_effect",
+        "phi_dealer_lender",
+        "dealer_lender_run_id",
+        "dealer_lender_status",
+        "n_defaults_dealer_lender",
+        "cascade_fraction_dealer_lender",
     ]
 
     def __init__(
@@ -354,6 +384,7 @@ class BalancedComparisonRunner:
         self.passive_dir = self.base_dir / "passive"
         self.active_dir = self.base_dir / "active"
         self.lender_dir = self.base_dir / "nbfi"
+        self.dealer_lender_dir = self.base_dir / "dealer_lender"
         self.aggregate_dir = self.base_dir / "aggregate"
 
         # Only create local directories if we're doing local processing
@@ -362,6 +393,8 @@ class BalancedComparisonRunner:
             self.active_dir.mkdir(parents=True, exist_ok=True)
             if config.enable_lender:
                 self.lender_dir.mkdir(parents=True, exist_ok=True)
+            if config.enable_dealer_lender:
+                self.dealer_lender_dir.mkdir(parents=True, exist_ok=True)
             self.aggregate_dir.mkdir(parents=True, exist_ok=True)
 
         self.comparison_results: List[BalancedComparisonResult] = []
@@ -624,6 +657,56 @@ class BalancedComparisonRunner:
             balanced_mode_override="nbfi",
         )
 
+    def _get_dealer_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+        """Get runner for combined dealer+lender arm (F).
+
+        Both dealer trading and NBFI lending are enabled. Cash is split 50/50
+        between VBT/Dealer and the lender using balanced_mode_override="nbfi_dealer".
+        """
+        dealer_config = {
+            "ticket_size": int(self.config.face_value),
+            "dealer_share": str(Decimal("0")),  # Dealers already have inventory from scenario
+            "vbt_share": str(self.config.vbt_share),
+        }
+
+        return RingSweepRunner(
+            out_dir=self.dealer_lender_dir,
+            name_prefix=f"{self.config.name_prefix} (Dealer+Lender)",
+            n_agents=self.config.n_agents,
+            maturity_days=self.config.maturity_days,
+            Q_total=self.config.Q_total,
+            liquidity_mode=self.config.liquidity_mode,
+            liquidity_agent=None,
+            base_seed=self.config.base_seed,
+            default_handling=self.config.default_handling,
+            dealer_enabled=True,  # Dealer trading ON
+            dealer_config=dealer_config,
+            balanced_mode=True,
+            face_value=self.config.face_value,
+            outside_mid_ratio=outside_mid_ratio,
+            big_entity_share=self.config.big_entity_share,
+            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
+            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            rollover_enabled=self.config.rollover_enabled,
+            detailed_dealer_logging=self.config.detailed_logging,
+            executor=self.executor,
+            quiet=self.config.quiet,
+            risk_assessment_enabled=self.config.risk_assessment_enabled,
+            risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            # Combined mode: both dealer and lender enabled
+            lender_mode=True,
+            lender_share=self.config.lender_share,
+            balanced_mode_override="nbfi_dealer",  # 50/50 cash split
+        )
+
     def run_all(self) -> List[BalancedComparisonResult]:
         """Execute all passive/active pairs and return comparison results.
 
@@ -638,8 +721,8 @@ class BalancedComparisonRunner:
 
     def _run_all_batch(self) -> List[BalancedComparisonResult]:
         """Execute all pairs using batch execution (parallel on Modal)."""
-        # Lender arm not yet optimized for batch - fall back to sequential
-        if self.config.enable_lender:
+        # Lender/dealer+lender arms not yet optimized for batch - fall back to sequential
+        if self.config.enable_lender or self.config.enable_dealer_lender:
             return self._run_all_sequential()
 
         total_pairs = (
@@ -1020,6 +1103,31 @@ class BalancedComparisonRunner:
                 "lender_modal_call_id": lender_result.modal_call_id,
             }
 
+        # Run dealer+lender (optional fourth arm — combined mode)
+        dealer_lender_data: Dict[str, Any] = {}
+        if self.config.enable_dealer_lender:
+            logger.info("  Running Dealer+Lender...")
+            print("  Dealer+Lender run:", flush=True)
+            dl_runner = self._get_dealer_lender_runner(outside_mid_ratio)
+            dl_result = dl_runner._execute_run(
+                phase="balanced_dealer_lender",
+                kappa=kappa,
+                concentration=concentration,
+                mu=mu,
+                monotonicity=monotonicity,
+                seed=seed,
+                progress_callback=self._make_progress_callback("dealer+lender"),
+            )
+            dealer_lender_data = {
+                "delta_dealer_lender": dl_result.delta_total,
+                "phi_dealer_lender": dl_result.phi_total,
+                "dealer_lender_run_id": dl_result.run_id,
+                "dealer_lender_status": "completed" if dl_result.delta_total is not None else "failed",
+                "n_defaults_dealer_lender": dl_result.n_defaults,
+                "cascade_fraction_dealer_lender": dl_result.cascade_fraction,
+                "dealer_lender_modal_call_id": dl_result.modal_call_id,
+            }
+
         result = BalancedComparisonResult(
             kappa=kappa,
             concentration=concentration,
@@ -1062,6 +1170,7 @@ class BalancedComparisonRunner:
                 dm, passive_result.dealer_metrics,
             ),
             **lender_result_data,
+            **dealer_lender_data,
         )
 
         # Log comparison
@@ -1218,6 +1327,13 @@ class BalancedComparisonRunner:
                     "lender_total_pnl": str(result.lender_total_pnl) if result.lender_total_pnl is not None else "",
                     "lender_total_return": str(result.lender_total_return) if result.lender_total_return is not None else "",
                     "total_loans": str(result.total_loans) if result.total_loans is not None else "",
+                    "delta_dealer_lender": str(result.delta_dealer_lender) if result.delta_dealer_lender is not None else "",
+                    "combined_effect": str(result.combined_effect) if result.combined_effect is not None else "",
+                    "phi_dealer_lender": str(result.phi_dealer_lender) if result.phi_dealer_lender is not None else "",
+                    "dealer_lender_run_id": result.dealer_lender_run_id,
+                    "dealer_lender_status": result.dealer_lender_status,
+                    "n_defaults_dealer_lender": str(result.n_defaults_dealer_lender),
+                    "cascade_fraction_dealer_lender": str(result.cascade_fraction_dealer_lender) if result.cascade_fraction_dealer_lender is not None else "",
                 }
                 writer.writerow(row)
 
