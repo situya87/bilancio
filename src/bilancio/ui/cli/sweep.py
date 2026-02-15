@@ -568,6 +568,11 @@ def sweep_comparison(
     default=Decimal("0.10"),
     help='Lender capital as fraction of system cash (default: 0.10)',
 )
+@click.option(
+    '--enable-dealer-lender/--no-dealer-lender',
+    default=False,
+    help='Enable fourth arm: dealer trading + non-bank lending combined (default: disabled)',
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -599,6 +604,7 @@ def sweep_balanced(
     vbt_spread_sensitivity: Decimal,
     enable_lender: bool,
     lender_share: Decimal,
+    enable_dealer_lender: bool,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -710,6 +716,7 @@ def sweep_balanced(
         vbt_spread_sensitivity=vbt_spread_sensitivity,
         enable_lender=enable_lender,
         lender_share=lender_share,
+        enable_dealer_lender=enable_dealer_lender,
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)
