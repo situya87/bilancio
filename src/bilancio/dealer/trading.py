@@ -131,7 +131,7 @@ class TradeExecutor:
         # is below layoff threshold, VBT injects cash to expand dealer capacity.
         # Economically: repo/credit facility from VBT to market maker.
         if not is_interior and self.layoff_threshold > 0:
-            inventory_ratio = Decimal(dealer.a) / max(1, dealer.K_star) if dealer.K_star > 0 else Decimal(0)
+            inventory_ratio = Decimal(dealer.a) / Decimal(dealer.K_star) if dealer.K_star > 0 else Decimal(0)
             if inventory_ratio < self.layoff_threshold:
                 needed_cash = dealer.bid * self.params.S
                 if vbt.cash >= needed_cash:

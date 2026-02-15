@@ -35,6 +35,7 @@ def check_trade_viability(
     buy_premium: Decimal,
     maturity_days: int,
     outside_mid_ratio: Decimal = Decimal("1.0"),
+    base_spread: Decimal = Decimal("0.04"),
 ) -> ViabilityReport:
     """Check whether buy and sell trades are viable for given parameters.
 
@@ -93,8 +94,8 @@ def check_trade_viability(
     diagnostics["X_star"] = float(X_star)
     diagnostics["dealer_inventory_ratio"] = float(Decimal(n_dealer_tickets) / max(1, K_star)) if K_star > 0 else 0.0
 
-    # VBT outside spread (use short bucket default O=0.10)
-    O = Decimal("0.10")
+    # VBT outside spread (per-bucket: short=0.04, mid=0.08, long=0.12)
+    O = base_spread
 
     # --- Sell viability ---
     # Compute dealer bid at current inventory
