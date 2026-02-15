@@ -1188,6 +1188,10 @@ class BalancedComparisonRunner:
         # Persist runs to Supabase
         self._persist_run_to_supabase(passive_result, "passive", kappa, concentration, mu, outside_mid_ratio, seed)
         self._persist_run_to_supabase(active_result, "active", kappa, concentration, mu, outside_mid_ratio, seed)
+        if self.config.enable_lender and lender_result_data.get("lender_run_id"):
+            self._persist_run_to_supabase(lender_result, "nbfi", kappa, concentration, mu, outside_mid_ratio, seed)
+        if self.config.enable_dealer_lender and dealer_lender_data.get("dealer_lender_run_id"):
+            self._persist_run_to_supabase(dl_result, "dealer_lender", kappa, concentration, mu, outside_mid_ratio, seed)
 
         return result
 
