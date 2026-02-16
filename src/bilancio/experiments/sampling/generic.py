@@ -10,6 +10,7 @@ from __future__ import annotations
 import random
 from collections.abc import Iterator, Sequence
 from decimal import Decimal
+from itertools import product
 
 
 def generate_grid_generic(
@@ -28,23 +29,8 @@ def generate_grid_generic(
         return
 
     value_lists = [list(dimensions[n]) for n in names]
-    _product_helper(names, value_lists, 0, {}, (result := []))
-    yield from result
-
-
-def _product_helper(
-    names: list[str],
-    value_lists: list[list[Decimal]],
-    depth: int,
-    current: dict[str, Decimal],
-    out: list[dict[str, Decimal]],
-) -> None:
-    if depth == len(names):
-        out.append(dict(current))
-        return
-    for val in value_lists[depth]:
-        current[names[depth]] = val
-        _product_helper(names, value_lists, depth + 1, current, out)
+    for values in product(*value_lists):
+        yield dict(zip(names, values))
 
 
 def generate_lhs_generic(
@@ -86,7 +72,10 @@ def _lhs_axis(
     bounds: tuple[Decimal, Decimal],
     rng: random.Random,
 ) -> list[Decimal]:
-    """Sample a single dimension via stratified uniform draws."""
+    """Sample a single dimension via stratified uniform draws.
+
+    Returns samples in stratum order (caller is responsible for shuffling).
+    """
     low, high = bounds
     samples: list[Decimal] = []
     for stratum in range(count):
@@ -95,5 +84,4 @@ def _lhs_axis(
         u = Decimal(str(rng.random()))
         frac = a + (b - a) * u
         samples.append(low + (high - low) * frac)
-    rng.shuffle(samples)
     return samples

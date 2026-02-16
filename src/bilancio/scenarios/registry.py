@@ -56,3 +56,13 @@ def register_plugin(name: str, plugin: ScenarioPlugin) -> None:
     """
     reg = _ensure_registry()
     reg[name] = plugin
+
+
+def reset_registry() -> None:
+    """Reset the registry to its default state.
+
+    Intended for test isolation — drops any plugins added via
+    :func:`register_plugin` and forces re-initialisation on next access.
+    """
+    global _registry
+    _registry = None

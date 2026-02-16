@@ -18,7 +18,7 @@ from .ring_explorer import (
 
 # New plugin API
 from .protocol import ParameterDimension, ScenarioMetadata, ScenarioPlugin
-from .registry import get_plugin, get_registry, register_plugin
+from .registry import get_plugin, get_registry, register_plugin, reset_registry
 
 
 def compile_generator(
@@ -44,4 +44,5 @@ __all__ = [
     "get_plugin",
     "get_registry",
     "register_plugin",
+    "reset_registry",
 ]

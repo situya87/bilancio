@@ -11,7 +11,7 @@ from bilancio.scenarios.protocol import (
     ScenarioMetadata,
     ScenarioPlugin,
 )
-from bilancio.scenarios.registry import get_plugin, get_registry, register_plugin
+from bilancio.scenarios.registry import get_plugin, get_registry, register_plugin, reset_registry
 from bilancio.scenarios.ring.plugin import KaleckiRingPlugin
 
 
@@ -148,8 +148,11 @@ class TestRegistry:
                 return BaseModel
 
         register_plugin("dummy", _DummyPlugin())
-        assert "dummy" in get_registry()
-        assert get_plugin("dummy").metadata.name == "dummy"
+        try:
+            assert "dummy" in get_registry()
+            assert get_plugin("dummy").metadata.name == "dummy"
+        finally:
+            reset_registry()  # Clean up to avoid leaking into other tests
 
     def test_get_registry_returns_copy(self):
         """Mutating the returned dict should not affect the internal registry."""
