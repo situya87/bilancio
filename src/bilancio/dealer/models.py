@@ -304,6 +304,13 @@ class TraderState:
         due = self.payment_due(day)
         return max(Decimal(0), due - self.cash)
 
+    def upcoming_shortfall(self, start_day: int, horizon: int) -> Decimal:
+        """Maximum shortfall across upcoming days (for urgency computation)."""
+        max_sf = Decimal(0)
+        for day_offset in range(horizon + 1):
+            max_sf = max(max_sf, self.shortfall(start_day + day_offset))
+        return max_sf
+
     def earliest_liability_day(self, after_day: int) -> int | None:
         """
         Find the earliest liability date after the given day.

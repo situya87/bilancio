@@ -192,6 +192,8 @@ class System:
             for cid in list(cash_ids):
                 instr = self.state.contracts[cid]
                 take = min(instr.amount, remaining)
+                if take <= 0:
+                    continue
                 consume(self, cid, take)
                 remaining -= take
                 if remaining == 0: break

@@ -815,6 +815,124 @@ class TestBuildEligible:
 
 
 # ===================================================================
+# TraderState.upcoming_shortfall
+# ===================================================================
+
+
+class TestUpcomingShortfall:
+    """Test the upcoming_shortfall method on TraderState."""
+
+    def test_no_obligations_returns_zero(self):
+        trader = TraderState(agent_id="T1", cash=Decimal(100))
+        assert trader.upcoming_shortfall(0, 10) == Decimal(0)
+
+    def test_future_shortfall_detected(self):
+        """Trader with obligation on day 5 has shortfall when looking ahead."""
+        obligation = _make_ticket(id="obl", face=Decimal(200), maturity_day=5)
+        trader = TraderState(
+            agent_id="T1", cash=Decimal(50),
+            obligations=[obligation],
+        )
+        # On day 0, no shortfall for day 0 itself
+        assert trader.shortfall(0) == Decimal(0)
+        # But upcoming_shortfall over 10-day horizon finds day 5
+        assert trader.upcoming_shortfall(0, 10) == Decimal(150)
+
+    def test_horizon_too_short_misses_obligation(self):
+        """Shortfall on day 10, horizon=5 starting from day 0 misses it."""
+        obligation = _make_ticket(id="obl", face=Decimal(200), maturity_day=10)
+        trader = TraderState(
+            agent_id="T1", cash=Decimal(50),
+            obligations=[obligation],
+        )
+        assert trader.upcoming_shortfall(0, 5) == Decimal(0)
+        assert trader.upcoming_shortfall(0, 10) == Decimal(150)
+
+
+class TestSellWithFutureUrgency:
+    """Seller with shortfall on day 5 should get urgency applied on day 0."""
+
+    def test_future_shortfall_enables_sell(self):
+        """Sell risk assessment uses upcoming shortfall for urgency."""
+        subsystem = _make_subsystem(with_risk_assessor=True)
+
+        # Moderate premium - would reject without urgency
+        subsystem.risk_assessor = RiskAssessor(
+            RiskAssessmentParams(
+                base_risk_premium=Decimal("0.02"),
+                urgency_sensitivity=Decimal("0.10"),
+            )
+        )
+
+        ticket = _make_ticket(face=Decimal(1))
+        # Obligation on day 5, not today (day 0)
+        obligation = _make_ticket(id="obl", face=Decimal(200), maturity_day=5)
+        dealer = subsystem.dealers["short"]
+        trader = TraderState(
+            agent_id="T1",
+            cash=Decimal(10),
+            tickets_owned=[ticket],
+            obligations=[obligation],
+        )
+        events: list[dict] = []
+
+        # On day 0, shortfall(0) = 0 but upcoming_shortfall(0, 10) = 190
+        # This should give urgency and make the sell acceptable
+        rejected = _check_sell_risk_assessment(
+            subsystem, trader, "T1", ticket, dealer, "short", 0, events
+        )
+        # With upcoming shortfall, urgency should reduce threshold enough
+        # to accept the sell (threshold goes negative with high urgency)
+        assert rejected is False
+
+
+class TestBuyReserveFraction:
+    """Test buyer eligibility with different reserve fractions."""
+
+    def test_reserve_fraction_half_allows_more_buyers(self):
+        """With buy_reserve_fraction=0.5, agent reserves only half of dues."""
+        from bilancio.decision.profiles import TraderProfile
+        subsystem = _make_subsystem(face_value=Decimal(1))
+        subsystem.trader_profile = TraderProfile(buy_reserve_fraction=Decimal("0.5"))
+
+        # Trader has 60 cash, 100 in upcoming dues
+        # With fraction=0.5: reserved=50, surplus=10 > 0 -> eligible
+        obligation = _make_ticket(id="obl", face=Decimal(100), maturity_day=5)
+        _add_trader(subsystem, "T1", cash=Decimal(60), obligations=[obligation])
+
+        buyers = _build_eligible_buyers(subsystem, current_day=5)
+        assert "T1" in buyers
+
+    def test_reserve_fraction_one_requires_full_coverage(self):
+        """With buy_reserve_fraction=1.0, agent must cover all dues."""
+        from bilancio.decision.profiles import TraderProfile
+        subsystem = _make_subsystem(face_value=Decimal(1))
+        subsystem.trader_profile = TraderProfile(buy_reserve_fraction=Decimal("1.0"))
+
+        # Trader has 60 cash, 100 in upcoming dues
+        # With fraction=1.0: reserved=100, surplus=-40 -> NOT eligible
+        obligation = _make_ticket(id="obl", face=Decimal(100), maturity_day=5)
+        _add_trader(subsystem, "T1", cash=Decimal(60), obligations=[obligation])
+
+        buyers = _build_eligible_buyers(subsystem, current_day=5)
+        assert "T1" not in buyers
+
+    def test_reserve_fraction_zero_ignores_dues(self):
+        """With buy_reserve_fraction=0.0, agent ignores all upcoming dues."""
+        from bilancio.decision.profiles import TraderProfile
+        subsystem = _make_subsystem(face_value=Decimal(1))
+        subsystem.trader_profile = TraderProfile(buy_reserve_fraction=Decimal("0"))
+
+        # Trader has 1 cash, 1000 in upcoming dues
+        # With fraction=0: reserved=0, surplus=1 > 0 -> eligible
+        obligation = _make_ticket(id="obl", face=Decimal(1000), maturity_day=5)
+        _add_trader(subsystem, "T1", cash=Decimal(1), obligations=[obligation])
+
+        buyers = _build_eligible_buyers(subsystem, current_day=5)
+        assert "T1" in buyers
+
+
+# ===================================================================
 # _execute_interleaved_order_flow
 # ===================================================================
 
