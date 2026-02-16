@@ -30,7 +30,7 @@ def generate_grid_generic(
 
     value_lists = [list(dimensions[n]) for n in names]
     for values in product(*value_lists):
-        yield dict(zip(names, values))
+        yield dict(zip(names, values, strict=True))
 
 
 def generate_lhs_generic(

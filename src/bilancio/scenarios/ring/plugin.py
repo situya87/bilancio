@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from bilancio.config.models import (
+    GeneratorCompileConfig,
     RingExplorerGeneratorConfig,
     RingExplorerInequalityConfig,
     RingExplorerLiquidityAllocation,
@@ -130,19 +131,24 @@ class KaleckiRingPlugin:
                     allocation=RingExplorerLiquidityAllocation(
                         mode=liquidity_mode,
                         agent=liquidity_agent if liquidity_mode == "single_at" else None,
+                        vector=None,
                     ),
                 ),
                 inequality=RingExplorerInequalityConfig(
+                    scheme="dirichlet",
                     concentration=concentration,
                     monotonicity=monotonicity,
                 ),
                 maturity=RingExplorerMaturityConfig(
                     days=maturity_days,
+                    mode="lead_lag",
                     mu=mu,
                 ),
+                currency="USD",
                 Q_total=Q_total,
+                policy_overrides=None,
             ),
-            compile={"out_dir": None, "emit_yaml": False},
+            compile=GeneratorCompileConfig(out_dir=None, emit_yaml=False),
         )
 
         # Use balanced compiler when a mode is specified

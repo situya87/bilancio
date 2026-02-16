@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.experiments.sampling.generic import (
     generate_grid_generic,
     generate_lhs_generic,
