@@ -725,6 +725,12 @@ class BalancedDealerConfig(BaseModel):
         le=Decimal("1"),
         description="Trader default observability (0=ignore, 1=full tracking)",
     )
+    buy_reserve_fraction: Decimal = Field(
+        default=Decimal("0.5"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="Fraction of upcoming obligations to reserve for buyer eligibility (0=ignore, 1=reserve all)",
+    )
     vbt_mid_sensitivity: Decimal = Field(
         default=Decimal("1.0"),
         ge=Decimal("0"),

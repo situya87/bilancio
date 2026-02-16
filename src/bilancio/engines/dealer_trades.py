@@ -75,7 +75,7 @@ def _check_sell_risk_assessment(
         dealer_bid=dealer.bid,
         current_day=current_day,
         trader_cash=trader.cash,
-        trader_shortfall=trader.shortfall(current_day),
+        trader_shortfall=trader.upcoming_shortfall(current_day, subsystem.trader_profile.sell_horizon),
         trader_asset_value=asset_value,
     ):
         return False  # Trade accepted
@@ -218,7 +218,7 @@ def _execute_sell_trade(
     pre_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
 
     # Check if liquidity-driven (Section 8.3)
-    is_liquidity_driven = trader.shortfall(current_day) > 0
+    is_liquidity_driven = trader.upcoming_shortfall(current_day, subsystem.trader_profile.sell_horizon) > 0
 
     # Risk assessment check (Plan 032)
     if _check_sell_risk_assessment(
@@ -574,7 +574,8 @@ def _build_eligible_buyers(
         total_upcoming_dues = Decimal(0)
         for day_offset in range(horizon + 1):
             total_upcoming_dues += trader.payment_due(current_day + day_offset)
-        surplus = trader.cash - total_upcoming_dues
+        reserved = subsystem.trader_profile.buy_reserve_fraction * total_upcoming_dues
+        surplus = trader.cash - reserved
         threshold = subsystem.face_value * subsystem.trader_profile.surplus_threshold_factor
         if surplus > threshold:
             eligible_buyers.append(trader_id)

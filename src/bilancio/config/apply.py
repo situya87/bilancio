@@ -597,6 +597,7 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
                 planning_horizon=config.balanced_dealer.planning_horizon,
                 aggressiveness=config.balanced_dealer.aggressiveness,
                 default_observability=config.balanced_dealer.default_observability,
+                buy_reserve_fraction=config.balanced_dealer.buy_reserve_fraction,
             )
             vbt_profile = VBTProfile(
                 mid_sensitivity=config.balanced_dealer.vbt_mid_sensitivity,
