@@ -20,9 +20,9 @@ from dashboards.simulator.lib.snapshot import capture_snapshot, compute_diff
 
 
 def _build_export_yaml(state) -> dict:
-    """Build a scenario YAML dict from the action log."""
+    """Build a scenario YAML dict compatible with `bilancio run`."""
     agents_list = []
-    setup_events = []
+    initial_actions = []
 
     for action in state.action_log:
         t = action["type"]
@@ -33,43 +33,46 @@ def _build_export_yaml(state) -> dict:
                 "name": action["name"],
             })
         elif t == "mint_cash":
-            setup_events.append({
-                "type": "mint_cash",
-                "to": action["to_agent_id"],
-                "amount": action["amount"],
+            initial_actions.append({
+                "mint_cash": {
+                    "to": action["to_agent_id"],
+                    "amount": action["amount"],
+                },
             })
         elif t == "mint_reserves":
-            setup_events.append({
-                "type": "mint_reserves",
-                "to": action["to_bank_id"],
-                "amount": action["amount"],
+            initial_actions.append({
+                "mint_reserves": {
+                    "to": action["to_bank_id"],
+                    "amount": action["amount"],
+                },
             })
         elif t == "create_payable":
-            setup_events.append({
-                "type": "create_payable",
-                "debtor": action["debtor_id"],
-                "creditor": action["creditor_id"],
-                "amount": action["amount"],
-                "due_day": action["due_day"],
+            initial_actions.append({
+                "create_payable": {
+                    "from": action["debtor_id"],
+                    "to": action["creditor_id"],
+                    "amount": action["amount"],
+                    "due_day": action["due_day"],
+                },
             })
         elif t == "create_cb_loan":
-            setup_events.append({
-                "type": "create_cb_loan",
-                "bank": action["bank_id"],
-                "amount": action["amount"],
-                "rate": action["rate"],
+            initial_actions.append({
+                "create_cb_loan": {
+                    "bank": action["bank_id"],
+                    "amount": action["amount"],
+                    "rate": action["rate"],
+                },
             })
 
     return {
-        "scenario": {
-            "name": "Exported from Simulator",
-            "agents": agents_list,
-            "setup": setup_events,
-            "simulation": {
-                "max_days": state.sim_config.get("max_days", 30),
-                "default_handling": state.sim_config.get("default_handling", "expel-agent"),
-            },
-        }
+        "version": 1,
+        "name": "Exported from Simulator",
+        "agents": agents_list,
+        "initial_actions": initial_actions,
+        "run": {
+            "max_days": state.sim_config.get("max_days", 30),
+            "quiet_days": 2,
+        },
     }
 
 
@@ -88,11 +91,20 @@ if st.button("▶️ Run Simulation", type="primary", use_container_width=True):
 
     # Rebuild system from action log to ensure clean starting state
     system = rebuild_system(state.action_log)
+
+    # [P1 fix] Apply simulation config to the rebuilt system
+    default_handling = state.sim_config.get("default_handling", "expel-agent")
+    system.default_mode = default_handling
+    system.state.rollover_enabled = state.sim_config.get("rollover", False)
+
     state.system = system
 
     # Capture initial snapshot (setup state)
     snapshots = [capture_snapshot(system)]
     events_by_day: dict[int, list] = {}
+    # [P1 fix] Track cumulative defaults per-day for accurate historical view
+    defaults_by_day: dict[int, int] = {0: 0}
+    already_defaulted: set[str] = set()
 
     # Run simulation day by day
     progress = st.progress(0, text="Running simulation...")
@@ -100,6 +112,7 @@ if st.button("▶️ Run Simulation", type="primary", use_container_width=True):
     for day in range(max_days):
         # Track contracts before to detect settlements
         contracts_before = set(system.state.contracts.keys())
+        defaulted_before = set(already_defaulted)
 
         try:
             run_day(
@@ -119,15 +132,17 @@ if st.button("▶️ Run Simulation", type="primary", use_container_width=True):
         contracts_after = set(system.state.contracts.keys())
         settled = contracts_before - contracts_after
         day_events = []
-        for cid in settled:
+        for cid in sorted(settled):
             day_events.append({"type": "settled", "instrument": cid})
 
-        # Check for defaults
+        # [P1 fix] Only report NEW defaults (agents that weren't already defaulted)
         for aid, agent in system.state.agents.items():
-            if getattr(agent, "defaulted", False):
+            if getattr(agent, "defaulted", False) and aid not in already_defaulted:
                 day_events.append({"type": "default", "agent": aid})
+                already_defaulted.add(aid)
 
         events_by_day[day + 1] = day_events
+        defaults_by_day[day + 1] = len(already_defaulted)
 
         progress.progress(
             (day + 1) / max_days,
@@ -139,6 +154,7 @@ if st.button("▶️ Run Simulation", type="primary", use_container_width=True):
     # Store results in session
     state.snapshots = snapshots
     state.events_by_day = events_by_day
+    state.defaults_by_day = defaults_by_day
 
     st.success(f"Simulation complete: {len(snapshots) - 1} days simulated.")
 
@@ -165,14 +181,14 @@ if day > 0:
 
 total_cash = 0
 total_obligations = 0
-total_defaults = 0
 
 for aid, bal in current_snapshot.items():
     total_cash += bal.assets_by_kind.get("cash", 0)
     total_obligations += bal.liabilities_by_kind.get("payable", 0)
-    agent = state.system.state.agents.get(aid)
-    if agent and getattr(agent, "defaulted", False):
-        total_defaults += 1
+
+# [P1 fix] Use per-day default counts instead of final system state
+defaults_by_day = getattr(state, "defaults_by_day", {})
+total_defaults = defaults_by_day.get(day, 0)
 
 render_system_summary(
     agent_count=len(current_snapshot),

@@ -21,6 +21,7 @@ class SimState:
     snapshots: list[dict[str, AgentBalance]]  # per-day balance snapshots
     sim_config: dict[str, Any]
     events_by_day: dict[int, list[dict[str, Any]]]
+    defaults_by_day: dict[int, int] = field(default_factory=dict)  # cumulative defaults per day
 
     @classmethod
     def fresh(cls) -> SimState:
