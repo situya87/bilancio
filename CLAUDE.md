@@ -558,11 +558,95 @@ uv run bilancio run examples/scenarios/simple_dealer.yaml \
 
 ---
 
-## Sweep Pre-Flight Checklist
+## Sweep Pre-Flight: Interactive Parameter Review
 
-**MANDATORY**: Before running ANY sweep (however simple), compute and present ALL checks below to the user. Do not run until the user confirms.
+**MANDATORY**: Before running ANY simulation or sweep (however simple), present the full parameter review below to the user. Do NOT run until the user confirms. This ensures every run is deliberate and reproducible.
 
-### A. Scale & Cost
+### Step 1: Confirm Sweep Arms
+
+Ask the user which comparison legs to run:
+
+| Arm | CLI mapping | What it tests |
+|-----|-------------|---------------|
+| Passive (baseline) | always included | No dealer, no lender — pure settlement |
+| Active (dealer) | `--active` (default in balanced) | Dealer provides secondary market |
+| Lender | `--lender` | Non-bank lender provides credit |
+| Dealer + Lender | `--dealer-lender` | Both dealer and lender active |
+
+Also confirm: **Cloud** (Modal) or **Local** execution.
+
+### Step 2: Present All Parameters by Category
+
+Present the following table to the user. Show the **current value** (from CLI args, previous run, or defaults). The user can accept all defaults or change any value.
+
+#### A. General / Scale
+
+| Parameter | Default | Current | Description |
+|-----------|---------|---------|-------------|
+| `n_agents` | 100 | ? | Number of firms in ring |
+| `maturity_days` | 10 | ? | Payment horizon (days) |
+| `face_value` | 20 | ? | Face value per ticket |
+| `q_total` | 10000 | ? | Total debt amount |
+| `base_seed` | 42 | ? | PRNG seed |
+| `default_handling` | expel-agent | ? | fail-fast or expel-agent |
+| `rollover` | True | ? | Continuous rollover of matured claims |
+
+#### B. Sweep Grid
+
+| Parameter | Default | Current | Description |
+|-----------|---------|---------|-------------|
+| `kappas` | 0.25,0.5,1,2,4 | ? | Liquidity stress levels |
+| `concentrations` | 1 | ? | Debt inequality (Dirichlet c) |
+| `mus` | 0 | ? | Maturity timing skew |
+| `outside_mid_ratios` (ρ) | 0.90 | ? | Outside-money discount |
+| `seeds` | (single) | ? | Multiple seeds for robustness |
+
+#### C. Trader Behavior
+
+| Parameter | Default | Current | Description | Effect |
+|-----------|---------|---------|-------------|--------|
+| `risk_aversion` | 0 | ? | 0=risk-neutral, 1=max risk-averse | Higher → pickier buyers (buy_premium = 0.01 + 0.02×RA) |
+| `planning_horizon` | 10 | ? | Days to look ahead (1-20) | sell_horizon = PH, buy_horizon = PH/2 |
+| `aggressiveness` | 1.0 | ? | 0=conservative buyer, 1=eager | Lower → higher surplus needed to buy |
+| `buy_reserve_fraction` | 0.5 | ? | Fraction of upcoming dues reserved | Lower → more buyers eligible, less prudent |
+| `default_observability` | 1.0 | ? | 0=ignore defaults, 1=full tracking | Lower → agents slower to react to defaults |
+
+#### D. Dealer & VBT
+
+| Parameter | Default | Current | Description |
+|-----------|---------|---------|-------------|
+| `dealer_share_per_bucket` | 0.05 | ? | Dealer capital as fraction of bucket |
+| `vbt_share_per_bucket` | 0.20 | ? | VBT capital as fraction of bucket |
+| `vbt_mid_sensitivity` | 1.0 | ? | VBT mid-price reaction to defaults (0=fixed, 1=full) |
+| `vbt_spread_sensitivity` | 0.0 | ? | VBT spread widening with defaults (0=fixed, 1=widen) |
+| Bucket spreads (O) | short=0.20, mid=0.30, long=0.40 | ? | Bid-ask spread per bucket |
+
+#### E. Risk Assessment
+
+| Parameter | Default | Current | Description |
+|-----------|---------|---------|-------------|
+| `risk_assessment` | True | ? | Enable risk-based trade decisions |
+| `risk_premium` | 0.02 | ? | Base risk premium (sellers) |
+| `risk_urgency` | 0.10 | ? | Urgency sensitivity (how much stress lowers threshold) |
+| `initial_prior` | 0.15 | ? | No-history default probability |
+| `alpha_vbt` | 0 | ? | VBT informedness (0=naive, 1=kappa-informed) |
+| `alpha_trader` | 0 | ? | Trader informedness (0=naive, 1=kappa-informed) |
+
+#### F. Lending (only if lender arm selected)
+
+| Parameter | Default | Current | Description |
+|-----------|---------|---------|-------------|
+| `lender_base_rate` | 0.05 | ? | Base interest rate |
+| `lender_risk_premium_scale` | 0.20 | ? | Risk premium multiplier |
+| `lender_risk_aversion` | 0.3 | ? | 0=aggressive, 1=conservative |
+| `max_single_exposure` | 0.15 | ? | Max fraction to single borrower |
+| `max_total_exposure` | 0.80 | ? | Max total lending exposure |
+| `loan_maturity_days` | 2 | ? | Loan maturity |
+| `lender_horizon` | 3 | ? | Look-ahead for obligations |
+
+### Step 3: Scale & Cost Estimate
+
+Compute and show:
 
 1. **Total runs** = `len(kappas) × len(concentrations) × len(mus) × len(outside_mid_ratios) × arms`
    - arms = 2 (passive+active), 3 (+ lender), or 4 (+ dealer-lender)
@@ -570,7 +654,7 @@ uv run bilancio run examples/scenarios/simple_dealer.yaml \
 3. **Estimated cost** = `total_runs × $0.0003` (cloud only)
 4. **Grid explosion guard**: if total_runs > 1000, warn and suggest LHS sampling
 
-### B. Parameter Sanity
+### Step 4: Parameter Sanity
 
 | Parameter | Valid range | Warn if |
 |-----------|-----------|---------|
@@ -580,121 +664,130 @@ uv run bilancio run examples/scenarios/simple_dealer.yaml \
 | ρ (outside_mid_ratio) | (0, 1] | < 0.5 |
 | n_agents | [3, 1000] | > 500 (slow) or < 10 (noisy) |
 | maturity_days | [1, 100] | > 30 (slow) or = 1 (no temporal spread) |
+| risk_aversion | [0, 1] | = 0 with multi-issuer buys (buyers accept almost everything) |
 | No parameter list may be empty | — | empty list = zero runs |
 
-### C. Economic Viability Checks
+### Step 5: Economic Viability Checks
 
 For each representative parameter combo (pick the median κ, ρ, etc.), compute:
 
-#### C1. Sell trade viability
+#### V1. Sell trade viability
 
 ```
-p = 0.15                          # no-data prior (day 0)
-EV = (1 - p) = 0.85              # expected value per unit face
+p = initial_prior                 # default 0.15 (day 0)
+EV = (1 - p)                     # expected value per unit face
 O_short = 0.04 + 0.6 × p         # short bucket spread
 M = ρ × (1 - p)                  # credit-adjusted VBT mid
 B = M - O_short/2                # VBT bid (floor for dealer bid)
 
-spread_gap = EV - B = (1 - p) - ρ(1 - p) + O_short/2
-           = (1 - ρ)(1 - p) + O_short/2
-min_urgency = spread_gap / 0.10  # urgency_sensitivity = 0.10
+spread_gap = EV - B = (1 - ρ)(1 - p) + O_short/2
+min_urgency = spread_gap / urgency_sensitivity
 ```
 
-- **min_urgency < 0.5**: Sells will clear for moderately stressed agents ✓
+- **min_urgency < 0.5**: Sells clear for moderately stressed agents ✓
 - **min_urgency 0.5–1.0**: Sells only for very stressed agents (κ < 0.5) ⚠️
-- **min_urgency > 1.0**: Sells IMPOSSIBLE — urgency ratio capped at 1. Flag to user! ✗
+- **min_urgency > 1.0**: Sells IMPOSSIBLE — urgency ratio capped at 1 ✗
 
-**Rule of thumb**: At ρ=1.0, min_urgency ≈ O_short/(2×0.10) ≈ 0.65 — sells require high stress. At ρ < 0.85, sells become very difficult. At ρ < 0.7, sells are near-impossible.
-
-#### C2. Buy trade viability
+#### V2. Buy trade viability
 
 ```
 A = min(1, M + O_short/2)        # VBT ask (ceiling for dealer ask)
-buy_premium = 0.01               # buyer's minimum premium
-buy_clears = (EV > A + buy_premium)
-           = (1-p) > ρ(1-p) + O_short/2 + 0.01
-           = (1-ρ)(1-p) > O_short/2 + 0.01
+buy_premium = 0.01 + 0.02 × risk_aversion    # buyer's minimum premium
+buy_clears = (1-ρ)(1-p) > O_short/2 + buy_premium
 ```
 
-- If ρ = 1.0: buys NEVER clear through risk assessment (LHS = 0). Buys only happen when risk_assessment is disabled or when the dealer interior ask is significantly below VBT ask (low inventory).
-- If ρ < 0.95: buys become viable as the (1-ρ) wedge grows.
-- **Flag**: If ρ = 1.0, inform user that buy trades will be rare/absent and trading effect will come primarily from sells.
+- ρ = 1.0: buys NEVER clear (LHS = 0) ✗
+- ρ < 0.95 with risk_aversion=0: buys very permissive (1% threshold) ⚠️
+- ρ < 0.95 with risk_aversion ≥ 0.5: buys selective (2%+ threshold) ✓
 
-#### C3. Both-way trading (dealer inventory turnover)
+#### V3. Both-way trading (dealer inventory turnover)
 
-For the dealer to provide meaningful intermediation, BOTH sells and buys must occur:
+- **κ < 0.3**: Mostly sells, few buys → one-way flow
+- **0.3 ≤ κ ≤ 2**: Sweet spot — stressed sell, surplus buy
+- **κ > 2**: Few sells, many potential buyers → one-way flow
+- **Flag**: If ALL κ > 2 or ALL < 0.3, trading is one-directional.
 
-- **κ < 0.3**: Mostly sells (agents desperate), few buys (no surplus) → one-way flow
-- **0.3 ≤ κ ≤ 2**: Sweet spot — stressed agents sell, surplus agents buy
-- **κ > 2**: Few sells (agents flush), many potential buyers → one-way flow
-- **Flag**: If ALL κ values are > 2 or ALL are < 0.3, warn that trading is one-directional.
-
-#### C4. Dealer capacity not binding too quickly
+#### V4. Dealer capacity
 
 ```
-dealer_cash ≈ dealer_share × system_value  # typically 5% of system
-K_star_initial = floor(dealer_cash / M)     # max tickets when empty
-expected_sells = n_agents × sell_fraction   # ~30% at κ=0.5
+dealer_cash ≈ dealer_share × system_value
+K_star_initial = floor(dealer_cash / M)
 ```
 
-- If K_star_initial < 3: dealer capacity binds immediately → most trades passthrough to VBT
-- If K_star_initial > n_agents/2: dealer never hits capacity → spread is very tight
-- **Ideal**: K_star_initial between 5 and n_agents/4
+- K_star_initial < 3: capacity binds immediately → passthrough ⚠️
+- K_star_initial > n_agents/2: dealer never constrained → tight spread
+- **Ideal**: between 5 and n_agents/4
 
-#### C5. Lending viability (if `--enable-lender` or `--enable-dealer-lender`)
+#### V5. Lending viability (if lender arm)
 
 ```
-p_lender = 1 / (1 + κ)           # lender's kappa-informed default estimate
-rate = profit_target + risk_premium_scale × p_lender
-     ≈ 0.05 + 0.22 × p_lender    # at risk_aversion=0.3
+p_lender = 1 / (1 + κ)
+rate ≈ profit_target + risk_premium_scale × p_lender
 ```
 
-- **κ > 3**: p_lender < 0.25, rate ≈ 10% → loans cheap, but few borrowers need them
-- **0.3 < κ < 1.5**: p_lender 0.4–0.75, rate 15–22% → loans happen, rates meaningful
-- **κ < 0.3**: p_lender > 0.75, rate > 20% → very expensive, borrowers may prefer selling
-- **Flag**: If no κ value is below 1.5, lending will have minimal effect (no borrowers).
+- κ > 3: loans cheap but few borrowers need them ⚠️
+- 0.3 < κ < 1.5: meaningful lending ✓
+- κ < 0.3: very expensive loans ⚠️
 
-#### C6. Temporal spread of activity
+#### V6. Temporal spread
 
-Trading/lending should occur across multiple days, not just day 0:
+- maturity_days = 1: trading ONLY on day 0 ✗
+- maturity_days ≥ 5: multi-day trading ✓
+- μ = 0: front-loaded stress ⚠️ / μ = 1: back-loaded burst ⚠️
+- μ ∈ [0.3, 0.7]: good spread ✓
+- buy_reserve_fraction = 1: buyers disappear after day 0 ✗
 
-- **maturity_days = 1**: All obligations due on day 1 → trading ONLY on day 0. Flag! ✗
-- **maturity_days ≥ 5**: Obligations spread across days → multi-day trading ✓
-- **μ = 0**: All dues front-loaded → trading concentrated on early days ⚠️
-- **μ = 1**: All dues back-loaded → early days have no stress, late burst ⚠️
-- **μ ∈ [0.3, 0.7]**: Good temporal spread ✓
-- **buy_reserve_fraction = 1**: Buyers reserve all dues → buyers disappear after day 0 ✗
-- **buy_reserve_fraction ≤ 0.5**: Buyers remain eligible across days ✓
+#### V7. Trading effect detectable
 
-#### C7. Trading effect detectable
+- n_agents ≥ 10 ✓
+- At least one κ < 1 ✓
+- At least two κ values ✓
+- maturity_days ≥ 5 ✓
 
-The sweep should be designed so the passive-vs-active comparison is meaningful:
-
-- **n_agents ≥ 10**: Enough agents for statistical significance ✓
-- **At least one κ < 1**: Need stress to see dealer impact ✓
-- **At least two κ values**: Need variation to see how dealer effect scales ✓
-- **maturity_days ≥ 5**: Enough days for trading to accumulate effect ✓
-
-### D. Pre-Flight Summary Template
+### Step 6: Pre-Flight Summary
 
 Present to user before running:
 
 ```
-SWEEP PRE-FLIGHT CHECK
-──────────────────────
-Scale:    X pairs → Y runs → ~Z min, ~$W
-Params:   κ ∈ {…}, c ∈ {…}, μ ∈ {…}, ρ ∈ {…}
-          n={…}, maturity={…} days, arms={…}
+SWEEP PRE-FLIGHT
+════════════════
 
-Economic viability:
-  Sells:    [✓ viable / ⚠️ marginal / ✗ impossible] (min_urgency=…)
-  Buys:     [✓ viable / ⚠️ marginal / ✗ impossible]
-  2-way:    [✓ both directions / ⚠️ one-directional]
-  Capacity: K_star_init=… [✓ balanced / ⚠️ binding / ⚠️ unused]
-  Lending:  [✓ active / ⚠️ minimal / n/a]
-  Temporal: [✓ multi-day / ⚠️ concentrated / ✗ single-day]
-  Effect:   [✓ detectable / ⚠️ noisy]
+Arms:     [passive] [active] [lender?] [dealer+lender?]
+Cloud:    [yes/no]
 
-Issues: [list any ✗ or ⚠️ items with explanation]
+─── A. General ───────────────────────────────────────
+  n_agents=100  maturity=10d  face=20  seed=42
+
+─── B. Grid ──────────────────────────────────────────
+  κ ∈ {0.3, 0.5, 1.0}   c ∈ {1}   μ ∈ {0}   ρ ∈ {0.90}
+  → X pairs, Y runs  ~Z min  ~$W
+
+─── C. Trader Behavior ──────────────────────────────
+  risk_aversion=0.5  planning_horizon=10  aggressiveness=1.0
+  buy_reserve_fraction=0.5  default_observability=1.0
+
+─── D. Dealer & VBT ─────────────────────────────────
+  dealer_share=0.05  vbt_share=0.20
+  vbt_mid_sensitivity=1.0  vbt_spread_sensitivity=0.0
+
+─── E. Risk Assessment ──────────────────────────────
+  risk_premium=0.02  urgency=0.10  initial_prior=0.15
+  alpha_vbt=0  alpha_trader=0
+
+─── F. Lending (if applicable) ──────────────────────
+  base_rate=0.05  risk_premium_scale=0.20  risk_aversion=0.3
+
+─── Viability ────────────────────────────────────────
+  Sells:    [✓/⚠️/✗] (min_urgency=…)
+  Buys:     [✓/⚠️/✗] (buy_premium=…)
+  2-way:    [✓/⚠️]
+  Capacity: K*=… [✓/⚠️]
+  Lending:  [✓/⚠️/n/a]
+  Temporal: [✓/⚠️/✗]
+  Effect:   [✓/⚠️]
+
+Issues: [list any ✗ or ⚠️ items]
 Proceed? [waiting for user confirmation]
 ```
+
+**IMPORTANT**: If any parameter differs from the default, highlight it explicitly. If the user says "run with defaults", still present the summary — defaults should be a conscious choice, not an accident.
