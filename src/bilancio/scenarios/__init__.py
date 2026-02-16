@@ -10,10 +10,15 @@ from bilancio.config.models import (
     RingExplorerGeneratorConfig,
 )
 
+# Backward-compatible re-exports (unchanged)
 from .ring_explorer import (
     compile_ring_explorer,
     compile_ring_explorer_balanced,
 )
+
+# New plugin API
+from .protocol import ParameterDimension, ScenarioMetadata, ScenarioPlugin
+from .registry import get_plugin, get_registry, register_plugin
 
 
 def compile_generator(
@@ -28,7 +33,15 @@ def compile_generator(
 
 
 __all__ = [
+    # Backward compatible
     "compile_generator",
     "compile_ring_explorer",
     "compile_ring_explorer_balanced",
+    # Plugin API
+    "ParameterDimension",
+    "ScenarioMetadata",
+    "ScenarioPlugin",
+    "get_plugin",
+    "get_registry",
+    "register_plugin",
 ]

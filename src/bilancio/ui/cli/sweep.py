@@ -41,6 +41,35 @@ def sweep() -> None:
     pass
 
 
+@sweep.command("list")
+def sweep_list() -> None:
+    """List available scenario plugins."""
+    from bilancio.scenarios.registry import get_registry
+
+    registry = get_registry()
+    if not registry:
+        console.print("[yellow]No scenario plugins registered.[/yellow]")
+        return
+
+    for name, plugin in sorted(registry.items()):
+        meta = plugin.metadata
+        console.print(f"\n[bold cyan]{meta.display_name}[/bold cyan] ({name})")
+        console.print(f"  {meta.description}")
+        console.print(f"  Version: {meta.version}")
+        console.print(f"  Instruments: {', '.join(meta.instruments_used)}")
+        console.print(f"  Agent types: {', '.join(meta.agent_types)}")
+        console.print(f"  Dealer support: {'yes' if meta.supports_dealer else 'no'}")
+        console.print(f"  Lender support: {'yes' if meta.supports_lender else 'no'}")
+        dims = plugin.parameter_dimensions()
+        if dims:
+            console.print("  Parameters:")
+            for dim in dims:
+                defaults_str = ", ".join(str(v) for v in dim.default_values)
+                console.print(f"    {dim.name}: {dim.display_name}")
+                console.print(f"      {dim.description}")
+                console.print(f"      Defaults: [{defaults_str}]")
+
+
 @sweep.command("ring")
 @click.option(
     "--config", type=click.Path(path_type=Path), default=None, help="Path to sweep config YAML"
