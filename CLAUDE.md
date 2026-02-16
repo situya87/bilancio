@@ -555,3 +555,146 @@ uv run bilancio sweep balanced --cloud \
 uv run bilancio run examples/scenarios/simple_dealer.yaml \
   --html temp/result.html
 ```
+
+---
+
+## Sweep Pre-Flight Checklist
+
+**MANDATORY**: Before running ANY sweep (however simple), compute and present ALL checks below to the user. Do not run until the user confirms.
+
+### A. Scale & Cost
+
+1. **Total runs** = `len(kappas) × len(concentrations) × len(mus) × len(outside_mid_ratios) × arms`
+   - arms = 2 (passive+active), 3 (+ lender), or 4 (+ dealer-lender)
+2. **Estimated duration** = `total_runs / 4` minutes (cloud) or `total_runs × 45s` (local)
+3. **Estimated cost** = `total_runs × $0.0003` (cloud only)
+4. **Grid explosion guard**: if total_runs > 1000, warn and suggest LHS sampling
+
+### B. Parameter Sanity
+
+| Parameter | Valid range | Warn if |
+|-----------|-----------|---------|
+| κ (kappa) | (0, ∞) | any value > 10 or < 0.05 |
+| c (concentration) | (0, ∞) | any value > 10 or < 0.1 |
+| μ (mu) | [0, 1] | outside [0, 1] |
+| ρ (outside_mid_ratio) | (0, 1] | < 0.5 |
+| n_agents | [3, 1000] | > 500 (slow) or < 10 (noisy) |
+| maturity_days | [1, 100] | > 30 (slow) or = 1 (no temporal spread) |
+| No parameter list may be empty | — | empty list = zero runs |
+
+### C. Economic Viability Checks
+
+For each representative parameter combo (pick the median κ, ρ, etc.), compute:
+
+#### C1. Sell trade viability
+
+```
+p = 0.15                          # no-data prior (day 0)
+EV = (1 - p) = 0.85              # expected value per unit face
+O_short = 0.04 + 0.6 × p         # short bucket spread
+M = ρ × (1 - p)                  # credit-adjusted VBT mid
+B = M - O_short/2                # VBT bid (floor for dealer bid)
+
+spread_gap = EV - B = (1 - p) - ρ(1 - p) + O_short/2
+           = (1 - ρ)(1 - p) + O_short/2
+min_urgency = spread_gap / 0.10  # urgency_sensitivity = 0.10
+```
+
+- **min_urgency < 0.5**: Sells will clear for moderately stressed agents ✓
+- **min_urgency 0.5–1.0**: Sells only for very stressed agents (κ < 0.5) ⚠️
+- **min_urgency > 1.0**: Sells IMPOSSIBLE — urgency ratio capped at 1. Flag to user! ✗
+
+**Rule of thumb**: At ρ=1.0, min_urgency ≈ O_short/(2×0.10) ≈ 0.65 — sells require high stress. At ρ < 0.85, sells become very difficult. At ρ < 0.7, sells are near-impossible.
+
+#### C2. Buy trade viability
+
+```
+A = min(1, M + O_short/2)        # VBT ask (ceiling for dealer ask)
+buy_premium = 0.01               # buyer's minimum premium
+buy_clears = (EV > A + buy_premium)
+           = (1-p) > ρ(1-p) + O_short/2 + 0.01
+           = (1-ρ)(1-p) > O_short/2 + 0.01
+```
+
+- If ρ = 1.0: buys NEVER clear through risk assessment (LHS = 0). Buys only happen when risk_assessment is disabled or when the dealer interior ask is significantly below VBT ask (low inventory).
+- If ρ < 0.95: buys become viable as the (1-ρ) wedge grows.
+- **Flag**: If ρ = 1.0, inform user that buy trades will be rare/absent and trading effect will come primarily from sells.
+
+#### C3. Both-way trading (dealer inventory turnover)
+
+For the dealer to provide meaningful intermediation, BOTH sells and buys must occur:
+
+- **κ < 0.3**: Mostly sells (agents desperate), few buys (no surplus) → one-way flow
+- **0.3 ≤ κ ≤ 2**: Sweet spot — stressed agents sell, surplus agents buy
+- **κ > 2**: Few sells (agents flush), many potential buyers → one-way flow
+- **Flag**: If ALL κ values are > 2 or ALL are < 0.3, warn that trading is one-directional.
+
+#### C4. Dealer capacity not binding too quickly
+
+```
+dealer_cash ≈ dealer_share × system_value  # typically 5% of system
+K_star_initial = floor(dealer_cash / M)     # max tickets when empty
+expected_sells = n_agents × sell_fraction   # ~30% at κ=0.5
+```
+
+- If K_star_initial < 3: dealer capacity binds immediately → most trades passthrough to VBT
+- If K_star_initial > n_agents/2: dealer never hits capacity → spread is very tight
+- **Ideal**: K_star_initial between 5 and n_agents/4
+
+#### C5. Lending viability (if `--enable-lender` or `--enable-dealer-lender`)
+
+```
+p_lender = 1 / (1 + κ)           # lender's kappa-informed default estimate
+rate = profit_target + risk_premium_scale × p_lender
+     ≈ 0.05 + 0.22 × p_lender    # at risk_aversion=0.3
+```
+
+- **κ > 3**: p_lender < 0.25, rate ≈ 10% → loans cheap, but few borrowers need them
+- **0.3 < κ < 1.5**: p_lender 0.4–0.75, rate 15–22% → loans happen, rates meaningful
+- **κ < 0.3**: p_lender > 0.75, rate > 20% → very expensive, borrowers may prefer selling
+- **Flag**: If no κ value is below 1.5, lending will have minimal effect (no borrowers).
+
+#### C6. Temporal spread of activity
+
+Trading/lending should occur across multiple days, not just day 0:
+
+- **maturity_days = 1**: All obligations due on day 1 → trading ONLY on day 0. Flag! ✗
+- **maturity_days ≥ 5**: Obligations spread across days → multi-day trading ✓
+- **μ = 0**: All dues front-loaded → trading concentrated on early days ⚠️
+- **μ = 1**: All dues back-loaded → early days have no stress, late burst ⚠️
+- **μ ∈ [0.3, 0.7]**: Good temporal spread ✓
+- **buy_reserve_fraction = 1**: Buyers reserve all dues → buyers disappear after day 0 ✗
+- **buy_reserve_fraction ≤ 0.5**: Buyers remain eligible across days ✓
+
+#### C7. Trading effect detectable
+
+The sweep should be designed so the passive-vs-active comparison is meaningful:
+
+- **n_agents ≥ 10**: Enough agents for statistical significance ✓
+- **At least one κ < 1**: Need stress to see dealer impact ✓
+- **At least two κ values**: Need variation to see how dealer effect scales ✓
+- **maturity_days ≥ 5**: Enough days for trading to accumulate effect ✓
+
+### D. Pre-Flight Summary Template
+
+Present to user before running:
+
+```
+SWEEP PRE-FLIGHT CHECK
+──────────────────────
+Scale:    X pairs → Y runs → ~Z min, ~$W
+Params:   κ ∈ {…}, c ∈ {…}, μ ∈ {…}, ρ ∈ {…}
+          n={…}, maturity={…} days, arms={…}
+
+Economic viability:
+  Sells:    [✓ viable / ⚠️ marginal / ✗ impossible] (min_urgency=…)
+  Buys:     [✓ viable / ⚠️ marginal / ✗ impossible]
+  2-way:    [✓ both directions / ⚠️ one-directional]
+  Capacity: K_star_init=… [✓ balanced / ⚠️ binding / ⚠️ unused]
+  Lending:  [✓ active / ⚠️ minimal / n/a]
+  Temporal: [✓ multi-day / ⚠️ concentrated / ✗ single-day]
+  Effect:   [✓ detectable / ⚠️ noisy]
+
+Issues: [list any ✗ or ⚠️ items with explanation]
+Proceed? [waiting for user confirmation]
+```
