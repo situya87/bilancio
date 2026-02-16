@@ -21,23 +21,22 @@ References:
       if not subsystem.enabled: return [] check"
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.engines.system import System
-from bilancio.domain.agents import Bank, Household, CentralBank
-from bilancio.domain.agents.non_bank_lender import NonBankLender
+from bilancio.dealer.models import DEFAULT_BUCKETS
+from bilancio.dealer.simulation import DealerRingConfig
+from bilancio.domain.agents import Bank, CentralBank, Household
 from bilancio.domain.agents.firm import Firm
+from bilancio.domain.agents.non_bank_lender import NonBankLender
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
-from bilancio.engines.simulation import run_day
 from bilancio.engines.dealer_integration import (
-    initialize_dealer_subsystem,
     _get_agent_cash,
+    initialize_dealer_subsystem,
 )
 from bilancio.engines.lending import LendingConfig
-from bilancio.dealer.simulation import DealerRingConfig
-from bilancio.dealer.models import DEFAULT_BUCKETS
+from bilancio.engines.simulation import run_day
+from bilancio.engines.system import System
 
 
 def _make_dealer_config() -> DealerRingConfig:
@@ -141,7 +140,7 @@ def test_lending_then_disabled_dealer_preserves_cash():
     sys.mint_cash("H03", 50)
 
     # Create household payables so the dealer has traders with tickets
-    for (src, dst, due) in [("H01", "H02", 3), ("H02", "H03", 5), ("H03", "H01", 8)]:
+    for src, dst, due in [("H01", "H02", 3), ("H02", "H03", 5), ("H03", "H01", 8)]:
         pid = sys.new_contract_id("P")
         p = Payable(
             id=pid,
@@ -179,9 +178,7 @@ def test_lending_then_disabled_dealer_preserves_cash():
     total_cash_after = _total_system_cash(sys)
 
     # Check for lending events
-    loan_events = [
-        e for e in sys.state.events if e.get("kind") == "NonBankLoanCreated"
-    ]
+    loan_events = [e for e in sys.state.events if e.get("kind") == "NonBankLoanCreated"]
 
     if loan_events:
         # Lending happened: F01 must have gained cash (before any settlement)
@@ -192,9 +189,7 @@ def test_lending_then_disabled_dealer_preserves_cash():
             f"before={f01_cash_before}, after={f01_cash_after}"
         )
         # Lender should have less cash (transferred to borrower)
-        assert nbl_cash_after < nbl_cash_before, (
-            "NonBankLender cash should decrease after lending"
-        )
+        assert nbl_cash_after < nbl_cash_before, "NonBankLender cash should decrease after lending"
     else:
         # Lending did not happen (possibly no shortfall detected).
         # Key assertion: cash must NOT have decreased due to dealer sync bug.
@@ -247,7 +242,7 @@ def test_lending_effect_is_nonzero_in_nbfi_mode():
     household_ids = [f"H{i:02d}" for i in range(1, 6)]
     cash_amounts = [30, 40, 35, 50, 45]  # All well below the 100 obligation
 
-    for hid, cash_amt in zip(household_ids, cash_amounts):
+    for hid, cash_amt in zip(household_ids, cash_amounts, strict=False):
         h = Household(id=hid, name=f"Household {hid}", kind="household")
         sys.add_agent(h)
         sys.mint_cash(hid, cash_amt)
@@ -292,9 +287,7 @@ def test_lending_effect_is_nonzero_in_nbfi_mode():
         run_day(sys, enable_dealer=True, enable_lender=True)
 
     # Check for at least one lending event
-    loan_events = [
-        e for e in sys.state.events if e.get("kind") == "NonBankLoanCreated"
-    ]
+    loan_events = [e for e in sys.state.events if e.get("kind") == "NonBankLoanCreated"]
     assert len(loan_events) >= 1, (
         "Expected at least one NonBankLoanCreated event in 5 days of "
         "simulation with cash-constrained agents and an available lender. "

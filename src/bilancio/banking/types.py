@@ -4,10 +4,9 @@ Core types for the banking kernel.
 Based on "Banks-as-Dealers with deposits on demand" specification.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
-from typing import Optional
 
 
 class TicketType(Enum):
@@ -35,6 +34,7 @@ class Ticket:
     in force (r_D, r_L), and later generates interest, withdrawals,
     and repayments according to timing rules.
     """
+
     id: str
     ticket_type: TicketType
     amount: int  # In minor units (e.g., cents)
@@ -43,15 +43,15 @@ class Ticket:
 
     # For inter-bank transfers: which bank is the counterparty?
     # None for intra-bank transfers or loans
-    counterparty_bank_id: Optional[str] = None
+    counterparty_bank_id: str | None = None
 
     # Rate stamps at time of booking (2-day rates)
-    stamped_deposit_rate: Optional[Decimal] = None
-    stamped_loan_rate: Optional[Decimal] = None
+    stamped_deposit_rate: Decimal | None = None
+    stamped_loan_rate: Decimal | None = None
 
     # For withdrawals: which deposit cohort(s) to draw from
     # If None, use FIFO or bank's allocation rule
-    source_cohort_key: Optional[tuple[int, str]] = None
+    source_cohort_key: tuple[int, str] | None = None
 
 
 @dataclass
@@ -65,6 +65,7 @@ class DepositCohort:
     Interest is credited every 2 days (at τ+2, τ+4, ...) while the
     deposit remains outstanding, as a deposit-only leg (no R movement).
     """
+
     issuance_day: int
     origin: str  # "payment" or "loan"
     principal: int  # Remaining principal (decreases with withdrawals)
@@ -74,7 +75,7 @@ class DepositCohort:
     interest_accrued: int = 0
 
     # Track which interest periods have been credited
-    last_interest_day: Optional[int] = None
+    last_interest_day: int | None = None
 
     @property
     def total_balance(self) -> int:
@@ -110,6 +111,7 @@ class LoanCohort:
     All loans repay at t+10 (single bullet repayment).
     Repayment = (1 + r_L) × principal, paid in reserves.
     """
+
     issuance_day: int
     principal: int
     stamped_rate: Decimal  # 2-day loan rate at issuance
@@ -133,6 +135,7 @@ class CBBorrowingCohort:
     CB borrowing is for 2 days at rate i_B.
     Repayment at t+2: (1 + i_B) × principal.
     """
+
     issuance_day: int
     principal: int
     cb_rate: Decimal  # i_B at time of borrowing
@@ -155,10 +158,11 @@ class ScheduledLeg:
 
     Used for building the 10-day reserve projection.
     """
+
     day: int
     amount: int  # Positive = inflow, negative = outflow
     leg_type: str  # "cb_repay", "cb_remuneration", "loan_repay", "deposit_interest"
-    source_cohort: Optional[str] = None  # Description of originating cohort
+    source_cohort: str | None = None  # Description of originating cohort
 
 
 @dataclass
@@ -169,6 +173,7 @@ class ClientAccount:
     Tracks the client's deposits and loans at this specific bank.
     In a full system this would link to the client agent.
     """
+
     client_id: str
     bank_id: str
 
@@ -187,13 +192,14 @@ class Quote:
 
     These are 2-day effective rates on the funding plane.
     """
+
     deposit_rate: Decimal  # r_D - what the bank pays on deposits (bid)
     loan_rate: Decimal  # r_L - what the bank charges on loans (ask)
     day: int
     ticket_number: int = 0  # Which ticket these quotes are for
 
     # Diagnostic info
-    inventory: Optional[int] = None  # x = R_{t+2} - R^tar
-    cash_tightness: Optional[Decimal] = None  # L*
-    risk_index: Optional[Decimal] = None  # ρ
-    midline: Optional[Decimal] = None  # m^(2)_bank
+    inventory: int | None = None  # x = R_{t+2} - R^tar
+    cash_tightness: Decimal | None = None  # L*
+    risk_index: Decimal | None = None  # ρ
+    midline: Decimal | None = None  # m^(2)_bank

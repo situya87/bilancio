@@ -25,6 +25,7 @@ def retry_transient(
         base_delay: Base delay in seconds (doubles each retry).
         retryable: Exception types that trigger a retry.
     """
+
     def decorator(fn: F) -> F:
         @wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -32,13 +33,19 @@ def retry_transient(
                 try:
                     return fn(*args, **kwargs)
                 except retryable as exc:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     logger.warning(
                         "%s failed (attempt %d/%d): %s — retrying in %.1fs",
-                        fn.__qualname__, attempt + 1, max_retries + 1, exc, delay,
+                        fn.__qualname__,
+                        attempt + 1,
+                        max_retries + 1,
+                        exc,
+                        delay,
                     )
                     time.sleep(delay)
             # Final attempt — let any exception propagate
             return fn(*args, **kwargs)
+
         return wrapper  # type: ignore[return-value]
+
     return decorator

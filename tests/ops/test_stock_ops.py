@@ -1,18 +1,19 @@
 """Tests for stock operation primitives."""
 
-import pytest
 from decimal import Decimal
 
-from bilancio.engines.system import System
+import pytest
+
+from bilancio.core.errors import ValidationError
 from bilancio.domain.agents.firm import Firm
 from bilancio.domain.goods import StockLot
+from bilancio.engines.system import System
 from bilancio.ops.primitives_stock import (
-    stock_fungible_key,
-    split_stock,
-    merge_stock,
     consume_stock,
+    merge_stock,
+    split_stock,
+    stock_fungible_key,
 )
-from bilancio.core.errors import ValidationError
 
 
 def make_system_with_stock(sku="WIDGET", quantity=100, unit_price=Decimal("10.00"), divisible=True):
@@ -21,7 +22,9 @@ def make_system_with_stock(sku="WIDGET", quantity=100, unit_price=Decimal("10.00
     with system.setup():
         f1 = Firm(id="F1", name="Firm1", kind="firm")
         system.add_agent(f1)
-    stock_id = system.create_stock("F1", sku=sku, quantity=quantity, unit_price=unit_price, divisible=divisible)
+    stock_id = system.create_stock(
+        "F1", sku=sku, quantity=quantity, unit_price=unit_price, divisible=divisible
+    )
     return system, stock_id
 
 
@@ -48,7 +51,7 @@ class TestStockFungibleKey:
             quantity=100,
             unit_price=Decimal("10.00"),
             owner_id="F1",
-            divisible=True
+            divisible=True,
         )
         key = stock_fungible_key(lot)
         assert key == ("stock_lot", "WIDGET", "F1", Decimal("10.00"))
@@ -61,7 +64,7 @@ class TestStockFungibleKey:
             sku="WIDGET",
             quantity=100,
             unit_price=Decimal("10.00"),
-            owner_id="F1"
+            owner_id="F1",
         )
         lot2 = StockLot(
             id="S2",
@@ -69,7 +72,7 @@ class TestStockFungibleKey:
             sku="WIDGET",
             quantity=50,  # Different quantity should not matter
             unit_price=Decimal("10.00"),
-            owner_id="F1"
+            owner_id="F1",
         )
         assert stock_fungible_key(lot1) == stock_fungible_key(lot2)
 
@@ -81,7 +84,7 @@ class TestStockFungibleKey:
             sku="WIDGET",
             quantity=100,
             unit_price=Decimal("10.00"),
-            owner_id="F1"
+            owner_id="F1",
         )
         lot2 = StockLot(
             id="S2",
@@ -89,7 +92,7 @@ class TestStockFungibleKey:
             sku="GADGET",
             quantity=100,
             unit_price=Decimal("10.00"),
-            owner_id="F1"
+            owner_id="F1",
         )
         assert stock_fungible_key(lot1) != stock_fungible_key(lot2)
 
@@ -101,7 +104,7 @@ class TestStockFungibleKey:
             sku="WIDGET",
             quantity=100,
             unit_price=Decimal("10.00"),
-            owner_id="F1"
+            owner_id="F1",
         )
         lot2 = StockLot(
             id="S2",
@@ -109,7 +112,7 @@ class TestStockFungibleKey:
             sku="WIDGET",
             quantity=100,
             unit_price=Decimal("15.00"),
-            owner_id="F1"
+            owner_id="F1",
         )
         assert stock_fungible_key(lot1) != stock_fungible_key(lot2)
 
@@ -121,7 +124,7 @@ class TestStockFungibleKey:
             sku="WIDGET",
             quantity=100,
             unit_price=Decimal("10.00"),
-            owner_id="F1"
+            owner_id="F1",
         )
         lot2 = StockLot(
             id="S2",
@@ -129,7 +132,7 @@ class TestStockFungibleKey:
             sku="WIDGET",
             quantity=100,
             unit_price=Decimal("10.00"),
-            owner_id="F2"
+            owner_id="F2",
         )
         assert stock_fungible_key(lot1) != stock_fungible_key(lot2)
 
@@ -171,20 +174,17 @@ class TestSplitStock:
     def test_split_preserves_properties(self):
         """Test that split preserves all stock properties."""
         system, stock_id = make_system_with_stock(
-            sku="GADGET",
-            quantity=100,
-            unit_price=Decimal("25.50"),
-            divisible=True
+            sku="GADGET", quantity=100, unit_price=Decimal("25.50"), divisible=True
         )
 
         new_id = split_stock(system, stock_id, 40)
 
-        original = system.state.stocks[stock_id]
+        system.state.stocks[stock_id]
         new_stock = system.state.stocks[new_id]
 
         assert new_stock.sku == "GADGET"
         assert new_stock.unit_price == Decimal("25.50")
-        assert new_stock.divisible == True
+        assert new_stock.divisible
         assert new_stock.owner_id == "F1"
 
     def test_split_indivisible_lot_raises_error(self):
@@ -264,8 +264,12 @@ class TestMergeStock:
             f1 = Firm(id="F1", name="Firm1", kind="firm")
             system.add_agent(f1)
 
-        stock1_id = system.create_stock("F1", sku="WIDGET", quantity=100, unit_price=Decimal("10.00"))
-        stock2_id = system.create_stock("F1", sku="GADGET", quantity=50, unit_price=Decimal("10.00"))
+        stock1_id = system.create_stock(
+            "F1", sku="WIDGET", quantity=100, unit_price=Decimal("10.00")
+        )
+        stock2_id = system.create_stock(
+            "F1", sku="GADGET", quantity=50, unit_price=Decimal("10.00")
+        )
 
         with pytest.raises(ValidationError, match="not fungible"):
             merge_stock(system, stock1_id, stock2_id)
@@ -277,8 +281,12 @@ class TestMergeStock:
             f1 = Firm(id="F1", name="Firm1", kind="firm")
             system.add_agent(f1)
 
-        stock1_id = system.create_stock("F1", sku="WIDGET", quantity=100, unit_price=Decimal("10.00"))
-        stock2_id = system.create_stock("F1", sku="WIDGET", quantity=50, unit_price=Decimal("15.00"))
+        stock1_id = system.create_stock(
+            "F1", sku="WIDGET", quantity=100, unit_price=Decimal("10.00")
+        )
+        stock2_id = system.create_stock(
+            "F1", sku="WIDGET", quantity=50, unit_price=Decimal("15.00")
+        )
 
         with pytest.raises(ValidationError, match="not fungible"):
             merge_stock(system, stock1_id, stock2_id)
@@ -292,8 +300,12 @@ class TestMergeStock:
             system.add_agent(f1)
             system.add_agent(f2)
 
-        stock1_id = system.create_stock("F1", sku="WIDGET", quantity=100, unit_price=Decimal("10.00"))
-        stock2_id = system.create_stock("F2", sku="WIDGET", quantity=50, unit_price=Decimal("10.00"))
+        stock1_id = system.create_stock(
+            "F1", sku="WIDGET", quantity=100, unit_price=Decimal("10.00")
+        )
+        stock2_id = system.create_stock(
+            "F2", sku="WIDGET", quantity=50, unit_price=Decimal("10.00")
+        )
 
         with pytest.raises(ValidationError, match="not fungible"):
             merge_stock(system, stock1_id, stock2_id)
@@ -301,10 +313,7 @@ class TestMergeStock:
     def test_merge_preserves_keep_stock_properties(self):
         """Test that merge preserves the keep stock's properties."""
         system, stock1_id, stock2_id = make_system_with_two_stocks(
-            sku="GADGET",
-            qty1=100,
-            qty2=50,
-            price=Decimal("25.50")
+            sku="GADGET", qty1=100, qty2=50, price=Decimal("25.50")
         )
 
         original_stock1 = system.state.stocks[stock1_id]
@@ -344,7 +353,7 @@ class TestConsumeStock:
         assert events[0]["stock_id"] == stock_id
         assert events[0]["qty"] == 30
         assert events[0]["remaining"] == 70
-        assert events[0]["complete"] == False
+        assert not events[0]["complete"]
 
     def test_complete_consumption(self):
         """Test completely consuming a stock lot."""
@@ -362,7 +371,7 @@ class TestConsumeStock:
         assert len(events) == 1
         assert events[0]["stock_id"] == stock_id
         assert events[0]["qty"] == 100
-        assert events[0]["complete"] == True
+        assert events[0]["complete"]
 
     def test_consume_zero_quantity_raises_error(self):
         """Test that consuming zero quantity raises ValidationError."""

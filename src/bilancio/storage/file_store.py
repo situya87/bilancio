@@ -6,13 +6,12 @@ import csv
 import json
 import re
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Set, Union
+from typing import Any
 
-from .models import RunResult, RegistryEntry, RunArtifacts, RunStatus
-
+from .models import RegistryEntry, RunArtifacts, RunResult, RunStatus
 
 # Pattern for valid IDs (alphanumeric, dash, underscore, dot)
-_VALID_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+_VALID_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 
 
 def _validate_id(value: str, field_name: str) -> None:
@@ -52,7 +51,7 @@ class FileResultStore:
         run_id: str,
         name: str,
         content: bytes,
-        content_type: str = "application/octet-stream"
+        content_type: str = "application/octet-stream",
     ) -> str:
         """Save artifact to file, return relative path."""
         run_dir = self._run_dir(experiment_id, run_id)
@@ -80,15 +79,13 @@ class FileResultStore:
             "status": result.status.value,
             "parameters": result.parameters,
             "metrics": result.metrics,
-            "artifacts": {
-                k: v for k, v in vars(result.artifacts).items() if v is not None
-            },
+            "artifacts": {k: v for k, v in vars(result.artifacts).items() if v is not None},
             "error": result.error,
             "execution_time_ms": result.execution_time_ms,
         }
         meta_path.write_text(json.dumps(meta, indent=2))
 
-    def load_run(self, experiment_id: str, run_id: str) -> Optional[RunResult]:
+    def load_run(self, experiment_id: str, run_id: str) -> RunResult | None:
         """Load run result from file."""
         meta_path = self._run_dir(experiment_id, run_id) / "result.json"
         if not meta_path.exists():
@@ -115,8 +112,10 @@ class FileResultStore:
         # Validate path doesn't escape base_dir (security: prevent path traversal)
         try:
             path.resolve().relative_to(self.base_dir.resolve())
-        except ValueError:
-            raise ValueError(f"Invalid artifact reference: path traversal detected in '{reference}'")
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid artifact reference: path traversal detected in '{reference}'"
+            ) from e
         return path.read_bytes()
 
 
@@ -125,15 +124,35 @@ class FileRegistryStore:
 
     # Default fields - will be extended dynamically
     DEFAULT_FIELDS = [
-        "run_id", "experiment_id", "phase", "status", "error",
+        "run_id",
+        "experiment_id",
+        "phase",
+        "status",
+        "error",
         # Common parameters
-        "seed", "n_agents", "kappa", "concentration", "mu", "monotonicity",
-        "maturity_days", "Q_total", "S1", "L0", "default_handling", "dealer_enabled",
+        "seed",
+        "n_agents",
+        "kappa",
+        "concentration",
+        "mu",
+        "monotonicity",
+        "maturity_days",
+        "Q_total",
+        "S1",
+        "L0",
+        "default_handling",
+        "dealer_enabled",
         # Common metrics
-        "phi_total", "delta_total", "time_to_stability",
+        "phi_total",
+        "delta_total",
+        "time_to_stability",
         # Common artifact paths
-        "scenario_yaml", "events_jsonl", "balances_csv", "metrics_csv",
-        "metrics_html", "run_html",
+        "scenario_yaml",
+        "events_jsonl",
+        "balances_csv",
+        "metrics_csv",
+        "metrics_html",
+        "run_html",
     ]
 
     def __init__(self, base_dir: Path | str):
@@ -152,11 +171,11 @@ class FileRegistryStore:
         registry_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Load existing entries
-        entries: Dict[str, Dict[str, str]] = {}
+        entries: dict[str, dict[str, str]] = {}
         fieldnames = list(self.DEFAULT_FIELDS)
 
         if registry_path.exists():
-            with open(registry_path, "r", newline="") as f:
+            with open(registry_path, newline="") as f:
                 reader = csv.DictReader(f)
                 if reader.fieldnames:
                     fieldnames = list(reader.fieldnames)
@@ -164,7 +183,7 @@ class FileRegistryStore:
                     entries[row["run_id"]] = dict(row)
 
         # Build row from entry
-        new_row: Dict[str, str] = {
+        new_row: dict[str, str] = {
             "run_id": entry.run_id,
             "experiment_id": entry.experiment_id,
             "status": entry.status.value,
@@ -196,34 +215,32 @@ class FileRegistryStore:
             for r in entries.values():
                 writer.writerow(r)
 
-    def get(self, experiment_id: str, run_id: str) -> Optional[RegistryEntry]:
+    def get(self, experiment_id: str, run_id: str) -> RegistryEntry | None:
         """Get registry entry by ID."""
         registry_path = self._registry_path(experiment_id)
         if not registry_path.exists():
             return None
 
-        with open(registry_path, "r", newline="") as f:
+        with open(registry_path, newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 if row["run_id"] == run_id:
                     return self._row_to_entry(row)
         return None
 
-    def list_runs(self, experiment_id: str) -> List[str]:
+    def list_runs(self, experiment_id: str) -> list[str]:
         """List all run IDs."""
         registry_path = self._registry_path(experiment_id)
         if not registry_path.exists():
             return []
 
-        with open(registry_path, "r", newline="") as f:
+        with open(registry_path, newline="") as f:
             reader = csv.DictReader(f)
             return [row["run_id"] for row in reader]
 
     def get_completed_keys(
-        self,
-        experiment_id: str,
-        key_fields: Optional[List[str]] = None
-    ) -> Set[Any]:
+        self, experiment_id: str, key_fields: list[str] | None = None
+    ) -> set[Any]:
         """Get completed parameter keys for resumption."""
         if key_fields is None:
             key_fields = ["seed", "kappa", "concentration"]
@@ -233,11 +250,11 @@ class FileRegistryStore:
             return set()
 
         completed = set()
-        with open(registry_path, "r", newline="") as f:
+        with open(registry_path, newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 if row.get("status") == "completed":
-                    key_values: List[Union[int, float, str]] = []
+                    key_values: list[int | float | str] = []
                     for field in key_fields:
                         val = row.get(field, "")
                         # Try to parse as number for consistent hashing
@@ -252,44 +269,60 @@ class FileRegistryStore:
         return completed
 
     def query(
-        self,
-        experiment_id: str,
-        filters: Optional[Dict[str, Any]] = None
-    ) -> List[RegistryEntry]:
+        self, experiment_id: str, filters: dict[str, Any] | None = None
+    ) -> list[RegistryEntry]:
         """Query registry with filters."""
         registry_path = self._registry_path(experiment_id)
         if not registry_path.exists():
             return []
 
         results = []
-        with open(registry_path, "r", newline="") as f:
+        with open(registry_path, newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 if filters:
-                    match = all(
-                        str(row.get(k, "")) == str(v)
-                        for k, v in filters.items()
-                    )
+                    match = all(str(row.get(k, "")) == str(v) for k, v in filters.items())
                     if not match:
                         continue
                 results.append(self._row_to_entry(row))
         return results
 
-    def _row_to_entry(self, row: Dict[str, str]) -> RegistryEntry:
+    def _row_to_entry(self, row: dict[str, str]) -> RegistryEntry:
         """Convert CSV row to RegistryEntry."""
         # Known parameter, metric, and artifact keys
-        param_keys = {"phase", "seed", "n_agents", "kappa", "concentration", "mu",
-                      "monotonicity", "maturity_days", "Q_total", "S1", "L0",
-                      "default_handling", "dealer_enabled"}
+        param_keys = {
+            "phase",
+            "seed",
+            "n_agents",
+            "kappa",
+            "concentration",
+            "mu",
+            "monotonicity",
+            "maturity_days",
+            "Q_total",
+            "S1",
+            "L0",
+            "default_handling",
+            "dealer_enabled",
+        }
         metric_keys = {"phi_total", "delta_total", "time_to_stability"}
-        artifact_keys = {"scenario_yaml", "events_jsonl", "balances_csv",
-                        "metrics_csv", "metrics_json", "metrics_html", "run_html",
-                        "dealer_metrics_json", "trades_csv", "repayment_events_csv"}
+        artifact_keys = {
+            "scenario_yaml",
+            "events_jsonl",
+            "balances_csv",
+            "metrics_csv",
+            "metrics_json",
+            "metrics_html",
+            "run_html",
+            "dealer_metrics_json",
+            "trades_csv",
+            "repayment_events_csv",
+        }
         meta_keys = {"run_id", "experiment_id", "status", "error"}
 
-        parameters: Dict[str, Any] = {}
-        metrics: Dict[str, Any] = {}
-        artifact_paths: Dict[str, str] = {}
+        parameters: dict[str, Any] = {}
+        metrics: dict[str, Any] = {}
+        artifact_paths: dict[str, str] = {}
 
         for k, v in row.items():
             if not v or k in meta_keys:

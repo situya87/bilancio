@@ -5,7 +5,6 @@ from decimal import Decimal
 import pytest
 
 from bilancio.information.channels import (
-    Channel,
     InstitutionalChannel,
     MarketDerivedChannel,
     NetworkDerivedChannel,
@@ -21,7 +20,6 @@ from bilancio.information.noise import (
     SampleNoise,
 )
 from bilancio.information.profile import CategoryAccess
-
 
 # ── SelfDerivedChannel construction & validation ─────────────────────────
 
@@ -212,26 +210,20 @@ class TestDerivNoiseMarketDerived:
 
     def test_staleness_dominates(self):
         """staleness=5 → lag_error=0.25; thickness=100 → thick_error=0.10. Lag dominates."""
-        noise = derive_noise(
-            MarketDerivedChannel(market_thickness=100, staleness_days=5)
-        )
+        noise = derive_noise(MarketDerivedChannel(market_thickness=100, staleness_days=5))
         assert isinstance(noise, LagNoise)
         assert noise.lag_days == 5
 
     def test_thickness_dominates(self):
         """staleness=1 → lag_error=0.05; thickness=4 → thick_error=0.50. Thickness dominates."""
-        noise = derive_noise(
-            MarketDerivedChannel(market_thickness=4, staleness_days=1)
-        )
+        noise = derive_noise(MarketDerivedChannel(market_thickness=4, staleness_days=1))
         assert isinstance(noise, EstimationNoise)
         assert noise.error_fraction == Decimal("0.50")
 
     def test_equal_errors_lag_wins(self):
         """When lag_error == thickness_error AND staleness > 0, lag dominates (>=)."""
         # staleness=2 → lag_error=0.10; thickness=100 → thick_error=0.10. Equal → lag.
-        noise = derive_noise(
-            MarketDerivedChannel(market_thickness=100, staleness_days=2)
-        )
+        noise = derive_noise(MarketDerivedChannel(market_thickness=100, staleness_days=2))
         assert isinstance(noise, LagNoise)
         assert noise.lag_days == 2
 
@@ -274,26 +266,20 @@ class TestDerivNoiseInstitutional:
 
     def test_staleness_dominates(self):
         """staleness=10 → lag_error=0.50; coverage=0.8 → gap=0.20. Lag dominates."""
-        noise = derive_noise(
-            InstitutionalChannel(staleness_days=10, coverage=Decimal("0.8"))
-        )
+        noise = derive_noise(InstitutionalChannel(staleness_days=10, coverage=Decimal("0.8")))
         assert isinstance(noise, LagNoise)
         assert noise.lag_days == 10
 
     def test_coverage_gap_dominates(self):
         """staleness=1 → lag_error=0.05; coverage=0.3 → gap=0.70. Coverage dominates."""
-        noise = derive_noise(
-            InstitutionalChannel(staleness_days=1, coverage=Decimal("0.3"))
-        )
+        noise = derive_noise(InstitutionalChannel(staleness_days=1, coverage=Decimal("0.3")))
         assert isinstance(noise, SampleNoise)
         assert noise.sample_rate == Decimal("0.3")
 
     def test_equal_errors_lag_wins(self):
         """When lag_error == coverage_gap AND staleness > 0, lag dominates (>=)."""
         # staleness=4 → lag_error=0.20; coverage=0.8 → gap=0.20. Equal → lag.
-        noise = derive_noise(
-            InstitutionalChannel(staleness_days=4, coverage=Decimal("0.8"))
-        )
+        noise = derive_noise(InstitutionalChannel(staleness_days=4, coverage=Decimal("0.8")))
         assert isinstance(noise, LagNoise)
         assert noise.lag_days == 4
 
@@ -329,9 +315,7 @@ class TestCategoryFromChannel:
         assert isinstance(ca.noise, EstimationNoise)
 
     def test_institutional_channel(self):
-        ca = category_from_channel(
-            InstitutionalChannel(staleness_days=10, coverage=Decimal("0.8"))
-        )
+        ca = category_from_channel(InstitutionalChannel(staleness_days=10, coverage=Decimal("0.8")))
         assert ca.level == AccessLevel.NOISY
         assert isinstance(ca.noise, LagNoise)
 
@@ -343,11 +327,13 @@ class TestLenderChannelBased:
     @pytest.fixture
     def realistic(self):
         from bilancio.information.presets import LENDER_REALISTIC
+
         return LENDER_REALISTIC
 
     @pytest.fixture
     def channel_based(self):
         from bilancio.information.presets import LENDER_CHANNEL_BASED
+
         return LENDER_CHANNEL_BASED
 
     def test_cash_noisy(self, channel_based):
@@ -365,21 +351,15 @@ class TestLenderChannelBased:
         assert channel_based.counterparty_net_worth.noise.error_fraction == Decimal("0.20")
 
     def test_default_history_sample_noise(self, channel_based):
-        assert isinstance(
-            channel_based.counterparty_default_history.noise, SampleNoise
-        )
-        assert channel_based.counterparty_default_history.noise.sample_rate == Decimal(
-            "0.7"
-        )
+        assert isinstance(channel_based.counterparty_default_history.noise, SampleNoise)
+        assert channel_based.counterparty_default_history.noise.sample_rate == Decimal("0.7")
 
     def test_assets_aggregate_only(self, channel_based):
         """Structural constraint: still AggregateOnlyNoise (not channel-derived)."""
         assert isinstance(channel_based.counterparty_assets.noise, AggregateOnlyNoise)
 
     def test_liabilities_aggregate_only(self, channel_based):
-        assert isinstance(
-            channel_based.counterparty_liabilities.noise, AggregateOnlyNoise
-        )
+        assert isinstance(channel_based.counterparty_liabilities.noise, AggregateOnlyNoise)
 
     def test_market_prices_none(self, channel_based):
         """Lender still has no market access."""
@@ -465,7 +445,7 @@ class TestBackwardCompatibility:
 class TestChannelServiceIntegration:
     def test_channel_based_profile_works_with_service(self):
         """A channel-based preset can be used with InformationService."""
-        from bilancio.information import LENDER_CHANNEL_BASED, InformationService
+        from bilancio.information import LENDER_CHANNEL_BASED
 
         # InformationService requires a System, but we can at least verify
         # that the profile is accepted without error during construction
@@ -482,22 +462,23 @@ class TestExports:
     def test_channel_types_importable_from_init(self):
         from bilancio.information import (
             SelfDerivedChannel,
-            MarketDerivedChannel,
-            NetworkDerivedChannel,
-            InstitutionalChannel,
         )
+
         # Just verify they import without error
         assert SelfDerivedChannel is not None
 
     def test_functions_importable_from_init(self):
         from bilancio.information import category_from_channel, derive_noise
+
         assert category_from_channel is not None
         assert derive_noise is not None
 
     def test_preset_importable_from_init(self):
         from bilancio.information import LENDER_CHANNEL_BASED
+
         assert LENDER_CHANNEL_BASED is not None
 
     def test_channel_union_importable(self):
         from bilancio.information import Channel
+
         assert Channel is not None

@@ -8,26 +8,27 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional
 
 
 @dataclass(frozen=True)
 class SystemView:
     """Snapshot of system-wide conditions."""
+
     day: int
-    aggregate_default_rate: Optional[Decimal] = None
-    system_liquidity: Optional[int] = None
+    aggregate_default_rate: Decimal | None = None
+    system_liquidity: int | None = None
 
 
 @dataclass(frozen=True)
 class CounterpartyView:
     """Snapshot of a single counterparty's observable state."""
+
     agent_id: str
     day: int
-    cash: Optional[int] = None
-    obligations: Optional[int] = None
-    net_worth: Optional[int] = None
-    default_probability: Optional[Decimal] = None
+    cash: int | None = None
+    obligations: int | None = None
+    net_worth: int | None = None
+    default_probability: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -37,16 +38,18 @@ class InstrumentView:
     Sparse in Phase 1 — dealer quote data not yet queryable
     through the service.
     """
+
     day: int
 
 
 @dataclass(frozen=True)
 class TransactionView:
     """Snapshot of counterparty x instrument specific information."""
+
     agent_id: str
     day: int
-    bilateral_exposure: Optional[int] = None
-    total_exposure: Optional[int] = None
+    bilateral_exposure: int | None = None
+    total_exposure: int | None = None
 
 
 __all__ = [

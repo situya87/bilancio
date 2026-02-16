@@ -9,21 +9,22 @@ Tests cover:
 5. CentralBank corridor parameters
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.engines.system import System
-from bilancio.domain.agents.central_bank import CentralBank
+import pytest
+
+from bilancio.core.errors import ValidationError
 from bilancio.domain.agents.bank import Bank
+from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.domain.instruments.means_of_payment import ReserveDeposit
-from bilancio.core.errors import ValidationError
-
+from bilancio.engines.system import System
 
 # =============================================================================
 # CBLoan Instrument Tests
 # =============================================================================
+
 
 class TestCBLoanInstrument:
     """Tests for the CBLoan instrument type."""
@@ -61,8 +62,8 @@ class TestCBLoanInstrument:
 
         assert not loan.is_due(0)  # Not due on issuance day
         assert not loan.is_due(1)  # Not due day before maturity
-        assert loan.is_due(2)      # Due on maturity day
-        assert loan.is_due(3)      # Due after maturity day
+        assert loan.is_due(2)  # Due on maturity day
+        assert loan.is_due(3)  # Due after maturity day
 
     def test_cb_loan_different_rates(self):
         """Test CBLoan with different interest rates."""
@@ -97,6 +98,7 @@ class TestCBLoanInstrument:
 # Reserve Interest Accrual Tests
 # =============================================================================
 
+
 class TestReserveInterest:
     """Tests for reserve deposit interest accrual."""
 
@@ -115,10 +117,10 @@ class TestReserveInterest:
 
         assert reserve.next_interest_day() == 2  # 0 + 2
         assert reserve.compute_interest() == 100  # 10000 * 0.01
-        assert reserve.is_interest_due(0) == False
-        assert reserve.is_interest_due(1) == False
-        assert reserve.is_interest_due(2) == True
-        assert reserve.is_interest_due(3) == True
+        assert not reserve.is_interest_due(0)
+        assert not reserve.is_interest_due(1)
+        assert reserve.is_interest_due(2)
+        assert reserve.is_interest_due(3)
 
     def test_reserve_without_interest(self):
         """Test ReserveDeposit without interest (backwards compatible)."""
@@ -134,7 +136,7 @@ class TestReserveInterest:
 
         assert reserve.next_interest_day() is None
         assert reserve.compute_interest() == 0
-        assert reserve.is_interest_due(100) == False
+        assert not reserve.is_interest_due(100)
 
     def test_reserve_interest_day_tracking(self):
         """Test that last_interest_day updates affect next_interest_day."""
@@ -164,6 +166,7 @@ class TestReserveInterest:
 # =============================================================================
 # CentralBank Agent Tests
 # =============================================================================
+
 
 class TestCentralBankCorridor:
     """Tests for CentralBank corridor parameters."""
@@ -213,8 +216,8 @@ class TestCentralBankCorridor:
         """Test CB configuration flags."""
         # Default: both enabled
         cb_default = CentralBank(id="CB", name="CB")
-        assert cb_default.issues_cash == True
-        assert cb_default.reserves_accrue_interest == True
+        assert cb_default.issues_cash
+        assert cb_default.reserves_accrue_interest
 
         # Disabled
         cb_custom = CentralBank(
@@ -223,13 +226,14 @@ class TestCentralBankCorridor:
             issues_cash=False,
             reserves_accrue_interest=False,
         )
-        assert cb_custom.issues_cash == False
-        assert cb_custom.reserves_accrue_interest == False
+        assert not cb_custom.issues_cash
+        assert not cb_custom.reserves_accrue_interest
 
 
 # =============================================================================
 # CB Lending Facility Tests
 # =============================================================================
+
 
 class TestCBLendingFacility:
     """Tests for CB lending operations."""
@@ -262,7 +266,8 @@ class TestCBLendingFacility:
 
         # Check reserves created
         bank_reserves = sum(
-            c.amount for c in self.sys.state.contracts.values()
+            c.amount
+            for c in self.sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert bank_reserves == 10000
@@ -280,7 +285,8 @@ class TestCBLendingFacility:
 
         # Find the reserve
         reserve = next(
-            c for c in self.sys.state.contracts.values()
+            c
+            for c in self.sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
 
@@ -309,6 +315,7 @@ class TestCBLendingFacility:
 # =============================================================================
 # CB Loan Repayment Tests
 # =============================================================================
+
 
 class TestCBLoanRepayment:
     """Tests for CB loan repayment."""
@@ -343,7 +350,8 @@ class TestCBLoanRepayment:
 
         # Bank should have remaining reserves
         bank_reserves = sum(
-            c.amount for c in self.sys.state.contracts.values()
+            c.amount
+            for c in self.sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert bank_reserves == 100  # 10400 - 10300
@@ -392,6 +400,7 @@ class TestCBLoanRepayment:
 # Reserve Interest Crediting Tests
 # =============================================================================
 
+
 class TestReserveInterestCrediting:
     """Tests for system-wide reserve interest crediting."""
 
@@ -423,7 +432,8 @@ class TestReserveInterestCrediting:
 
         # Bank should have original + interest
         bank_reserves = sum(
-            c.amount for c in self.sys.state.contracts.values()
+            c.amount
+            for c in self.sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert bank_reserves == 10100
@@ -440,11 +450,13 @@ class TestReserveInterestCrediting:
         assert total_interest == 150  # 100 + 50
 
         b1_reserves = sum(
-            c.amount for c in self.sys.state.contracts.values()
+            c.amount
+            for c in self.sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         b2_reserves = sum(
-            c.amount for c in self.sys.state.contracts.values()
+            c.amount
+            for c in self.sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B2"
         )
 
@@ -463,7 +475,8 @@ class TestReserveInterestCrediting:
         assert total_interest == 0
 
         bank_reserves = sum(
-            c.amount for c in self.sys.state.contracts.values()
+            c.amount
+            for c in self.sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert bank_reserves == 10000
@@ -518,6 +531,7 @@ class TestReserveInterestCrediting:
 # Integration Tests
 # =============================================================================
 
+
 class TestCBCorridorIntegration:
     """Integration tests for the full CB corridor workflow."""
 
@@ -560,7 +574,8 @@ class TestCBCorridorIntegration:
 
         # Bank should have: 10100 + 200 - 10300 = 0
         bank_reserves = sum(
-            c.amount for c in sys.state.contracts.values()
+            c.amount
+            for c in sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert bank_reserves == 0
@@ -586,7 +601,7 @@ class TestCBCorridorIntegration:
         sys.mint_reserves_with_interest("B1", 20000, day=0)
 
         # Bank2 needs to borrow
-        loan_id = sys.cb_lend_reserves("B2", 10000, day=0)
+        sys.cb_lend_reserves("B2", 10000, day=0)
 
         # Day 2: Both earn/owe
         interest = sys.credit_reserve_interest(day=2)
@@ -600,7 +615,8 @@ class TestCBCorridorIntegration:
 
         # Check B1 earning at floor
         b1_reserves = sum(
-            c.amount for c in sys.state.contracts.values()
+            c.amount
+            for c in sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert b1_reserves == 20200  # 20000 + 200

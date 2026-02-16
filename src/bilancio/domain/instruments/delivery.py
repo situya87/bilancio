@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from decimal import Decimal
+
 from bilancio.domain.instruments.base import Instrument, InstrumentKind
+
 
 @dataclass
 class DeliveryObligation(Instrument):
@@ -24,8 +26,9 @@ class DeliveryObligation(Instrument):
     @property
     def valued_amount(self) -> Decimal:
         from decimal import Decimal as D
+
         return D(str(self.amount)) * self.unit_price
-        
+
     def validate_type_invariants(self) -> None:
         # Standard bilateral instrument validation (holder != issuer)
         super().validate_type_invariants()

@@ -1,8 +1,7 @@
 """Configuration for cloud execution."""
 
-from dataclasses import dataclass, field
 import os
-from typing import Optional
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -27,12 +26,10 @@ class CloudConfig:
     timeout_seconds: int = field(
         default_factory=lambda: int(os.getenv("BILANCIO_CLOUD_TIMEOUT", "600"))
     )
-    memory_mb: int = field(
-        default_factory=lambda: int(os.getenv("BILANCIO_CLOUD_MEMORY", "2048"))
-    )
+    memory_mb: int = field(default_factory=lambda: int(os.getenv("BILANCIO_CLOUD_MEMORY", "2048")))
     max_parallel: int = field(
         default_factory=lambda: int(os.getenv("BILANCIO_CLOUD_MAX_PARALLEL", "50"))
     )
 
     # GPU configuration (for future ML workloads)
-    gpu: Optional[str] = None
+    gpu: str | None = None

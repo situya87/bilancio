@@ -17,8 +17,11 @@ def deposit_cash(system: System, customer_id: str, bank_id: str, amount: int) ->
     # collect payer cash, splitting as needed
     with atomic(system):
         remaining = amount
-        cash_ids = [cid for cid in list(system.state.agents[customer_id].asset_ids)
-                    if system.state.contracts[cid].kind == InstrumentKind.CASH]
+        cash_ids = [
+            cid
+            for cid in list(system.state.agents[customer_id].asset_ids)
+            if system.state.contracts[cid].kind == InstrumentKind.CASH
+        ]
         moved_piece_ids = []
         for cid in cash_ids:
             instr = system.state.contracts[cid]
@@ -39,9 +42,16 @@ def deposit_cash(system: System, customer_id: str, bank_id: str, amount: int) ->
         # credit/ensure deposit
         dep_id = coalesce_deposits(system, customer_id, bank_id)
         system.state.contracts[dep_id].amount += amount
-        system.log("CashDeposited", customer=customer_id, bank=bank_id, amount=amount,
-                   cash_piece_ids=moved_piece_ids, deposit_id=dep_id)
+        system.log(
+            "CashDeposited",
+            customer=customer_id,
+            bank=bank_id,
+            amount=amount,
+            cash_piece_ids=moved_piece_ids,
+            deposit_id=dep_id,
+        )
         return dep_id
+
 
 def withdraw_cash(system: System, customer_id: str, bank_id: str, amount: int) -> str:
     if amount <= 0:
@@ -70,8 +80,11 @@ def withdraw_cash(system: System, customer_id: str, bank_id: str, amount: int) -
             raise ValidationError("insufficient deposit balance")
 
         # 2) move cash from bank vault → customer (require sufficient cash on hand)
-        bank_cash_ids = [cid for cid in list(system.state.agents[bank_id].asset_ids)
-                         if system.state.contracts[cid].kind == InstrumentKind.CASH]
+        bank_cash_ids = [
+            cid
+            for cid in list(system.state.agents[bank_id].asset_ids)
+            if system.state.contracts[cid].kind == InstrumentKind.CASH
+        ]
         remaining = amount
         moved_piece_ids = []
         for cid in bank_cash_ids:
@@ -87,14 +100,30 @@ def withdraw_cash(system: System, customer_id: str, bank_id: str, amount: int) -
             if remaining == 0:
                 break
         if remaining != 0:
-            raise ValidationError("bank has insufficient cash on hand (MVP: no auto conversion from reserves)")
+            raise ValidationError(
+                "bank has insufficient cash on hand (MVP: no auto conversion from reserves)"
+            )
 
-        system.log("CashWithdrawn", customer=customer_id, bank=bank_id, amount=amount, cash_piece_ids=moved_piece_ids)
+        system.log(
+            "CashWithdrawn",
+            customer=customer_id,
+            bank=bank_id,
+            amount=amount,
+            cash_piece_ids=moved_piece_ids,
+        )
         # 3) coalesce customer cash if you want tidy balances (optional)
         return "ok"
 
-def client_payment(system: System, payer_id: str, payer_bank: str, payee_id: str, payee_bank: str,
-                   amount: int, allow_cash_fallback: bool = False) -> str:
+
+def client_payment(
+    system: System,
+    payer_id: str,
+    payer_bank: str,
+    payee_id: str,
+    payee_bank: str,
+    amount: int,
+    allow_cash_fallback: bool = False,
+) -> str:
     if amount <= 0:
         raise ValidationError("amount must be positive")
     with atomic(system):
@@ -120,8 +149,11 @@ def client_payment(system: System, payer_id: str, payer_bank: str, payee_id: str
         # Optional fallback: use payer's cash for the remainder (real-world "pay cash")
         cash_paid = 0
         if remaining and allow_cash_fallback:
-            cash_ids = [cid for cid in list(system.state.agents[payer_id].asset_ids)
-                        if system.state.contracts[cid].kind == InstrumentKind.CASH]
+            cash_ids = [
+                cid
+                for cid in list(system.state.agents[payer_id].asset_ids)
+                if system.state.contracts[cid].kind == InstrumentKind.CASH
+            ]
             for cid in cash_ids:
                 instr = system.state.contracts[cid]
                 if instr.amount > remaining:
@@ -147,25 +179,26 @@ def client_payment(system: System, payer_id: str, payer_bank: str, payee_id: str
         if deposit_paid > 0:
             if payer_bank == payee_bank:
                 # Intra-bank payment (same bank)
-                system.log("IntraBankPayment", 
-                          payer=payer_id, 
-                          payee=payee_id, 
-                          bank=payer_bank, 
-                          amount=deposit_paid)
+                system.log(
+                    "IntraBankPayment",
+                    payer=payer_id,
+                    payee=payee_id,
+                    bank=payer_bank,
+                    amount=deposit_paid,
+                )
             else:
                 # Inter-bank payment (cross-bank, will need clearing)
-                system.log("ClientPayment", 
-                          payer=payer_id, 
-                          payer_bank=payer_bank,
-                          payee=payee_id, 
-                          payee_bank=payee_bank, 
-                          amount=deposit_paid)
-        
+                system.log(
+                    "ClientPayment",
+                    payer=payer_id,
+                    payer_bank=payer_bank,
+                    payee=payee_id,
+                    payee_bank=payee_bank,
+                    amount=deposit_paid,
+                )
+
         if cash_paid > 0:
             # Cash payment was used as fallback
-            system.log("CashPayment",
-                      payer=payer_id,
-                      payee=payee_id,
-                      amount=cash_paid)
+            system.log("CashPayment", payer=payer_id, payee=payee_id, amount=cash_paid)
 
         return dep_rx

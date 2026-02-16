@@ -8,14 +8,15 @@ This module enables traders to:
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, List, TYPE_CHECKING
-
-logger = logging.getLogger(__name__)
+from typing import TYPE_CHECKING, Any, cast
 
 from bilancio.core.ids import AgentId
+
 from .models import Ticket
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from bilancio.information.estimates import Estimate
@@ -40,13 +41,17 @@ class RiskAssessmentParams:
 
     lookback_window: int = 5
     smoothing_alpha: Decimal = Decimal("1.0")
-    base_risk_premium: Decimal = Decimal("0")  # Seller premium: 0 (selling converts uncertainty to certainty)
+    base_risk_premium: Decimal = Decimal(
+        "0"
+    )  # Seller premium: 0 (selling converts uncertainty to certainty)
     urgency_sensitivity: Decimal = Decimal("0.10")  # 10% sensitivity
     use_issuer_specific: bool = False
     buy_premium_multiplier: Decimal = Decimal("1.0")  # Buyers use same premium as sellers
     buy_risk_premium: Decimal = Decimal("0.01")  # Buyer premium: 1%
     default_observability: Decimal = Decimal("1.0")  # 0=ignore observed defaults, 1=full tracking
-    initial_prior: Decimal = Decimal("0.15")  # No-history default prior (can be overridden by informedness)
+    initial_prior: Decimal = Decimal(
+        "0.15"
+    )  # No-history default prior (can be overridden by informedness)
 
 
 class RiskAssessor:
@@ -72,10 +77,10 @@ class RiskAssessor:
         self.instrument_valuer = instrument_valuer
 
         # Track system-wide default history: (day, issuer_id, defaulted)
-        self.payment_history: List[tuple[int, AgentId, bool]] = []
+        self.payment_history: list[tuple[int, AgentId, bool]] = []
 
         # Track per-issuer history (if issuer-specific enabled)
-        self.issuer_history: Dict[AgentId, List[tuple[int, bool]]] = {}
+        self.issuer_history: dict[AgentId, list[tuple[int, bool]]] = {}
 
     def update_history(self, day: int, issuer_id: AgentId, defaulted: bool) -> None:
         """
@@ -147,7 +152,9 @@ class RiskAssessor:
         # obs=0.0: always return initial_prior regardless of observed data
         if self.params.default_observability == Decimal("1"):
             return p_default
-        return self.params.initial_prior + self.params.default_observability * (p_default - self.params.initial_prior)
+        return self.params.initial_prior + self.params.default_observability * (
+            p_default - self.params.initial_prior
+        )
 
     def expected_value(self, ticket: Ticket, current_day: int) -> Decimal:
         """
@@ -173,7 +180,10 @@ class RiskAssessor:
         return ev
 
     def estimate_default_prob_detail(
-        self, issuer_id: AgentId, current_day: int, estimator_id: str = "system",
+        self,
+        issuer_id: AgentId,
+        current_day: int,
+        estimator_id: str = "system",
     ) -> "Estimate":
         """Return an Estimate wrapping estimate_default_prob() with provenance."""
         from bilancio.information.estimates import Estimate
@@ -190,9 +200,7 @@ class RiskAssessor:
             ]
         else:
             recent = [
-                (d, defaulted)
-                for d, _, defaulted in self.payment_history
-                if d >= window_start
+                (d, defaulted) for d, _, defaulted in self.payment_history if d >= window_start
             ]
 
         defaults_count = sum(1 for _, defaulted in recent if defaulted)
@@ -220,7 +228,10 @@ class RiskAssessor:
         )
 
     def expected_value_detail(
-        self, ticket: Ticket, current_day: int, estimator_id: str = "system",
+        self,
+        ticket: Ticket,
+        current_day: int,
+        estimator_id: str = "system",
     ) -> "Estimate":
         """Return an Estimate wrapping expected_value() with provenance.
 
@@ -228,13 +239,15 @@ class RiskAssessor:
         ``value()`` method instead of using the built-in formula.
         """
         if self.instrument_valuer is not None:
-            ev_est: Estimate = self.instrument_valuer.value(ticket, current_day)
-            return ev_est
+            ev_est = self.instrument_valuer.value(ticket, current_day)
+            return cast("Estimate", ev_est)
         from bilancio.information.estimates import Estimate
 
         value = self.expected_value(ticket, current_day)
         p_default_est = self.estimate_default_prob_detail(
-            ticket.issuer_id, current_day, estimator_id,
+            ticket.issuer_id,
+            current_day,
+            estimator_id,
         )
 
         return Estimate(
@@ -289,8 +302,7 @@ class RiskAssessor:
 
         # Reduce threshold based on urgency
         threshold_eff = (
-            self.params.base_risk_premium
-            - self.params.urgency_sensitivity * urgency_ratio
+            self.params.base_risk_premium - self.params.urgency_sensitivity * urgency_ratio
         )
 
         return threshold_eff
@@ -383,7 +395,7 @@ class RiskAssessor:
 
         return should_accept
 
-    def get_diagnostics(self, current_day: int) -> Dict[str, Any]:
+    def get_diagnostics(self, current_day: int) -> dict[str, Any]:
         """
         Get diagnostic information about risk assessor state.
 
@@ -408,9 +420,7 @@ class RiskAssessor:
         total_defaults = sum(1 for _, _, defaulted in recent_payments if defaulted)
 
         system_default_rate = (
-            Decimal(total_defaults) / Decimal(total_payments)
-            if total_payments > 0
-            else Decimal(0)
+            Decimal(total_defaults) / Decimal(total_payments) if total_payments > 0 else Decimal(0)
         )
 
         return {

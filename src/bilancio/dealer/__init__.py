@@ -19,25 +19,6 @@ References:
 - Examples Document with programmatic assertions
 """
 
-from .models import (
-    TicketId,
-    BucketConfig,
-    DEFAULT_BUCKETS,
-    Ticket,
-    DealerState,
-    VBTState,
-    TraderState,
-)
-
-from .kernel import (
-    M_MIN,
-    KernelParams,
-    ExecutionResult,
-    recompute_dealer_state,
-    can_interior_buy,
-    can_interior_sell,
-)
-
 from .assertions import (
     EPSILON_CASH,
     EPSILON_QTY,
@@ -49,21 +30,34 @@ from .assertions import (
     assert_c6_anchor_timing,
     run_all_assertions,
 )
-
 from .events import EventLog
-
-from .trading import TradeExecutor
-
+from .kernel import (
+    M_MIN,
+    ExecutionResult,
+    KernelParams,
+    can_interior_buy,
+    can_interior_sell,
+    recompute_dealer_state,
+)
+from .models import (
+    DEFAULT_BUCKETS,
+    BucketConfig,
+    DealerState,
+    Ticket,
+    TicketId,
+    TraderState,
+    VBTState,
+)
+from .report import (
+    export_dealer_ring_html,
+    generate_dealer_ring_html,
+)
 from .simulation import (
     DaySnapshot,
     DealerRingConfig,
     DealerRingSimulation,
 )
-
-from .report import (
-    generate_dealer_ring_html,
-    export_dealer_ring_html,
-)
+from .trading import TradeExecutor
 
 __all__ = [
     # Models

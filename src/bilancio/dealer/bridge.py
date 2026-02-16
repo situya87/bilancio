@@ -13,14 +13,13 @@ the systems decoupled.
 """
 
 from decimal import Decimal
-from typing import Dict, List, Tuple, Set, Optional
 
-from bilancio.dealer.models import Ticket, TicketId, BucketConfig, DEFAULT_BUCKETS
-from bilancio.domain.instruments.credit import Payable
 from bilancio.core.ids import new_id
+from bilancio.dealer.models import BucketConfig, Ticket, TicketId
+from bilancio.domain.instruments.credit import Payable
 
 
-def assign_bucket(remaining_tau: int, bucket_configs: List[BucketConfig]) -> str:
+def assign_bucket(remaining_tau: int, bucket_configs: list[BucketConfig]) -> str:
     """
     Determine which maturity bucket a ticket belongs to based on remaining maturity.
 
@@ -59,11 +58,11 @@ def assign_bucket(remaining_tau: int, bucket_configs: List[BucketConfig]) -> str
 
 
 def payables_to_tickets(
-    payables: Dict[str, Payable],
+    payables: dict[str, Payable],
     current_day: int,
-    bucket_configs: List[BucketConfig],
+    bucket_configs: list[BucketConfig],
     ticket_size: Decimal = Decimal(1),
-) -> Tuple[Dict[TicketId, Ticket], Dict[str, List[str]]]:
+) -> tuple[dict[TicketId, Ticket], dict[str, list[str]]]:
     """
     Convert outstanding Payable contracts to tradeable Tickets.
 
@@ -90,8 +89,8 @@ def payables_to_tickets(
         - Serial numbers are assigned sequentially for deterministic tie-breaking
         - Amount is converted from minor units to major units by dividing by 100
     """
-    ticket_registry: Dict[TicketId, Ticket] = {}
-    payable_to_tickets: Dict[str, List[str]] = {}
+    ticket_registry: dict[TicketId, Ticket] = {}
+    payable_to_tickets: dict[str, list[str]] = {}
 
     for payable_id, payable in payables.items():
         # Validate payable hasn't matured
@@ -122,7 +121,7 @@ def payables_to_tickets(
         bucket_id = assign_bucket(remaining_tau, bucket_configs)
 
         # Create tickets for this payable
-        ticket_ids: List[str] = []
+        ticket_ids: list[str] = []
         for serial in range(num_tickets):
             ticket_id = new_id()
             ticket = Ticket(
@@ -144,9 +143,9 @@ def payables_to_tickets(
 
 
 def tickets_to_trader_holdings(
-    tickets: Dict[TicketId, Ticket],
-    agent_ids: Set[str],
-) -> Dict[str, List[Ticket]]:
+    tickets: dict[TicketId, Ticket],
+    agent_ids: set[str],
+) -> dict[str, list[Ticket]]:
     """
     Group tickets by their owner for agents that are traders.
 
@@ -165,7 +164,7 @@ def tickets_to_trader_holdings(
         - Returns empty list for agents with no tickets
         - Tickets are references to original objects (not copies)
     """
-    holdings: Dict[str, List[Ticket]] = {agent_id: [] for agent_id in agent_ids}
+    holdings: dict[str, list[Ticket]] = {agent_id: [] for agent_id in agent_ids}
 
     for ticket in tickets.values():
         if ticket.owner_id in agent_ids:
@@ -175,9 +174,9 @@ def tickets_to_trader_holdings(
 
 
 def apply_trade_results_to_payables(
-    payables: Dict[str, Payable],
-    ticket_to_payable: Dict[str, str],
-    trade_results: List[Dict[str, str]],
+    payables: dict[str, Payable],
+    ticket_to_payable: dict[str, str],
+    trade_results: list[dict[str, str]],
 ) -> None:
     """
     Apply dealer trade results back to main system by updating Payable holders.
@@ -208,8 +207,8 @@ def apply_trade_results_to_payables(
         KeyError: If ticket_id or payable_id not found in mappings
     """
     for result in trade_results:
-        ticket_id = result['ticket_id']
-        new_owner = result['new_owner']
+        ticket_id = result["ticket_id"]
+        new_owner = result["new_owner"]
 
         # Find the corresponding payable
         if ticket_id not in ticket_to_payable:

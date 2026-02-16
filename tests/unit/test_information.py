@@ -19,6 +19,9 @@ from decimal import Decimal
 import pytest
 
 from bilancio.information import (
+    LENDER_REALISTIC,
+    OMNISCIENT,
+    TRADER_BASIC,
     AccessLevel,
     AggregateOnlyNoise,
     BilateralOnlyNoise,
@@ -26,13 +29,9 @@ from bilancio.information import (
     EstimationNoise,
     InformationProfile,
     InformationService,
-    LENDER_REALISTIC,
     LagNoise,
-    OMNISCIENT,
     SampleNoise,
-    TRADER_BASIC,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 1. AccessLevel Enum
@@ -150,9 +149,7 @@ class TestInformationProfile:
     def test_custom_fields(self):
         p = InformationProfile(
             counterparty_cash=CategoryAccess(AccessLevel.NONE),
-            dealer_quotes=CategoryAccess(
-                AccessLevel.NOISY, EstimationNoise(Decimal("0.05"))
-            ),
+            dealer_quotes=CategoryAccess(AccessLevel.NOISY, EstimationNoise(Decimal("0.05"))),
         )
         assert p.counterparty_cash.level == AccessLevel.NONE
         assert p.dealer_quotes.level == AccessLevel.NOISY
@@ -208,9 +205,7 @@ class TestPresets:
 
     def test_trader_basic_history_is_noisy(self):
         assert TRADER_BASIC.counterparty_default_history.level == AccessLevel.NOISY
-        assert isinstance(
-            TRADER_BASIC.counterparty_default_history.noise, SampleNoise
-        )
+        assert isinstance(TRADER_BASIC.counterparty_default_history.noise, SampleNoise)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -225,10 +220,10 @@ def _build_system_for_info_tests(
     payable_due_day: int = 2,
 ):
     """Build a minimal system for InformationService tests."""
+    from bilancio.domain.agents.bank import Bank
     from bilancio.domain.agents.central_bank import CentralBank
     from bilancio.domain.agents.firm import Firm
     from bilancio.domain.agents.non_bank_lender import NonBankLender
-    from bilancio.domain.agents.bank import Bank
     from bilancio.domain.instruments.base import InstrumentKind
     from bilancio.domain.instruments.credit import Payable
     from bilancio.engines.system import System
@@ -386,12 +381,10 @@ class TestInformationServiceNoisy:
         """Noisy cash should be close to but different from true value."""
         system = _build_system_for_info_tests(firm_cash=1000)
         profile = InformationProfile(
-            counterparty_cash=CategoryAccess(
-                AccessLevel.NOISY, EstimationNoise(Decimal("0.10"))
-            ),
+            counterparty_cash=CategoryAccess(AccessLevel.NOISY, EstimationNoise(Decimal("0.10"))),
         )
         rng = random.Random(42)
-        info = InformationService(system, profile, observer_id="NBL01", rng=rng)
+        InformationService(system, profile, observer_id="NBL01", rng=rng)
 
         # Collect multiple samples
         values = []
@@ -412,9 +405,7 @@ class TestInformationServiceNoisy:
         """Noisy values should never go below zero."""
         system = _build_system_for_info_tests(firm_cash=10)
         profile = InformationProfile(
-            counterparty_cash=CategoryAccess(
-                AccessLevel.NOISY, EstimationNoise(Decimal("0.50"))
-            ),
+            counterparty_cash=CategoryAccess(AccessLevel.NOISY, EstimationNoise(Decimal("0.50"))),
         )
         for seed in range(100):
             rng = random.Random(seed)
@@ -475,19 +466,22 @@ class TestLenderWithInformationService:
         from bilancio.engines.lending import LendingConfig, run_lending_phase
 
         system = _build_system_for_info_tests(
-            lender_cash=10000, firm_cash=200, firm_payable_amount=1000,
+            lender_cash=10000,
+            firm_cash=200,
+            firm_payable_amount=1000,
         )
         # Default (no profile)
-        events_default = run_lending_phase(
-            system, 0, LendingConfig(horizon=3, min_shortfall=1)
-        )
+        events_default = run_lending_phase(system, 0, LendingConfig(horizon=3, min_shortfall=1))
 
         # Reset system state for fair comparison — need to rebuild
         system2 = _build_system_for_info_tests(
-            lender_cash=10000, firm_cash=200, firm_payable_amount=1000,
+            lender_cash=10000,
+            firm_cash=200,
+            firm_payable_amount=1000,
         )
         events_omniscient = run_lending_phase(
-            system2, 0,
+            system2,
+            0,
             LendingConfig(
                 horizon=3,
                 min_shortfall=1,
@@ -506,14 +500,17 @@ class TestLenderWithInformationService:
         from bilancio.engines.lending import LendingConfig, run_lending_phase
 
         system = _build_system_for_info_tests(
-            lender_cash=10000, firm_cash=200, firm_payable_amount=1000,
+            lender_cash=10000,
+            firm_cash=200,
+            firm_payable_amount=1000,
         )
         profile = InformationProfile(
             counterparty_cash=CategoryAccess(AccessLevel.NONE),
             counterparty_liabilities=CategoryAccess(AccessLevel.NONE),
         )
         events = run_lending_phase(
-            system, 0,
+            system,
+            0,
             LendingConfig(
                 horizon=3,
                 min_shortfall=1,
@@ -528,10 +525,13 @@ class TestLenderWithInformationService:
         from bilancio.engines.lending import LendingConfig, run_lending_phase
 
         system = _build_system_for_info_tests(
-            lender_cash=10000, firm_cash=200, firm_payable_amount=1000,
+            lender_cash=10000,
+            firm_cash=200,
+            firm_payable_amount=1000,
         )
         events = run_lending_phase(
-            system, 0,
+            system,
+            0,
             LendingConfig(
                 horizon=3,
                 min_shortfall=1,

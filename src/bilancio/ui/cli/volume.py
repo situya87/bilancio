@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
-import subprocess
 import json
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+import subprocess
+from datetime import datetime
+from typing import Any
 
 import click
 
+CLI_HANDLED_ERRORS = (
+    click.ClickException,
+    FileNotFoundError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+)
 
-def get_volume_contents(volume_name: str = "bilancio-results") -> List[Dict[str, Any]]:
+
+def get_volume_contents(volume_name: str = "bilancio-results") -> list[dict[str, Any]]:
     """Get contents of Modal Volume as list of dicts."""
     result = subprocess.run(
         ["uv", "run", "modal", "volume", "ls", volume_name, "--json"],
@@ -19,7 +30,7 @@ def get_volume_contents(volume_name: str = "bilancio-results") -> List[Dict[str,
     )
     if result.returncode != 0:
         raise click.ClickException(f"Failed to list volume: {result.stderr}")
-    contents: List[Dict[str, Any]] = json.loads(result.stdout)
+    contents: list[dict[str, Any]] = json.loads(result.stdout)
     return contents
 
 
@@ -57,8 +68,8 @@ def list_volume(volume_name: str) -> None:
     """List experiments in Modal Volume."""
     try:
         contents = get_volume_contents(volume_name)
-    except Exception as e:  # Intentionally broad: top-level CLI handler
-        raise click.ClickException(str(e))
+    except CLI_HANDLED_ERRORS as e:
+        raise click.ClickException(str(e)) from e
 
     if not contents:
         click.echo("Volume is empty.")
@@ -96,8 +107,8 @@ def list_volume(volume_name: str) -> None:
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 def cleanup(
     volume_name: str,
-    older_than: Optional[int],
-    pattern: Optional[str],
+    older_than: int | None,
+    pattern: str | None,
     dry_run: bool,
     yes: bool,
 ) -> None:
@@ -110,8 +121,8 @@ def cleanup(
     """
     try:
         contents = get_volume_contents(volume_name)
-    except Exception as e:  # Intentionally broad: top-level CLI handler
-        raise click.ClickException(str(e))
+    except CLI_HANDLED_ERRORS as e:
+        raise click.ClickException(str(e)) from e
 
     # Filter directories only
     experiments = [i for i in contents if i.get("Type") == "dir"]

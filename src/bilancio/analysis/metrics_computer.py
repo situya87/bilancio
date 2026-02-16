@@ -9,10 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from bilancio.storage.artifact_loaders import ArtifactLoader
-from bilancio.analysis.loaders import read_events_jsonl, read_balances_csv
 from bilancio.analysis.report import (
     compute_day_metrics,
     compute_run_level_metrics,
@@ -23,6 +21,7 @@ from bilancio.analysis.report import (
     write_intraday_csv,
     write_metrics_html,
 )
+from bilancio.storage.artifact_loaders import ArtifactLoader
 
 
 @dataclass
@@ -33,19 +32,19 @@ class MetricsBundle:
     or writing to output files.
     """
 
-    day_metrics: List[Dict[str, Any]]
+    day_metrics: list[dict[str, Any]]
     """Per-day metrics rows (S_t, Mbar_t, phi_t, etc.)."""
 
-    debtor_shares: List[Dict[str, Any]]
+    debtor_shares: list[dict[str, Any]]
     """Debtor shortfall shares (day, agent, DS_t)."""
 
-    intraday: List[Dict[str, Any]]
+    intraday: list[dict[str, Any]]
     """Intraday settlement steps (day, step, P_prefix, etc.)."""
 
-    summary: Dict[str, Any]
+    summary: dict[str, Any]
     """Aggregate summary from summarize_day_metrics (phi_total, delta_total, etc.)."""
 
-    run_level_metrics: Dict[str, Any] = field(default_factory=dict)
+    run_level_metrics: dict[str, Any] = field(default_factory=dict)
     """Run-level metrics (cascade, contagion, etc.)."""
 
 
@@ -78,8 +77,8 @@ class MetricsComputer:
 
     def compute(
         self,
-        artifacts: Dict[str, str],
-        day_list: Optional[List[int]] = None,
+        artifacts: dict[str, str],
+        day_list: list[int] | None = None,
     ) -> MetricsBundle:
         """Compute metrics from simulation artifacts.
 
@@ -107,7 +106,7 @@ class MetricsComputer:
         events = self._parse_events_from_text(events_text)
 
         # Load balances (optional, enables M_t and G_t computation)
-        balances_rows: Optional[List[Dict[str, Any]]] = None
+        balances_rows: list[dict[str, Any]] | None = None
         balances_ref = artifacts.get("balances_csv")
         if balances_ref and self.loader.exists(balances_ref):
             balances_text = self.loader.load_text(balances_ref)
@@ -141,9 +140,9 @@ class MetricsComputer:
         self,
         bundle: MetricsBundle,
         output_dir: Path,
-        title: Optional[str] = None,
-        subtitle: Optional[str] = None,
-    ) -> Dict[str, Path]:
+        title: str | None = None,
+        subtitle: str | None = None,
+    ) -> dict[str, Path]:
         """Write metrics bundle to output files.
 
         Args:
@@ -163,7 +162,7 @@ class MetricsComputer:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        paths: Dict[str, Path] = {}
+        paths: dict[str, Path] = {}
 
         # Write metrics CSV
         metrics_csv_path = output_dir / "metrics.csv"
@@ -200,15 +199,14 @@ class MetricsComputer:
 
         return paths
 
-    def _parse_events_from_text(self, text: str) -> List[Dict[str, Any]]:
+    def _parse_events_from_text(self, text: str) -> list[dict[str, Any]]:
         """Parse events from JSONL text content.
 
         This mirrors read_events_jsonl but works from text instead of file path.
         """
         import json
-        from decimal import Decimal
 
-        events: List[Dict[str, Any]] = []
+        events: list[dict[str, Any]] = []
         for line in text.splitlines():
             if not line.strip():
                 continue
@@ -229,7 +227,7 @@ class MetricsComputer:
             events.append(evt)
         return events
 
-    def _parse_balances_from_text(self, text: str) -> List[Dict[str, Any]]:
+    def _parse_balances_from_text(self, text: str) -> list[dict[str, Any]]:
         """Parse balances from CSV text content.
 
         This mirrors read_balances_csv but works from text instead of file path.
@@ -237,7 +235,7 @@ class MetricsComputer:
         import csv
         from io import StringIO
 
-        rows: List[Dict[str, Any]] = []
+        rows: list[dict[str, Any]] = []
         reader = csv.DictReader(StringIO(text))
         for row in reader:
             rows.append(dict(row))

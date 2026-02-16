@@ -16,7 +16,6 @@ from bilancio.domain.jurisdiction import (
     Jurisdiction,
 )
 
-
 # ── Domain model tests ───────────────────────────────────────────────
 
 
@@ -266,7 +265,7 @@ class TestConfigModels:
     def test_exchange_rate_pair_config_validation(self):
         from bilancio.config.models import ExchangeRatePairConfig
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             ExchangeRatePairConfig(
                 base_currency="USD",
                 quote_currency="USD",
@@ -276,7 +275,7 @@ class TestConfigModels:
     def test_exchange_rate_pair_config_positive_rate(self):
         from bilancio.config.models import ExchangeRatePairConfig
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             ExchangeRatePairConfig(
                 base_currency="EUR",
                 quote_currency="USD",
@@ -375,8 +374,8 @@ class TestAgentJurisdiction:
 class TestOps:
     def _build_system(self):
         """Build a simple system with two jurisdictions."""
-        from bilancio.engines.system import System
         from bilancio.domain.agents import Bank, CentralBank, Firm
+        from bilancio.engines.system import System
 
         system = System()
         cb = CentralBank(id="CB", name="CB", kind="central_bank")
@@ -432,24 +431,36 @@ class TestOps:
         assert get_agent_domestic_currency(system, "F3") == "X"
 
     def test_validate_same_denomination(self):
-        from bilancio.ops.jurisdiction import validate_same_denomination
-        from bilancio.domain.instruments.means_of_payment import Cash
         from bilancio.domain.instruments.base import InstrumentKind
+        from bilancio.domain.instruments.means_of_payment import Cash
+        from bilancio.ops.jurisdiction import validate_same_denomination
 
         system = self._build_system()
-        c1 = Cash(id="C1", kind=InstrumentKind.CASH, amount=100, denom="X",
-                   asset_holder_id="F1", liability_issuer_id="CB")
-        c2 = Cash(id="C2", kind=InstrumentKind.CASH, amount=200, denom="X",
-                   asset_holder_id="F2", liability_issuer_id="CB")
+        c1 = Cash(
+            id="C1",
+            kind=InstrumentKind.CASH,
+            amount=100,
+            denom="X",
+            asset_holder_id="F1",
+            liability_issuer_id="CB",
+        )
+        c2 = Cash(
+            id="C2",
+            kind=InstrumentKind.CASH,
+            amount=200,
+            denom="X",
+            asset_holder_id="F2",
+            liability_issuer_id="CB",
+        )
         system.add_contract(c1)
         system.add_contract(c2)
         assert validate_same_denomination(system, "C1", "C2") is True
         assert validate_same_denomination(system, "C1", "NOPE") is False
 
     def test_check_reserve_requirement(self):
-        from bilancio.ops.jurisdiction import check_reserve_requirement
-        from bilancio.domain.instruments.means_of_payment import BankDeposit, ReserveDeposit
         from bilancio.domain.instruments.base import InstrumentKind
+        from bilancio.domain.instruments.means_of_payment import BankDeposit
+        from bilancio.ops.jurisdiction import check_reserve_requirement
 
         system = self._build_system()
 
@@ -538,8 +549,8 @@ class TestIntegration:
         assert config.fx_rates[0].rate == Decimal("1.10")
 
     def test_apply_two_jurisdictions_to_system(self):
-        from bilancio.config.loaders import load_yaml
         from bilancio.config.apply import apply_to_system
+        from bilancio.config.loaders import load_yaml
         from bilancio.engines.system import System
 
         config = load_yaml("examples/scenarios/two_jurisdictions.yaml")

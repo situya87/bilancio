@@ -7,11 +7,11 @@ ensuring all relationships are explicitly declared.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class BalanceSheetPosition(Enum):
     """Position of an instrument on an agent's balance sheet."""
+
     ASSET = "asset"
     LIABILITY = "liability"
     NOT_APPLICABLE = "not_applicable"
@@ -24,43 +24,46 @@ class InstrumentRelation:
 
     Every (Agent, Instrument) pair must have one of these defined.
     """
+
     instrument_name: str
 
     # Balance sheet
     position: BalanceSheetPosition
-    balance_sheet_entry: Optional[str] = None  # e.g., "deposits", "loans", "inventory"
+    balance_sheet_entry: str | None = None  # e.g., "deposits", "loans", "inventory"
 
     # Capabilities
     can_create: bool = False  # Can this agent create/issue this instrument?
-    can_hold: bool = False    # Can this agent hold this instrument?
+    can_hold: bool = False  # Can this agent hold this instrument?
     can_transfer: bool = False  # Can this agent transfer this instrument to others?
 
     # Settlement
-    settlement_role: Optional[str] = None  # e.g., "issuer", "holder", "intermediary"
-    settlement_action: Optional[str] = None  # What happens at settlement?
+    settlement_role: str | None = None  # e.g., "issuer", "holder", "intermediary"
+    settlement_action: str | None = None  # What happens at settlement?
 
     # Decision relevance
     affects_decisions: bool = False
-    decision_description: Optional[str] = None  # How does it affect decisions?
+    decision_description: str | None = None  # How does it affect decisions?
 
     def is_complete(self) -> tuple[bool, list[str]]:
         """Check if this relation is fully specified."""
         errors = []
 
         # If can hold or create, must have balance sheet entry
-        if (self.can_hold or self.can_create) and self.position == BalanceSheetPosition.NOT_APPLICABLE:
-            errors.append(f"Can hold/create but position is NOT_APPLICABLE")
+        if (
+            self.can_hold or self.can_create
+        ) and self.position == BalanceSheetPosition.NOT_APPLICABLE:
+            errors.append("Can hold/create but position is NOT_APPLICABLE")
 
         if (self.can_hold or self.can_create) and not self.balance_sheet_entry:
-            errors.append(f"Can hold/create but no balance_sheet_entry specified")
+            errors.append("Can hold/create but no balance_sheet_entry specified")
 
         # If can hold, should have settlement action
         if self.can_hold and not self.settlement_action:
-            errors.append(f"Can hold but no settlement_action specified")
+            errors.append("Can hold but no settlement_action specified")
 
         # If affects decisions, should have description
         if self.affects_decisions and not self.decision_description:
-            errors.append(f"Affects decisions but no decision_description")
+            errors.append("Affects decisions but no decision_description")
 
         return len(errors) == 0, errors
 
@@ -72,38 +75,41 @@ class AgentRelation:
 
     Every (Instrument, Agent) pair must have one of these defined.
     """
+
     agent_name: str
 
     # Balance sheet
     position: BalanceSheetPosition
-    balance_sheet_entry: Optional[str] = None
+    balance_sheet_entry: str | None = None
 
     # Capabilities
-    can_issue: bool = False   # Can this agent issue this instrument?
-    can_hold: bool = False    # Can this agent hold this instrument?
+    can_issue: bool = False  # Can this agent issue this instrument?
+    can_hold: bool = False  # Can this agent hold this instrument?
 
     # Settlement
-    settlement_action: Optional[str] = None
+    settlement_action: str | None = None
 
     # Creation
-    creation_trigger: Optional[str] = None  # What causes creation for this agent?
-    creation_effect: Optional[str] = None   # What happens when created?
+    creation_trigger: str | None = None  # What causes creation for this agent?
+    creation_effect: str | None = None  # What happens when created?
 
     def is_complete(self) -> tuple[bool, list[str]]:
         """Check if this relation is fully specified."""
         errors = []
 
-        if (self.can_hold or self.can_issue) and self.position == BalanceSheetPosition.NOT_APPLICABLE:
-            errors.append(f"Can hold/issue but position is NOT_APPLICABLE")
+        if (
+            self.can_hold or self.can_issue
+        ) and self.position == BalanceSheetPosition.NOT_APPLICABLE:
+            errors.append("Can hold/issue but position is NOT_APPLICABLE")
 
         if (self.can_hold or self.can_issue) and not self.balance_sheet_entry:
-            errors.append(f"Can hold/issue but no balance_sheet_entry specified")
+            errors.append("Can hold/issue but no balance_sheet_entry specified")
 
         if self.can_issue and not self.creation_trigger:
-            errors.append(f"Can issue but no creation_trigger specified")
+            errors.append("Can issue but no creation_trigger specified")
 
         if self.can_hold and not self.settlement_action:
-            errors.append(f"Can hold but no settlement_action specified")
+            errors.append("Can hold but no settlement_action specified")
 
         return len(errors) == 0, errors
 
@@ -111,6 +117,7 @@ class AgentRelation:
 @dataclass
 class DecisionSpec:
     """Specification of a decision an agent makes."""
+
     name: str
     trigger: str  # When is this decision made?
     inputs: list[str]  # What state variables are considered?
@@ -137,29 +144,30 @@ class DecisionSpec:
 @dataclass
 class LifecycleSpec:
     """Specification of lifecycle events for an agent or instrument."""
+
     # Creation
-    creation_trigger: Optional[str] = None
-    creation_effect: Optional[str] = None
+    creation_trigger: str | None = None
+    creation_effect: str | None = None
 
     # Holding period
-    interest_accrual: Optional[str] = None  # Does interest accrue? How?
-    transferable: Optional[bool] = None
-    transfer_mechanism: Optional[str] = None
+    interest_accrual: str | None = None  # Does interest accrue? How?
+    transferable: bool | None = None
+    transfer_mechanism: str | None = None
 
     # Maturity/Settlement
-    maturity_trigger: Optional[str] = None
-    full_settlement_action: Optional[str] = None
-    partial_settlement_action: Optional[str] = None
+    maturity_trigger: str | None = None
+    full_settlement_action: str | None = None
+    partial_settlement_action: str | None = None
 
     # Rollover
     can_rollover: bool = False
-    rollover_trigger: Optional[str] = None
-    rollover_terms: Optional[str] = None
+    rollover_trigger: str | None = None
+    rollover_terms: str | None = None
 
     # Default
-    default_trigger: Optional[str] = None
-    default_priority: Optional[str] = None
-    recovery_mechanism: Optional[str] = None
+    default_trigger: str | None = None
+    default_priority: str | None = None
+    recovery_mechanism: str | None = None
 
     def is_complete(self) -> tuple[bool, list[str]]:
         """Check if lifecycle is fully specified."""
@@ -185,6 +193,7 @@ class AgentSpec:
 
     Includes all relationships to instruments and decision-making logic.
     """
+
     name: str
     description: str
 
@@ -193,7 +202,7 @@ class AgentSpec:
 
     # Banking
     has_bank_account: bool = False
-    bank_assignment_rule: Optional[str] = None
+    bank_assignment_rule: str | None = None
 
     # Instrument relationships (one per instrument in the system)
     instrument_relations: dict[str, InstrumentRelation] = field(default_factory=dict)
@@ -202,9 +211,9 @@ class AgentSpec:
     decisions: list[DecisionSpec] = field(default_factory=list)
 
     # Lifecycle
-    lifecycle: Optional[LifecycleSpec] = None
+    lifecycle: LifecycleSpec | None = None
 
-    def get_relation(self, instrument_name: str) -> Optional[InstrumentRelation]:
+    def get_relation(self, instrument_name: str) -> InstrumentRelation | None:
         """Get the relation specification for a given instrument."""
         return self.instrument_relations.get(instrument_name)
 
@@ -216,6 +225,7 @@ class AgentSpec:
 @dataclass
 class InstrumentInteraction:
     """Specification of how one instrument interacts with another."""
+
     other_instrument: str
     relationship: str  # "substitutes", "complements", "independent", "created_together"
     decision_tradeoff: str  # When would agent choose one over the other?
@@ -236,6 +246,7 @@ class InstrumentSpec:
 
     Includes all relationships to agents and lifecycle.
     """
+
     name: str
     description: str
 
@@ -251,12 +262,12 @@ class InstrumentSpec:
     agent_relations: dict[str, AgentRelation] = field(default_factory=dict)
 
     # Lifecycle
-    lifecycle: Optional[LifecycleSpec] = None
+    lifecycle: LifecycleSpec | None = None
 
     # Interactions with other instruments
     instrument_interactions: dict[str, InstrumentInteraction] = field(default_factory=dict)
 
-    def get_relation(self, agent_name: str) -> Optional[AgentRelation]:
+    def get_relation(self, agent_name: str) -> AgentRelation | None:
         """Get the relation specification for a given agent."""
         return self.agent_relations.get(agent_name)
 

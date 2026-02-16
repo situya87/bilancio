@@ -20,27 +20,22 @@ References:
 - docs/dealer_ring/dealer_specification.pdf
 """
 
-import pytest
 from decimal import Decimal
-from copy import deepcopy
 
+import pytest
+
+from bilancio.core.ids import new_id
 from bilancio.dealer import (
-    Ticket,
-    DealerState,
-    VBTState,
-    TraderState,
-    KernelParams,
     DealerRingConfig,
     DealerRingSimulation,
-    recompute_dealer_state,
-    run_all_assertions,
+    Ticket,
+    TraderState,
 )
-from bilancio.core.ids import new_id
-
 
 # =========================================================================
 # Test Fixtures and Helpers
 # =========================================================================
+
 
 def create_ticket(
     issuer_id: str,
@@ -79,10 +74,12 @@ def create_ring_traders(n: int, cash_per_trader: Decimal = Decimal(10)) -> list[
     """Create a ring of traders."""
     traders = []
     for i in range(n):
-        traders.append(TraderState(
-            agent_id=new_id(f"trader_{i}"),
-            cash=cash_per_trader,
-        ))
+        traders.append(
+            TraderState(
+                agent_id=new_id(f"trader_{i}"),
+                cash=cash_per_trader,
+            )
+        )
     return traders
 
 
@@ -128,6 +125,7 @@ def create_ring_tickets(
 # =========================================================================
 # Test: Simulation Initialization
 # =========================================================================
+
 
 class TestSimulationInit:
     """Tests for simulation initialization."""
@@ -179,6 +177,7 @@ class TestSimulationInit:
 # Test: Ring Setup
 # =========================================================================
 
+
 class TestRingSetup:
     """Tests for setting up the ring with traders and tickets."""
 
@@ -207,7 +206,7 @@ class TestRingSetup:
         traders = create_ring_traders(5)
         # Create tickets all in mid bucket (remaining_tau in [4-8])
         tickets = []
-        for i, trader in enumerate(traders):
+        for _i, trader in enumerate(traders):
             ticket = create_ticket(
                 issuer_id=trader.agent_id,
                 owner_id=trader.agent_id,
@@ -231,9 +230,9 @@ class TestRingSetup:
 
         # Check total allocation matches
         total_allocated = (
-            len(mid_dealer.inventory) +
-            len(mid_vbt.inventory) +
-            sum(len(t.tickets_owned) for t in sim.traders.values())
+            len(mid_dealer.inventory)
+            + len(mid_vbt.inventory)
+            + sum(len(t.tickets_owned) for t in sim.traders.values())
         )
         assert total_allocated == 5
 
@@ -262,6 +261,7 @@ class TestRingSetup:
 # =========================================================================
 # Test: Phase 1 - Maturity Updates and Rebucketing
 # =========================================================================
+
 
 class TestPhase1MaturityUpdates:
     """Tests for maturity updates and rebucketing (Phase 1)."""
@@ -295,7 +295,7 @@ class TestPhase1MaturityUpdates:
         """
         config = DealerRingConfig(
             dealer_share=Decimal(0),  # No dealer allocation
-            vbt_share=Decimal(0),      # No VBT allocation
+            vbt_share=Decimal(0),  # No VBT allocation
             max_days=1,
         )
         sim = DealerRingSimulation(config)
@@ -417,6 +417,7 @@ class TestDealerRebucketing:
 # Test: Phase 3 - Eligibility Sets
 # =========================================================================
 
+
 class TestPhase3Eligibility:
     """Tests for sell/buy eligibility computation (Phase 3)."""
 
@@ -495,6 +496,7 @@ class TestPhase3Eligibility:
 # Test: Phase 5 - Settlement with Proportional Recovery
 # =========================================================================
 
+
 class TestPhase5Settlement:
     """
     Tests for settlement phase with proportional recovery.
@@ -536,7 +538,6 @@ class TestPhase5Settlement:
 
         # Track initial cash
         holder_cash_before = holder.cash
-        issuer_cash_before = issuer.cash
 
         # Run one day (triggers settlement)
         sim.run_day()
@@ -636,6 +637,7 @@ class TestPhase5Settlement:
 # Test: Phase 6 - VBT Anchor Updates
 # =========================================================================
 
+
 class TestPhase6VBTAnchorUpdates:
     """
     Tests for VBT anchor updates based on bucket loss rates.
@@ -653,8 +655,8 @@ class TestPhase6VBTAnchorUpdates:
         config = DealerRingConfig(
             dealer_share=Decimal(0),
             vbt_share=Decimal(0),
-            phi_M=Decimal(1),       # M drops by loss_rate
-            phi_O=Decimal("0.6"),   # O increases by 0.6 * loss_rate
+            phi_M=Decimal(1),  # M drops by loss_rate
+            phi_O=Decimal("0.6"),  # O increases by 0.6 * loss_rate
             enable_vbt_anchor_updates=True,
             max_days=1,
         )
@@ -701,6 +703,7 @@ class TestPhase6VBTAnchorUpdates:
 # Test: Full Event Loop
 # =========================================================================
 
+
 class TestFullEventLoop:
     """
     Integration tests for complete simulation runs.
@@ -718,7 +721,9 @@ class TestFullEventLoop:
 
         # Create a small ring with tickets in mid bucket (far from settlement)
         traders = create_ring_traders(5, cash_per_trader=Decimal(20))
-        tickets = create_ring_tickets(traders, tickets_per_trader=2, starting_tau=50, starting_maturity=100)
+        tickets = create_ring_tickets(
+            traders, tickets_per_trader=2, starting_tau=50, starting_maturity=100
+        )
 
         sim.setup_ring(traders, tickets)
 
@@ -742,7 +747,9 @@ class TestFullEventLoop:
 
         # Create ring with sufficient cash for trading
         traders = create_ring_traders(5, cash_per_trader=Decimal(50))
-        tickets = create_ring_tickets(traders, tickets_per_trader=3, starting_tau=50, starting_maturity=100)
+        tickets = create_ring_tickets(
+            traders, tickets_per_trader=3, starting_tau=50, starting_maturity=100
+        )
 
         sim.setup_ring(traders, tickets)
 
@@ -766,7 +773,9 @@ class TestFullEventLoop:
         sim = DealerRingSimulation(config)
 
         traders = create_ring_traders(5, cash_per_trader=Decimal(20))
-        tickets = create_ring_tickets(traders, tickets_per_trader=2, starting_tau=50, starting_maturity=100)
+        tickets = create_ring_tickets(
+            traders, tickets_per_trader=2, starting_tau=50, starting_maturity=100
+        )
 
         sim.setup_ring(traders, tickets)
         sim.run()
@@ -785,6 +794,7 @@ class TestFullEventLoop:
 # Test: Assertions Integration
 # =========================================================================
 
+
 class TestAssertionsIntegration:
     """Verify that programmatic assertions (C1-C6) pass during simulation."""
 
@@ -794,24 +804,29 @@ class TestAssertionsIntegration:
         sim = DealerRingSimulation(config)
 
         traders = create_ring_traders(3, cash_per_trader=Decimal(10))
-        tickets = create_ring_tickets(traders, tickets_per_trader=2, starting_tau=50, starting_maturity=100)
+        tickets = create_ring_tickets(
+            traders, tickets_per_trader=2, starting_tau=50, starting_maturity=100
+        )
 
         sim.setup_ring(traders, tickets)
 
         # Run simulation and check invariants after each day
-        for day in range(3):
+        for _day in range(3):
             sim.run_day()
 
             # Verify V = C + M*a for each dealer
             for bucket_id, dealer in sim.dealers.items():
                 vbt = sim.vbts[bucket_id]
                 expected_V = dealer.cash + vbt.M * dealer.a
-                assert dealer.V == expected_V, f"C5 failed for {bucket_id}: V={dealer.V}, expected={expected_V}"
+                assert dealer.V == expected_V, (
+                    f"C5 failed for {bucket_id}: V={dealer.V}, expected={expected_V}"
+                )
 
 
 # =========================================================================
 # Test: Event Logging
 # =========================================================================
+
 
 class TestEventLogging:
     """Tests for event logging system."""
@@ -822,7 +837,9 @@ class TestEventLogging:
         sim = DealerRingSimulation(config)
 
         traders = create_ring_traders(3, cash_per_trader=Decimal(10))
-        tickets = create_ring_tickets(traders, tickets_per_trader=2, starting_tau=50, starting_maturity=100)
+        tickets = create_ring_tickets(
+            traders, tickets_per_trader=2, starting_tau=50, starting_maturity=100
+        )
 
         sim.setup_ring(traders, tickets)
         sim.run()
@@ -837,7 +854,9 @@ class TestEventLogging:
         sim = DealerRingSimulation(config)
 
         traders = create_ring_traders(3, cash_per_trader=Decimal(10))
-        tickets = create_ring_tickets(traders, tickets_per_trader=1, starting_tau=50, starting_maturity=100)
+        tickets = create_ring_tickets(
+            traders, tickets_per_trader=1, starting_tau=50, starting_maturity=100
+        )
 
         sim.setup_ring(traders, tickets)
         sim.run()

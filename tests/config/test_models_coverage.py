@@ -4,49 +4,50 @@ Covers all dataclass validators, default values, property methods, and edge case
 that are not already covered by test_models.py.
 """
 
-import pytest
 from decimal import Decimal
+
+import pytest
 from pydantic import ValidationError
 
 from bilancio.config.models import (
-    PolicyOverrides,
     AgentSpec,
-    MintReserves,
-    MintCash,
-    TransferReserves,
-    TransferCash,
-    DepositCash,
-    WithdrawCash,
+    BalancedDealerConfig,
     ClientPayment,
-    CreateStock,
-    TransferStock,
     CreateDeliveryObligation,
     CreatePayable,
-    TransferClaim,
-    ScheduledAction,
-    ShowConfig,
-    ExportConfig,
-    RunConfig,
+    CreateStock,
     DealerBucketConfig,
+    DealerConfig,
     DealerOrderFlowConfig,
     DealerTraderPolicyConfig,
-    RiskAssessmentConfig,
-    DealerConfig,
-    BalancedDealerConfig,
-    ScenarioConfig,
+    DepositCash,
+    ExportConfig,
+    GeneratorCompileConfig,
+    MintCash,
+    MintReserves,
+    PolicyOverrides,
+    RingExplorerGeneratorConfig,
+    RingExplorerInequalityConfig,
     RingExplorerLiquidityAllocation,
     RingExplorerLiquidityConfig,
-    RingExplorerInequalityConfig,
     RingExplorerMaturityConfig,
     RingExplorerParamsModel,
-    GeneratorCompileConfig,
-    RingExplorerGeneratorConfig,
+    RiskAssessmentConfig,
+    RunConfig,
+    ScenarioConfig,
+    ScheduledAction,
+    ShowConfig,
+    TransferCash,
+    TransferClaim,
+    TransferReserves,
+    TransferStock,
+    WithdrawCash,
 )
-
 
 # ──────────────────────────────────────────────────────────────────────
 # PolicyOverrides
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestPolicyOverrides:
     def test_default_none(self):
@@ -62,10 +63,18 @@ class TestPolicyOverrides:
 # AgentSpec
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestAgentSpecCoverage:
-    @pytest.mark.parametrize("kind", [
-        "central_bank", "bank", "household", "firm", "treasury",
-    ])
+    @pytest.mark.parametrize(
+        "kind",
+        [
+            "central_bank",
+            "bank",
+            "household",
+            "firm",
+            "treasury",
+        ],
+    )
     def test_all_valid_kinds(self, kind):
         agent = AgentSpec(id="A1", kind=kind, name="test")
         assert agent.kind == kind
@@ -78,6 +87,7 @@ class TestAgentSpecCoverage:
 # ──────────────────────────────────────────────────────────────────────
 # MintReserves
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestMintReserves:
     def test_valid(self):
@@ -104,6 +114,7 @@ class TestMintReserves:
 # MintCash
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestMintCash:
     def test_with_alias(self):
         mc = MintCash(to="H1", amount=Decimal("100"), alias="c1")
@@ -117,6 +128,7 @@ class TestMintCash:
 # ──────────────────────────────────────────────────────────────────────
 # TransferReserves
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestTransferReserves:
     def test_valid(self):
@@ -139,6 +151,7 @@ class TestTransferReserves:
 # TransferCash
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestTransferCash:
     def test_valid(self):
         tc = TransferCash(from_agent="A1", to_agent="A2", amount=Decimal("50"))
@@ -159,6 +172,7 @@ class TestTransferCash:
 # DepositCash
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestDepositCash:
     def test_zero_amount_rejected(self):
         with pytest.raises(ValidationError, match="positive"):
@@ -172,6 +186,7 @@ class TestDepositCash:
 # ──────────────────────────────────────────────────────────────────────
 # WithdrawCash
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestWithdrawCash:
     def test_valid(self):
@@ -194,6 +209,7 @@ class TestWithdrawCash:
 # ClientPayment
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestClientPayment:
     def test_valid(self):
         cp = ClientPayment(payer="H1", payee="H2", amount=Decimal("100"))
@@ -214,6 +230,7 @@ class TestClientPayment:
 # CreateStock (additional coverage)
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestCreateStockCoverage:
     def test_negative_quantity_rejected(self):
         with pytest.raises(ValidationError, match="positive"):
@@ -231,6 +248,7 @@ class TestCreateStockCoverage:
 # ──────────────────────────────────────────────────────────────────────
 # TransferStock
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestTransferStock:
     def test_valid(self):
@@ -254,48 +272,85 @@ class TestTransferStock:
 # CreateDeliveryObligation (additional coverage)
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestCreateDeliveryObligationCoverage:
     def test_negative_quantity_rejected(self):
         with pytest.raises(ValidationError, match="positive"):
-            CreateDeliveryObligation(**{
-                "from": "F1", "to": "H1", "sku": "W",
-                "quantity": -1, "unit_price": Decimal("10"), "due_day": 1,
-            })
+            CreateDeliveryObligation(
+                **{
+                    "from": "F1",
+                    "to": "H1",
+                    "sku": "W",
+                    "quantity": -1,
+                    "unit_price": Decimal("10"),
+                    "due_day": 1,
+                }
+            )
 
     def test_negative_unit_price_rejected(self):
         with pytest.raises(ValidationError, match="negative"):
-            CreateDeliveryObligation(**{
-                "from": "F1", "to": "H1", "sku": "W",
-                "quantity": 5, "unit_price": Decimal("-1"), "due_day": 1,
-            })
+            CreateDeliveryObligation(
+                **{
+                    "from": "F1",
+                    "to": "H1",
+                    "sku": "W",
+                    "quantity": 5,
+                    "unit_price": Decimal("-1"),
+                    "due_day": 1,
+                }
+            )
 
     def test_zero_unit_price_allowed(self):
-        d = CreateDeliveryObligation(**{
-            "from": "F1", "to": "H1", "sku": "W",
-            "quantity": 5, "unit_price": Decimal("0"), "due_day": 1,
-        })
+        d = CreateDeliveryObligation(
+            **{
+                "from": "F1",
+                "to": "H1",
+                "sku": "W",
+                "quantity": 5,
+                "unit_price": Decimal("0"),
+                "due_day": 1,
+            }
+        )
         assert d.unit_price == Decimal("0")
 
     def test_negative_due_day_rejected(self):
         with pytest.raises(ValidationError, match="negative"):
-            CreateDeliveryObligation(**{
-                "from": "F1", "to": "H1", "sku": "W",
-                "quantity": 5, "unit_price": Decimal("10"), "due_day": -1,
-            })
+            CreateDeliveryObligation(
+                **{
+                    "from": "F1",
+                    "to": "H1",
+                    "sku": "W",
+                    "quantity": 5,
+                    "unit_price": Decimal("10"),
+                    "due_day": -1,
+                }
+            )
 
     def test_zero_due_day_allowed(self):
-        d = CreateDeliveryObligation(**{
-            "from": "F1", "to": "H1", "sku": "W",
-            "quantity": 5, "unit_price": Decimal("10"), "due_day": 0,
-        })
+        d = CreateDeliveryObligation(
+            **{
+                "from": "F1",
+                "to": "H1",
+                "sku": "W",
+                "quantity": 5,
+                "unit_price": Decimal("10"),
+                "due_day": 0,
+            }
+        )
         assert d.due_day == 0
 
     def test_with_alias(self):
-        d = CreateDeliveryObligation(**{
-            "from": "F1", "to": "H1", "sku": "W",
-            "quantity": 5, "unit_price": Decimal("10"), "due_day": 3,
-            "alias": "del1",
-        })
+        d = CreateDeliveryObligation(
+            **{
+                "from": "F1",
+                "to": "H1",
+                "sku": "W",
+                "quantity": 5,
+                "unit_price": Decimal("10"),
+                "due_day": 3,
+                "alias": "del1",
+            }
+        )
         assert d.alias == "del1"
 
 
@@ -303,41 +358,60 @@ class TestCreateDeliveryObligationCoverage:
 # CreatePayable (additional coverage)
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestCreatePayableCoverage:
     def test_zero_amount_rejected(self):
         with pytest.raises(ValidationError, match="positive"):
-            CreatePayable(**{
-                "from": "H1", "to": "H2",
-                "amount": Decimal("0"), "due_day": 1,
-            })
+            CreatePayable(
+                **{
+                    "from": "H1",
+                    "to": "H2",
+                    "amount": Decimal("0"),
+                    "due_day": 1,
+                }
+            )
 
     def test_with_alias_and_maturity_distance(self):
-        p = CreatePayable(**{
-            "from": "H1", "to": "H2",
-            "amount": Decimal("100"), "due_day": 5,
-            "alias": "pay1", "maturity_distance": 3,
-        })
+        p = CreatePayable(
+            **{
+                "from": "H1",
+                "to": "H2",
+                "amount": Decimal("100"),
+                "due_day": 5,
+                "alias": "pay1",
+                "maturity_distance": 3,
+            }
+        )
         assert p.alias == "pay1"
         assert p.maturity_distance == 3
 
     def test_maturity_distance_defaults_none(self):
-        p = CreatePayable(**{
-            "from": "H1", "to": "H2",
-            "amount": Decimal("100"), "due_day": 5,
-        })
+        p = CreatePayable(
+            **{
+                "from": "H1",
+                "to": "H2",
+                "amount": Decimal("100"),
+                "due_day": 5,
+            }
+        )
         assert p.maturity_distance is None
 
     def test_zero_due_day_allowed(self):
-        p = CreatePayable(**{
-            "from": "H1", "to": "H2",
-            "amount": Decimal("100"), "due_day": 0,
-        })
+        p = CreatePayable(
+            **{
+                "from": "H1",
+                "to": "H2",
+                "amount": Decimal("100"),
+                "due_day": 0,
+            }
+        )
         assert p.due_day == 0
 
 
 # ──────────────────────────────────────────────────────────────────────
 # TransferClaim
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestTransferClaim:
     def test_valid_with_alias(self):
@@ -358,7 +432,9 @@ class TestTransferClaim:
         assert tc.contract_id == "abc-123"
 
     def test_neither_alias_nor_id_rejected(self):
-        with pytest.raises(ValidationError, match="contract_alias.*contract_id|contract_id.*contract_alias"):
+        with pytest.raises(
+            ValidationError, match="contract_alias.*contract_id|contract_id.*contract_alias"
+        ):
             TransferClaim(to_agent="H2")
 
     def test_empty_to_agent_rejected(self):
@@ -369,6 +445,7 @@ class TestTransferClaim:
 # ──────────────────────────────────────────────────────────────────────
 # ScheduledAction
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestScheduledAction:
     def test_valid(self):
@@ -392,6 +469,7 @@ class TestScheduledAction:
 # ──────────────────────────────────────────────────────────────────────
 # ShowConfig
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestShowConfig:
     def test_defaults(self):
@@ -420,6 +498,7 @@ class TestShowConfig:
 # ExportConfig
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestExportConfig:
     def test_defaults(self):
         ec = ExportConfig()
@@ -435,6 +514,7 @@ class TestExportConfig:
 # ──────────────────────────────────────────────────────────────────────
 # RunConfig (additional coverage)
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestRunConfigCoverage:
     def test_zero_max_days_rejected(self):
@@ -470,6 +550,7 @@ class TestRunConfigCoverage:
 # DealerBucketConfig
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestDealerBucketConfig:
     def test_valid(self):
         bc = DealerBucketConfig(tau_min=1, tau_max=5)
@@ -480,8 +561,10 @@ class TestDealerBucketConfig:
 
     def test_custom_mid_and_spread(self):
         bc = DealerBucketConfig(
-            tau_min=1, tau_max=3,
-            M=Decimal("0.95"), O=Decimal("0.10"),
+            tau_min=1,
+            tau_max=3,
+            M=Decimal("0.95"),
+            O=Decimal("0.10"),
         )
         assert bc.M == Decimal("0.95")
         assert bc.O == Decimal("0.10")
@@ -527,6 +610,7 @@ class TestDealerBucketConfig:
 # DealerOrderFlowConfig
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestDealerOrderFlowConfig:
     def test_defaults(self):
         ofc = DealerOrderFlowConfig()
@@ -566,6 +650,7 @@ class TestDealerOrderFlowConfig:
 # DealerTraderPolicyConfig
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestDealerTraderPolicyConfig:
     def test_defaults(self):
         tp = DealerTraderPolicyConfig()
@@ -596,6 +681,7 @@ class TestDealerTraderPolicyConfig:
 # ──────────────────────────────────────────────────────────────────────
 # RiskAssessmentConfig
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestRiskAssessmentConfig:
     def test_defaults(self):
@@ -673,6 +759,7 @@ class TestRiskAssessmentConfig:
 # DealerConfig
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestDealerConfig:
     def test_defaults(self):
         dc = DealerConfig()
@@ -713,8 +800,10 @@ class TestDealerConfig:
     def test_custom_buckets_not_overridden(self):
         custom_buckets = {
             "only": DealerBucketConfig(
-                tau_min=1, tau_max=999,
-                M=Decimal("0.90"), O=Decimal("0.50"),
+                tau_min=1,
+                tau_max=999,
+                M=Decimal("0.90"),
+                O=Decimal("0.50"),
             ),
         }
         dc = DealerConfig(buckets=custom_buckets)
@@ -781,6 +870,7 @@ class TestDealerConfig:
 # ──────────────────────────────────────────────────────────────────────
 # BalancedDealerConfig
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestBalancedDealerConfig:
     def test_defaults(self):
@@ -887,6 +977,7 @@ class TestBalancedDealerConfig:
 # ScenarioConfig (additional coverage)
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestScenarioConfigCoverage:
     def _minimal_agents(self):
         return [{"id": "CB", "kind": "central_bank", "name": "CB"}]
@@ -939,6 +1030,7 @@ class TestScenarioConfigCoverage:
 # ──────────────────────────────────────────────────────────────────────
 # RingExplorerLiquidityAllocation
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestRingExplorerLiquidityAllocation:
     def test_default_uniform(self):
@@ -995,6 +1087,7 @@ class TestRingExplorerLiquidityAllocation:
 # RingExplorerLiquidityConfig
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestRingExplorerLiquidityConfig:
     def test_defaults(self):
         lc = RingExplorerLiquidityConfig()
@@ -1021,6 +1114,7 @@ class TestRingExplorerLiquidityConfig:
 # ──────────────────────────────────────────────────────────────────────
 # RingExplorerInequalityConfig
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestRingExplorerInequalityConfig:
     def test_defaults(self):
@@ -1057,6 +1151,7 @@ class TestRingExplorerInequalityConfig:
 # ──────────────────────────────────────────────────────────────────────
 # RingExplorerMaturityConfig
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestRingExplorerMaturityConfig:
     def test_defaults(self):
@@ -1099,6 +1194,7 @@ class TestRingExplorerMaturityConfig:
 # RingExplorerParamsModel
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestRingExplorerParamsModel:
     def test_minimal(self):
         p = RingExplorerParamsModel(kappa=Decimal("1"))
@@ -1111,8 +1207,11 @@ class TestRingExplorerParamsModel:
 
     def test_custom_values(self):
         p = RingExplorerParamsModel(
-            n_agents=10, seed=123, kappa=Decimal("0.5"),
-            currency="EUR", Q_total=Decimal("500"),
+            n_agents=10,
+            seed=123,
+            kappa=Decimal("0.5"),
+            currency="EUR",
+            Q_total=Decimal("500"),
         )
         assert p.n_agents == 10
         assert p.seed == 123
@@ -1156,6 +1255,7 @@ class TestRingExplorerParamsModel:
 # GeneratorCompileConfig
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TestGeneratorCompileConfig:
     def test_defaults(self):
         gc = GeneratorCompileConfig()
@@ -1171,6 +1271,7 @@ class TestGeneratorCompileConfig:
 # ──────────────────────────────────────────────────────────────────────
 # RingExplorerGeneratorConfig
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TestRingExplorerGeneratorConfig:
     def test_valid(self):

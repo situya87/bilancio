@@ -12,14 +12,13 @@ References:
 - "Banks-as-Dealers with deposits on demand" specification Section 6
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.banking.types import Ticket, TicketType
-from bilancio.banking.state import BankDealerState, CentralBankParams
+from bilancio.banking.day_runner import DayRunner, MultiBankDayRunner
 from bilancio.banking.pricing_kernel import PricingParams
+from bilancio.banking.state import BankDealerState, CentralBankParams
 from bilancio.banking.ticket_processor import TicketProcessor
-from bilancio.banking.day_runner import DayRunner, DayResult, MultiBankDayRunner
+from bilancio.banking.types import Ticket, TicketType
 
 
 def create_standard_params() -> tuple[CentralBankParams, PricingParams]:
@@ -94,13 +93,13 @@ class TestDayRunnerBasic:
 
         result = runner.run_day(day=1, tickets=[])
 
-        assert hasattr(result, 'opening_reserves')
-        assert hasattr(result, 'closing_reserves')
-        assert hasattr(result, 'opening_deposits')
-        assert hasattr(result, 'closing_deposits')
-        assert hasattr(result, 'opening_quote')
-        assert hasattr(result, 'closing_quote')
-        assert hasattr(result, 'events')
+        assert hasattr(result, "opening_reserves")
+        assert hasattr(result, "closing_reserves")
+        assert hasattr(result, "opening_deposits")
+        assert hasattr(result, "closing_deposits")
+        assert hasattr(result, "opening_quote")
+        assert hasattr(result, "closing_quote")
+        assert hasattr(result, "events")
 
 
 class TestPartAOpen:
@@ -416,7 +415,7 @@ class TestClosingState:
         result = runner.run_day(day=1, tickets=tickets)
 
         assert result.closing_reserves == 120000  # 100000 + 20000
-        assert result.closing_deposits == 70000   # 50000 + 20000
+        assert result.closing_deposits == 70000  # 50000 + 20000
 
     def test_closing_quote_captured(self):
         """Closing quote is captured in result."""
@@ -494,7 +493,7 @@ class TestMultiDaySequence:
                 counterparty_bank_id="BankB",
             ),
         ]
-        result_d1 = runner.run_day(day=1, tickets=tickets_d1)
+        runner.run_day(day=1, tickets=tickets_d1)
 
         # Day 2: State should have the extra deposits
         result_d2 = runner.run_day(day=2, tickets=[])
@@ -543,10 +542,10 @@ class TestWithdrawalForecastCallback:
         forecast_values = {1: 10000, 2: 15000, 3: 8000}
         runner.withdrawal_forecast_fn = lambda day: forecast_values.get(day, 0)
 
-        result_d1 = runner.run_day(day=1, tickets=[])
+        runner.run_day(day=1, tickets=[])
         assert runner.processor.state.withdrawal_forecast == 10000
 
-        result_d2 = runner.run_day(day=2, tickets=[])
+        runner.run_day(day=2, tickets=[])
         assert runner.processor.state.withdrawal_forecast == 15000
 
     def test_explicit_forecast_overrides_callback(self):

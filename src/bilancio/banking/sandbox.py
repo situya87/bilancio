@@ -10,17 +10,16 @@ Run with: uv run python -m bilancio.banking.sandbox
 """
 
 from decimal import Decimal
-from typing import List
 
-from bilancio.banking.types import Ticket, TicketType, Quote
-from bilancio.banking.state import BankDealerState, CentralBankParams
+from bilancio.banking.day_runner import DayRunner, MultiBankDayRunner
 from bilancio.banking.pricing_kernel import PricingParams
+from bilancio.banking.state import BankDealerState, CentralBankParams
 from bilancio.banking.ticket_processor import (
     TicketProcessor,
     process_inter_bank_payment,
     process_intra_bank_payment,
 )
-from bilancio.banking.day_runner import DayRunner, MultiBankDayRunner
+from bilancio.banking.types import Quote, Ticket, TicketType
 
 
 def create_standard_cb_params() -> CentralBankParams:
@@ -118,7 +117,7 @@ def run_sandbox() -> None:
     print_separator("Setup")
 
     cb_params = create_standard_cb_params()
-    print(f"Central Bank Corridor:")
+    print("Central Bank Corridor:")
     print(f"  Floor (i_R):   {cb_params.reserve_remuneration_rate:.2%}")
     print(f"  Ceiling (i_B): {cb_params.cb_borrowing_rate:.2%}")
     print(f"  Width (Omega): {cb_params.corridor_width:.2%}")
@@ -131,7 +130,7 @@ def run_sandbox() -> None:
         reserve_floor=10_000,
     )
 
-    print(f"\nPricing Parameters:")
+    print("\nPricing Parameters:")
     print(f"  Reserve target (R^tar): {pricing_params.reserve_target:,}")
     print(f"  Symmetric capacity (X*): {pricing_params.symmetric_capacity:,}")
     print(f"  Ticket size (S_fund):    {pricing_params.ticket_size:,}")
@@ -226,7 +225,7 @@ def run_sandbox() -> None:
     # Verify reserve conservation
     total_reserves = state_a.reserves + state_b.reserves
     print(f"\nTotal system reserves: {total_reserves:,}")
-    print(f"(Should equal initial: 100,000 + 80,000 = 180,000)")
+    print("(Should equal initial: 100,000 + 80,000 = 180,000)")
 
     # --- Test 3: Intra-bank payment at Bank B ---
     print_separator("Test 3: Intra-bank Payment at Bank B")
@@ -253,9 +252,7 @@ def run_sandbox() -> None:
     # =========================================================================
     print_separator("Day 2-3: Using Day Runner")
 
-    multi_runner = MultiBankDayRunner(
-        runners={"BankA": runner_a, "BankB": runner_b}
-    )
+    multi_runner = MultiBankDayRunner(runners={"BankA": runner_a, "BankB": runner_b})
 
     # Day 2: Process some tickets
     day2_tickets_a = [
@@ -346,7 +343,7 @@ def run_sandbox() -> None:
         amount=200_000,
         rate=Decimal("0.015"),
     )
-    print(f"Added 200,000 deposit at Bank A")
+    print("Added 200,000 deposit at Bank A")
     print(f"Bank A reserves before large withdrawal: {state_a.reserves:,}")
 
     # Now process a large withdrawal that exceeds reserves
@@ -374,7 +371,7 @@ def run_sandbox() -> None:
             withdrawal_forecast=0,
         )
 
-        print(f"\nAfter CB top-up:")
+        print("\nAfter CB top-up:")
         print(f"  Reserves: {state_a.reserves:,}")
         print(f"  CB Borrowing: {state_a.total_cb_borrowing:,}")
         print(f"  CB top-up amount: {result_d4.cb_topup_amount:,}")

@@ -1,18 +1,13 @@
 """Test Rich builders for rendering."""
 
-import pytest
 from decimal import Decimal
-from bilancio.ui.render.models import (
-    BalanceItemView,
-    AgentBalanceView,
-    EventView,
-    DayEventsView
-)
+
+from bilancio.ui.render.models import AgentBalanceView, BalanceItemView, DayEventsView, EventView
 from bilancio.ui.render.rich_builders import (
     build_agent_balance_table,
-    build_multiple_agent_balances,
     build_events_panel,
-    convert_raw_event_to_view
+    build_multiple_agent_balances,
+    convert_raw_event_to_view,
 )
 
 
@@ -25,28 +20,23 @@ def test_build_agent_balance_table():
         agent_kind="bank",
         items=[
             BalanceItemView(
-                category="asset",
-                instrument="reserves",
-                amount=10000,
-                value=Decimal("10000")
+                category="asset", instrument="reserves", amount=10000, value=Decimal("10000")
             ),
             BalanceItemView(
-                category="liability",
-                instrument="deposits",
-                amount=5000,
-                value=Decimal("5000")
-            )
-        ]
+                category="liability", instrument="deposits", amount=5000, value=Decimal("5000")
+            ),
+        ],
     )
-    
+
     # Build table
     table = build_agent_balance_table(balance_view)
-    
+
     # Verify it's a Table (or string if Rich not available)
     assert table is not None
     if not isinstance(table, str):
         # Rich is available, check it's a Table
         from rich.table import Table
+
         assert isinstance(table, Table)
 
 
@@ -60,12 +50,9 @@ def test_build_multiple_agent_balances():
             agent_kind="bank",
             items=[
                 BalanceItemView(
-                    category="asset",
-                    instrument="cash",
-                    amount=1000,
-                    value=Decimal("1000")
+                    category="asset", instrument="cash", amount=1000, value=Decimal("1000")
                 )
-            ]
+            ],
         ),
         AgentBalanceView(
             agent_id="household1",
@@ -73,23 +60,21 @@ def test_build_multiple_agent_balances():
             agent_kind="household",
             items=[
                 BalanceItemView(
-                    category="asset",
-                    instrument="deposits",
-                    amount=500,
-                    value=Decimal("500")
+                    category="asset", instrument="deposits", amount=500, value=Decimal("500")
                 )
-            ]
-        )
+            ],
+        ),
     ]
-    
+
     # Build columns
     columns = build_multiple_agent_balances(balances)
-    
+
     # Verify result
     assert columns is not None
     if not isinstance(columns, str):
         # Rich is available, check it's Columns
         from rich.columns import Columns
+
         assert isinstance(columns, Columns)
 
 
@@ -105,7 +90,7 @@ def test_build_events_panel():
                     title="Day begins",
                     lines=["Starting day 1"],
                     icon="⏰",
-                    raw_event={"kind": "PhaseA", "day": 1}
+                    raw_event={"kind": "PhaseA", "day": 1},
                 )
             ],
             "B": [
@@ -114,21 +99,22 @@ def test_build_events_panel():
                     title="Cash transferred",
                     lines=["bank1 → household1: $100"],
                     icon="💵",
-                    raw_event={"kind": "CashTransferred", "day": 1}
+                    raw_event={"kind": "CashTransferred", "day": 1},
                 )
             ],
-            "C": []
-        }
+            "C": [],
+        },
     )
-    
+
     # Build panel
     panel = build_events_panel(day_view)
-    
+
     # Verify result
     assert panel is not None
     if not isinstance(panel, str):
         # Rich is available, check it's a Panel
         from rich.panel import Panel
+
         assert isinstance(panel, Panel)
 
 
@@ -140,11 +126,11 @@ def test_convert_raw_event_to_view():
         "frm": "bank1",
         "to": "household1",
         "amount": 1000,
-        "day": 1
+        "day": 1,
     }
-    
+
     event_view = convert_raw_event_to_view(raw_event)
-    
+
     assert isinstance(event_view, EventView)
     assert "Cash Transfer" in event_view.title
     assert event_view.lines[0] == "bank1 → household1"
@@ -154,13 +140,10 @@ def test_convert_raw_event_to_view():
 
 def test_convert_unknown_event_to_view():
     """Test converting unknown event type to EventView."""
-    raw_event = {
-        "kind": "CustomEvent",
-        "data": "some value"
-    }
-    
+    raw_event = {"kind": "CustomEvent", "data": "some value"}
+
     event_view = convert_raw_event_to_view(raw_event)
-    
+
     assert isinstance(event_view, EventView)
     assert "CustomEvent" in event_view.title
     assert event_view.icon == "❓"

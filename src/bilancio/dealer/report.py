@@ -1,13 +1,12 @@
 """HTML report generation for dealer ring simulations."""
 
-from dataclasses import dataclass
+import html
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, TYPE_CHECKING
-import html
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .simulation import DealerRingConfig, DaySnapshot
+    from .simulation import DaySnapshot, DealerRingConfig
 
 
 def _load_base_css() -> str:
@@ -134,17 +133,19 @@ def _fmt_decimal(d: Decimal | float | int | str | None, precision: int = 4) -> s
             d = Decimal(d)
         except (ValueError, TypeError, ArithmeticError):
             return str(d)
-    if isinstance(d, (int, float)):
+    if isinstance(d, int | float):
         d = Decimal(str(d))
     # Format with requested precision, then strip trailing zeros
-    formatted = f"{d:.{precision}f}".rstrip('0').rstrip('.')
+    formatted = f"{d:.{precision}f}".rstrip("0").rstrip(".")
     return formatted
 
 
-def _render_header(config: "DealerRingConfig", snapshots: List[Any], title: str, subtitle: str) -> str:
+def _render_header(
+    config: "DealerRingConfig", snapshots: list[Any], title: str, subtitle: str
+) -> str:
     """Render header with config summary."""
     num_days = len(snapshots) - 1 if snapshots else 0  # -1 because Day 0 is setup
-    num_buckets = len(config.buckets)
+    len(config.buckets)
     num_traders = len(snapshots[0].traders) if snapshots else 0
 
     # Count total tickets
@@ -171,10 +172,10 @@ def _render_header(config: "DealerRingConfig", snapshots: List[Any], title: str,
 """
 
 
-def _render_events_table(events: List[Dict[str, Any]], table_title: str) -> str:
+def _render_events_table(events: list[dict[str, Any]], table_title: str) -> str:
     """Render events table for a day."""
     # Filter out day_start events
-    display_events = [e for e in events if e.get('kind') != 'day_start']
+    display_events = [e for e in events if e.get("kind") != "day_start"]
 
     if not display_events:
         return f"""
@@ -186,71 +187,71 @@ def _render_events_table(events: List[Dict[str, Any]], table_title: str) -> str:
 
     rows = []
     for event in display_events:
-        kind = event.get('kind', 'unknown')
+        kind = event.get("kind", "unknown")
 
         # Determine CSS class for event type
         css_class = f"event-{kind.replace('_', '-')}"
 
         # Check for passthrough trades
-        if kind == 'trade' and event.get('is_passthrough'):
+        if kind == "trade" and event.get("is_passthrough"):
             css_class = "event-passthrough"
 
         # Format details based on event kind
-        if kind == 'trade':
-            side = event.get('side', '')
-            price = _fmt_decimal(event.get('price'))
-            bucket = event.get('bucket', '')
-            is_passthrough = event.get('is_passthrough', False)
-            trader_id = event.get('trader_id', '')[:20]
-            ticket_id = event.get('ticket_id', '')
+        if kind == "trade":
+            side = event.get("side", "")
+            price = _fmt_decimal(event.get("price"))
+            bucket = event.get("bucket", "")
+            is_passthrough = event.get("is_passthrough", False)
+            trader_id = event.get("trader_id", "")[:20]
+            ticket_id = event.get("ticket_id", "")
             details = f"{side} @ {price} [{bucket}]"
             notes = f"trader: {trader_id}, ticket: {ticket_id}"
             if is_passthrough:
                 notes += " (passthrough to VBT)"
-        elif kind == 'rebucket':
-            old_bucket = event.get('old_bucket', '')
-            new_bucket = event.get('new_bucket', '')
-            price = _fmt_decimal(event.get('price'))
-            holder_type = event.get('holder_type', '')
-            ticket_id = event.get('ticket_id', '')
+        elif kind == "rebucket":
+            old_bucket = event.get("old_bucket", "")
+            new_bucket = event.get("new_bucket", "")
+            price = _fmt_decimal(event.get("price"))
+            holder_type = event.get("holder_type", "")
+            ticket_id = event.get("ticket_id", "")
             details = f"{old_bucket} → {new_bucket} @ {price}"
             notes = f"{holder_type} ticket {ticket_id}"
-        elif kind == 'settlement':
-            issuer = event.get('issuer_id', '')[:20]
-            total_paid = _fmt_decimal(event.get('total_paid'), 2)
-            n_tickets = event.get('n_tickets', 0)
+        elif kind == "settlement":
+            issuer = event.get("issuer_id", "")[:20]
+            total_paid = _fmt_decimal(event.get("total_paid"), 2)
+            n_tickets = event.get("n_tickets", 0)
             details = f"Paid {total_paid} on {n_tickets} tickets"
             notes = f"issuer: {issuer}"
-        elif kind == 'default':
-            issuer = event.get('issuer_id', '')[:20]
-            recovery_rate = _fmt_decimal(event.get('recovery_rate'), 2)
-            total_due = _fmt_decimal(event.get('total_due'), 2)
-            total_paid = _fmt_decimal(event.get('total_paid'), 2)
-            bucket = event.get('bucket', '')
+        elif kind == "default":
+            issuer = event.get("issuer_id", "")[:20]
+            recovery_rate = _fmt_decimal(event.get("recovery_rate"), 2)
+            total_due = _fmt_decimal(event.get("total_due"), 2)
+            total_paid = _fmt_decimal(event.get("total_paid"), 2)
+            bucket = event.get("bucket", "")
             details = f"Recovery {recovery_rate} (due: {total_due}, paid: {total_paid})"
             notes = f"issuer: {issuer}, bucket: {bucket}"
-        elif kind == 'quote':
-            bucket = event.get('bucket', '')
-            dealer_bid = _fmt_decimal(event.get('dealer_bid'))
-            dealer_ask = _fmt_decimal(event.get('dealer_ask'))
-            vbt_bid = _fmt_decimal(event.get('vbt_bid'))
-            vbt_ask = _fmt_decimal(event.get('vbt_ask'))
-            inventory = event.get('inventory', 0)
-            capacity = _fmt_decimal(event.get('capacity'))
+        elif kind == "quote":
+            bucket = event.get("bucket", "")
+            dealer_bid = _fmt_decimal(event.get("dealer_bid"))
+            dealer_ask = _fmt_decimal(event.get("dealer_ask"))
+            vbt_bid = _fmt_decimal(event.get("vbt_bid"))
+            vbt_ask = _fmt_decimal(event.get("vbt_ask"))
+            inventory = event.get("inventory", 0)
+            capacity = _fmt_decimal(event.get("capacity"))
             details = f"[{bucket}] D: {dealer_bid}/{dealer_ask}, VBT: {vbt_bid}/{vbt_ask}"
             notes = f"inv={inventory}, cap={capacity}"
-        elif kind == 'vbt_anchor_update':
-            bucket = event.get('bucket', '')
-            M_old = _fmt_decimal(event.get('M_old'))
-            M_new = _fmt_decimal(event.get('M_new'))
-            O_old = _fmt_decimal(event.get('O_old'))
-            O_new = _fmt_decimal(event.get('O_new'))
-            loss_rate = _fmt_decimal(event.get('loss_rate'), 4)
+        elif kind == "vbt_anchor_update":
+            bucket = event.get("bucket", "")
+            M_old = _fmt_decimal(event.get("M_old"))
+            M_new = _fmt_decimal(event.get("M_new"))
+            O_old = _fmt_decimal(event.get("O_old"))
+            O_new = _fmt_decimal(event.get("O_new"))
+            loss_rate = _fmt_decimal(event.get("loss_rate"), 4)
             details = f"[{bucket}] M: {M_old}→{M_new}, O: {O_old}→{O_new}"
             notes = f"loss rate: {loss_rate}"
         else:
             details = str(event)
-            notes = ''
+            notes = ""
 
         rows.append(f"""
           <tr>
@@ -272,49 +273,51 @@ def _render_events_table(events: List[Dict[str, Any]], table_title: str) -> str:
       </tr>
     </thead>
     <tbody>
-      {''.join(rows)}
+      {"".join(rows)}
     </tbody>
   </table>
 </div>
 """
 
 
-def _render_dealer_card(dealer_dict: Dict[str, Any], vbt_dict: Dict[str, Any]) -> str:
+def _render_dealer_card(dealer_dict: dict[str, Any], vbt_dict: dict[str, Any]) -> str:
     """Render dealer state card with kernel params."""
-    bucket_id = dealer_dict.get('bucket_id', 'unknown')
+    bucket_id = dealer_dict.get("bucket_id", "unknown")
 
     # Inventory
-    a = dealer_dict.get('a', 0)
-    x = _fmt_decimal(dealer_dict.get('x'))
-    cash = _fmt_decimal(dealer_dict.get('cash'))
-    V = _fmt_decimal(dealer_dict.get('V'))
+    a = dealer_dict.get("a", 0)
+    x = _fmt_decimal(dealer_dict.get("x"))
+    cash = _fmt_decimal(dealer_dict.get("cash"))
+    V = _fmt_decimal(dealer_dict.get("V"))
 
     # Capacity
-    K_star = dealer_dict.get('K_star', 0)
-    X_star = _fmt_decimal(dealer_dict.get('X_star'))
-    N = dealer_dict.get('N', 0)
-    lambda_ = _fmt_decimal(dealer_dict.get('lambda_'))
+    K_star = dealer_dict.get("K_star", 0)
+    X_star = _fmt_decimal(dealer_dict.get("X_star"))
+    N = dealer_dict.get("N", 0)
+    lambda_ = _fmt_decimal(dealer_dict.get("lambda_"))
 
     # Quotes
-    I = _fmt_decimal(dealer_dict.get('I'))
-    midline = _fmt_decimal(dealer_dict.get('midline'))
-    bid = _fmt_decimal(dealer_dict.get('bid'))
-    ask = _fmt_decimal(dealer_dict.get('ask'))
+    inside_width = _fmt_decimal(dealer_dict.get("I"))
+    midline = _fmt_decimal(dealer_dict.get("midline"))
+    bid = _fmt_decimal(dealer_dict.get("bid"))
+    ask = _fmt_decimal(dealer_dict.get("ask"))
 
     # Pin flags
-    is_pinned_bid = dealer_dict.get('is_pinned_bid', False)
-    is_pinned_ask = dealer_dict.get('is_pinned_ask', False)
+    is_pinned_bid = dealer_dict.get("is_pinned_bid", False)
+    is_pinned_ask = dealer_dict.get("is_pinned_ask", False)
     pin_bid_class = "pinned" if is_pinned_bid else "not-pinned"
     pin_ask_class = "pinned" if is_pinned_ask else "not-pinned"
+    pin_bid_title = "Pinned at VBT bid" if is_pinned_bid else "Not pinned"
+    pin_ask_title = "Pinned at VBT ask" if is_pinned_ask else "Not pinned"
 
     # Inventory list
-    inventory = dealer_dict.get('inventory', [])
+    inventory = dealer_dict.get("inventory", [])
     inventory_items = []
     for t in inventory:
-        tid = t.get('id', '?')
-        issuer = t.get('issuer_id', '?')[:15]
-        face = _fmt_decimal(t.get('face'), 2)
-        tau = t.get('remaining_tau', '?')
+        tid = t.get("id", "?")
+        issuer = t.get("issuer_id", "?")[:15]
+        face = _fmt_decimal(t.get("face"), 2)
+        tau = t.get("remaining_tau", "?")
         inventory_items.append(f"<li>{tid} (issuer: {issuer}, face: {face}, τ: {tau})</li>")
 
     inventory_html = ""
@@ -323,7 +326,7 @@ def _render_dealer_card(dealer_dict: Dict[str, Any], vbt_dict: Dict[str, Any]) -
   <div class="inventory-list">
     <h4>Inventory ({len(inventory)} tickets)</h4>
     <ul>
-      {''.join(inventory_items)}
+      {"".join(inventory_items)}
     </ul>
   </div>
 """
@@ -344,10 +347,10 @@ def _render_dealer_card(dealer_dict: Dict[str, Any], vbt_dict: Dict[str, Any]) -
       <tr><th>Ladder rungs (N)</th><td>{N}</td></tr>
       <tr><th>Layoff prob (λ)</th><td>{lambda_}</td></tr>
       <tr class="section-header"><th colspan="2">Quotes</th></tr>
-      <tr><th>Inside width (I)</th><td>{I}</td></tr>
+      <tr><th>Inside width (I)</th><td>{inside_width}</td></tr>
       <tr><th>Midline p(x)</th><td>{midline}</td></tr>
-      <tr><th>Bid <span class="pin-indicator {pin_bid_class}" title="{'Pinned at VBT bid' if is_pinned_bid else 'Not pinned'}"></span></th><td>{bid}</td></tr>
-      <tr><th>Ask <span class="pin-indicator {pin_ask_class}" title="{'Pinned at VBT ask' if is_pinned_ask else 'Not pinned'}"></span></th><td>{ask}</td></tr>
+      <tr><th>Bid <span class="pin-indicator {pin_bid_class}" title="{pin_bid_title}"></span></th><td>{bid}</td></tr>
+      <tr><th>Ask <span class="pin-indicator {pin_ask_class}" title="{pin_ask_title}"></span></th><td>{ask}</td></tr>
     </tbody>
   </table>
   {inventory_html}
@@ -355,17 +358,17 @@ def _render_dealer_card(dealer_dict: Dict[str, Any], vbt_dict: Dict[str, Any]) -
 """
 
 
-def _render_vbt_card(vbt_dict: Dict[str, Any]) -> str:
+def _render_vbt_card(vbt_dict: dict[str, Any]) -> str:
     """Render VBT state card."""
-    bucket_id = vbt_dict.get('bucket_id', 'unknown')
-    M = _fmt_decimal(vbt_dict.get('M'))
-    O = _fmt_decimal(vbt_dict.get('O'))
-    A = _fmt_decimal(vbt_dict.get('A'))
-    B = _fmt_decimal(vbt_dict.get('B'))
-    cash = _fmt_decimal(vbt_dict.get('cash'))
+    bucket_id = vbt_dict.get("bucket_id", "unknown")
+    M = _fmt_decimal(vbt_dict.get("M"))
+    spread_anchor = _fmt_decimal(vbt_dict.get("O"))
+    A = _fmt_decimal(vbt_dict.get("A"))
+    B = _fmt_decimal(vbt_dict.get("B"))
+    cash = _fmt_decimal(vbt_dict.get("cash"))
 
     # Inventory
-    inventory = vbt_dict.get('inventory', [])
+    inventory = vbt_dict.get("inventory", [])
     inv_count = len(inventory)
 
     return f"""
@@ -374,7 +377,7 @@ def _render_vbt_card(vbt_dict: Dict[str, Any]) -> str:
   <table class="params-table">
     <tbody>
       <tr><th>Mid anchor (M)</th><td>{M}</td></tr>
-      <tr><th>Spread anchor (O)</th><td>{O}</td></tr>
+      <tr><th>Spread anchor (O)</th><td>{spread_anchor}</td></tr>
       <tr><th>Ask (A = M + O/2)</th><td>{A}</td></tr>
       <tr><th>Bid (B = M - O/2)</th><td>{B}</td></tr>
       <tr><th>Cash</th><td>{cash}</td></tr>
@@ -385,11 +388,11 @@ def _render_vbt_card(vbt_dict: Dict[str, Any]) -> str:
 """
 
 
-def _render_trader_balance(trader_dict: Dict[str, Any]) -> str:
+def _render_trader_balance(trader_dict: dict[str, Any]) -> str:
     """Render trader T-account balance sheet."""
-    agent_id = trader_dict.get('agent_id', 'unknown')
-    cash = trader_dict.get('cash', 0)
-    defaulted = trader_dict.get('defaulted', False)
+    agent_id = trader_dict.get("agent_id", "unknown")
+    cash = trader_dict.get("cash", 0)
+    defaulted = trader_dict.get("defaulted", False)
 
     # Status indicator
     status_badge = ""
@@ -397,24 +400,26 @@ def _render_trader_balance(trader_dict: Dict[str, Any]) -> str:
         status_badge = '<span style="color: #dc2626; font-weight: 600;"> [DEFAULTED]</span>'
 
     # Build assets side (Cash + Tickets owned)
-    tickets_owned = trader_dict.get('tickets_owned', [])
-    assets_rows = [f"""
+    tickets_owned = trader_dict.get("tickets_owned", [])
+    assets_rows = [
+        f"""
       <tr>
         <td class="name">Cash</td>
         <td class="val">{_fmt_decimal(cash, 2)}</td>
       </tr>
-    """]
+    """
+    ]
 
     total_ticket_face = Decimal(0)
     for ticket in tickets_owned:
-        face = ticket.get('face', 0)
+        face = ticket.get("face", 0)
         if isinstance(face, str):
             face = Decimal(face)
         total_ticket_face += face
-        tid = ticket.get('id', '?')
-        issuer = _html_escape(ticket.get('issuer_id', '?')[:12])
-        bucket = _html_escape(ticket.get('bucket_id', '?'))
-        tau = ticket.get('remaining_tau', '?')
+        tid = ticket.get("id", "?")
+        issuer = _html_escape(ticket.get("issuer_id", "?")[:12])
+        _html_escape(ticket.get("bucket_id", "?"))
+        tau = ticket.get("remaining_tau", "?")
         assets_rows.append(f"""
       <tr>
         <td class="name">{_html_escape(tid)}</td>
@@ -430,18 +435,18 @@ def _render_trader_balance(trader_dict: Dict[str, Any]) -> str:
         """)
 
     # Build liabilities side (Obligations)
-    obligations = trader_dict.get('obligations', [])
+    obligations = trader_dict.get("obligations", [])
     liabilities_rows = []
 
     total_obligations = Decimal(0)
     for obligation in obligations:
-        face = obligation.get('face', 0)
+        face = obligation.get("face", 0)
         if isinstance(face, str):
             face = Decimal(face)
         total_obligations += face
-        tid = obligation.get('id', '?')
-        owner = _html_escape(obligation.get('owner_id', '?')[:12])
-        maturity = obligation.get('maturity_day', '?')
+        tid = obligation.get("id", "?")
+        owner = _html_escape(obligation.get("owner_id", "?")[:12])
+        maturity = obligation.get("maturity_day", "?")
         liabilities_rows.append(f"""
       <tr>
         <td class="name">{_html_escape(tid)}</td>
@@ -469,7 +474,7 @@ def _render_trader_balance(trader_dict: Dict[str, Any]) -> str:
       <h4>Assets ({_fmt_decimal(total_assets, 2)})</h4>
       <table class="side">
         <tbody>
-          {''.join(assets_rows)}
+          {"".join(assets_rows)}
         </tbody>
       </table>
     </div>
@@ -477,7 +482,7 @@ def _render_trader_balance(trader_dict: Dict[str, Any]) -> str:
       <h4>Liabilities ({_fmt_decimal(total_obligations, 2)})</h4>
       <table class="side">
         <tbody>
-          {''.join(liabilities_rows)}
+          {"".join(liabilities_rows)}
         </tbody>
       </table>
     </div>
@@ -527,7 +532,7 @@ def _render_day_section(snapshot: "DaySnapshot", is_setup: bool = False) -> str:
   <div class="balances-section">
     <h3>Trader Balances</h3>
     <div class="traders-grid">
-      {''.join(trader_cards)}
+      {"".join(trader_cards)}
     </div>
   </div>
 """
@@ -541,10 +546,10 @@ def _render_day_section(snapshot: "DaySnapshot", is_setup: bool = False) -> str:
   <div class="balances-section">
     <h3>Market State</h3>
     <div class="dealers-grid">
-      {''.join(dealer_cards)}
+      {"".join(dealer_cards)}
     </div>
     <div class="dealers-grid">
-      {''.join(vbt_cards)}
+      {"".join(vbt_cards)}
     </div>
   </div>
 
@@ -582,7 +587,7 @@ def generate_dealer_ring_html(
     # Render each day
     day_sections = []
     for i, snapshot in enumerate(snapshots):
-        is_setup = (i == 0 and snapshot.day == 0)
+        is_setup = i == 0 and snapshot.day == 0
         day_sections.append(_render_day_section(snapshot, is_setup=is_setup))
 
     return f"""<!DOCTYPE html>
@@ -601,7 +606,7 @@ def generate_dealer_ring_html(
     {header_html}
 
     <main>
-      {''.join(day_sections)}
+      {"".join(day_sections)}
     </main>
 
     <footer>

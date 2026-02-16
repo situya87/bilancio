@@ -58,14 +58,14 @@ def compute_intraday_nets(system: System, day: int) -> dict[tuple[str, str], int
 def settle_intraday_nets(system: System, day: int) -> None:
     """
     Settle intraday nets between banks using reserves or creating overnight payables.
-    
+
     For each net amount between banks:
     - Try to transfer reserves if sufficient
     - If insufficient reserves, create overnight payable due tomorrow
     - Log InterbankCleared or InterbankOvernightCreated events
-    
+
     Args:
-        system: System instance  
+        system: System instance
         day: Current day
     """
     nets = compute_intraday_nets(system, day)
@@ -101,19 +101,30 @@ def settle_intraday_nets(system: System, day: int) -> None:
                 if not debtor_reserve_ids:
                     available_reserves = 0
                 else:
-                    available_reserves = sum(system.state.contracts[cid].amount for cid in debtor_reserve_ids)
+                    available_reserves = sum(
+                        system.state.contracts[cid].amount for cid in debtor_reserve_ids
+                    )
 
                 if available_reserves >= amount:
                     # Sufficient reserves - transfer them
                     system.transfer_reserves(debtor_bank, creditor_bank, amount)
-                    logger.debug("interbank cleared: %s -> %s amount=%d", debtor_bank, creditor_bank, amount)
-                    system.log(EventKind.INTERBANK_CLEARED,
-                              debtor_bank=debtor_bank,
-                              creditor_bank=creditor_bank,
-                              amount=amount)
+                    logger.debug(
+                        "interbank cleared: %s -> %s amount=%d", debtor_bank, creditor_bank, amount
+                    )
+                    system.log(
+                        EventKind.INTERBANK_CLEARED,
+                        debtor_bank=debtor_bank,
+                        creditor_bank=creditor_bank,
+                        amount=amount,
+                    )
                 else:
                     # Insufficient reserves - create overnight payable
-                    logger.debug("interbank overnight: %s -> %s amount=%d (insufficient reserves)", debtor_bank, creditor_bank, amount)
+                    logger.debug(
+                        "interbank overnight: %s -> %s amount=%d (insufficient reserves)",
+                        debtor_bank,
+                        creditor_bank,
+                        amount,
+                    )
                     payable_id = system.new_contract_id("P")
                     overnight_payable = Payable(
                         id=payable_id,
@@ -122,16 +133,18 @@ def settle_intraday_nets(system: System, day: int) -> None:
                         denom="X",
                         asset_holder_id=creditor_bank,
                         liability_issuer_id=debtor_bank,
-                        due_day=day + 1
+                        due_day=day + 1,
                     )
 
                     system.add_contract(overnight_payable)
-                    system.log(EventKind.INTERBANK_OVERNIGHT_CREATED,
-                              debtor_bank=debtor_bank,
-                              creditor_bank=creditor_bank,
-                              amount=amount,
-                              payable_id=payable_id,
-                              due_day=day + 1)
+                    system.log(
+                        EventKind.INTERBANK_OVERNIGHT_CREATED,
+                        debtor_bank=debtor_bank,
+                        creditor_bank=creditor_bank,
+                        amount=amount,
+                        payable_id=payable_id,
+                        due_day=day + 1,
+                    )
 
         except ValidationError:
             # If transfer fails, create overnight payable as fallback
@@ -143,13 +156,15 @@ def settle_intraday_nets(system: System, day: int) -> None:
                 denom="X",
                 asset_holder_id=creditor_bank,
                 liability_issuer_id=debtor_bank,
-                due_day=day + 1
+                due_day=day + 1,
             )
 
             system.add_contract(overnight_payable)
-            system.log(EventKind.INTERBANK_OVERNIGHT_CREATED,
-                      debtor_bank=debtor_bank,
-                      creditor_bank=creditor_bank,
-                      amount=amount,
-                      payable_id=payable_id,
-                      due_day=day + 1)
+            system.log(
+                EventKind.INTERBANK_OVERNIGHT_CREATED,
+                debtor_bank=debtor_bank,
+                creditor_bank=creditor_bank,
+                amount=amount,
+                payable_id=payable_id,
+                due_day=day + 1,
+            )

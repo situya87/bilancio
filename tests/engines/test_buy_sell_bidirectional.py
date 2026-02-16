@@ -10,28 +10,22 @@ import random
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-import pytest
-
 from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
+from bilancio.dealer.metrics import RunMetrics
 from bilancio.dealer.models import (
-    DealerState,
-    VBTState,
-    TraderState,
-    Ticket,
     BucketConfig,
+    DealerState,
+    Ticket,
+    TraderState,
+    VBTState,
 )
 from bilancio.dealer.trading import TradeExecutor
-from bilancio.dealer.metrics import RunMetrics
-from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
 from bilancio.engines.dealer_integration import DealerSubsystem
 from bilancio.engines.dealer_trades import (
-    _execute_sell_trade,
     _execute_buy_trade,
     _execute_interleaved_order_flow,
-    _build_eligible_sellers,
-    _build_eligible_buyers,
+    _execute_sell_trade,
 )
-from bilancio.decision.profiles import TraderProfile
 
 
 def _make_ticket(
@@ -79,12 +73,12 @@ def _make_dealer(
 def _make_vbt(
     bucket_id: str = "short",
     M: Decimal = Decimal("0.85"),
-    O: Decimal = Decimal("0.10"),
+    spread: Decimal = Decimal("0.10"),
     n_tickets: int = 0,
     cash: Decimal = Decimal(100),
 ) -> VBTState:
     agent_id = f"vbt_{bucket_id}"
-    vbt = VBTState(bucket_id=bucket_id, agent_id=agent_id, M=M, O=O, cash=cash)
+    vbt = VBTState(bucket_id=bucket_id, agent_id=agent_id, M=M, O=spread, cash=cash)
     vbt.recompute_quotes()
     for i in range(n_tickets):
         vbt.inventory.append(
@@ -178,11 +172,15 @@ class TestBidirectionalTrading:
         # Add sellers with shortfall
         for i in range(3):
             ticket = _make_ticket(
-                id=f"sell_t{i}", face=Decimal(1), bucket_id="short",
+                id=f"sell_t{i}",
+                face=Decimal(1),
+                bucket_id="short",
                 issuer_id=f"issuer_{i}",
             )
             obligation = _make_ticket(
-                id=f"obl{i}", face=Decimal(50), maturity_day=5,
+                id=f"obl{i}",
+                face=Decimal(50),
+                maturity_day=5,
                 issuer_id=f"issuer_{i}",
             )
             trader = TraderState(
@@ -204,6 +202,7 @@ class TestBidirectionalTrading:
         # Mock system for dealer budgets — need cash contracts so
         # _get_agent_cash returns non-zero for dealer/VBT
         from bilancio.domain.instruments.base import InstrumentKind
+
         dealer_cash_contract = MagicMock()
         dealer_cash_contract.kind = InstrumentKind.CASH
         dealer_cash_contract.amount = 50
@@ -226,7 +225,12 @@ class TestBidirectionalTrading:
         buyers = [f"buyer{i}" for i in range(3)]
 
         _execute_interleaved_order_flow(
-            subsystem, system, 5, sellers, buyers, events,
+            subsystem,
+            system,
+            5,
+            sellers,
+            buyers,
+            events,
         )
 
         sell_events = [e for e in events if e.get("side") == "sell"]
@@ -243,11 +247,13 @@ class TestPassthroughFriction:
         """When dealer inventory < layoff_threshold * K_star, VBT injects cash."""
         params = KernelParams(S=Decimal(1))
         M = Decimal("0.85")
-        O = Decimal("0.10")
+        spread = Decimal("0.10")
 
         # Dealer starts with 0 inventory (below any threshold)
         dealer = DealerState(bucket_id="short", agent_id="dealer_short", cash=Decimal(0))
-        vbt = VBTState(bucket_id="short", agent_id="vbt_short", M=M, O=O, cash=Decimal(100))
+        vbt = VBTState(
+            bucket_id="short", agent_id="vbt_short", M=M, O=spread, cash=Decimal(100)
+        )
         vbt.recompute_quotes()
         recompute_dealer_state(dealer, vbt, params)
 
@@ -268,11 +274,13 @@ class TestPassthroughFriction:
         """With layoff_threshold=0, credit facility is disabled."""
         params = KernelParams(S=Decimal(1))
         M = Decimal("0.85")
-        O = Decimal("0.10")
+        spread = Decimal("0.10")
 
         # Dealer with 0 inventory and 0 cash
         dealer = DealerState(bucket_id="short", agent_id="dealer_short", cash=Decimal(0))
-        vbt = VBTState(bucket_id="short", agent_id="vbt_short", M=M, O=O, cash=Decimal(100))
+        vbt = VBTState(
+            bucket_id="short", agent_id="vbt_short", M=M, O=spread, cash=Decimal(100)
+        )
         vbt.recompute_quotes()
         recompute_dealer_state(dealer, vbt, params)
 
@@ -290,17 +298,24 @@ class TestPassthroughFriction:
         """When dealer inventory >= layoff_threshold * K_star, passthrough resumes."""
         params = KernelParams(S=Decimal(1))
         M = Decimal("0.85")
-        O = Decimal("0.10")
+        spread = Decimal("0.10")
 
         # Dealer with LOTS of inventory (above threshold)
         dealer = DealerState(bucket_id="short", agent_id="dealer_short", cash=Decimal(50))
         for i in range(20):
-            dealer.inventory.append(_make_ticket(
-                id=f"d_inv_{i}", owner_id="dealer_short",
-                issuer_id=f"iss_{i}", serial=i, bucket_id="short",
-            ))
+            dealer.inventory.append(
+                _make_ticket(
+                    id=f"d_inv_{i}",
+                    owner_id="dealer_short",
+                    issuer_id=f"iss_{i}",
+                    serial=i,
+                    bucket_id="short",
+                )
+            )
 
-        vbt = VBTState(bucket_id="short", agent_id="vbt_short", M=M, O=O, cash=Decimal(100))
+        vbt = VBTState(
+            bucket_id="short", agent_id="vbt_short", M=M, O=spread, cash=Decimal(100)
+        )
         vbt.recompute_quotes()
         recompute_dealer_state(dealer, vbt, params)
 

@@ -1,5 +1,5 @@
 """Experiment orchestration helpers."""
 
-from .ring import RingSweepRunner, RingRunSummary
+from .ring import RingRunSummary, RingSweepRunner
 
 __all__ = ["RingSweepRunner", "RingRunSummary"]

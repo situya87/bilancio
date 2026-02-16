@@ -13,7 +13,6 @@ The corridor and backstop discipline prices and guarantee settlement.
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional
 
 from bilancio.banking.types import Quote
 
@@ -25,6 +24,7 @@ class PricingParams:
 
     All rates are 2-day effective rates.
     """
+
     # === Central Bank Corridor ===
     # Floor: 2-day reserve remuneration rate
     reserve_remuneration_rate: Decimal  # i_R^(2) = r_t (lower pin)
@@ -73,9 +73,7 @@ class PricingParams:
         Steady-state probability that a marginal unit of 2-day liquidity
         is laid off to CB (rather than warehoused) for symmetric band limits.
         """
-        return Decimal(self.ticket_size) / Decimal(
-            2 * self.symmetric_capacity + self.ticket_size
-        )
+        return Decimal(self.ticket_size) / Decimal(2 * self.symmetric_capacity + self.ticket_size)
 
     @property
     def inside_width(self) -> Decimal:
@@ -115,9 +113,7 @@ def compute_midline(inventory: int, params: PricingParams) -> Decimal:
         The midline rate at this inventory position
     """
     # Slope: how much the midline moves per unit of inventory
-    slope = params.outside_width / Decimal(
-        2 * (params.symmetric_capacity + params.ticket_size)
-    )
+    slope = params.outside_width / Decimal(2 * (params.symmetric_capacity + params.ticket_size))
 
     return params.outside_mid - slope * inventory
 
@@ -185,9 +181,7 @@ def compute_quotes(
         Quote with deposit and loan rates
     """
     # Tilted midline
-    midline = compute_tilted_midline(
-        inventory, cash_tightness, risk_index, params
-    )
+    midline = compute_tilted_midline(inventory, cash_tightness, risk_index, params)
 
     # Inside quotes
     half_width = params.inside_width / 2
@@ -242,8 +236,8 @@ def compute_inventory(
 
 def simple_risk_index(
     cash_tightness: Decimal,
-    loan_gap_ratio: Optional[Decimal] = None,
-    deposit_gap_ratio: Optional[Decimal] = None,
+    loan_gap_ratio: Decimal | None = None,
+    deposit_gap_ratio: Decimal | None = None,
     weight_reserve: Decimal = Decimal("1.0"),
     weight_loan: Decimal = Decimal("0.5"),
     weight_deposit: Decimal = Decimal("0.5"),

@@ -20,6 +20,7 @@ class Payable(Instrument):
                            payment - either the secondary market holder_id or the
                            original asset_holder_id.
     """
+
     due_day: int | None = None
     holder_id: str | None = None
     maturity_distance: int | None = None  # Plan 024: for continuous rollover

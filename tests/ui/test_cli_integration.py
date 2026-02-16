@@ -4,12 +4,12 @@ Tests the CLI commands work correctly with real scenario files.
 Uses Click's CliRunner for testing.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
 from click.testing import CliRunner
 
 from bilancio.ui.cli import cli
-
 
 # Path to example scenarios
 EXAMPLES_DIR = Path(__file__).parent.parent.parent / "examples" / "scenarios"
@@ -21,75 +21,75 @@ class TestCLIHelp:
     def test_main_help_shows_expected_commands(self):
         """Test that main --help shows all expected commands."""
         runner = CliRunner()
-        result = runner.invoke(cli, ['--help'])
+        result = runner.invoke(cli, ["--help"])
 
         assert result.exit_code == 0
-        assert 'run' in result.output
-        assert 'validate' in result.output
-        assert 'new' in result.output
-        assert 'analyze' in result.output
-        assert 'sweep' in result.output
+        assert "run" in result.output
+        assert "validate" in result.output
+        assert "new" in result.output
+        assert "analyze" in result.output
+        assert "sweep" in result.output
 
     def test_validate_help(self):
         """Test that validate command help works."""
         runner = CliRunner()
-        result = runner.invoke(cli, ['validate', '--help'])
+        result = runner.invoke(cli, ["validate", "--help"])
 
         assert result.exit_code == 0
-        assert 'Validate' in result.output
-        assert 'scenario' in result.output.lower()
+        assert "Validate" in result.output
+        assert "scenario" in result.output.lower()
 
     def test_analyze_help(self):
         """Test that analyze command help works."""
         runner = CliRunner()
-        result = runner.invoke(cli, ['analyze', '--help'])
+        result = runner.invoke(cli, ["analyze", "--help"])
 
         assert result.exit_code == 0
-        assert '--events' in result.output
-        assert '--balances' in result.output
-        assert '--out-csv' in result.output
+        assert "--events" in result.output
+        assert "--balances" in result.output
+        assert "--out-csv" in result.output
 
     def test_sweep_help_shows_subcommands(self):
         """Test that sweep --help shows sweep subcommands."""
         runner = CliRunner()
-        result = runner.invoke(cli, ['sweep', '--help'])
+        result = runner.invoke(cli, ["sweep", "--help"])
 
         assert result.exit_code == 0
-        assert 'ring' in result.output
-        assert 'comparison' in result.output
-        assert 'balanced' in result.output
+        assert "ring" in result.output
+        assert "comparison" in result.output
+        assert "balanced" in result.output
 
     def test_sweep_ring_help_shows_options(self):
         """Test that sweep ring --help shows ring options."""
         runner = CliRunner()
-        result = runner.invoke(cli, ['sweep', 'ring', '--help'])
+        result = runner.invoke(cli, ["sweep", "ring", "--help"])
 
         assert result.exit_code == 0
-        assert '--config' in result.output
-        assert '--out-dir' in result.output
-        assert '--kappas' in result.output
-        assert '--n-agents' in result.output
-        assert '--grid' in result.output
+        assert "--config" in result.output
+        assert "--out-dir" in result.output
+        assert "--kappas" in result.output
+        assert "--n-agents" in result.output
+        assert "--grid" in result.output
 
     def test_sweep_comparison_help(self):
         """Test that sweep comparison --help works."""
         runner = CliRunner()
-        result = runner.invoke(cli, ['sweep', 'comparison', '--help'])
+        result = runner.invoke(cli, ["sweep", "comparison", "--help"])
 
         assert result.exit_code == 0
-        assert '--out-dir' in result.output
-        assert '--n-agents' in result.output
-        assert '--dealer-share' in result.output
+        assert "--out-dir" in result.output
+        assert "--n-agents" in result.output
+        assert "--dealer-share" in result.output
 
     def test_sweep_balanced_help(self):
         """Test that sweep balanced --help works."""
         runner = CliRunner()
-        result = runner.invoke(cli, ['sweep', 'balanced', '--help'])
+        result = runner.invoke(cli, ["sweep", "balanced", "--help"])
 
         assert result.exit_code == 0
-        assert '--out-dir' in result.output
-        assert '--face-value' in result.output
-        assert '--big-entity-share' in result.output
+        assert "--out-dir" in result.output
+        assert "--face-value" in result.output
+        assert "--big-entity-share" in result.output
 
 
 class TestValidateCommand:
@@ -102,10 +102,10 @@ class TestValidateCommand:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['validate', str(scenario_path)])
+        result = runner.invoke(cli, ["validate", str(scenario_path)])
 
         assert result.exit_code == 0
-        assert 'valid' in result.output.lower()
+        assert "valid" in result.output.lower()
 
     def test_validate_two_banks_scenario(self):
         """Test validating the two_banks_interbank.yaml scenario."""
@@ -114,15 +114,15 @@ class TestValidateCommand:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(cli, ['validate', str(scenario_path)])
+        result = runner.invoke(cli, ["validate", str(scenario_path)])
 
         assert result.exit_code == 0
-        assert 'valid' in result.output.lower()
+        assert "valid" in result.output.lower()
 
     def test_validate_nonexistent_file(self):
         """Test validate with non-existent file."""
         runner = CliRunner()
-        result = runner.invoke(cli, ['validate', 'nonexistent_file.yaml'])
+        result = runner.invoke(cli, ["validate", "nonexistent_file.yaml"])
 
         assert result.exit_code != 0
 
@@ -137,14 +137,11 @@ class TestRunCommand:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'run', str(scenario_path),
-            '--max-days', '3'
-        ])
+        result = runner.invoke(cli, ["run", str(scenario_path), "--max-days", "3"])
 
         assert result.exit_code == 0
         # Check that the scenario name appears
-        assert 'Simple Banking System' in result.output
+        assert "Simple Banking System" in result.output
 
     def test_run_with_show_summary(self):
         """Test running with --show summary option."""
@@ -153,11 +150,9 @@ class TestRunCommand:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'run', str(scenario_path),
-            '--max-days', '2',
-            '--show', 'summary'
-        ])
+        result = runner.invoke(
+            cli, ["run", str(scenario_path), "--max-days", "2", "--show", "summary"]
+        )
 
         assert result.exit_code == 0
 
@@ -168,11 +163,9 @@ class TestRunCommand:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'run', str(scenario_path),
-            '--max-days', '2',
-            '--agents', 'CB,B1'
-        ])
+        result = runner.invoke(
+            cli, ["run", str(scenario_path), "--max-days", "2", "--agents", "CB,B1"]
+        )
 
         assert result.exit_code == 0
 
@@ -183,11 +176,9 @@ class TestRunCommand:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'run', str(scenario_path),
-            '--max-days', '2',
-            '--check-invariants', 'none'
-        ])
+        result = runner.invoke(
+            cli, ["run", str(scenario_path), "--max-days", "2", "--check-invariants", "none"]
+        )
 
         assert result.exit_code == 0
 
@@ -198,11 +189,7 @@ class TestRunCommand:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'run', str(scenario_path),
-            '--max-days', '2',
-            '--t-account'
-        ])
+        result = runner.invoke(cli, ["run", str(scenario_path), "--max-days", "2", "--t-account"])
 
         assert result.exit_code == 0
 
@@ -219,11 +206,10 @@ class TestRunWithExport:
         balances_file = tmp_path / "balances.csv"
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'run', str(scenario_path),
-            '--max-days', '2',
-            '--export-balances', str(balances_file)
-        ])
+        result = runner.invoke(
+            cli,
+            ["run", str(scenario_path), "--max-days", "2", "--export-balances", str(balances_file)],
+        )
 
         assert result.exit_code == 0
         assert balances_file.exists()
@@ -238,11 +224,9 @@ class TestRunWithExport:
         events_file = tmp_path / "events.jsonl"
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'run', str(scenario_path),
-            '--max-days', '2',
-            '--export-events', str(events_file)
-        ])
+        result = runner.invoke(
+            cli, ["run", str(scenario_path), "--max-days", "2", "--export-events", str(events_file)]
+        )
 
         assert result.exit_code == 0
         assert events_file.exists()
@@ -257,16 +241,14 @@ class TestRunWithExport:
         html_file = tmp_path / "output.html"
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'run', str(scenario_path),
-            '--max-days', '2',
-            '--html', str(html_file)
-        ])
+        result = runner.invoke(
+            cli, ["run", str(scenario_path), "--max-days", "2", "--html", str(html_file)]
+        )
 
         assert result.exit_code == 0
         assert html_file.exists()
         content = html_file.read_text()
-        assert 'html' in content.lower()
+        assert "html" in content.lower()
 
 
 class TestErrorHandling:
@@ -279,10 +261,7 @@ class TestErrorHandling:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'run', str(scenario_path),
-            '--mode', 'invalid-mode'
-        ])
+        result = runner.invoke(cli, ["run", str(scenario_path), "--mode", "invalid-mode"])
 
         # Click should reject invalid choice
         assert result.exit_code != 0
@@ -294,10 +273,7 @@ class TestErrorHandling:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'run', str(scenario_path),
-            '--show', 'invalid-show'
-        ])
+        result = runner.invoke(cli, ["run", str(scenario_path), "--show", "invalid-show"])
 
         # Click should reject invalid choice
         assert result.exit_code != 0
@@ -305,13 +281,13 @@ class TestErrorHandling:
     def test_unknown_command(self):
         """Test invoking unknown command."""
         runner = CliRunner()
-        result = runner.invoke(cli, ['unknown-command'])
+        result = runner.invoke(cli, ["unknown-command"])
 
         assert result.exit_code != 0
 
     def test_sweep_unknown_subcommand(self):
         """Test invoking unknown sweep subcommand."""
         runner = CliRunner()
-        result = runner.invoke(cli, ['sweep', 'unknown-subcommand'])
+        result = runner.invoke(cli, ["sweep", "unknown-subcommand"])
 
         assert result.exit_code != 0

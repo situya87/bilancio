@@ -2,38 +2,36 @@
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.experiments.balanced_comparison import (
-    BalancedComparisonResult,
     BalancedComparisonConfig,
+    BalancedComparisonResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Minimal kwargs shared across tests
 # ---------------------------------------------------------------------------
 
+
 def _base_kwargs(**overrides):
     """Return minimal kwargs for BalancedComparisonResult."""
-    defaults = dict(
-        kappa=Decimal("1"),
-        concentration=Decimal("1"),
-        mu=Decimal("0"),
-        monotonicity=Decimal("0"),
-        seed=42,
-        face_value=Decimal("20"),
-        outside_mid_ratio=Decimal("1"),
-        big_entity_share=Decimal("0.25"),
-        delta_passive=Decimal("0.4"),
-        phi_passive=Decimal("0.6"),
-        passive_run_id="passive-1",
-        passive_status="completed",
-        delta_active=Decimal("0.3"),
-        phi_active=Decimal("0.7"),
-        active_run_id="active-1",
-        active_status="completed",
-    )
+    defaults = {
+        "kappa": Decimal("1"),
+        "concentration": Decimal("1"),
+        "mu": Decimal("0"),
+        "monotonicity": Decimal("0"),
+        "seed": 42,
+        "face_value": Decimal("20"),
+        "outside_mid_ratio": Decimal("1"),
+        "big_entity_share": Decimal("0.25"),
+        "delta_passive": Decimal("0.4"),
+        "phi_passive": Decimal("0.6"),
+        "passive_run_id": "passive-1",
+        "passive_status": "completed",
+        "delta_active": Decimal("0.3"),
+        "phi_active": Decimal("0.7"),
+        "active_run_id": "active-1",
+        "active_status": "completed",
+    }
     defaults.update(overrides)
     return defaults
 
@@ -42,8 +40,8 @@ def _base_kwargs(**overrides):
 # Tests: combined_effect property
 # ---------------------------------------------------------------------------
 
-class TestCombinedEffect:
 
+class TestCombinedEffect:
     def test_combined_effect_positive(self):
         """Positive combined_effect when dealer+lender reduces defaults."""
         r = BalancedComparisonResult(
@@ -92,8 +90,8 @@ class TestCombinedEffect:
 # Tests: F arm default field values
 # ---------------------------------------------------------------------------
 
-class TestDealerLenderDefaults:
 
+class TestDealerLenderDefaults:
     def test_default_values(self):
         """F arm fields default to empty/zero/None."""
         r = BalancedComparisonResult(**_base_kwargs())
@@ -131,8 +129,8 @@ class TestDealerLenderDefaults:
 # Tests: Config enable_dealer_lender field
 # ---------------------------------------------------------------------------
 
-class TestConfigDealerLender:
 
+class TestConfigDealerLender:
     def test_default_disabled(self):
         """enable_dealer_lender defaults to False."""
         cfg = BalancedComparisonConfig()

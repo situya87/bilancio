@@ -6,24 +6,32 @@ specifications are properly defined before code is written.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
-from .models import AgentSpec, InstrumentSpec, BalanceSheetPosition, InstrumentRelation, AgentRelation
+from .models import (
+    AgentRelation,
+    AgentSpec,
+    BalanceSheetPosition,
+    InstrumentRelation,
+    InstrumentSpec,
+)
 from .registry import SpecificationRegistry
 
 
 @dataclass
 class ValidationError:
     """A single validation error."""
+
     category: str  # e.g., "missing_relation", "incomplete_spec", "inconsistency"
-    entity: str    # Agent or instrument name
-    field: str     # Which field has the error
-    message: str   # Human-readable description
+    entity: str  # Agent or instrument name
+    field: str  # Which field has the error
+    message: str  # Human-readable description
 
 
 @dataclass
 class ValidationResult:
     """Result of a validation check."""
+
     is_valid: bool
     errors: list[ValidationError] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -66,7 +74,9 @@ def validate_agent_completeness(
         result.add_error("missing_field", agent.name or "unknown", "name", "Agent name is required")
 
     if not agent.description:
-        result.add_error("missing_field", agent.name, "description", "Agent description is required")
+        result.add_error(
+            "missing_field", agent.name, "description", "Agent description is required"
+        )
 
     # 2. Check relations for all instruments
     for instrument_name in registry.list_instruments():
@@ -75,7 +85,7 @@ def validate_agent_completeness(
                 "missing_relation",
                 agent.name,
                 f"instrument_relations[{instrument_name}]",
-                f"Missing relation to instrument '{instrument_name}'"
+                f"Missing relation to instrument '{instrument_name}'",
             )
         else:
             # 3. Check relation is internally consistent
@@ -87,7 +97,7 @@ def validate_agent_completeness(
                     "incomplete_relation",
                     agent.name,
                     f"instrument_relations[{instrument_name}]",
-                    error
+                    error,
                 )
 
     # 4. Check decisions reference valid instruments
@@ -95,10 +105,7 @@ def validate_agent_completeness(
         is_complete, errors = decision.is_complete()
         for error in errors:
             result.add_error(
-                "incomplete_decision",
-                agent.name,
-                f"decisions[{decision.name}]",
-                error
+                "incomplete_decision", agent.name, f"decisions[{decision.name}]", error
             )
 
         # Check that instruments_involved exist
@@ -109,10 +116,7 @@ def validate_agent_completeness(
                 )
 
     # 5. Check lifecycle if agent can hold any instruments
-    can_hold_any = any(
-        rel.can_hold
-        for rel in agent.instrument_relations.values()
-    )
+    can_hold_any = any(rel.can_hold for rel in agent.instrument_relations.values())
     if can_hold_any and not agent.lifecycle:
         result.add_warning(
             f"Agent '{agent.name}' can hold instruments but has no lifecycle specification"
@@ -145,10 +149,14 @@ def validate_instrument_completeness(
 
     # 1. Check required fields
     if not instrument.name:
-        result.add_error("missing_field", instrument.name or "unknown", "name", "Instrument name is required")
+        result.add_error(
+            "missing_field", instrument.name or "unknown", "name", "Instrument name is required"
+        )
 
     if not instrument.description:
-        result.add_error("missing_field", instrument.name, "description", "Instrument description is required")
+        result.add_error(
+            "missing_field", instrument.name, "description", "Instrument description is required"
+        )
 
     # 2. Check relations for all agents
     for agent_name in registry.list_agents():
@@ -157,7 +165,7 @@ def validate_instrument_completeness(
                 "missing_relation",
                 instrument.name,
                 f"agent_relations[{agent_name}]",
-                f"Missing relation to agent '{agent_name}'"
+                f"Missing relation to agent '{agent_name}'",
             )
         else:
             # 3. Check relation is internally consistent
@@ -166,29 +174,18 @@ def validate_instrument_completeness(
             is_complete, errors = relation.is_complete()
             for error in errors:
                 result.add_error(
-                    "incomplete_relation",
-                    instrument.name,
-                    f"agent_relations[{agent_name}]",
-                    error
+                    "incomplete_relation", instrument.name, f"agent_relations[{agent_name}]", error
                 )
 
     # 4. Check lifecycle
     if not instrument.lifecycle:
         result.add_error(
-            "missing_field",
-            instrument.name,
-            "lifecycle",
-            "Instrument lifecycle is required"
+            "missing_field", instrument.name, "lifecycle", "Instrument lifecycle is required"
         )
     else:
         is_complete, errors = instrument.lifecycle.is_complete()
         for error in errors:
-            result.add_error(
-                "incomplete_lifecycle",
-                instrument.name,
-                "lifecycle",
-                error
-            )
+            result.add_error("incomplete_lifecycle", instrument.name, "lifecycle", error)
 
     # 5. Check interactions with other instruments
     for other_name in registry.list_instruments():
@@ -207,7 +204,7 @@ def validate_instrument_completeness(
                     "incomplete_interaction",
                     instrument.name,
                     f"instrument_interactions[{other_name}]",
-                    error
+                    error,
                 )
 
     return result
@@ -234,7 +231,7 @@ def validate_all_relationships(registry: SpecificationRegistry) -> ValidationRes
             "missing_relation",
             f"{agent_name}<->{instrument_name}",
             "relationship",
-            f"No relationship defined between agent '{agent_name}' and instrument '{instrument_name}'"
+            f"No relationship defined between agent '{agent_name}' and instrument '{instrument_name}'",
         )
 
     # 3. Check symmetry
@@ -250,7 +247,7 @@ def validate_all_relationships(registry: SpecificationRegistry) -> ValidationRes
                         "inconsistency",
                         f"{agent_name}<->{instrument_name}",
                         "can_hold",
-                        f"Agent says can_hold={agent_rel.can_hold}, instrument says can_hold={instrument_rel.can_hold}"
+                        f"Agent says can_hold={agent_rel.can_hold}, instrument says can_hold={instrument_rel.can_hold}",
                     )
 
                 # Check can_create/can_issue is consistent
@@ -259,7 +256,7 @@ def validate_all_relationships(registry: SpecificationRegistry) -> ValidationRes
                         "inconsistency",
                         f"{agent_name}<->{instrument_name}",
                         "can_create/can_issue",
-                        f"Agent says can_create={agent_rel.can_create}, instrument says can_issue={instrument_rel.can_issue}"
+                        f"Agent says can_create={agent_rel.can_create}, instrument says can_issue={instrument_rel.can_issue}",
                     )
 
                 # Check position is consistent
@@ -268,15 +265,15 @@ def validate_all_relationships(registry: SpecificationRegistry) -> ValidationRes
                         "inconsistency",
                         f"{agent_name}<->{instrument_name}",
                         "position",
-                        f"Agent says position={agent_rel.position.value}, instrument says position={instrument_rel.position.value}"
+                        f"Agent says position={agent_rel.position.value}, instrument says position={instrument_rel.position.value}",
                     )
 
     # 4. Validate individual specs
-    for agent_name, agent in registry.agents.items():
+    for _agent_name, agent in registry.agents.items():
         agent_result = validate_agent_completeness(agent, registry)
         result.merge(agent_result)
 
-    for instrument_name, instrument in registry.instruments.items():
+    for _instrument_name, instrument in registry.instruments.items():
         instrument_result = validate_instrument_completeness(instrument, registry)
         result.merge(instrument_result)
 
@@ -295,7 +292,6 @@ def generate_stub_relations(
 
     These can be used to quickly add the missing relations.
     """
-    from .models import InstrumentRelation, AgentRelation
 
     agent_stubs = []
     instrument_stubs = []

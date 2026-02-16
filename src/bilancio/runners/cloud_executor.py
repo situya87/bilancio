@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import itertools
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 from bilancio.runners.models import ExecutionResult, RunOptions
 from bilancio.runners.retry import retry_transient
@@ -35,7 +36,7 @@ class CloudExecutor:
         self,
         experiment_id: str,
         download_artifacts: bool = True,
-        local_output_dir: Optional[Path] = None,
+        local_output_dir: Path | None = None,
         volume_name: str = "bilancio-results",
         job_id: str = "",
     ):
@@ -52,9 +53,7 @@ class CloudExecutor:
         """
         self.experiment_id = experiment_id
         self.download_artifacts = download_artifacts
-        self.local_output_dir = local_output_dir or Path(
-            f"out/experiments/{experiment_id}"
-        )
+        self.local_output_dir = local_output_dir or Path(f"out/experiments/{experiment_id}")
         self.volume_name = volume_name
         self.app_name = "bilancio-simulations"
         self.job_id = job_id
@@ -70,18 +69,17 @@ class CloudExecutor:
         """
         if self._run_simulation is None:
             # Apply proxy patch for environments with HTTP CONNECT proxy (e.g., Claude Code web)
-            import bilancio.cloud.proxy_patch  # noqa: F401
             import modal
 
-            self._run_simulation = modal.Function.from_name(
-                self.app_name, "run_simulation"
-            )
+            import bilancio.cloud.proxy_patch  # noqa: F401
+
+            self._run_simulation = modal.Function.from_name(self.app_name, "run_simulation")
         return self._run_simulation
 
     @retry_transient()
     def execute(
         self,
-        scenario_config: Dict[str, Any],
+        scenario_config: dict[str, Any],
         run_id: str,
         output_dir: Path,
         options: RunOptions,
@@ -124,11 +122,7 @@ class CloudExecutor:
 
         return ExecutionResult(
             run_id=result["run_id"],
-            status=(
-                RunStatus.COMPLETED
-                if result["status"] == "completed"
-                else RunStatus.FAILED
-            ),
+            status=(RunStatus.COMPLETED if result["status"] == "completed" else RunStatus.FAILED),
             storage_type=storage_type,
             storage_base=storage_base,
             artifacts=result["artifacts"],
@@ -140,10 +134,10 @@ class CloudExecutor:
 
     def execute_batch(
         self,
-        runs: List[Tuple[Dict[str, Any], str, RunOptions]],
+        runs: list[tuple[dict[str, Any], str, RunOptions]],
         max_parallel: int = 50,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
-    ) -> List[ExecutionResult]:
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[ExecutionResult]:
         """Execute multiple simulations in parallel on Modal.
 
         Modal handles parallelization automatically. This method provides
@@ -161,7 +155,7 @@ class CloudExecutor:
         run_simulation = self._get_run_simulation()
 
         total = len(runs)
-        results: List[Optional[ExecutionResult]] = [None] * total
+        results: list[ExecutionResult | None] = [None] * total
 
         run_id_to_index = {run_id: idx for idx, (_, run_id, _) in enumerate(runs)}
         configs = [config for config, _, _ in runs]
@@ -196,9 +190,7 @@ class CloudExecutor:
             results[idx] = ExecutionResult(
                 run_id=result["run_id"],
                 status=(
-                    RunStatus.COMPLETED
-                    if result["status"] == "completed"
-                    else RunStatus.FAILED
+                    RunStatus.COMPLETED if result["status"] == "completed" else RunStatus.FAILED
                 ),
                 storage_type=storage_type,
                 storage_base=storage_base,
@@ -215,7 +207,7 @@ class CloudExecutor:
 
         return results  # type: ignore
 
-    def _options_to_dict(self, options: RunOptions) -> Dict[str, Any]:
+    def _options_to_dict(self, options: RunOptions) -> dict[str, Any]:
         """Convert RunOptions to serializable dict."""
         result = {
             "mode": options.mode,
@@ -246,7 +238,7 @@ class CloudExecutor:
         self,
         run_id: str,
         output_dir: Path,
-        artifacts: Dict[str, str],
+        artifacts: dict[str, str],
     ) -> None:
         """Download artifacts from Modal Volume to local disk.
 
@@ -285,11 +277,9 @@ class CloudExecutor:
                 )
             except subprocess.CalledProcessError as e:
                 # Log but don't fail - artifact might be optional
-                print(
-                    f"Warning: Failed to download {artifact_name}: {e.stderr.decode()}"
-                )
+                print(f"Warning: Failed to download {artifact_name}: {e.stderr.decode()}")
 
-    def compute_aggregate_metrics(self, run_ids: List[str]) -> Dict[str, Any]:
+    def compute_aggregate_metrics(self, run_ids: list[str]) -> dict[str, Any]:
         """Compute aggregate metrics for completed runs on Modal.
 
         Calls the compute_aggregate_metrics Modal function to calculate
@@ -302,8 +292,9 @@ class CloudExecutor:
             Dict with aggregate metrics and status.
         """
         # Apply proxy patch for environments with HTTP CONNECT proxy
-        import bilancio.cloud.proxy_patch  # noqa: F401
         import modal
+
+        import bilancio.cloud.proxy_patch  # noqa: F401
 
         # Get reference to deployed function (same pattern as run_simulation)
         modal_aggregate = modal.Function.from_name(self.app_name, "compute_aggregate_metrics")
@@ -316,11 +307,17 @@ class CloudExecutor:
 
         if result.get("status") == "completed":
             summary = result.get("summary", {})
-            print(f"Aggregate metrics computed:", flush=True)
+            print("Aggregate metrics computed:", flush=True)
             print(f"  Comparisons: {summary.get('n_comparisons', 0)}", flush=True)
-            print(f"  Mean trading effect: {summary.get('mean_trading_effect', 'N/A'):.4f}"
-                  if summary.get('mean_trading_effect') is not None else "  Mean trading effect: N/A", flush=True)
+            print(
+                f"  Mean trading effect: {summary.get('mean_trading_effect', 'N/A'):.4f}"
+                if summary.get("mean_trading_effect") is not None
+                else "  Mean trading effect: N/A",
+                flush=True,
+            )
         else:
-            print(f"Warning: Aggregate metrics computation failed: {result.get('error')}", flush=True)
+            print(
+                f"Warning: Aggregate metrics computation failed: {result.get('error')}", flush=True
+            )
 
         return dict(result)

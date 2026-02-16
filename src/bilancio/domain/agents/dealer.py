@@ -6,6 +6,7 @@ liquidity by maintaining bid/ask quotes for claims in a specific
 maturity bucket. Dealers hold inventory and trade with both customers
 (traders) and the VBT (Value-Based Trader).
 """
+
 from dataclasses import dataclass, field
 
 from bilancio.domain.agent import Agent, AgentKind

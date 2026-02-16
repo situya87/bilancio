@@ -17,11 +17,11 @@ All arithmetic uses Decimal for precision - never float.
 
 import logging
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_FLOOR
+from decimal import ROUND_FLOOR, Decimal
+
+from .models import DealerState, Ticket, VBTState
 
 logger = logging.getLogger(__name__)
-
-from .models import DealerState, VBTState, Ticket
 
 # Guard threshold - when M <= M_MIN, dealer pins to outside quotes
 M_MIN = Decimal("0.02")
@@ -35,6 +35,7 @@ class KernelParams:
     Attributes:
         S: Standard ticket size (face value)
     """
+
     S: Decimal = Decimal(1)
 
 
@@ -73,7 +74,7 @@ def recompute_dealer_state(
     """
     S = params.S
     M = vbt.M
-    O = vbt.O
+    outside_spread = vbt.O
     A = vbt.A
     B = vbt.B
 
@@ -91,7 +92,7 @@ def recompute_dealer_state(
         dealer.X_star = Decimal(0)
         dealer.N = 1
         dealer.lambda_ = Decimal(1)
-        dealer.I = O  # Not used when pinned, but set for completeness
+        dealer.I = outside_spread  # Not used when pinned, but set for completeness
         dealer.midline = M
         dealer.bid = B
         dealer.ask = A
@@ -131,7 +132,7 @@ def recompute_dealer_state(
     # I = λ * O
     # Inside width (competitive equilibrium spread)
     # Dealer spread is compressed by layoff probability
-    dealer.I = dealer.lambda_ * O
+    dealer.I = dealer.lambda_ * outside_spread
 
     # Step 4: Inventory-sensitive midline (Section 8.4)
     # p(x) = M - (O / (X* + 2S)) * (x - X*/2)
@@ -141,7 +142,7 @@ def recompute_dealer_state(
     # - Increase as inventory decreases (dealer wants to buy)
     # - Centered at balanced inventory x = X*/2
     if dealer.X_star + 2 * S > 0:
-        slope = O / (dealer.X_star + 2 * S)
+        slope = outside_spread / (dealer.X_star + 2 * S)
         dealer.midline = M - slope * (dealer.x - dealer.X_star / 2)
     else:
         # Degenerate case: zero capacity
@@ -167,8 +168,8 @@ def recompute_dealer_state(
     # Step 7: Pin detection
     # Dealer is "pinned" when its quote equals the outside quote
     # This signals that the dealer wants to route to VBT
-    dealer.is_pinned_ask = (dealer.ask >= A)
-    dealer.is_pinned_bid = (dealer.bid == B)
+    dealer.is_pinned_ask = dealer.ask >= A
+    dealer.is_pinned_bid = dealer.bid == B
 
 
 def can_interior_buy(dealer: DealerState, params: KernelParams) -> bool:
@@ -190,8 +191,8 @@ def can_interior_buy(dealer: DealerState, params: KernelParams) -> bool:
         - Section 8.6: Feasibility Checks
     """
     S = params.S
-    has_capacity = (dealer.x + S <= dealer.X_star)
-    has_cash = (dealer.cash >= dealer.bid * S)
+    has_capacity = dealer.x + S <= dealer.X_star
+    has_cash = dealer.cash >= dealer.bid * S
     return has_capacity and has_cash
 
 
@@ -219,8 +220,8 @@ def can_interior_sell(dealer: DealerState, params: KernelParams) -> bool:
         - Section 7.2: Guard regime when M <= M_MIN
     """
     S = params.S
-    has_inventory = (dealer.x >= S)
-    not_in_guard = (dealer.X_star > 0)
+    has_inventory = dealer.x >= S
+    not_in_guard = dealer.X_star > 0
     return has_inventory and not_in_guard
 
 
@@ -235,6 +236,7 @@ class ExecutionResult:
         is_passthrough: True if trade was routed to VBT (outside market)
         ticket: Ticket that was transferred (for BUYs), None for failed trades
     """
+
     executed: bool
     price: Decimal
     is_passthrough: bool

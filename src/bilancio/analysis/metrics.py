@@ -1,13 +1,15 @@
-from __future__ import annotations
-
 """Analytics and metrics for payment microstructure (Kalecki-style scenarios).
 
 Includes existing financial placeholders (NPV/IRR) kept intact for tests,
 plus new metrics used by the Kalecki ring baseline analysis.
 """
 
-from typing import Any
+from __future__ import annotations
 
+from collections import defaultdict
+from collections.abc import Callable, Iterable
+from decimal import Decimal
+from typing import Any
 
 # TODO: Import CashFlow and Money from appropriate modules once defined
 # from bilancio.domain.instruments import CashFlow
@@ -47,24 +49,18 @@ def calculate_irr(flows: list[Any]) -> float:
 # Kalecki metrics API
 # ---------------------------------------------------------------------------
 
-from collections import defaultdict
-from dataclasses import dataclass
-from decimal import Decimal
-from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple
-
-
 # Types
 Event = dict[str, Any]
 AgentId = str
 
 
-def dues_for_day(events: Iterable[Event], t: int) -> List[dict[str, Any]]:
+def dues_for_day(events: Iterable[Event], t: int) -> list[dict[str, Any]]:
     """Return dues maturing on day t from creation events.
 
     We look for PayableCreated (or similarly named) events that carry a due_day.
     Output items minimally include: debtor, creditor, amount, due_day, and ids if present.
     """
-    dues: List[dict[str, Any]] = []
+    dues: list[dict[str, Any]] = []
     for e in events:
         kind = e.get("kind")
         if kind == "PayableCreated" and int(e.get("due_day", -1)) == int(t):
@@ -81,33 +77,33 @@ def dues_for_day(events: Iterable[Event], t: int) -> List[dict[str, Any]]:
     return dues
 
 
-def net_vectors(dues: Iterable[dict[str, Any]]) -> Dict[AgentId, Dict[str, Decimal]]:
+def net_vectors(dues: Iterable[dict[str, Any]]) -> dict[AgentId, dict[str, Decimal]]:
     """Compute F (outflows due), I (inflows due), and n=I-F per agent.
 
     Returns mapping: agent -> {"F": Decimal, "I": Decimal, "n": Decimal}
     """
-    F: Dict[AgentId, Decimal] = defaultdict(lambda: Decimal("0"))
-    I: Dict[AgentId, Decimal] = defaultdict(lambda: Decimal("0"))
+    outflow_totals: dict[AgentId, Decimal] = defaultdict(lambda: Decimal("0"))
+    inflow_totals: dict[AgentId, Decimal] = defaultdict(lambda: Decimal("0"))
 
     for d in dues:
         a = Decimal(d.get("amount", 0))
         debtor = d.get("debtor") or d.get("from")
         creditor = d.get("creditor") or d.get("to")
         if debtor:
-            F[debtor] += a
+            outflow_totals[debtor] += a
         if creditor:
-            I[creditor] += a
+            inflow_totals[creditor] += a
 
-    agents = set(F.keys()) | set(I.keys())
-    nets: Dict[AgentId, Dict[str, Decimal]] = {}
+    agents = set(outflow_totals.keys()) | set(inflow_totals.keys())
+    nets: dict[AgentId, dict[str, Decimal]] = {}
     for agent in agents:
-        f = F.get(agent, Decimal("0"))
-        i = I.get(agent, Decimal("0"))
+        f = outflow_totals.get(agent, Decimal("0"))
+        i = inflow_totals.get(agent, Decimal("0"))
         nets[agent] = {"F": f, "I": i, "n": i - f}
     return nets
 
 
-def raw_minimum_liquidity(nets: Dict[AgentId, Dict[str, Decimal]]) -> Decimal:
+def raw_minimum_liquidity(nets: dict[AgentId, dict[str, Decimal]]) -> Decimal:
     """Mbar = sum over agents of max(0, F - I)."""
     total = Decimal("0")
     for v in nets.values():
@@ -116,14 +112,14 @@ def raw_minimum_liquidity(nets: Dict[AgentId, Dict[str, Decimal]]) -> Decimal:
 
 
 def size_and_bunching(
-    dues: Iterable[dict[str, Any]], bin_fn: Optional[Callable[[dict[str, Any]], str]] = None
-) -> Tuple[Decimal, Decimal]:
+    dues: Iterable[dict[str, Any]], bin_fn: Callable[[dict[str, Any]], str] | None = None
+) -> tuple[Decimal, Decimal]:
     """Return (S_t, BI_t). If no bin_fn, BI_t=0.
 
     S_t is total amount due that day.
     BI_t is an optional concentration index across user-provided bins.
     """
-    amounts: List[Decimal] = [Decimal(d.get("amount", 0)) for d in dues]
+    amounts: list[Decimal] = [Decimal(d.get("amount", 0)) for d in dues]
     S_t = sum(amounts, start=Decimal("0"))
 
     if not bin_fn:
@@ -131,7 +127,7 @@ def size_and_bunching(
 
     from statistics import mean, pstdev
 
-    buckets: Dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    buckets: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
     for d in dues:
         buckets[bin_fn(d)] += Decimal(d.get("amount", 0))
 
@@ -145,14 +141,16 @@ def size_and_bunching(
     return S_t, sd / m
 
 
-def phi_delta(events: Iterable[Event], dues: Iterable[dict[str, Any]], t: int) -> Tuple[Optional[Decimal], Optional[Decimal]]:
+def phi_delta(
+    events: Iterable[Event], dues: Iterable[dict[str, Any]], t: int
+) -> tuple[Decimal | None, Decimal | None]:
     """Compute on-time settlement ratio phi_t and delta_t = 1 - phi_t.
 
     Numerator: settled events with day==t and original due_day==t.
     Denominator: S_t from dues list.
     """
     # Map payable IDs (pid/alias) to due_day for matching
-    id_to_due: Dict[str, int] = {}
+    id_to_due: dict[str, int] = {}
     for d in dues:
         if d.get("pid"):
             id_to_due[str(d["pid"])] = int(d.get("due_day", -1))
@@ -186,16 +184,16 @@ def phi_delta(events: Iterable[Event], dues: Iterable[dict[str, Any]], t: int) -
 
 def replay_intraday_peak(
     events: Iterable[Event], t: int
-) -> Tuple[Decimal, List[dict[str, Any]], Decimal]:
+) -> tuple[Decimal, list[dict[str, Any]], Decimal]:
     """Replay day-t PayableSettled events in order to compute RTGS peak.
 
     Returns (Mpeak_t, steps_table, gross_settled_t)
     steps_table rows: {step, payer, payee, amount, P_prefix}
     """
-    Delta: Dict[AgentId, Decimal] = defaultdict(lambda: Decimal("0"))
+    Delta: dict[AgentId, Decimal] = defaultdict(lambda: Decimal("0"))
     gross = Decimal("0")
     peak = Decimal("0")
-    steps: List[dict[str, Any]] = []
+    steps: list[dict[str, Any]] = []
     step_idx = 0
 
     for e in events:
@@ -218,26 +216,28 @@ def replay_intraday_peak(
         if P > peak:
             peak = P
         step_idx += 1
-        steps.append({
-            "day": int(t),
-            "step": step_idx,
-            "payer": payer,
-            "payee": payee,
-            "amount": amount,
-            "P_prefix": P,
-        })
+        steps.append(
+            {
+                "day": int(t),
+                "step": step_idx,
+                "payer": payer,
+                "payee": payee,
+                "amount": amount,
+                "P_prefix": P,
+            }
+        )
 
     return peak, steps, gross
 
 
-def velocity(gross_settled_t: Decimal, Mpeak_t: Decimal) -> Optional[Decimal]:
+def velocity(gross_settled_t: Decimal, Mpeak_t: Decimal) -> Decimal | None:
     """gross_settled_t / Mpeak_t, None if division not defined."""
     if Mpeak_t and Mpeak_t != 0:
         return gross_settled_t / Mpeak_t
     return None
 
 
-def creditor_hhi_plus(nets: Dict[AgentId, Dict[str, Decimal]]) -> Optional[Decimal]:
+def creditor_hhi_plus(nets: dict[AgentId, dict[str, Decimal]]) -> Decimal | None:
     """HHI over positive n_i (creditor side). Returns None if no creditors."""
     pos = [v["n"] for v in nets.values() if v["n"] > 0]
     if not pos:
@@ -249,17 +249,17 @@ def creditor_hhi_plus(nets: Dict[AgentId, Dict[str, Decimal]]) -> Optional[Decim
 
 
 def debtor_shortfall_shares(
-    nets: Dict[AgentId, Dict[str, Decimal]]
-) -> Dict[AgentId, Optional[Decimal]]:
+    nets: dict[AgentId, dict[str, Decimal]],
+) -> dict[AgentId, Decimal | None]:
     """DS_t(i) per agent (or None if no net debtors)."""
     short = {a: max(Decimal("0"), v["F"] - v["I"]) for a, v in nets.items()}
     denom = sum(short.values(), start=Decimal("0"))
     if denom == 0:
-        return {a: None for a in nets.keys()}
+        return dict.fromkeys(nets.keys())
     return {a: (val / denom if denom != 0 else None) for a, val in short.items()}
 
 
-def start_of_day_money(bal_rows: List[dict[str, Any]], t: int) -> Decimal:
+def start_of_day_money(bal_rows: list[dict[str, Any]], t: int) -> Decimal:
     """Sum system means-of-payment at start of day t.
 
     Since the current CSV is a snapshot (no day column), for baseline we use the
@@ -269,6 +269,7 @@ def start_of_day_money(bal_rows: List[dict[str, Any]], t: int) -> Decimal:
     For closed systems without injections/withdrawals across the day, this equals
     the start-of-day supply. This matches the Kalecki ring baseline.
     """
+
     def _get_decimal(row: dict[str, Any], key: str) -> Decimal:
         val = row.get(key)
         if val in (None, "", "None"):
@@ -299,16 +300,14 @@ def liquidity_gap(Mbar_t: Decimal, M_t: Decimal) -> Decimal:
     return gap if gap > 0 else Decimal("0")
 
 
-def alpha(Mbar_t: Decimal, S_t: Decimal) -> Optional[Decimal]:
+def alpha(Mbar_t: Decimal, S_t: Decimal) -> Decimal | None:
     """alpha_t = 1 - Mbar_t / S_t (None if S_t==0)."""
     if S_t == 0:
         return None
     return Decimal("1") - (Mbar_t / S_t)
 
 
-def microstructure_gain_lower_bound(
-    Mbar_t: Decimal, Mpeak_rtgs: Decimal
-) -> Optional[Decimal]:
+def microstructure_gain_lower_bound(Mbar_t: Decimal, Mpeak_rtgs: Decimal) -> Decimal | None:
     """Lower bound for LSM gain using only RTGS run: 1 - Mbar / Mpeak_rtgs."""
     if not Mpeak_rtgs:
         return None
@@ -320,7 +319,7 @@ def microstructure_gain_lower_bound(
 # ---------------------------------------------------------------------------
 
 
-def _agent_from_event(e: Event) -> Optional[str]:
+def _agent_from_event(e: Event) -> str | None:
     """Extract agent ID from an AgentDefaulted event.
 
     Checks ``agent`` first, falls back to ``frm``.  Skips empty strings
@@ -347,7 +346,7 @@ def count_defaults(events: Iterable[Event]) -> int:
     return len(defaulted)
 
 
-def cascade_fraction(events: Iterable[Event]) -> Optional[Decimal]:
+def cascade_fraction(events: Iterable[Event]) -> Decimal | None:
     """Fraction of defaults caused by upstream contagion.
 
     For each defaulted agent, checks if any of their debtors (agents that owe
@@ -367,7 +366,7 @@ def cascade_fraction(events: Iterable[Event]) -> Optional[Decimal]:
 
     # 1. Build obligation graph: creditor -> set of debtors
     #    (who owes money to whom)
-    creditor_to_debtors: Dict[str, set[str]] = defaultdict(set)
+    creditor_to_debtors: dict[str, set[str]] = defaultdict(set)
     for e in events_list:
         if e.get("kind") == "PayableCreated":
             debtor = e.get("debtor") or e.get("from")

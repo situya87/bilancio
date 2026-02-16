@@ -1,17 +1,17 @@
 """Tests for file-based storage implementations."""
 
 import json
-import csv
-import pytest
 from pathlib import Path
 
+import pytest
+
+from bilancio.storage.file_store import FileRegistryStore, FileResultStore
 from bilancio.storage.models import (
-    RunStatus,
+    RegistryEntry,
     RunArtifacts,
     RunResult,
-    RegistryEntry,
+    RunStatus,
 )
-from bilancio.storage.file_store import FileResultStore, FileRegistryStore
 
 
 class TestFileResultStore:
@@ -21,13 +21,13 @@ class TestFileResultStore:
         """Test that initialization creates the base directory."""
         base_dir = tmp_path / "results"
         assert not base_dir.exists()
-        store = FileResultStore(base_dir)
+        FileResultStore(base_dir)
         assert base_dir.exists()
 
     def test_init_accepts_string_path(self, tmp_path):
         """Test that initialization accepts string path."""
         base_dir = str(tmp_path / "results")
-        store = FileResultStore(base_dir)
+        FileResultStore(base_dir)
         assert Path(base_dir).exists()
 
     def test_save_artifact_creates_correct_structure(self, tmp_path):
@@ -197,12 +197,8 @@ class TestFileResultStore:
         scenario_content = b"agents:\n  - name: Bank1"
         events_content = b'{"day": 1, "event": "payment"}\n'
 
-        scenario_path = store.save_artifact(
-            "exp_001", "run_001", "scenario.yaml", scenario_content
-        )
-        events_path = store.save_artifact(
-            "exp_001", "run_001", "events.jsonl", events_content
-        )
+        scenario_path = store.save_artifact("exp_001", "run_001", "scenario.yaml", scenario_content)
+        events_path = store.save_artifact("exp_001", "run_001", "events.jsonl", events_content)
 
         # Save run result
         original = RunResult(
@@ -505,10 +501,7 @@ class TestFileRegistryStore:
                     store.upsert(entry)
 
         # Filter by multiple criteria
-        results = store.query(
-            "exp_001",
-            filters={"seed": 1, "status": "completed"}
-        )
+        results = store.query("exp_001", filters={"seed": 1, "status": "completed"})
 
         assert len(results) == 2
         for r in results:

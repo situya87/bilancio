@@ -11,10 +11,9 @@ References:
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 
-from bilancio.core.ids import AgentId, new_id
-
+from bilancio.core.ids import AgentId
 
 # =============================================================================
 # Loan Types
@@ -31,6 +30,7 @@ class TraderLoan:
 
     All loans have fixed tenor = max payable maturity in the system.
     """
+
     loan_id: str
     borrower_id: AgentId
     bank_id: str
@@ -60,6 +60,7 @@ class DepositCohort:
 
     This is a trader-facing view; the bank tracks these in BankDealerState.
     """
+
     cohort_id: str
     bank_id: str
     depositor_id: AgentId
@@ -67,7 +68,7 @@ class DepositCohort:
     rate: Decimal  # Locked at deposit time
     issuance_day: int
     interest_accrued: Decimal = Decimal(0)
-    last_interest_day: Optional[int] = None
+    last_interest_day: int | None = None
 
     @property
     def total_balance(self) -> Decimal:
@@ -98,14 +99,15 @@ class BankAwareTraderState:
     This replaces TraderState.cash with deposit tracking at a specific bank.
     All payments flow through deposits.
     """
+
     agent_id: AgentId
     bank_id: str  # Which bank holds this trader's deposits
 
     # Payables held (assets) - same as TraderState
-    tickets_owned: List[Any] = field(default_factory=list)
+    tickets_owned: list[Any] = field(default_factory=list)
 
     # Payables issued (liabilities) - same as TraderState
-    obligations: List[Any] = field(default_factory=list)
+    obligations: list[Any] = field(default_factory=list)
 
     # Single-issuer constraint - same as TraderState
     asset_issuer_id: AgentId | None = None
@@ -140,8 +142,7 @@ class BankAwareTraderState:
             Decimal(0),
         )
         loan_due: Decimal = sum(
-            (loan.repayment_amount for loan in self.loans
-            if loan.maturity_day == day),
+            (loan.repayment_amount for loan in self.loans if loan.maturity_day == day),
             Decimal(0),
         )
         return payable_due + loan_due
@@ -156,8 +157,7 @@ class BankAwareTraderState:
     def loan_due(self, day: int) -> Decimal:
         """Loan repayments due on a given day."""
         return sum(
-            (loan.repayment_amount for loan in self.loans
-            if loan.maturity_day == day),
+            (loan.repayment_amount for loan in self.loans if loan.maturity_day == day),
             Decimal(0),
         )
 
@@ -177,12 +177,10 @@ class BankAwareTraderState:
         Considers both payable obligations and loan maturities.
         """
         future_payable_days = [
-            t.maturity_day for t in self.obligations
-            if t.maturity_day > after_day
+            t.maturity_day for t in self.obligations if t.maturity_day > after_day
         ]
         future_loan_days = [
-            loan.maturity_day for loan in self.loans
-            if loan.maturity_day > after_day
+            loan.maturity_day for loan in self.loans if loan.maturity_day > after_day
         ]
         all_future = future_payable_days + future_loan_days
         return min(all_future) if all_future else None
@@ -234,10 +232,7 @@ class BankAwareTraderState:
         withdrawn = Decimal(0)
 
         # Sort by issuance day (FIFO)
-        sorted_cohorts = sorted(
-            self.deposit_cohorts,
-            key=lambda c: c.issuance_day
-        )
+        sorted_cohorts = sorted(self.deposit_cohorts, key=lambda c: c.issuance_day)
 
         for cohort in sorted_cohorts:
             if remaining <= 0:
@@ -262,9 +257,7 @@ class BankAwareTraderState:
             remaining -= take
 
         # Remove empty cohorts
-        self.deposit_cohorts = [
-            c for c in self.deposit_cohorts if c.total_balance > 0
-        ]
+        self.deposit_cohorts = [c for c in self.deposit_cohorts if c.total_balance > 0]
 
         return withdrawn
 
@@ -297,6 +290,7 @@ class InterbankPosition:
     create interbank payables/receivables. These are netted
     at end of day and settled via reserve transfers.
     """
+
     from_bank_id: str
     to_bank_id: str
     amount: Decimal = Decimal(0)
@@ -320,9 +314,8 @@ class InterbankLedger:
     Positions are keyed by (from_bank, to_bank) tuples.
     At end of day, we net bilateral positions and settle.
     """
-    positions: dict[tuple[str, str], InterbankPosition] = field(
-        default_factory=dict
-    )
+
+    positions: dict[tuple[str, str], InterbankPosition] = field(default_factory=dict)
 
     def record_payment(
         self,
@@ -391,6 +384,7 @@ class BankDealerRingConfig:
 
     Extends dealer ring config with banking parameters.
     """
+
     # === Existing dealer config (to be inherited) ===
     ticket_size: Decimal = Decimal(1)
     max_days: int = 30
@@ -553,6 +547,7 @@ def compute_yield_buy_decision(
 @dataclass
 class InterbankSettlementResult:
     """Result of settling interbank positions between two banks."""
+
     payer_bank_id: str
     receiver_bank_id: str
     net_amount: Decimal
@@ -594,7 +589,7 @@ def settle_interbank_positions(
 
     # Settle bilaterally in order
     for i, bank_a in enumerate(all_banks):
-        for bank_b in all_banks[i + 1:]:
+        for bank_b in all_banks[i + 1 :]:
             payer, receiver, net_amount = ledger.net_bilateral(bank_a, bank_b)
 
             if net_amount <= 0:
@@ -608,9 +603,7 @@ def settle_interbank_positions(
             if payer_reserves >= net_amount:
                 # Normal settlement
                 updated_reserves[payer] = payer_reserves - net_amount
-                updated_reserves[receiver] = updated_reserves.get(
-                    receiver, Decimal(0)
-                ) + net_amount
+                updated_reserves[receiver] = updated_reserves.get(receiver, Decimal(0)) + net_amount
                 cb_borrow = Decimal(0)
             else:
                 # Payer needs CB borrowing
@@ -624,16 +617,16 @@ def settle_interbank_positions(
 
                 # Now payer can settle
                 updated_reserves[payer] = Decimal(0)  # Used all reserves
-                updated_reserves[receiver] = updated_reserves.get(
-                    receiver, Decimal(0)
-                ) + net_amount
+                updated_reserves[receiver] = updated_reserves.get(receiver, Decimal(0)) + net_amount
 
-            results.append(InterbankSettlementResult(
-                payer_bank_id=payer,
-                receiver_bank_id=receiver,
-                net_amount=net_amount,
-                payer_cb_borrowing=cb_borrow,
-            ))
+            results.append(
+                InterbankSettlementResult(
+                    payer_bank_id=payer,
+                    receiver_bank_id=receiver,
+                    net_amount=net_amount,
+                    payer_cb_borrowing=cb_borrow,
+                )
+            )
 
             # Clear the bilateral positions
             ledger.clear_bilateral(bank_a, bank_b)
@@ -649,6 +642,7 @@ def settle_interbank_positions(
 @dataclass
 class Claim:
     """A claim on a defaulting trader."""
+
     claimant_id: AgentId  # Bank or payable holder
     claim_type: str  # "loan" or "payable"
     amount: Decimal  # Face value / principal
@@ -663,6 +657,7 @@ class Claim:
 @dataclass
 class DefaultResolution:
     """Result of resolving a default."""
+
     defaulter_id: AgentId
     total_pool: Decimal  # Liquidation + deposits
     liquidation_proceeds: Decimal
@@ -711,22 +706,26 @@ def resolve_default(
     # Loan claims (from bank)
     for loan in trader.loans:
         days_to_mat = max(0, loan.maturity_day - current_day)
-        claims.append(Claim(
-            claimant_id=loan.bank_id,
-            claim_type="loan",
-            amount=loan.repayment_amount,
-            days_to_maturity=days_to_mat,
-        ))
+        claims.append(
+            Claim(
+                claimant_id=loan.bank_id,
+                claim_type="loan",
+                amount=loan.repayment_amount,
+                days_to_maturity=days_to_mat,
+            )
+        )
 
     # Payable claims (from holders)
     for ticket in trader.obligations:
         days_to_mat = max(0, ticket.maturity_day - current_day)
-        claims.append(Claim(
-            claimant_id=ticket.owner_id,
-            claim_type="payable",
-            amount=ticket.face,
-            days_to_maturity=days_to_mat,
-        ))
+        claims.append(
+            Claim(
+                claimant_id=ticket.owner_id,
+                claim_type="payable",
+                amount=ticket.face,
+                days_to_maturity=days_to_mat,
+            )
+        )
 
     # Step 4: Compute weights
     total_weight: Decimal = sum((c.maturity_weight * c.amount for c in claims), Decimal(0))
@@ -806,6 +805,7 @@ class IntegratedBankState:
 
     Extends the basic bank concept with client tracking and interbank positions.
     """
+
     bank_id: str
     current_day: int = 0
 

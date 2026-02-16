@@ -4,31 +4,31 @@ Targets uncovered branches from the existing test_apply.py tests,
 bringing coverage from ~49% to 90%+.
 """
 
-import pytest
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
-from bilancio.engines.system import System
-from bilancio.config.models import (
-    ScenarioConfig,
-    AgentSpec,
-    ScheduledAction,
-)
+import pytest
+
 from bilancio.config.apply import (
-    apply_to_system,
-    create_agent,
+    _collect_alias_from_action,
     apply_action,
     apply_policy_overrides,
+    apply_to_system,
+    create_agent,
     validate_scheduled_aliases,
-    _collect_alias_from_action,
 )
-from bilancio.domain.agents import Bank, Household, Firm, Treasury
-
+from bilancio.config.models import (
+    AgentSpec,
+    ScenarioConfig,
+)
+from bilancio.domain.agents import Treasury
+from bilancio.engines.system import System
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _minimal_system_with_agents(*agent_specs):
     """Create a System with agents already added (inside setup context)."""
@@ -71,6 +71,7 @@ def _system_with_firms():
 # create_agent
 # ===========================================================================
 
+
 class TestCreateAgentCoverage:
     """Cover branches not exercised by existing tests."""
 
@@ -87,9 +88,9 @@ class TestCreateAgentCoverage:
         # AgentSpec validates the kind field, so we need to bypass it.
         # We can create a mock spec with an invalid kind.
         spec = AgentSpec.__new__(AgentSpec)
-        object.__setattr__(spec, 'id', 'X1')
-        object.__setattr__(spec, 'name', 'Bad')
-        object.__setattr__(spec, 'kind', 'alien')
+        object.__setattr__(spec, "id", "X1")
+        object.__setattr__(spec, "name", "Bad")
+        object.__setattr__(spec, "kind", "alien")
         with pytest.raises(ValueError, match="Unknown agent kind"):
             create_agent(spec)
 
@@ -97,6 +98,7 @@ class TestCreateAgentCoverage:
 # ===========================================================================
 # apply_policy_overrides
 # ===========================================================================
+
 
 class TestApplyPolicyOverrides:
     """Cover the early-return on empty overrides (line 57)."""
@@ -130,6 +132,7 @@ class TestApplyPolicyOverrides:
 # apply_action – mint_reserves with alias
 # ===========================================================================
 
+
 class TestMintReservesAlias:
     """Lines 90-93: alias capture for mint_reserves."""
 
@@ -155,6 +158,7 @@ class TestMintReservesAlias:
 # apply_action – mint_cash with alias
 # ===========================================================================
 
+
 class TestMintCashAlias:
     """Lines 102-105: alias capture for mint_cash."""
 
@@ -179,6 +183,7 @@ class TestMintCashAlias:
 # apply_action – transfer_reserves
 # ===========================================================================
 
+
 class TestTransferReservesAction:
     """Line 108: transfer_reserves action."""
 
@@ -188,13 +193,18 @@ class TestTransferReservesAction:
             apply_action(system, {"mint_reserves": {"to": "B1", "amount": 10000}}, agents)
         # Transfer half the reserves from B1 to B2
         with system.setup():
-            apply_action(system, {"transfer_reserves": {"from_bank": "B1", "to_bank": "B2", "amount": 4000}}, agents)
+            apply_action(
+                system,
+                {"transfer_reserves": {"from_bank": "B1", "to_bank": "B2", "amount": 4000}},
+                agents,
+            )
         system.assert_invariants()
 
 
 # ===========================================================================
 # apply_action – transfer_cash
 # ===========================================================================
+
 
 class TestTransferCashAction:
     """Line 115: transfer_cash action."""
@@ -204,13 +214,18 @@ class TestTransferCashAction:
         with system.setup():
             apply_action(system, {"mint_cash": {"to": "H1", "amount": 3000}}, agents)
         with system.setup():
-            apply_action(system, {"transfer_cash": {"from_agent": "H1", "to_agent": "H2", "amount": 1000}}, agents)
+            apply_action(
+                system,
+                {"transfer_cash": {"from_agent": "H1", "to_agent": "H2", "amount": 1000}},
+                agents,
+            )
         system.assert_invariants()
 
 
 # ===========================================================================
 # apply_action – withdraw_cash
 # ===========================================================================
+
 
 class TestWithdrawCashAction:
     """Line 130: withdraw_cash action."""
@@ -220,16 +235,21 @@ class TestWithdrawCashAction:
         with system.setup():
             apply_action(system, {"mint_reserves": {"to": "B1", "amount": 10000}}, agents)
             apply_action(system, {"mint_cash": {"to": "H1", "amount": 5000}}, agents)
-            apply_action(system, {"deposit_cash": {"customer": "H1", "bank": "B1", "amount": 3000}}, agents)
+            apply_action(
+                system, {"deposit_cash": {"customer": "H1", "bank": "B1", "amount": 3000}}, agents
+            )
         # Now withdraw some of it back
         with system.setup():
-            apply_action(system, {"withdraw_cash": {"customer": "H1", "bank": "B1", "amount": 1000}}, agents)
+            apply_action(
+                system, {"withdraw_cash": {"customer": "H1", "bank": "B1", "amount": 1000}}, agents
+            )
         system.assert_invariants()
 
 
 # ===========================================================================
 # apply_action – client_payment
 # ===========================================================================
+
 
 class TestClientPaymentAction:
     """Lines 139-159: client_payment logic including error paths."""
@@ -241,18 +261,28 @@ class TestClientPaymentAction:
             apply_action(system, {"mint_reserves": {"to": "B2", "amount": 20000}}, agents)
             apply_action(system, {"mint_cash": {"to": "H1", "amount": 10000}}, agents)
             apply_action(system, {"mint_cash": {"to": "H2", "amount": 10000}}, agents)
-            apply_action(system, {"deposit_cash": {"customer": "H1", "bank": "B1", "amount": 5000}}, agents)
-            apply_action(system, {"deposit_cash": {"customer": "H2", "bank": "B2", "amount": 5000}}, agents)
+            apply_action(
+                system, {"deposit_cash": {"customer": "H1", "bank": "B1", "amount": 5000}}, agents
+            )
+            apply_action(
+                system, {"deposit_cash": {"customer": "H2", "bank": "B2", "amount": 5000}}, agents
+            )
         # Now make a client payment
         with system.setup():
-            apply_action(system, {"client_payment": {"payer": "H1", "payee": "H2", "amount": 1000}}, agents)
+            apply_action(
+                system, {"client_payment": {"payer": "H1", "payee": "H2", "amount": 1000}}, agents
+            )
         system.assert_invariants()
 
     def test_client_payment_unknown_agent_raises(self):
         system, agents = _system_with_cb_and_banks()
         with system.setup():
             with pytest.raises(ValueError, match="Unknown agent in client_payment"):
-                apply_action(system, {"client_payment": {"payer": "NONEXIST", "payee": "H2", "amount": 100}}, agents)
+                apply_action(
+                    system,
+                    {"client_payment": {"payer": "NONEXIST", "payee": "H2", "amount": 100}},
+                    agents,
+                )
 
     def test_client_payment_no_bank_relationship_raises(self):
         """No deposits => cannot determine bank."""
@@ -260,12 +290,17 @@ class TestClientPaymentAction:
         with system.setup():
             # H1 and H2 exist but have no deposits at any bank
             with pytest.raises(ValueError, match="Cannot determine banks"):
-                apply_action(system, {"client_payment": {"payer": "H1", "payee": "H2", "amount": 100}}, agents)
+                apply_action(
+                    system,
+                    {"client_payment": {"payer": "H1", "payee": "H2", "amount": 100}},
+                    agents,
+                )
 
 
 # ===========================================================================
 # apply_action – transfer_stock
 # ===========================================================================
+
 
 class TestTransferStockAction:
     """Lines 178-194: transfer_stock including error branches."""
@@ -274,22 +309,70 @@ class TestTransferStockAction:
         """Transfer partial quantity (quantity < stock.quantity)."""
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {"create_stock": {"owner": "F1", "sku": "BOLT", "quantity": 100, "unit_price": "10"}}, agents)
+            apply_action(
+                system,
+                {
+                    "create_stock": {
+                        "owner": "F1",
+                        "sku": "BOLT",
+                        "quantity": 100,
+                        "unit_price": "10",
+                    }
+                },
+                agents,
+            )
         with system.setup():
-            apply_action(system, {"transfer_stock": {"from_agent": "F1", "to_agent": "F2", "sku": "BOLT", "quantity": 30}}, agents)
+            apply_action(
+                system,
+                {
+                    "transfer_stock": {
+                        "from_agent": "F1",
+                        "to_agent": "F2",
+                        "sku": "BOLT",
+                        "quantity": 30,
+                    }
+                },
+                agents,
+            )
         # F1 should still have remaining stock
-        remaining = [s for s in system.state.stocks.values() if s.owner_id == "F1" and s.sku == "BOLT"]
+        remaining = [
+            s for s in system.state.stocks.values() if s.owner_id == "F1" and s.sku == "BOLT"
+        ]
         assert any(s.quantity == 70 for s in remaining)
 
     def test_transfer_stock_full(self):
         """Transfer full quantity (quantity == stock.quantity) -> passes None."""
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {"create_stock": {"owner": "F1", "sku": "BOLT", "quantity": 50, "unit_price": "10"}}, agents)
+            apply_action(
+                system,
+                {
+                    "create_stock": {
+                        "owner": "F1",
+                        "sku": "BOLT",
+                        "quantity": 50,
+                        "unit_price": "10",
+                    }
+                },
+                agents,
+            )
         with system.setup():
-            apply_action(system, {"transfer_stock": {"from_agent": "F1", "to_agent": "F2", "sku": "BOLT", "quantity": 50}}, agents)
+            apply_action(
+                system,
+                {
+                    "transfer_stock": {
+                        "from_agent": "F1",
+                        "to_agent": "F2",
+                        "sku": "BOLT",
+                        "quantity": 50,
+                    }
+                },
+                agents,
+            )
         # F2 should now own BOLT stock
-        f2_stocks = [s for s in system.state.stocks.values() if s.owner_id == "F2" and s.sku == "BOLT"]
+        f2_stocks = [
+            s for s in system.state.stocks.values() if s.owner_id == "F2" and s.sku == "BOLT"
+        ]
         assert len(f2_stocks) > 0
 
     def test_transfer_stock_no_matching_sku_raises(self):
@@ -297,21 +380,48 @@ class TestTransferStockAction:
         system, agents = _system_with_firms()
         with system.setup():
             with pytest.raises(ValueError, match="No stock with SKU"):
-                apply_action(system, {"transfer_stock": {"from_agent": "F1", "to_agent": "F2", "sku": "MISSING", "quantity": 10}}, agents)
+                apply_action(
+                    system,
+                    {
+                        "transfer_stock": {
+                            "from_agent": "F1",
+                            "to_agent": "F2",
+                            "sku": "MISSING",
+                            "quantity": 10,
+                        }
+                    },
+                    agents,
+                )
 
     def test_transfer_stock_insufficient_quantity_raises(self):
         """Line 187: insufficient stock -> ValueError."""
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {"create_stock": {"owner": "F1", "sku": "NUT", "quantity": 5, "unit_price": "2"}}, agents)
+            apply_action(
+                system,
+                {"create_stock": {"owner": "F1", "sku": "NUT", "quantity": 5, "unit_price": "2"}},
+                agents,
+            )
         with system.setup():
             with pytest.raises(ValueError, match="Insufficient stock"):
-                apply_action(system, {"transfer_stock": {"from_agent": "F1", "to_agent": "F2", "sku": "NUT", "quantity": 20}}, agents)
+                apply_action(
+                    system,
+                    {
+                        "transfer_stock": {
+                            "from_agent": "F1",
+                            "to_agent": "F2",
+                            "sku": "NUT",
+                            "quantity": 20,
+                        }
+                    },
+                    agents,
+                )
 
 
 # ===========================================================================
 # apply_action – create_delivery_obligation with alias
 # ===========================================================================
+
 
 class TestCreateDeliveryObligationAlias:
     """Lines 207-210: alias capture for create_delivery_obligation."""
@@ -319,44 +429,88 @@ class TestCreateDeliveryObligationAlias:
     def test_delivery_obligation_stores_alias(self):
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {"create_stock": {"owner": "F1", "sku": "ITEM", "quantity": 10, "unit_price": "50"}}, agents)
-            apply_action(system, {
-                "create_delivery_obligation": {
-                    "from": "F1", "to": "F2",
-                    "sku": "ITEM", "quantity": 5,
-                    "unit_price": "50", "due_day": 3,
-                    "alias": "del1"
-                }
-            }, agents)
+            apply_action(
+                system,
+                {
+                    "create_stock": {
+                        "owner": "F1",
+                        "sku": "ITEM",
+                        "quantity": 10,
+                        "unit_price": "50",
+                    }
+                },
+                agents,
+            )
+            apply_action(
+                system,
+                {
+                    "create_delivery_obligation": {
+                        "from": "F1",
+                        "to": "F2",
+                        "sku": "ITEM",
+                        "quantity": 5,
+                        "unit_price": "50",
+                        "due_day": 3,
+                        "alias": "del1",
+                    }
+                },
+                agents,
+            )
         assert "del1" in system.state.aliases
         assert system.state.aliases["del1"] in system.state.contracts
 
     def test_delivery_obligation_duplicate_alias_raises(self):
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {"create_stock": {"owner": "F1", "sku": "ITEM", "quantity": 20, "unit_price": "50"}}, agents)
-            apply_action(system, {
-                "create_delivery_obligation": {
-                    "from": "F1", "to": "F2",
-                    "sku": "ITEM", "quantity": 3,
-                    "unit_price": "50", "due_day": 3,
-                    "alias": "del_dup"
-                }
-            }, agents)
-            with pytest.raises(ValueError, match="Alias already exists"):
-                apply_action(system, {
-                    "create_delivery_obligation": {
-                        "from": "F1", "to": "F2",
-                        "sku": "ITEM", "quantity": 2,
-                        "unit_price": "50", "due_day": 4,
-                        "alias": "del_dup"
+            apply_action(
+                system,
+                {
+                    "create_stock": {
+                        "owner": "F1",
+                        "sku": "ITEM",
+                        "quantity": 20,
+                        "unit_price": "50",
                     }
-                }, agents)
+                },
+                agents,
+            )
+            apply_action(
+                system,
+                {
+                    "create_delivery_obligation": {
+                        "from": "F1",
+                        "to": "F2",
+                        "sku": "ITEM",
+                        "quantity": 3,
+                        "unit_price": "50",
+                        "due_day": 3,
+                        "alias": "del_dup",
+                    }
+                },
+                agents,
+            )
+            with pytest.raises(ValueError, match="Alias already exists"):
+                apply_action(
+                    system,
+                    {
+                        "create_delivery_obligation": {
+                            "from": "F1",
+                            "to": "F2",
+                            "sku": "ITEM",
+                            "quantity": 2,
+                            "unit_price": "50",
+                            "due_day": 4,
+                            "alias": "del_dup",
+                        }
+                    },
+                    agents,
+                )
 
 
 # ===========================================================================
 # apply_action – create_payable with alias duplicate + maturity_distance
 # ===========================================================================
+
 
 class TestCreatePayableAlias:
     """Line 239: duplicate alias for create_payable."""
@@ -364,15 +518,51 @@ class TestCreatePayableAlias:
     def test_create_payable_duplicate_alias_raises(self):
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {"create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 1, "alias": "P1"}}, agents)
+            apply_action(
+                system,
+                {
+                    "create_payable": {
+                        "from": "F1",
+                        "to": "F2",
+                        "amount": 100,
+                        "due_day": 1,
+                        "alias": "P1",
+                    }
+                },
+                agents,
+            )
             with pytest.raises(ValueError, match="Alias already exists"):
-                apply_action(system, {"create_payable": {"from": "F1", "to": "F2", "amount": 200, "due_day": 2, "alias": "P1"}}, agents)
+                apply_action(
+                    system,
+                    {
+                        "create_payable": {
+                            "from": "F1",
+                            "to": "F2",
+                            "amount": 200,
+                            "due_day": 2,
+                            "alias": "P1",
+                        }
+                    },
+                    agents,
+                )
 
     def test_create_payable_maturity_distance_defaults_to_due_day(self):
         """When maturity_distance is not set, it defaults to due_day."""
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {"create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 5, "alias": "P_md"}}, agents)
+            apply_action(
+                system,
+                {
+                    "create_payable": {
+                        "from": "F1",
+                        "to": "F2",
+                        "amount": 100,
+                        "due_day": 5,
+                        "alias": "P_md",
+                    }
+                },
+                agents,
+            )
         cid = system.state.aliases["P_md"]
         payable = system.state.contracts[cid]
         assert payable.maturity_distance == 5
@@ -381,7 +571,20 @@ class TestCreatePayableAlias:
         """When maturity_distance is explicitly set, use it."""
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {"create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 5, "maturity_distance": 10, "alias": "P_md2"}}, agents)
+            apply_action(
+                system,
+                {
+                    "create_payable": {
+                        "from": "F1",
+                        "to": "F2",
+                        "amount": 100,
+                        "due_day": 5,
+                        "maturity_distance": 10,
+                        "alias": "P_md2",
+                    }
+                },
+                agents,
+            )
         cid = system.state.aliases["P_md2"]
         payable = system.state.contracts[cid]
         assert payable.maturity_distance == 10
@@ -391,6 +594,7 @@ class TestCreatePayableAlias:
 # apply_action – transfer_claim error paths
 # ===========================================================================
 
+
 class TestTransferClaimErrors:
     """Lines 262, 264, 267, 271, 281: various error paths in transfer_claim."""
 
@@ -399,28 +603,70 @@ class TestTransferClaimErrors:
         system, agents = _system_with_firms()
         with system.setup():
             with pytest.raises(ValueError, match="Unknown alias"):
-                apply_action(system, {"transfer_claim": {"contract_alias": "NONEXIST", "to_agent": "F2"}}, agents)
+                apply_action(
+                    system,
+                    {"transfer_claim": {"contract_alias": "NONEXIST", "to_agent": "F2"}},
+                    agents,
+                )
 
     def test_transfer_claim_alias_id_mismatch_raises(self):
         """Line 264: alias and contract_id point to different contracts."""
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {"create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 1, "alias": "P_tc1"}}, agents)
+            apply_action(
+                system,
+                {
+                    "create_payable": {
+                        "from": "F1",
+                        "to": "F2",
+                        "amount": 100,
+                        "due_day": 1,
+                        "alias": "P_tc1",
+                    }
+                },
+                agents,
+            )
             with pytest.raises(ValueError, match="refer to different contracts"):
-                apply_action(system, {"transfer_claim": {"contract_alias": "P_tc1", "contract_id": "WRONG_ID", "to_agent": "F3"}}, agents)
+                apply_action(
+                    system,
+                    {
+                        "transfer_claim": {
+                            "contract_alias": "P_tc1",
+                            "contract_id": "WRONG_ID",
+                            "to_agent": "F3",
+                        }
+                    },
+                    agents,
+                )
 
     def test_transfer_claim_contract_not_found_raises(self):
         """Line 271: resolved ID not in system.state.contracts."""
         system, agents = _system_with_firms()
         with system.setup():
             with pytest.raises(ValueError, match="Contract not found"):
-                apply_action(system, {"transfer_claim": {"contract_id": "GHOST_ID", "to_agent": "F2"}}, agents)
+                apply_action(
+                    system,
+                    {"transfer_claim": {"contract_id": "GHOST_ID", "to_agent": "F2"}},
+                    agents,
+                )
 
     def test_transfer_claim_by_contract_id_success(self):
         """Transfer claim using contract_id only (no alias)."""
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {"create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 1, "alias": "P_tc_cid"}}, agents)
+            apply_action(
+                system,
+                {
+                    "create_payable": {
+                        "from": "F1",
+                        "to": "F2",
+                        "amount": 100,
+                        "due_day": 1,
+                        "alias": "P_tc_cid",
+                    }
+                },
+                agents,
+            )
         cid = system.state.aliases["P_tc_cid"]
         with system.setup():
             apply_action(system, {"transfer_claim": {"contract_id": cid, "to_agent": "F3"}}, agents)
@@ -433,6 +679,7 @@ class TestTransferClaimErrors:
 # ===========================================================================
 # apply_action – unknown action type
 # ===========================================================================
+
 
 class TestUnknownActionType:
     """Lines 297-301: unknown action type and error wrapping."""
@@ -449,23 +696,37 @@ class TestUnknownActionType:
             with pytest.raises(ValueError, match="Failed to apply"):
                 # This triggers the error wrapping because transfer_stock with
                 # a missing SKU raises ValueError which gets wrapped.
-                apply_action(system, {"transfer_stock": {"from_agent": "F1", "to_agent": "F2", "sku": "NONE", "quantity": 1}}, agents)
+                apply_action(
+                    system,
+                    {
+                        "transfer_stock": {
+                            "from_agent": "F1",
+                            "to_agent": "F2",
+                            "sku": "NONE",
+                            "quantity": 1,
+                        }
+                    },
+                    agents,
+                )
 
 
 # ===========================================================================
 # _collect_alias_from_action
 # ===========================================================================
 
+
 class TestCollectAliasFromAction:
     """Line 305: _collect_alias_from_action."""
 
     def test_returns_alias_when_present(self):
         from bilancio.config.models import MintReserves
+
         action = MintReserves(to="B1", amount=Decimal("100"), alias="my_alias")
         assert _collect_alias_from_action(action) == "my_alias"
 
     def test_returns_none_when_no_alias(self):
         from bilancio.config.models import TransferReserves
+
         action = TransferReserves(from_bank="B1", to_bank="B2", amount=Decimal("100"))
         assert _collect_alias_from_action(action) is None
 
@@ -473,6 +734,7 @@ class TestCollectAliasFromAction:
 # ===========================================================================
 # validate_scheduled_aliases
 # ===========================================================================
+
 
 class TestValidateScheduledAliases:
     """Lines 313-354: all branches of validate_scheduled_aliases."""
@@ -495,10 +757,21 @@ class TestValidateScheduledAliases:
                 {"id": "F2", "kind": "firm", "name": "Firm 2"},
             ],
             initial_actions=[
-                {"create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 1, "alias": "A1"}},
+                {
+                    "create_payable": {
+                        "from": "F1",
+                        "to": "F2",
+                        "amount": 100,
+                        "due_day": 1,
+                        "alias": "A1",
+                    }
+                },
             ],
             scheduled_actions=[
-                {"day": 1, "action": {"transfer_claim": {"contract_alias": "A1", "to_agent": "F1"}}},
+                {
+                    "day": 1,
+                    "action": {"transfer_claim": {"contract_alias": "A1", "to_agent": "F1"}},
+                },
             ],
         )
         validate_scheduled_aliases(config)  # should not raise
@@ -512,8 +785,24 @@ class TestValidateScheduledAliases:
                 {"id": "F2", "kind": "firm", "name": "Firm 2"},
             ],
             initial_actions=[
-                {"create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 1, "alias": "DUP"}},
-                {"create_payable": {"from": "F1", "to": "F2", "amount": 200, "due_day": 2, "alias": "DUP"}},
+                {
+                    "create_payable": {
+                        "from": "F1",
+                        "to": "F2",
+                        "amount": 100,
+                        "due_day": 1,
+                        "alias": "DUP",
+                    }
+                },
+                {
+                    "create_payable": {
+                        "from": "F1",
+                        "to": "F2",
+                        "amount": 200,
+                        "due_day": 2,
+                        "alias": "DUP",
+                    }
+                },
             ],
         )
         with pytest.raises(ValueError, match="Duplicate alias in initial_actions"):
@@ -529,7 +818,10 @@ class TestValidateScheduledAliases:
             ],
             initial_actions=[],
             scheduled_actions=[
-                {"day": 1, "action": {"transfer_claim": {"contract_alias": "GHOST", "to_agent": "F1"}}},
+                {
+                    "day": 1,
+                    "action": {"transfer_claim": {"contract_alias": "GHOST", "to_agent": "F1"}},
+                },
             ],
         )
         with pytest.raises(ValueError, match="unknown alias 'GHOST'"):
@@ -545,8 +837,22 @@ class TestValidateScheduledAliases:
             ],
             initial_actions=[],
             scheduled_actions=[
-                {"day": 1, "action": {"create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 5, "alias": "SCH1"}}},
-                {"day": 2, "action": {"transfer_claim": {"contract_alias": "SCH1", "to_agent": "F1"}}},
+                {
+                    "day": 1,
+                    "action": {
+                        "create_payable": {
+                            "from": "F1",
+                            "to": "F2",
+                            "amount": 100,
+                            "due_day": 5,
+                            "alias": "SCH1",
+                        }
+                    },
+                },
+                {
+                    "day": 2,
+                    "action": {"transfer_claim": {"contract_alias": "SCH1", "to_agent": "F1"}},
+                },
             ],
         )
         validate_scheduled_aliases(config)  # should not raise
@@ -560,10 +866,29 @@ class TestValidateScheduledAliases:
                 {"id": "F2", "kind": "firm", "name": "Firm 2"},
             ],
             initial_actions=[
-                {"create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 1, "alias": "X"}},
+                {
+                    "create_payable": {
+                        "from": "F1",
+                        "to": "F2",
+                        "amount": 100,
+                        "due_day": 1,
+                        "alias": "X",
+                    }
+                },
             ],
             scheduled_actions=[
-                {"day": 1, "action": {"create_payable": {"from": "F1", "to": "F2", "amount": 200, "due_day": 5, "alias": "X"}}},
+                {
+                    "day": 1,
+                    "action": {
+                        "create_payable": {
+                            "from": "F1",
+                            "to": "F2",
+                            "amount": 200,
+                            "due_day": 5,
+                            "alias": "X",
+                        }
+                    },
+                },
             ],
         )
         with pytest.raises(ValueError, match="Duplicate alias detected"):
@@ -633,6 +958,7 @@ class TestValidateScheduledAliases:
 # ===========================================================================
 # apply_to_system – integration tests for missing paths
 # ===========================================================================
+
 
 class TestApplyToSystemCoverage:
     """Additional integration tests for apply_to_system."""
@@ -730,8 +1056,22 @@ class TestApplyToSystemCoverage:
                 {"id": "F2", "kind": "firm", "name": "Firm 2"},
             ],
             initial_actions=[
-                {"create_stock": {"owner": "F1", "sku": "GEAR", "quantity": 50, "unit_price": "10"}},
-                {"transfer_stock": {"from_agent": "F1", "to_agent": "F2", "sku": "GEAR", "quantity": 20}},
+                {
+                    "create_stock": {
+                        "owner": "F1",
+                        "sku": "GEAR",
+                        "quantity": 50,
+                        "unit_price": "10",
+                    }
+                },
+                {
+                    "transfer_stock": {
+                        "from_agent": "F1",
+                        "to_agent": "F2",
+                        "sku": "GEAR",
+                        "quantity": 20,
+                    }
+                },
             ],
         )
         system = System()
@@ -768,6 +1108,7 @@ class TestApplyToSystemCoverage:
 # apply_action – error wrapping context message
 # ===========================================================================
 
+
 class TestErrorWrapping:
     """Line 299-301: errors get wrapped with action context."""
 
@@ -776,16 +1117,32 @@ class TestErrorWrapping:
         system, agents = _system_with_firms()
         with system.setup():
             # Trigger a downstream ValueError (insufficient stock) and verify wrapping
-            apply_action(system, {"create_stock": {"owner": "F1", "sku": "X", "quantity": 3, "unit_price": "1"}}, agents)
+            apply_action(
+                system,
+                {"create_stock": {"owner": "F1", "sku": "X", "quantity": 3, "unit_price": "1"}},
+                agents,
+            )
         with system.setup():
             with pytest.raises(ValueError) as exc_info:
-                apply_action(system, {"transfer_stock": {"from_agent": "F1", "to_agent": "F2", "sku": "X", "quantity": 10}}, agents)
+                apply_action(
+                    system,
+                    {
+                        "transfer_stock": {
+                            "from_agent": "F1",
+                            "to_agent": "F2",
+                            "sku": "X",
+                            "quantity": 10,
+                        }
+                    },
+                    agents,
+                )
             assert "Failed to apply transfer_stock" in str(exc_info.value)
 
 
 # ===========================================================================
 # apply_action – unknown action type via mock (line 297)
 # ===========================================================================
+
 
 class TestUnknownActionTypeDirect:
     """Line 297: truly unknown action_type reaching the else branch."""
@@ -803,6 +1160,7 @@ class TestUnknownActionTypeDirect:
 # ===========================================================================
 # apply_action – transfer_claim: no alias and no contract_id (line 267)
 # ===========================================================================
+
 
 class TestTransferClaimNoReference:
     """Line 267: transfer_claim with both contract_alias and contract_id resolving to None."""
@@ -827,6 +1185,7 @@ class TestTransferClaimNoReference:
 # apply_action – transfer_claim: contract not in old holder's assets (line 281)
 # ===========================================================================
 
+
 class TestTransferClaimNotInHolderAssets:
     """Line 281: contract exists but is not in old holder's asset_ids."""
 
@@ -834,20 +1193,33 @@ class TestTransferClaimNotInHolderAssets:
         """Manually remove the contract from the holder's asset_ids to trigger line 281."""
         system, agents = _system_with_firms()
         with system.setup():
-            apply_action(system, {
-                "create_payable": {"from": "F1", "to": "F2", "amount": 100, "due_day": 1, "alias": "P_orphan"}
-            }, agents)
+            apply_action(
+                system,
+                {
+                    "create_payable": {
+                        "from": "F1",
+                        "to": "F2",
+                        "amount": 100,
+                        "due_day": 1,
+                        "alias": "P_orphan",
+                    }
+                },
+                agents,
+            )
         cid = system.state.aliases["P_orphan"]
         # Artificially remove the contract from F2's asset_ids (the holder)
         system.state.agents["F2"].asset_ids.remove(cid)
         with system.setup():
             with pytest.raises(ValueError, match="not in old holder's assets"):
-                apply_action(system, {"transfer_claim": {"contract_id": cid, "to_agent": "F3"}}, agents)
+                apply_action(
+                    system, {"transfer_claim": {"contract_id": cid, "to_agent": "F3"}}, agents
+                )
 
 
 # ===========================================================================
 # apply_to_system – dealer subsystem initialization (lines 401-459)
 # ===========================================================================
+
 
 class TestDealerSubsystemInit:
     """Lines 401-459: dealer subsystem configuration and initialization."""

@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import logging
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from bilancio.engines.system import System
     from bilancio.decision.profiles import RatingProfile
-    from bilancio.information.profile import InformationProfile
+    from bilancio.engines.system import System
     from bilancio.information.estimates import Estimate
+    from bilancio.information.profile import InformationProfile
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +25,16 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RatingConfig:
     """Configuration for the rating agency phase."""
-    rating_profile: Optional["RatingProfile"] = None
-    information_profile: Optional["InformationProfile"] = None
+
+    rating_profile: RatingProfile | None = None
+    information_profile: InformationProfile | None = None
 
 
 def run_rating_phase(
-    system: "System",
+    system: System,
     current_day: int,
-    rating_config: Optional[RatingConfig] = None,
-) -> List[Dict[str, Any]]:
+    rating_config: RatingConfig | None = None,
+) -> list[dict[str, Any]]:
     """Run the rating agency phase.
 
     The rating agency:
@@ -50,12 +51,12 @@ def run_rating_phase(
     Returns:
         List of rating event dicts
     """
-    from bilancio.domain.agent import AgentKind
     from bilancio.decision.profiles import RatingProfile
+    from bilancio.domain.agent import AgentKind
 
     config = rating_config or RatingConfig()
     profile = config.rating_profile or RatingProfile()
-    events: List[Dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
 
     # Find the rating agency
     agency_id = None
@@ -71,12 +72,15 @@ def run_rating_phase(
     info = None
     if config.information_profile is not None:
         from bilancio.information.service import InformationService
+
         info = InformationService(
-            system, config.information_profile, observer_id=agency_id,
+            system,
+            config.information_profile,
+            observer_id=agency_id,
         )
 
     # Collect eligible agents (HOUSEHOLD and FIRM, non-defaulted)
-    eligible: List[str] = []
+    eligible: list[str] = []
     for agent_id, agent in system.state.agents.items():
         if agent.defaulted:
             continue
@@ -95,7 +99,7 @@ def run_rating_phase(
     registry = system.state.rating_registry
 
     # Rate each selected agent
-    ratings_published: Dict[str, str] = {}
+    ratings_published: dict[str, str] = {}
     for agent_id in selected:
         agent = system.state.agents[agent_id]
         if agent.defaulted:
@@ -113,18 +117,23 @@ def run_rating_phase(
         if agent.defaulted:
             registry[agent_id] = Decimal("1.0")
 
-    events.append({
-        "kind": "RatingsPublished",
-        "day": current_day,
-        "agency_id": agency_id,
-        "n_rated": len(ratings_published),
-        "n_eligible": len(eligible),
-        "ratings": ratings_published,
-    })
+    events.append(
+        {
+            "kind": "RatingsPublished",
+            "day": current_day,
+            "agency_id": agency_id,
+            "n_rated": len(ratings_published),
+            "n_eligible": len(eligible),
+            "ratings": ratings_published,
+        }
+    )
 
     logger.debug(
         "Rating agency %s rated %d/%d agents on day %d",
-        agency_id, len(ratings_published), len(eligible), current_day,
+        agency_id,
+        len(ratings_published),
+        len(eligible),
+        current_day,
     )
 
     return events
@@ -134,10 +143,10 @@ def _compute_rating(
     info: Any,
     agent_id: str,
     current_day: int,
-    profile: "RatingProfile",
-    system: "System",
+    profile: RatingProfile,
+    system: System,
     return_estimate: bool = False,
-) -> "Decimal | Estimate":
+) -> Decimal | Estimate:
     """Compute a default probability rating for a single agent.
 
     Combines:
@@ -155,13 +164,14 @@ def _compute_rating(
     Returns:
         Default probability estimate as Decimal
     """
-    from bilancio.decision.profiles import RatingProfile
 
     # ── Balance sheet component ──
     coverage = None  # assigned below only when obligations > 0
     if info is not None:
         net_worth = info.get_counterparty_net_worth(agent_id, current_day)
-        obligations = info.get_counterparty_obligations(agent_id, current_day, profile.lookback_window)
+        obligations = info.get_counterparty_obligations(
+            agent_id, current_day, profile.lookback_window
+        )
     else:
         net_worth = _raw_net_worth(system, agent_id)
         obligations = _raw_total_liabilities(system, agent_id)
@@ -199,8 +209,7 @@ def _compute_rating(
     total_weight = profile.balance_sheet_weight + profile.history_weight
     if total_weight > 0:
         combined = (
-            profile.balance_sheet_weight * bs_score
-            + profile.history_weight * hist_score
+            profile.balance_sheet_weight * bs_score + profile.history_weight * hist_score
         ) / total_weight
     else:
         combined = profile.no_data_prior
@@ -239,7 +248,7 @@ def _compute_rating(
     )
 
 
-def _raw_net_worth(system: "System", agent_id: str) -> int:
+def _raw_net_worth(system: System, agent_id: str) -> int:
     """Get raw net worth for an agent."""
     agent = system.state.agents.get(agent_id)
     if agent is None:
@@ -257,7 +266,7 @@ def _raw_net_worth(system: "System", agent_id: str) -> int:
     return total_assets - total_liabilities
 
 
-def _raw_total_liabilities(system: "System", agent_id: str) -> int:
+def _raw_total_liabilities(system: System, agent_id: str) -> int:
     """Get total liabilities for an agent."""
     agent = system.state.agents.get(agent_id)
     if agent is None:
@@ -270,7 +279,7 @@ def _raw_total_liabilities(system: "System", agent_id: str) -> int:
     return total
 
 
-def _raw_default_prob_for_agent(system: "System", agent_id: str, current_day: int = 0) -> Decimal:
+def _raw_default_prob_for_agent(system: System, agent_id: str, current_day: int = 0) -> Decimal:
     """Get raw default probability for a single agent.
 
     Uses dealer risk assessor if available, otherwise falls back to

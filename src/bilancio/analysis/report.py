@@ -8,26 +8,28 @@ from __future__ import annotations
 import csv
 import decimal
 import json
-from dataclasses import asdict, dataclass
+from collections.abc import Sequence
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any
 
 from bilancio.analysis.metrics import (
-    dues_for_day,
-    net_vectors,
-    raw_minimum_liquidity,
-    size_and_bunching,
-    phi_delta,
-    replay_intraday_peak,
-    velocity,
+    alpha as alpha_fn,
+)
+from bilancio.analysis.metrics import (
+    cascade_fraction,
+    count_defaults,
     creditor_hhi_plus,
     debtor_shortfall_shares,
-    start_of_day_money,
+    dues_for_day,
     liquidity_gap,
-    alpha as alpha_fn,
-    count_defaults,
-    cascade_fraction,
+    net_vectors,
+    phi_delta,
+    raw_minimum_liquidity,
+    replay_intraday_peak,
+    size_and_bunching,
+    start_of_day_money,
+    velocity,
 )
 
 
@@ -40,12 +42,12 @@ def _to_json(val: Any) -> Any:
         return str(n)
     if isinstance(val, dict):
         return {k: _to_json(v) for k, v in val.items()}
-    if isinstance(val, (list, tuple)):
-        return [ _to_json(x) for x in val ]
+    if isinstance(val, list | tuple):
+        return [_to_json(x) for x in val]
     return val
 
 
-def write_day_metrics_csv(path: Path | str, rows: List[Dict[str, Any]]) -> None:
+def write_day_metrics_csv(path: Path | str, rows: list[dict[str, Any]]) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -55,12 +57,12 @@ def write_day_metrics_csv(path: Path | str, rows: List[Dict[str, Any]]) -> None:
             writer.writeheader()
         return
     # All keys across rows
-    keys: List[str] = sorted({k for r in rows for k in r.keys()})
+    keys: list[str] = sorted({k for r in rows for k in r.keys()})
     with p.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=keys)
         writer.writeheader()
         for r in rows:
-            row: Dict[str, Any] = {}
+            row: dict[str, Any] = {}
             for k in keys:
                 v = r.get(k)
                 if isinstance(v, Decimal):
@@ -73,18 +75,18 @@ def write_day_metrics_csv(path: Path | str, rows: List[Dict[str, Any]]) -> None:
             writer.writerow(row)
 
 
-def write_day_metrics_json(path: Path | str, rows: List[Dict[str, Any]]) -> None:
+def write_day_metrics_json(path: Path | str, rows: list[dict[str, Any]]) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("w") as f:
         json.dump([_to_json(r) for r in rows], f, indent=2)
 
 
-def write_debtor_shares_csv(path: Path | str, rows: List[Dict[str, Any]]) -> None:
+def write_debtor_shares_csv(path: Path | str, rows: list[dict[str, Any]]) -> None:
     write_day_metrics_csv(path, rows)
 
 
-def write_intraday_csv(path: Path | str, rows: List[Dict[str, Any]]) -> None:
+def write_intraday_csv(path: Path | str, rows: list[dict[str, Any]]) -> None:
     write_day_metrics_csv(path, rows)
 
 
@@ -99,26 +101,26 @@ def _fmt_num(val: Any) -> str:
         except (ValueError, TypeError, ArithmeticError):
             pass
         # Limit to 6 decimal places when not integral
-        return f"{float(n):.6f}".rstrip('0').rstrip('.')
+        return f"{float(n):.6f}".rstrip("0").rstrip(".")
     return str(val)
 
 
-def _group_by(rows: List[Dict[str, Any]], key: str) -> Dict[Any, List[Dict[str, Any]]]:
-    out: Dict[Any, List[Dict[str, Any]]] = {}
+def _group_by(rows: list[dict[str, Any]], key: str) -> dict[Any, list[dict[str, Any]]]:
+    out: dict[Any, list[dict[str, Any]]] = {}
     for r in rows:
         out.setdefault(r.get(key), []).append(r)
     return out
 
 
-def parse_day_ranges(spec: str) -> List[int]:
+def parse_day_ranges(spec: str) -> list[int]:
     """Parse comma-separated day ranges like "1,2-4" into a sorted list."""
-    out: List[int] = []
-    for part in spec.split(','):
+    out: list[int] = []
+    for part in spec.split(","):
         part = part.strip()
         if not part:
             continue
-        if '-' in part:
-            a, b = part.split('-', 1)
+        if "-" in part:
+            a, b = part.split("-", 1)
             try:
                 start = int(a)
                 end = int(b)
@@ -134,15 +136,27 @@ def parse_day_ranges(spec: str) -> List[int]:
     return sorted(set(out))
 
 
-def infer_day_list(events: Sequence[Dict[str, Any]]) -> List[int]:
+def infer_day_list(events: Sequence[dict[str, Any]]) -> list[int]:
     """Infer useful day indices from events when none specified."""
-    due_days = sorted({int(e["due_day"]) for e in events if e.get("kind") == "PayableCreated" and e.get("due_day") is not None})
-    settled_days = sorted({int(e["day"]) for e in events if e.get("kind") == "PayableSettled" and e.get("day") is not None})
+    due_days = sorted(
+        {
+            int(e["due_day"])
+            for e in events
+            if e.get("kind") == "PayableCreated" and e.get("due_day") is not None
+        }
+    )
+    settled_days = sorted(
+        {
+            int(e["day"])
+            for e in events
+            if e.get("kind") == "PayableSettled" and e.get("day") is not None
+        }
+    )
     day_list = due_days or settled_days
     return day_list
 
 
-def compute_run_level_metrics(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """Compute run-level metrics that span the entire simulation.
 
     These metrics complement the day-by-day metrics and provide systemic
@@ -159,10 +173,10 @@ def compute_run_level_metrics(events: Sequence[Dict[str, Any]]) -> Dict[str, Any
 
 
 def compute_day_metrics(
-    events: Sequence[Dict[str, Any]],
-    balances_rows: Optional[Sequence[Dict[str, Any]]] = None,
-    day_list: Optional[Sequence[int]] = None,
-) -> Dict[str, Any]:
+    events: Sequence[dict[str, Any]],
+    balances_rows: Sequence[dict[str, Any]] | None = None,
+    day_list: Sequence[int] | None = None,
+) -> dict[str, Any]:
     """Compute Kalecki-style day metrics for a completed run."""
     if day_list is None or len(day_list) == 0:
         day_list = infer_day_list(events)
@@ -175,11 +189,11 @@ def compute_day_metrics(
             "intraday": [],
         }
 
-    metrics_rows: List[Dict[str, Any]] = []
-    ds_rows: List[Dict[str, Any]] = []
-    intraday_rows: List[Dict[str, Any]] = []
+    metrics_rows: list[dict[str, Any]] = []
+    ds_rows: list[dict[str, Any]] = []
+    intraday_rows: list[dict[str, Any]] = []
 
-    for t in sorted(set(int(d) for d in day_list)):
+    for t in sorted({int(d) for d in day_list}):
         dues = dues_for_day(events, t)
         nets = net_vectors(dues)
         Mbar_t = raw_minimum_liquidity(nets)
@@ -200,7 +214,7 @@ def compute_day_metrics(
 
         alpha_t = alpha_fn(Mbar_t, S_t) if S_t is not None else None
 
-        notes: List[str] = []
+        notes: list[str] = []
         if HHIp_t is None:
             notes.append("no net creditors")
         if all(v is None for v in DS.values()):
@@ -233,19 +247,19 @@ def compute_day_metrics(
             intraday_rows.append(row)
 
     return {
-        "days": sorted(set(int(d) for d in day_list)),
+        "days": sorted({int(d) for d in day_list}),
         "day_metrics": metrics_rows,
         "debtor_shares": ds_rows,
         "intraday": intraday_rows,
     }
 
 
-def summarize_day_metrics(day_metrics: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """Summarize a day metrics table into aggregate indicators."""
     S_total = Decimal("0")
     phi_weighted = Decimal("0")
     delta_weighted = Decimal("0")
-    max_G: Optional[Decimal] = None
+    max_G: Decimal | None = None
     alpha_1 = None
     Mpeak_1 = None
     v_1 = None
@@ -315,12 +329,12 @@ def summarize_day_metrics(day_metrics: Sequence[Dict[str, Any]]) -> Dict[str, An
 
 def write_metrics_html(
     path: Path | str,
-    day_metrics: List[Dict[str, Any]],
-    debtor_shares: List[Dict[str, Any]],
-    intraday: List[Dict[str, Any]],
-    title: Optional[str] = None,
-    subtitle: Optional[str] = None,
-    run_level_metrics: Optional[Dict[str, Any]] = None,
+    day_metrics: list[dict[str, Any]],
+    debtor_shares: list[dict[str, Any]],
+    intraday: list[dict[str, Any]],
+    title: str | None = None,
+    subtitle: str | None = None,
+    run_level_metrics: dict[str, Any] | None = None,
 ) -> None:
     """Write a single, self-contained HTML report for analytics.
 
@@ -340,7 +354,11 @@ def write_metrics_html(
     gross_total = sum((_dec(r.get("gross_settled_t")) for r in day_metrics), start=Decimal("0"))
     Mpeak_max = max((_dec(r.get("Mpeak_t")) for r in day_metrics), default=Decimal("0"))
     v_vals = [r.get("v_t") for r in day_metrics if r.get("v_t") is not None]
-    v_avg = (sum((_dec(v) for v in v_vals), start=Decimal("0")) / Decimal(len(v_vals))) if v_vals else None
+    v_avg = (
+        (sum((_dec(v) for v in v_vals), start=Decimal("0")) / Decimal(len(v_vals)))
+        if v_vals
+        else None
+    )
     # Weighted on-time settlement ratio
     phi_weighted_num = Decimal("0")
     if S_total > 0:
@@ -356,7 +374,9 @@ def write_metrics_html(
     # Build intraday SVGs per-day
     intraday_by_day = _group_by(intraday, "day")
 
-    def _svg_for_day(day: Any, rows: List[Dict[str, Any]], width: int = 520, height: int = 140) -> str:
+    def _svg_for_day(
+        day: Any, rows: list[dict[str, Any]], width: int = 520, height: int = 140
+    ) -> str:
         if not rows:
             return ""
         # Sort by step
@@ -366,28 +386,31 @@ def write_metrics_html(
         max_step = max(steps) if steps else 1
         max_val = max(vals) if vals else 1.0
         # Margins
-        l, r, t, b = 35, 10, 10, 25
-        w = width - l - r
-        h = height - t - b
+        left, right, top, bottom = 35, 10, 10, 25
+        w = width - left - right
+        h = height - top - bottom
+
         def sx(s: int) -> float:
-            return l + (0 if max_step <= 1 else (s - 1) * (w / (max_step - 1)))
+            return left + (0 if max_step <= 1 else (s - 1) * (w / (max_step - 1)))
+
         def sy(v: float) -> float:
-            return t + (0 if max_val <= 0 else h - (v * h / max_val))
-        pts = " ".join(f"{sx(s):.1f},{sy(v):.1f}" for s, v in zip(steps, vals))
+            return top + (0 if max_val <= 0 else h - (v * h / max_val))
+
+        pts = " ".join(f"{sx(s):.1f},{sy(v):.1f}" for s, v in zip(steps, vals, strict=False))
         # Axes ticks (simple)
-        y0 = t + h
-        x0 = l
-        x1 = l + w
+        y0 = top + h
+        x0 = left
+        x1 = left + w
         # Labels
-        max_val_lbl = f"{max_val:.2f}".rstrip('0').rstrip('.')
+        max_val_lbl = f"{max_val:.2f}".rstrip("0").rstrip(".")
         return f"""
 <svg width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\" xmlns=\"http://www.w3.org/2000/svg\">
   <rect x=\"0\" y=\"0\" width=\"{width}\" height=\"{height}\" fill=\"#fff\"/>
   <line x1=\"{x0}\" y1=\"{y0}\" x2=\"{x1}\" y2=\"{y0}\" stroke=\"#999\" stroke-width=\"1\"/>
-  <line x1=\"{x0}\" y1=\"{t}\" x2=\"{x0}\" y2=\"{y0}\" stroke=\"#999\" stroke-width=\"1\"/>
-  <text x=\"{x0}\" y=\"{t-2}\" font-size=\"10\" fill=\"#555\">P_prefix</text>
-  <text x=\"{x1}\" y=\"{y0+14}\" font-size=\"10\" fill=\"#555\" text-anchor=\"end\">step</text>
-  <text x=\"{x0-6}\" y=\"{t+8}\" font-size=\"10\" fill=\"#555\" text-anchor=\"end\">{max_val_lbl}</text>
+  <line x1=\"{x0}\" y1=\"{top}\" x2=\"{x0}\" y2=\"{y0}\" stroke=\"#999\" stroke-width=\"1\"/>
+  <text x=\"{x0}\" y=\"{top - 2}\" font-size=\"10\" fill=\"#555\">P_prefix</text>
+  <text x=\"{x1}\" y=\"{y0 + 14}\" font-size=\"10\" fill=\"#555\" text-anchor=\"end\">step</text>
+  <text x=\"{x0 - 6}\" y=\"{top + 8}\" font-size=\"10\" fill=\"#555\" text-anchor=\"end\">{max_val_lbl}</text>
   <polyline fill=\"none\" stroke=\"#2a7\" stroke-width=\"2\" points=\"{pts}\" />
 </svg>
 """
@@ -397,7 +420,7 @@ def write_metrics_html(
     html_sub = subtitle or ""
 
     def _row(k: str, v: Any) -> str:
-        return f"<tr><th scope=\"row\">{k}</th><td>{v}</td></tr>"
+        return f'<tr><th scope="row">{k}</th><td>{v}</td></tr>'
 
     # Build day table
     day_cols = [
@@ -406,12 +429,12 @@ def write_metrics_html(
         ("Mbar_t", "Min net liquidity \u0305M_t"),
         ("M_t", "Start-of-day money M_t"),
         ("G_t", "Liquidity gap G_t"),
-        ("alpha_t", "Netting potential \u03B1_t"),
+        ("alpha_t", "Netting potential \u03b1_t"),
         ("Mpeak_t", "Operational peak M^peak_t"),
         ("gross_settled_t", "Gross settled"),
         ("v_t", "Intraday velocity v_t"),
-        ("phi_t", "On-time settlement \u03C6_t"),
-        ("delta_t", "Deferral/default \u03B4_t"),
+        ("phi_t", "On-time settlement \u03c6_t"),
+        ("delta_t", "Deferral/default \u03b4_t"),
         ("n_debtors", "# debtors"),
         ("n_creditors", "# creditors"),
         ("HHIplus_t", "Creditor HHI^+"),
@@ -436,7 +459,7 @@ def write_metrics_html(
         ths = "".join(f"<th>{a}</th>" for a in agents)
         ds_tds = "".join(f"<td>{_fmt_num(shares.get(a))}</td>" for a in agents)
         ds_sections.append(
-            f"<h4>Day {d}</h4><table class=\"grid\"><thead><tr><th>Agent</th>{ths}</tr></thead>"
+            f'<h4>Day {d}</h4><table class="grid"><thead><tr><th>Agent</th>{ths}</tr></thead>'
             f"<tbody><tr><th>DS_t</th>{ds_tds}</tr></tbody></table>"
         )
 
@@ -456,7 +479,7 @@ def write_metrics_html(
   <dd>System means-of-payment available at the start of day t (cash, deposits, reserves).</dd>
   <dt>Liquidity gap G_t</dt>
   <dd>Shortfall at the start of the day: max(0, \u0305M_t - M_t).</dd>
-  <dt>Netting potential \u03B1_t</dt>
+  <dt>Netting potential \u03b1_t</dt>
   <dd>Share of dues that can be cleared by circulation/netting: 1 - \u0305M_t / S_t.</dd>
   <dt>Operational peak M^peak_t</dt>
   <dd>Peak amount of money simultaneously out in circuit when replaying realized settlement sequence.</dd>
@@ -464,20 +487,26 @@ def write_metrics_html(
   <dd>Total value actually settled on day t.</dd>
   <dt>Intraday velocity v_t</dt>
   <dd>How intensively money is reused intraday: gross settled / operational peak.</dd>
-  <dt>On-time settlement \u03C6_t</dt>
+  <dt>On-time settlement \u03c6_t</dt>
   <dd>Share of dues with due_day=t that settle on day t.</dd>
-  <dt>Deferral/default \u03B4_t</dt>
-  <dd>1 - \u03C6_t (portion not settled on time; may reflect deferrals or defaults).</dd>
+  <dt>Deferral/default \u03b4_t</dt>
+  <dd>1 - \u03c6_t (portion not settled on time; may reflect deferrals or defaults).</dd>
   <dt>Creditor HHI^+</dt>
   <dd>Concentration of net creditor positions among those with n_i > 0.</dd>
   <dt>Debtor shortfall shares DS_t(i)</dt>
   <dd>Each net debtor's share of \u0305M_t, indicating who needs liquidity.</dd>
   <dt>Defaults (agents)</dt>
-  <dd>Number of distinct agents that defaulted during the simulation. Complements the value-weighted \u03B4_total.</dd>
+  <dd>Number of distinct agents that defaulted during the simulation. Complements the value-weighted \u03b4_total.</dd>
   <dt>Cascade fraction</dt>
-  <dd>Fraction of defaults caused by upstream contagion: a secondary default occurs when an agent's debtor defaulted before it, meaning the agent lost expected inflows. Ranges 0-1; \u2014 if no defaults.</dd>
+  <dd>
+    Fraction of defaults caused by upstream contagion: a secondary default occurs when an agent's
+    debtor defaulted before it, meaning the agent lost expected inflows. Ranges 0-1; \u2014 if no defaults.
+  </dd>
 </dl>
 """
+
+    defaults_agents = run_level_metrics.get("n_defaults", "—") if run_level_metrics else "—"
+    cascade_fraction = _fmt_num(run_level_metrics.get("cascade_fraction")) if run_level_metrics else "—"
 
     html = f"""
 <!doctype html>
@@ -510,7 +539,7 @@ def write_metrics_html(
 <body>
   <header>
     <h1>{html_title}</h1>
-    {f'<p class="small muted">{html_sub}</p>' if html_sub else ''}
+    {f'<p class="small muted">{html_sub}</p>' if html_sub else ""}
   </header>
 
   <section>
@@ -521,9 +550,9 @@ def write_metrics_html(
       <div class=\"card\"><div class=\"muted\">Gross settled total</div><div><strong>{_fmt_num(gross_total)}</strong></div></div>
       <div class=\"card\"><div class=\"muted\">Max operational peak</div><div><strong>{_fmt_num(Mpeak_max)}</strong></div></div>
       <div class=\"card\"><div class=\"muted\">Avg velocity</div><div><strong>{_fmt_num(v_avg)}</strong></div></div>
-      <div class=\"card\"><div class=\"muted\">Weighted on-time \u03C6</div><div><strong>{_fmt_num(phi_weighted)}</strong></div></div>
-      <div class=\"card\"><div class=\"muted\">Defaults (agents)</div><div><strong>{run_level_metrics.get('n_defaults', '—') if run_level_metrics else '—'}</strong></div></div>
-      <div class=\"card\"><div class=\"muted\">Cascade fraction</div><div><strong>{_fmt_num(run_level_metrics.get('cascade_fraction')) if run_level_metrics else '—'}</strong></div></div>
+      <div class=\"card\"><div class=\"muted\">Weighted on-time \u03c6</div><div><strong>{_fmt_num(phi_weighted)}</strong></div></div>
+      <div class=\"card\"><div class=\"muted\">Defaults (agents)</div><div><strong>{defaults_agents}</strong></div></div>
+      <div class=\"card\"><div class=\"muted\">Cascade fraction</div><div><strong>{cascade_fraction}</strong></div></div>
     </div>
   </section>
 
@@ -534,20 +563,20 @@ def write_metrics_html(
         <tr>{day_table_head}</tr>
       </thead>
       <tbody>
-        {''.join(day_table_rows)}
+        {"".join(day_table_rows)}
       </tbody>
     </table>
   </section>
 
   <section>
     <h2>Debtor Shortfall Shares DS_t(i)</h2>
-    {''.join(ds_sections) if ds_sections else '<p class="muted">No net debtors on analyzed days.</p>'}
+    {"".join(ds_sections) if ds_sections else '<p class="muted">No net debtors on analyzed days.</p>'}
   </section>
 
   <section>
     <h2>Intraday Diagnostics: Prefix Liquidity P(s)</h2>
     <p class=\"small muted\">For each settlement sequence on day t, P(s) = \u2211_i max(0, \u0394_i(s)) and M^peak_t = max_s P(s).</p>
-    {''.join(intraday_sections) if intraday_sections else '<p class="muted">No settlement steps found.</p>'}
+    {"".join(intraday_sections) if intraday_sections else '<p class="muted">No settlement steps found.</p>'}
   </section>
 
   <section>
@@ -569,7 +598,7 @@ def _resolve_path(base: Path, value: str) -> Path:
     return p
 
 
-def _decimal_or_none(val: Any) -> Optional[Decimal]:
+def _decimal_or_none(val: Any) -> Decimal | None:
     if val is None or val == "":
         return None
     try:
@@ -581,13 +610,13 @@ def _decimal_or_none(val: Any) -> Optional[Decimal]:
 def aggregate_runs(
     registry_csv: Path | str,
     results_csv: Path | str,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Aggregate per-run metrics into a single CSV."""
     registry_path = Path(registry_csv)
     results_path = Path(results_csv)
     results_path.parent.mkdir(parents=True, exist_ok=True)
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     with registry_path.open("r", newline="") as fh:
         reader = csv.DictReader(fh)
@@ -616,29 +645,32 @@ def aggregate_runs(
         n_defaults_val = entry.get("n_defaults", "")
         cascade_fraction_val = entry.get("cascade_fraction", "")
 
-        rows.append({
-            "run_id": entry.get("run_id"),
-            "phase": entry.get("phase"),
-            "seed": entry.get("seed"),
-            "n_agents": entry.get("n_agents"),
-            "kappa": entry.get("kappa"),
-            "concentration": entry.get("concentration"),
-            "mu": entry.get("mu"),
-            "monotonicity": entry.get("monotonicity"),
-            "S1": entry.get("S1"),
-            "L0": entry.get("L0"),
-            "phi_total": summary.get("phi_total"),
-            "delta_total": summary.get("delta_total"),
-            "max_G_t": summary.get("max_G_t"),
-            "alpha_1": summary.get("alpha_1"),
-            "Mpeak_1": summary.get("Mpeak_1"),
-            "v_1": summary.get("v_1"),
-            "HHIplus_1": summary.get("HHIplus_1"),
-            "n_defaults": n_defaults_val,
-            "cascade_fraction": cascade_fraction_val,
-            "time_to_stability": entry.get("time_to_stability") or str(summary.get("max_day", "")),
-            "metrics_csv": metrics_rel,
-        })
+        rows.append(
+            {
+                "run_id": entry.get("run_id"),
+                "phase": entry.get("phase"),
+                "seed": entry.get("seed"),
+                "n_agents": entry.get("n_agents"),
+                "kappa": entry.get("kappa"),
+                "concentration": entry.get("concentration"),
+                "mu": entry.get("mu"),
+                "monotonicity": entry.get("monotonicity"),
+                "S1": entry.get("S1"),
+                "L0": entry.get("L0"),
+                "phi_total": summary.get("phi_total"),
+                "delta_total": summary.get("delta_total"),
+                "max_G_t": summary.get("max_G_t"),
+                "alpha_1": summary.get("alpha_1"),
+                "Mpeak_1": summary.get("Mpeak_1"),
+                "v_1": summary.get("v_1"),
+                "HHIplus_1": summary.get("HHIplus_1"),
+                "n_defaults": n_defaults_val,
+                "cascade_fraction": cascade_fraction_val,
+                "time_to_stability": entry.get("time_to_stability")
+                or str(summary.get("max_day", "")),
+                "metrics_csv": metrics_rel,
+            }
+        )
 
     fieldnames = [
         "run_id",
@@ -693,12 +725,26 @@ def render_dashboard(results_csv: Path | str, dashboard_html: Path | str) -> Non
         rows = list(reader)
 
     total_runs = len(rows)
-    phi_values: List[Decimal] = [v for v in (_decimal_or_none(r.get("phi_total")) for r in rows) if v is not None]
-    delta_values: List[Decimal] = [v for v in (_decimal_or_none(r.get("delta_total")) for r in rows) if v is not None]
-    max_g_values: List[Decimal] = [v for v in (_decimal_or_none(r.get("max_G_t")) for r in rows if r.get("max_G_t")) if v is not None]
+    phi_values: list[Decimal] = [
+        v for v in (_decimal_or_none(r.get("phi_total")) for r in rows) if v is not None
+    ]
+    delta_values: list[Decimal] = [
+        v for v in (_decimal_or_none(r.get("delta_total")) for r in rows) if v is not None
+    ]
+    max_g_values: list[Decimal] = [
+        v
+        for v in (_decimal_or_none(r.get("max_G_t")) for r in rows if r.get("max_G_t"))
+        if v is not None
+    ]
 
-    avg_phi = (sum(phi_values, start=Decimal("0")) / Decimal(len(phi_values))) if phi_values else None
-    avg_delta = (sum(delta_values, start=Decimal("0")) / Decimal(len(delta_values))) if delta_values else None
+    avg_phi = (
+        (sum(phi_values, start=Decimal("0")) / Decimal(len(phi_values))) if phi_values else None
+    )
+    avg_delta = (
+        (sum(delta_values, start=Decimal("0")) / Decimal(len(delta_values)))
+        if delta_values
+        else None
+    )
     max_gap = max(max_g_values) if max_g_values else None
 
     table_rows = []
@@ -738,18 +784,19 @@ def render_dashboard(results_csv: Path | str, dashboard_html: Path | str) -> Non
   <h1>Kalecki Ring Sweep Dashboard</h1>
   <div class=\"summary\">
     <div class=\"card\"><div>Total runs</div><strong>{total_runs}</strong></div>
-    <div class=\"card\"><div>Average \u03C6_total</div><strong>{_fmt_num(avg_phi)}</strong></div>
-    <div class=\"card\"><div>Average \u03B4_total</div><strong>{_fmt_num(avg_delta)}</strong></div>
+    <div class=\"card\"><div>Average \u03c6_total</div><strong>{_fmt_num(avg_phi)}</strong></div>
+    <div class=\"card\"><div>Average \u03b4_total</div><strong>{_fmt_num(avg_delta)}</strong></div>
     <div class=\"card\"><div>Max liquidity gap</div><strong>{_fmt_num(max_gap)}</strong></div>
   </div>
   <table>
     <thead>
       <tr>
-        <th>Run</th><th>Phase</th><th>\u03BA</th><th>c</th><th>\u03BC</th><th>m</th><th>\u03C6_total</th><th>\u03B4_total</th><th>max G_t</th><th>Days</th>
+        <th>Run</th><th>Phase</th><th>\u03ba</th><th>c</th><th>\u03bc</th><th>m</th><th>\u03c6_total</th>
+        <th>\u03b4_total</th><th>max G_t</th><th>Days</th>
       </tr>
     </thead>
     <tbody>
-      {''.join(table_rows)}
+      {"".join(table_rows)}
     </tbody>
   </table>
 </body>

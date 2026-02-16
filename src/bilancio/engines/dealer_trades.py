@@ -7,31 +7,28 @@ dealer subsystem.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bilancio.engines.system import System
-    from bilancio.engines.dealer_integration import DealerSubsystem
     from bilancio.dealer.kernel import ExecutionResult
+    from bilancio.engines.dealer_integration import DealerSubsystem
+    from bilancio.engines.system import System
 
-from bilancio.dealer.models import (
-    DealerState,
-    VBTState,
-    TraderState,
-    Ticket,
-)
-from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
+from bilancio.dealer.kernel import recompute_dealer_state
 from bilancio.dealer.metrics import (
-    TradeRecord,
     TicketOutcome,
+    TradeRecord,
     compute_safety_margin,
 )
+from bilancio.dealer.models import (
+    DealerState,
+    Ticket,
+    TraderState,
+    VBTState,
+)
 
 
-def _compute_trader_safety_margin(
-    subsystem: "DealerSubsystem",
-    trader_id: str
-) -> Decimal:
+def _compute_trader_safety_margin(subsystem: DealerSubsystem, trader_id: str) -> Decimal:
     """Compute safety margin for a specific trader."""
     trader = subsystem.traders.get(trader_id)
     if not trader:
@@ -42,19 +39,19 @@ def _compute_trader_safety_margin(
         tickets_held=trader.tickets_owned,
         obligations=trader.obligations,
         dealers=subsystem.dealers,
-        ticket_size=subsystem.params.S
+        ticket_size=subsystem.params.S,
     )
 
 
 def _check_sell_risk_assessment(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     trader: TraderState,
     trader_id: str,
-    ticket: "Ticket",
+    ticket: Ticket,
     dealer: DealerState,
     bucket_id: str,
     current_day: int,
-    events: List[dict[str, object]],
+    events: list[dict[str, object]],
 ) -> bool:
     """Check risk assessment for a sell trade.
 
@@ -66,8 +63,7 @@ def _check_sell_risk_assessment(
 
     # Compute asset value as sum of EVs of owned tickets
     asset_value = sum(
-        (subsystem.risk_assessor.expected_value(t, current_day)
-         for t in trader.tickets_owned),
+        (subsystem.risk_assessor.expected_value(t, current_day) for t in trader.tickets_owned),
         Decimal(0),
     )
     if subsystem.risk_assessor.should_sell(
@@ -75,31 +71,35 @@ def _check_sell_risk_assessment(
         dealer_bid=dealer.bid,
         current_day=current_day,
         trader_cash=trader.cash,
-        trader_shortfall=trader.upcoming_shortfall(current_day, subsystem.trader_profile.sell_horizon),
+        trader_shortfall=trader.upcoming_shortfall(
+            current_day, subsystem.trader_profile.sell_horizon
+        ),
         trader_asset_value=asset_value,
     ):
         return False  # Trade accepted
 
     # Trader rejects price - log event and skip
-    events.append({
-        "kind": "sell_rejected",
-        "day": current_day,
-        "phase": "simulation",
-        "trader_id": trader_id,
-        "ticket_id": ticket.id,
-        "bucket": bucket_id,
-        "offered_price": float(dealer.bid),
-        "expected_value": float(subsystem.risk_assessor.expected_value(ticket, current_day)),
-        "threshold": float(subsystem.risk_assessor.params.base_risk_premium),
-        "reason": "price_below_ev_threshold",
-    })
+    events.append(
+        {
+            "kind": "sell_rejected",
+            "day": current_day,
+            "phase": "simulation",
+            "trader_id": trader_id,
+            "ticket_id": ticket.id,
+            "bucket": bucket_id,
+            "offered_price": float(dealer.bid),
+            "expected_value": float(subsystem.risk_assessor.expected_value(ticket, current_day)),
+            "threshold": float(subsystem.risk_assessor.params.base_risk_premium),
+            "reason": "price_below_ev_threshold",
+        }
+    )
     return True  # Trade rejected
 
 
 def _record_sell_trade(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     trader_id: str,
-    ticket: "Ticket",
+    ticket: Ticket,
     bucket_id: str,
     current_day: int,
     scaled_price: Decimal,
@@ -116,7 +116,7 @@ def _record_sell_trade(
     dealer: DealerState,
     vbt: VBTState,
     trader_cash_after: Decimal,
-    events: List[dict[str, object]],
+    events: list[dict[str, object]],
 ) -> None:
     """Record a completed sell trade in metrics, ticket outcomes, and events."""
     # Create detailed trade record for metrics (Section 8)
@@ -163,31 +163,32 @@ def _record_sell_trade(
     subsystem.metrics.ticket_outcomes[ticket.id].sale_price = scaled_price
     subsystem.metrics.ticket_outcomes[ticket.id].seller_id = trader_id
 
-    events.append({
-        "kind": "dealer_trade",
-        "day": current_day,
-        "phase": "simulation",
-        "trader": trader_id,
-        "side": "sell",
-        "ticket_id": ticket.id,
-        "bucket": bucket_id,
-        "price": float(scaled_price),
-        "unit_price": float(unit_price),
-        "face": float(ticket.face),
-        "is_passthrough": is_passthrough,
-        "is_liquidity_driven": is_liquidity_driven,
-    })
+    events.append(
+        {
+            "kind": "dealer_trade",
+            "day": current_day,
+            "phase": "simulation",
+            "trader": trader_id,
+            "side": "sell",
+            "ticket_id": ticket.id,
+            "bucket": bucket_id,
+            "price": float(scaled_price),
+            "unit_price": float(unit_price),
+            "face": float(ticket.face),
+            "is_passthrough": is_passthrough,
+            "is_liquidity_driven": is_liquidity_driven,
+        }
+    )
 
 
 def _execute_sell_trade(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     trader_id: str,
     current_day: int,
-    events: List[dict[str, object]],
-    dealer_budgets: Dict[str, Decimal] | None = None,
+    events: list[dict[str, object]],
+    dealer_budgets: dict[str, Decimal] | None = None,
 ) -> Decimal:
     """Process a single sell trade attempt for a trader. Returns cash injected into ring."""
-    from bilancio.engines.dealer_integration import _get_agent_cash
 
     trader = subsystem.traders[trader_id]
     if not trader.tickets_owned:
@@ -203,6 +204,7 @@ def _execute_sell_trade(
     # For a customer sell, the dealer (or VBT) is the buyer/payer
     if dealer_budgets is not None:
         from bilancio.dealer.kernel import can_interior_buy
+
         is_interior = can_interior_buy(dealer, subsystem.params)
         payer_id = dealer.agent_id if is_interior else vbt.agent_id
         estimated_cost = Decimal(str(dealer.bid if is_interior else vbt.B)) * ticket.face
@@ -218,20 +220,26 @@ def _execute_sell_trade(
     pre_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
 
     # Check if liquidity-driven (Section 8.3)
-    is_liquidity_driven = trader.upcoming_shortfall(current_day, subsystem.trader_profile.sell_horizon) > 0
+    is_liquidity_driven = (
+        trader.upcoming_shortfall(current_day, subsystem.trader_profile.sell_horizon) > 0
+    )
 
     # Risk assessment check (Plan 032)
     if _check_sell_risk_assessment(
-        subsystem, trader, trader_id, ticket,
-        dealer, bucket_id, current_day, events,
+        subsystem,
+        trader,
+        trader_id,
+        ticket,
+        dealer,
+        bucket_id,
+        current_day,
+        events,
     ):
         return Decimal(0)
 
     # Execute customer sell
     assert subsystem.executor is not None
-    result = subsystem.executor.execute_customer_sell(
-        dealer, vbt, ticket, check_assertions=False
-    )
+    result = subsystem.executor.execute_customer_sell(dealer, vbt, ticket, check_assertions=False)
 
     if result.executed:
         # Scale price by ticket face value
@@ -247,13 +255,26 @@ def _execute_sell_trade(
 
         # Record trade in metrics, ticket outcomes, and events
         _record_sell_trade(
-            subsystem, trader_id, ticket, bucket_id, current_day,
-            scaled_price, result.price, result.is_passthrough,
+            subsystem,
+            trader_id,
+            ticket,
+            bucket_id,
+            current_day,
+            scaled_price,
+            result.price,
+            result.is_passthrough,
             is_liquidity_driven,
-            pre_dealer_inventory, pre_dealer_cash,
-            pre_dealer_bid, pre_dealer_ask,
-            pre_trader_cash, pre_safety_margin, post_safety_margin,
-            dealer, vbt, trader.cash, events,
+            pre_dealer_inventory,
+            pre_dealer_cash,
+            pre_dealer_bid,
+            pre_dealer_ask,
+            pre_trader_cash,
+            pre_safety_margin,
+            post_safety_margin,
+            dealer,
+            vbt,
+            trader.cash,
+            events,
         )
 
         # Update dealer/VBT cash budget after successful sell trade
@@ -269,7 +290,7 @@ def _execute_sell_trade(
 def _reverse_buy_to_dealer(
     dealer: DealerState,
     vbt: VBTState,
-    result: "ExecutionResult",
+    result: ExecutionResult,
     bucket_id: str,
 ) -> None:
     """Reverse a buy trade by returning the ticket to the dealer or VBT.
@@ -296,15 +317,15 @@ def _reverse_buy_to_dealer(
 
 
 def _check_buy_risk_assessment(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     trader: TraderState,
     trader_id: str,
-    result: "ExecutionResult",
+    result: ExecutionResult,
     dealer: DealerState,
     vbt: VBTState,
     bucket_id: str,
     current_day: int,
-    events: List[dict[str, object]],
+    events: list[dict[str, object]],
 ) -> bool:
     """Check risk assessment for a buy trade and reverse if rejected.
 
@@ -318,8 +339,7 @@ def _check_buy_risk_assessment(
 
     # Compute asset value (including the ticket we just bought)
     asset_value = sum(
-        (subsystem.risk_assessor.expected_value(t, current_day)
-         for t in trader.tickets_owned),
+        (subsystem.risk_assessor.expected_value(t, current_day) for t in trader.tickets_owned),
         Decimal(0),
     )
     # Check if trader would accept this buy
@@ -335,22 +355,29 @@ def _check_buy_risk_assessment(
 
     # Trader rejects - reverse the transaction
     _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
-    events.append({
-        "kind": "buy_rejected",
-        "day": current_day,
-        "phase": "simulation",
-        "trader_id": trader_id,
-        "ticket_id": result.ticket.id,
-        "bucket": bucket_id,
-        "offered_price": float(result.price),
-        "expected_value": float(subsystem.risk_assessor.expected_value(result.ticket, current_day)),
-        "threshold": float(subsystem.risk_assessor.params.base_risk_premium * subsystem.risk_assessor.params.buy_premium_multiplier),
-        "reason": "ev_below_price_threshold",
-    })
+    events.append(
+        {
+            "kind": "buy_rejected",
+            "day": current_day,
+            "phase": "simulation",
+            "trader_id": trader_id,
+            "ticket_id": result.ticket.id,
+            "bucket": bucket_id,
+            "offered_price": float(result.price),
+            "expected_value": float(
+                subsystem.risk_assessor.expected_value(result.ticket, current_day)
+            ),
+            "threshold": float(
+                subsystem.risk_assessor.params.base_risk_premium
+                * subsystem.risk_assessor.params.buy_premium_multiplier
+            ),
+            "reason": "ev_below_price_threshold",
+        }
+    )
     return True  # Trade rejected
 
 
-def _is_liquidity_buy(trader: TraderState, ticket: "Ticket", current_day: int) -> bool:
+def _is_liquidity_buy(trader: TraderState, ticket: Ticket, current_day: int) -> bool:
     """True if ticket matures at or before the trader's earliest obligation."""
     earliest = trader.earliest_liability_day(current_day)
     if earliest is None:
@@ -359,10 +386,10 @@ def _is_liquidity_buy(trader: TraderState, ticket: "Ticket", current_day: int) -
 
 
 def _record_buy_trade(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     trader_id: str,
     trader: TraderState,
-    ticket: "Ticket",
+    ticket: Ticket,
     bucket_id: str,
     current_day: int,
     scaled_price: Decimal,
@@ -378,13 +405,11 @@ def _record_buy_trade(
     dealer: DealerState,
     vbt: VBTState,
     trader_cash_after: Decimal,
-    events: List[dict[str, object]],
+    events: list[dict[str, object]],
 ) -> None:
     """Record a completed buy trade in metrics, ticket outcomes, and events."""
     # Check if BUY reduced margin below zero (Section 8.4)
-    reduces_margin_below_zero = (
-        pre_safety_margin >= 0 and post_safety_margin < 0
-    )
+    reduces_margin_below_zero = pre_safety_margin >= 0 and post_safety_margin < 0
 
     # Create detailed trade record for metrics (Section 8)
     trade_record = TradeRecord(
@@ -430,28 +455,30 @@ def _record_buy_trade(
     subsystem.metrics.ticket_outcomes[ticket.id].purchase_price = scaled_price
     subsystem.metrics.ticket_outcomes[ticket.id].purchaser_id = trader_id
 
-    events.append({
-        "kind": "dealer_trade",
-        "day": current_day,
-        "phase": "simulation",
-        "trader": trader_id,
-        "side": "buy",
-        "ticket_id": ticket.id,
-        "bucket": bucket_id,
-        "price": float(scaled_price),
-        "unit_price": float(unit_price),
-        "face": float(ticket.face),
-        "is_passthrough": is_passthrough,
-        "reduces_margin_below_zero": reduces_margin_below_zero,
-    })
+    events.append(
+        {
+            "kind": "dealer_trade",
+            "day": current_day,
+            "phase": "simulation",
+            "trader": trader_id,
+            "side": "buy",
+            "ticket_id": ticket.id,
+            "bucket": bucket_id,
+            "price": float(scaled_price),
+            "unit_price": float(unit_price),
+            "face": float(ticket.face),
+            "is_passthrough": is_passthrough,
+            "reduces_margin_below_zero": reduces_margin_below_zero,
+        }
+    )
 
 
 def _execute_buy_trade(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     trader_id: str,
     current_day: int,
-    events: List[dict[str, object]],
-    dealer_budgets: Dict[str, Decimal] | None = None,
+    events: list[dict[str, object]],
+    dealer_budgets: dict[str, Decimal] | None = None,
 ) -> Decimal:
     """Process a single buy trade attempt for a trader. Returns cash drained from ring."""
     trader = subsystem.traders[trader_id]
@@ -490,14 +517,23 @@ def _execute_buy_trade(
         if result.executed and result.ticket:
             # Post-execution risk assessment check (Plan 032)
             if _check_buy_risk_assessment(
-                subsystem, trader, trader_id, result,
-                dealer, vbt, bucket_id, current_day, events,
+                subsystem,
+                trader,
+                trader_id,
+                result,
+                dealer,
+                vbt,
+                bucket_id,
+                current_day,
+                events,
             ):
                 continue  # Risk rejected, try next bucket
 
         if result.executed and result.ticket:
             # Liquidity-only gate: reject buys of tickets maturing after earliest obligation
-            if motive == "liquidity_only" and not _is_liquidity_buy(trader, result.ticket, current_day):
+            if motive == "liquidity_only" and not _is_liquidity_buy(
+                trader, result.ticket, current_day
+            ):
                 _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
                 recompute_dealer_state(dealer, vbt, subsystem.params)
                 continue
@@ -520,12 +556,26 @@ def _execute_buy_trade(
 
             # Record trade in metrics, ticket outcomes, and events
             _record_buy_trade(
-                subsystem, trader_id, trader, result.ticket, bucket_id, current_day,
-                scaled_price, result.price, result.is_passthrough,
-                pre_dealer_inventory, pre_dealer_cash,
-                pre_dealer_bid, pre_dealer_ask,
-                pre_trader_cash, pre_safety_margin, post_safety_margin,
-                dealer, vbt, trader.cash, events,
+                subsystem,
+                trader_id,
+                trader,
+                result.ticket,
+                bucket_id,
+                current_day,
+                scaled_price,
+                result.price,
+                result.is_passthrough,
+                pre_dealer_inventory,
+                pre_dealer_cash,
+                pre_dealer_bid,
+                pre_dealer_ask,
+                pre_trader_cash,
+                pre_safety_margin,
+                post_safety_margin,
+                dealer,
+                vbt,
+                trader.cash,
+                events,
             )
 
             # Update dealer/VBT cash budget after successful buy trade
@@ -540,10 +590,10 @@ def _execute_buy_trade(
 
 
 def _build_eligible_sellers(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     current_day: int,
     horizon: int | None = None,
-) -> List[str]:
+) -> list[str]:
     """Identify traders eligible to sell (have shortfall coming in next few days).
 
     Args:
@@ -567,10 +617,10 @@ def _build_eligible_sellers(
 
 
 def _build_eligible_buyers(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     current_day: int,
     horizon: int | None = None,
-) -> List[str]:
+) -> list[str]:
     """Identify traders eligible to buy (have surplus cash beyond needs).
 
     Only allows buying if trader has genuine surplus above ALL upcoming
@@ -603,12 +653,12 @@ def _build_eligible_buyers(
 
 
 def _execute_interleaved_order_flow(
-    subsystem: "DealerSubsystem",
-    system: "System",
+    subsystem: DealerSubsystem,
+    system: System,
     current_day: int,
-    eligible_sellers: List[str],
-    eligible_buyers: List[str],
-    events: List[dict[str, object]],
+    eligible_sellers: list[str],
+    eligible_buyers: list[str],
+    events: list[dict[str, object]],
 ) -> None:
     """Execute order flow: all sellers first, then all buyers independently.
 
@@ -623,10 +673,10 @@ def _execute_interleaved_order_flow(
 
     # Initialize cash budgets for dealers/VBTs from system-level cash
     # This prevents trades that would make dealer/VBT cash go negative
-    dealer_budgets: Dict[str, Decimal] = {}
-    for bucket_id, dealer in subsystem.dealers.items():
+    dealer_budgets: dict[str, Decimal] = {}
+    for _bucket_id, dealer in subsystem.dealers.items():
         dealer_budgets[dealer.agent_id] = _get_agent_cash(system, dealer.agent_id)
-    for bucket_id, vbt in subsystem.vbts.items():
+    for _bucket_id, vbt in subsystem.vbts.items():
         dealer_budgets[vbt.agent_id] = _get_agent_cash(system, vbt.agent_id)
 
     # --- Process all sellers (urgent liquidity needs) ---

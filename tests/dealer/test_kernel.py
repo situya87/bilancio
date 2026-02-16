@@ -10,22 +10,19 @@ References:
 - Examples Document: Balanced dealer state example
 """
 
-import pytest
 from decimal import Decimal
-from copy import deepcopy
 
 from bilancio.dealer import (
-    Ticket,
     DealerState,
-    VBTState,
     KernelParams,
-    recompute_dealer_state,
-    can_interior_buy,
-    can_interior_sell,
+    Ticket,
+    VBTState,
     assert_c2_quote_bounds,
     assert_c5_equity_basis,
+    can_interior_buy,
+    can_interior_sell,
+    recompute_dealer_state,
 )
-from bilancio.core.ids import new_id
 
 
 # Helper function to create test fixtures
@@ -33,7 +30,7 @@ def make_dealer_vbt(
     a: int = 2,
     cash: Decimal = Decimal(2),
     M: Decimal = Decimal(1),
-    O: Decimal = Decimal("0.30"),
+    O: Decimal = Decimal("0.30"),  # noqa: E741
     S: Decimal = Decimal(1),
 ) -> tuple[DealerState, VBTState, KernelParams]:
     """
@@ -317,7 +314,7 @@ class TestMidlineFormula:
 
         # At x=0 (no inventory):
         x_test = Decimal(0)
-        expected_p = vbt.M - expected_slope * (x_test - dealer.X_star / 2)
+        vbt.M - expected_slope * (x_test - dealer.X_star / 2)
 
         # Create dealer with x=0 but same X* (maintain V=4 via cash)
         dealer_test, vbt_test, params_test = make_dealer_vbt(

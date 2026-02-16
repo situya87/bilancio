@@ -8,32 +8,31 @@ with synthetic data -- no full system initialization required.
 
 import csv
 import json
-import pytest
 from decimal import Decimal
 from pathlib import Path
 
 from bilancio.dealer.metrics import (
-    TradeRecord,
     DealerSnapshot,
-    TraderSnapshot,
-    TicketOutcome,
-    SystemStateSnapshot,
+    LiabilityInfo,
     RepaymentEvent,
     RunMetrics,
-    LiabilityInfo,
+    SystemStateSnapshot,
+    TicketOutcome,
+    TradeRecord,
+    TraderSnapshot,
+    build_liability_map,
+    build_repayment_events,
     classify_trading_strategy,
     compute_safety_margin,
     compute_saleable_value,
-    build_liability_map,
     compute_trading_stats_by_trader,
     get_trades_before_day,
-    build_repayment_events,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build realistic test fixtures
 # ---------------------------------------------------------------------------
+
 
 def _trade(
     day=1,
@@ -197,22 +196,40 @@ def _ticket_outcome(
 # TradeRecord
 # ===================================================================
 
+
 class TestTradeRecord:
     def test_to_dict_keys(self):
         t = _trade()
         d = t.to_dict()
         expected_keys = {
-            "run_id", "regime",
-            "day", "bucket", "side", "trader_id", "ticket_id",
-            "issuer_id", "maturity_day", "face_value", "price", "unit_price",
+            "run_id",
+            "regime",
+            "day",
+            "bucket",
+            "side",
+            "trader_id",
+            "ticket_id",
+            "issuer_id",
+            "maturity_day",
+            "face_value",
+            "price",
+            "unit_price",
             "is_passthrough",
-            "dealer_inventory_before", "dealer_cash_before",
-            "dealer_bid_before", "dealer_ask_before", "vbt_mid_before",
-            "trader_cash_before", "trader_safety_margin_before",
-            "dealer_inventory_after", "dealer_cash_after",
-            "dealer_bid_after", "dealer_ask_after",
-            "trader_cash_after", "trader_safety_margin_after",
-            "is_liquidity_driven", "reduces_margin_below_zero",
+            "dealer_inventory_before",
+            "dealer_cash_before",
+            "dealer_bid_before",
+            "dealer_ask_before",
+            "vbt_mid_before",
+            "trader_cash_before",
+            "trader_safety_margin_before",
+            "dealer_inventory_after",
+            "dealer_cash_after",
+            "dealer_bid_after",
+            "dealer_ask_after",
+            "trader_cash_after",
+            "trader_safety_margin_after",
+            "is_liquidity_driven",
+            "reduces_margin_below_zero",
             "hit_inventory_limit",
         }
         assert set(d.keys()) == expected_keys
@@ -234,10 +251,12 @@ class TestTradeRecord:
 # DealerSnapshot
 # ===================================================================
 
+
 class TestDealerSnapshot:
     def test_mark_to_mid_equity(self):
-        s = _snapshot(cash=Decimal(100), vbt_mid=Decimal("0.95"),
-                      inventory=10, ticket_size=Decimal(1))
+        s = _snapshot(
+            cash=Decimal(100), vbt_mid=Decimal("0.95"), inventory=10, ticket_size=Decimal(1)
+        )
         # E = 100 + 0.95 * 10 * 1 = 109.5
         assert s.mark_to_mid_equity == Decimal("109.50")
 
@@ -293,6 +312,7 @@ class TestDealerSnapshot:
 # TraderSnapshot
 # ===================================================================
 
+
 class TestTraderSnapshot:
     def test_to_dict(self):
         ts = _trader_snapshot()
@@ -311,6 +331,7 @@ class TestTraderSnapshot:
 # ===================================================================
 # TicketOutcome
 # ===================================================================
+
 
 class TestTicketOutcome:
     def test_realized_return_not_purchased(self):
@@ -411,10 +432,13 @@ class TestTicketOutcome:
 # SystemStateSnapshot
 # ===================================================================
 
+
 class TestSystemStateSnapshot:
     def test_debt_to_money(self):
         s = SystemStateSnapshot(
-            run_id="r1", regime="active", day=1,
+            run_id="r1",
+            regime="active",
+            day=1,
             total_face_value=Decimal(1000),
             total_cash=Decimal(500),
         )
@@ -422,7 +446,9 @@ class TestSystemStateSnapshot:
 
     def test_debt_to_money_zero_cash(self):
         s = SystemStateSnapshot(
-            run_id="r1", regime="active", day=1,
+            run_id="r1",
+            regime="active",
+            day=1,
             total_face_value=Decimal(1000),
             total_cash=Decimal(0),
         )
@@ -430,7 +456,9 @@ class TestSystemStateSnapshot:
 
     def test_to_dict(self):
         s = SystemStateSnapshot(
-            run_id="r1", regime="active", day=3,
+            run_id="r1",
+            regime="active",
+            day=3,
             total_face_value=Decimal(800),
             face_bucket_short=Decimal(200),
             face_bucket_mid=Decimal(300),
@@ -449,14 +477,19 @@ class TestSystemStateSnapshot:
 # RepaymentEvent
 # ===================================================================
 
+
 class TestRepaymentEvent:
     def test_to_dict(self):
         e = RepaymentEvent(
-            run_id="r1", regime="active",
-            trader_id="h0", liability_id="PAY_1",
-            maturity_day=5, face_value=Decimal(50),
+            run_id="r1",
+            regime="active",
+            trader_id="h0",
+            liability_id="PAY_1",
+            maturity_day=5,
+            face_value=Decimal(50),
             outcome="repaid",
-            buy_count=2, sell_count=1,
+            buy_count=2,
+            sell_count=1,
             net_cash_pnl=Decimal("10.5"),
             strategy="round_trip",
         )
@@ -471,6 +504,7 @@ class TestRepaymentEvent:
 # ===================================================================
 # classify_trading_strategy
 # ===================================================================
+
 
 class TestClassifyTradingStrategy:
     def test_no_trade(self):
@@ -493,6 +527,7 @@ class TestClassifyTradingStrategy:
 # RunMetrics -- Dealer Profitability (Section 8.2)
 # ===================================================================
 
+
 class TestRunMetricsDealerProfitability:
     def _metrics_with_snapshots(self):
         m = RunMetrics()
@@ -502,15 +537,39 @@ class TestRunMetricsDealerProfitability:
         }
         # Day-1 snapshots
         m.dealer_snapshots = [
-            _snapshot(day=1, bucket="short", cash=Decimal(110), vbt_mid=Decimal(1),
-                      inventory=0, ticket_size=Decimal(1)),
-            _snapshot(day=1, bucket="mid", cash=Decimal(190), vbt_mid=Decimal(1),
-                      inventory=0, ticket_size=Decimal(1)),
+            _snapshot(
+                day=1,
+                bucket="short",
+                cash=Decimal(110),
+                vbt_mid=Decimal(1),
+                inventory=0,
+                ticket_size=Decimal(1),
+            ),
+            _snapshot(
+                day=1,
+                bucket="mid",
+                cash=Decimal(190),
+                vbt_mid=Decimal(1),
+                inventory=0,
+                ticket_size=Decimal(1),
+            ),
             # Day-3 snapshots (final)
-            _snapshot(day=3, bucket="short", cash=Decimal(120), vbt_mid=Decimal(1),
-                      inventory=0, ticket_size=Decimal(1)),
-            _snapshot(day=3, bucket="mid", cash=Decimal(180), vbt_mid=Decimal(1),
-                      inventory=0, ticket_size=Decimal(1)),
+            _snapshot(
+                day=3,
+                bucket="short",
+                cash=Decimal(120),
+                vbt_mid=Decimal(1),
+                inventory=0,
+                ticket_size=Decimal(1),
+            ),
+            _snapshot(
+                day=3,
+                bucket="mid",
+                cash=Decimal(180),
+                vbt_mid=Decimal(1),
+                inventory=0,
+                ticket_size=Decimal(1),
+            ),
         ]
         return m
 
@@ -531,8 +590,14 @@ class TestRunMetricsDealerProfitability:
         m = RunMetrics()
         m.initial_equity_by_bucket = {"short": Decimal(0)}
         m.dealer_snapshots = [
-            _snapshot(day=1, bucket="short", cash=Decimal(10), vbt_mid=Decimal(1),
-                      inventory=0, ticket_size=Decimal(1)),
+            _snapshot(
+                day=1,
+                bucket="short",
+                cash=Decimal(10),
+                vbt_mid=Decimal(1),
+                inventory=0,
+                ticket_size=Decimal(1),
+            ),
         ]
         returns = m.dealer_return_by_bucket()
         assert returns["short"] == Decimal(0)
@@ -555,8 +620,14 @@ class TestRunMetricsDealerProfitability:
         m = RunMetrics()
         m.initial_equity_by_bucket = {"short": Decimal(100)}
         m.dealer_snapshots = [
-            _snapshot(day=1, bucket="short", cash=Decimal(110), vbt_mid=Decimal(1),
-                      inventory=0, ticket_size=Decimal(1)),
+            _snapshot(
+                day=1,
+                bucket="short",
+                cash=Decimal(110),
+                vbt_mid=Decimal(1),
+                inventory=0,
+                ticket_size=Decimal(1),
+            ),
         ]
         assert m.is_dealer_profitable() is True
 
@@ -564,8 +635,14 @@ class TestRunMetricsDealerProfitability:
         m = RunMetrics()
         m.initial_equity_by_bucket = {"short": Decimal(100)}
         m.dealer_snapshots = [
-            _snapshot(day=1, bucket="short", cash=Decimal(80), vbt_mid=Decimal(1),
-                      inventory=0, ticket_size=Decimal(1)),
+            _snapshot(
+                day=1,
+                bucket="short",
+                cash=Decimal(80),
+                vbt_mid=Decimal(1),
+                inventory=0,
+                ticket_size=Decimal(1),
+            ),
         ]
         assert m.is_dealer_profitable() is False
 
@@ -578,10 +655,13 @@ class TestRunMetricsDealerProfitability:
 
     def test_spread_income_interior_sell(self):
         m = RunMetrics()
-        t = _trade(side="SELL", is_passthrough=False,
-                   dealer_bid_before=Decimal("0.88"),
-                   dealer_ask_before=Decimal("0.98"),
-                   face_value=Decimal(10))
+        t = _trade(
+            side="SELL",
+            is_passthrough=False,
+            dealer_bid_before=Decimal("0.88"),
+            dealer_ask_before=Decimal("0.98"),
+            face_value=Decimal(10),
+        )
         m.trades = [t]
         # midline = (0.88 + 0.98)/2 = 0.93
         # income = (0.93 - 0.88) * 10 = 0.50
@@ -589,10 +669,13 @@ class TestRunMetricsDealerProfitability:
 
     def test_spread_income_interior_buy(self):
         m = RunMetrics()
-        t = _trade(side="BUY", is_passthrough=False,
-                   dealer_bid_before=Decimal("0.88"),
-                   dealer_ask_before=Decimal("0.98"),
-                   face_value=Decimal(10))
+        t = _trade(
+            side="BUY",
+            is_passthrough=False,
+            dealer_bid_before=Decimal("0.88"),
+            dealer_ask_before=Decimal("0.98"),
+            face_value=Decimal(10),
+        )
         m.trades = [t]
         # midline = 0.93 , income = (0.98 - 0.93) * 10 = 0.50
         assert m.spread_income_total() == Decimal("0.50")
@@ -624,6 +707,7 @@ class TestRunMetricsDealerProfitability:
 # ===================================================================
 # RunMetrics -- Trader Returns (Section 8.3)
 # ===================================================================
+
 
 class TestRunMetricsTraderReturns:
     def test_trader_returns_single(self):
@@ -742,6 +826,7 @@ class TestRunMetricsTraderReturns:
 # RunMetrics -- Liquidity / Rescue (Section 8.3)
 # ===================================================================
 
+
 class TestRunMetricsLiquidity:
     def test_liquidity_driven_sales(self):
         m = RunMetrics()
@@ -755,15 +840,24 @@ class TestRunMetricsLiquidity:
     def test_rescue_events(self):
         m = RunMetrics()
         m.trades = [
-            _trade(side="SELL", is_liquidity_driven=True,
-                   trader_safety_margin_before=Decimal(-10),
-                   trader_safety_margin_after=Decimal(5)),
-            _trade(side="SELL", is_liquidity_driven=True,
-                   trader_safety_margin_before=Decimal(-10),
-                   trader_safety_margin_after=Decimal(-2)),  # still negative
-            _trade(side="BUY", is_liquidity_driven=True,
-                   trader_safety_margin_before=Decimal(-10),
-                   trader_safety_margin_after=Decimal(5)),  # not a SELL
+            _trade(
+                side="SELL",
+                is_liquidity_driven=True,
+                trader_safety_margin_before=Decimal(-10),
+                trader_safety_margin_after=Decimal(5),
+            ),
+            _trade(
+                side="SELL",
+                is_liquidity_driven=True,
+                trader_safety_margin_before=Decimal(-10),
+                trader_safety_margin_after=Decimal(-2),
+            ),  # still negative
+            _trade(
+                side="BUY",
+                is_liquidity_driven=True,
+                trader_safety_margin_before=Decimal(-10),
+                trader_safety_margin_after=Decimal(5),
+            ),  # not a SELL
         ]
         assert m.rescue_events() == 1
 
@@ -771,9 +865,12 @@ class TestRunMetricsLiquidity:
         """Margin going from negative to exactly zero counts as rescue."""
         m = RunMetrics()
         m.trades = [
-            _trade(side="SELL", is_liquidity_driven=True,
-                   trader_safety_margin_before=Decimal(-5),
-                   trader_safety_margin_after=Decimal(0)),
+            _trade(
+                side="SELL",
+                is_liquidity_driven=True,
+                trader_safety_margin_before=Decimal(-5),
+                trader_safety_margin_after=Decimal(0),
+            ),
         ]
         assert m.rescue_events() == 1
 
@@ -781,6 +878,7 @@ class TestRunMetricsLiquidity:
 # ===================================================================
 # RunMetrics -- Repayment-Priority (Section 8.4)
 # ===================================================================
+
 
 class TestRunMetricsRepaymentPriority:
     def test_unsafe_buy_count(self):
@@ -837,6 +935,7 @@ class TestRunMetricsRepaymentPriority:
 # RunMetrics -- Debt to money ratio
 # ===================================================================
 
+
 class TestRunMetricsDebtToMoney:
     def test_ratio_normal(self):
         m = RunMetrics()
@@ -854,6 +953,7 @@ class TestRunMetricsDebtToMoney:
 # ===================================================================
 # RunMetrics -- Mid Price Timeseries
 # ===================================================================
+
 
 class TestRunMetricsTimeseries:
     def _metrics_with_multi_day(self):
@@ -926,27 +1026,48 @@ class TestRunMetricsTimeseries:
 # RunMetrics -- Summary
 # ===================================================================
 
+
 class TestRunMetricsSummary:
     def test_summary_keys(self):
         m = RunMetrics()
         m.initial_equity_by_bucket = {"short": Decimal(100)}
         m.dealer_snapshots = [
-            _snapshot(day=1, bucket="short", cash=Decimal(100),
-                      vbt_mid=Decimal(1), inventory=0, ticket_size=Decimal(1)),
+            _snapshot(
+                day=1,
+                bucket="short",
+                cash=Decimal(100),
+                vbt_mid=Decimal(1),
+                inventory=0,
+                ticket_size=Decimal(1),
+            ),
         ]
         s = m.summary()
         expected = {
-            "dealer_total_pnl", "dealer_total_return", "dealer_profitable",
-            "dealer_pnl_by_bucket", "dealer_return_by_bucket",
-            "spread_income_total", "interior_trades", "passthrough_trades",
-            "mean_trader_return", "fraction_profitable_traders",
-            "liquidity_driven_sales", "rescue_events",
-            "unsafe_buy_count", "fraction_unsafe_buys",
+            "dealer_total_pnl",
+            "dealer_total_return",
+            "dealer_profitable",
+            "dealer_pnl_by_bucket",
+            "dealer_return_by_bucket",
+            "spread_income_total",
+            "interior_trades",
+            "passthrough_trades",
+            "mean_trader_return",
+            "fraction_profitable_traders",
+            "liquidity_driven_sales",
+            "rescue_events",
+            "unsafe_buy_count",
+            "fraction_unsafe_buys",
             "mean_margin_at_default",
-            "total_trades", "total_sell_trades", "total_buy_trades",
-            "initial_total_debt", "initial_total_money", "debt_to_money_ratio",
-            "dealer_mid_final", "vbt_mid_final",
-            "dealer_premium_final_pct", "vbt_premium_final_pct",
+            "total_trades",
+            "total_sell_trades",
+            "total_buy_trades",
+            "initial_total_debt",
+            "initial_total_money",
+            "debt_to_money_ratio",
+            "dealer_mid_final",
+            "vbt_mid_final",
+            "dealer_premium_final_pct",
+            "vbt_premium_final_pct",
         }
         assert set(s.keys()) == expected
 
@@ -969,6 +1090,7 @@ class TestRunMetricsSummary:
 # ===================================================================
 # RunMetrics -- CSV / JSON Exports
 # ===================================================================
+
 
 class TestRunMetricsExports:
     def test_to_trade_log_csv(self, tmp_path):
@@ -1076,9 +1198,17 @@ class TestRunMetricsExports:
     def test_to_inventory_timeseries_csv(self, tmp_path):
         m = RunMetrics()
         m.dealer_snapshots = [
-            _snapshot(day=1, bucket="short", run_id="r1", regime="active",
-                      max_capacity=10, is_at_zero=False, hit_vbt_this_step=False,
-                      total_system_face=Decimal(500), dealer_share_pct=Decimal("2.0")),
+            _snapshot(
+                day=1,
+                bucket="short",
+                run_id="r1",
+                regime="active",
+                max_capacity=10,
+                is_at_zero=False,
+                hit_vbt_this_step=False,
+                total_system_face=Decimal(500),
+                dealer_share_pct=Decimal("2.0"),
+            ),
             _snapshot(day=2, bucket="short"),
         ]
         path = str(tmp_path / "inventory.csv")
@@ -1100,12 +1230,18 @@ class TestRunMetricsExports:
         m = RunMetrics()
         m.system_state_snapshots = [
             SystemStateSnapshot(
-                run_id="r1", regime="active", day=1,
-                total_face_value=Decimal(1000), total_cash=Decimal(500),
+                run_id="r1",
+                regime="active",
+                day=1,
+                total_face_value=Decimal(1000),
+                total_cash=Decimal(500),
             ),
             SystemStateSnapshot(
-                run_id="r1", regime="active", day=2,
-                total_face_value=Decimal(900), total_cash=Decimal(500),
+                run_id="r1",
+                regime="active",
+                day=2,
+                total_face_value=Decimal(900),
+                total_cash=Decimal(500),
             ),
         ]
         path = str(tmp_path / "system_state.csv")
@@ -1126,16 +1262,24 @@ class TestRunMetricsExports:
         m = RunMetrics()
         m.repayment_events = [
             RepaymentEvent(
-                run_id="r1", regime="active",
-                trader_id="h0", liability_id="PAY_1",
-                maturity_day=5, face_value=Decimal(50),
-                outcome="repaid", strategy="no_trade",
+                run_id="r1",
+                regime="active",
+                trader_id="h0",
+                liability_id="PAY_1",
+                maturity_day=5,
+                face_value=Decimal(50),
+                outcome="repaid",
+                strategy="no_trade",
             ),
             RepaymentEvent(
-                run_id="r1", regime="active",
-                trader_id="h1", liability_id="PAY_2",
-                maturity_day=3, face_value=Decimal(30),
-                outcome="defaulted", strategy="sell_before",
+                run_id="r1",
+                regime="active",
+                trader_id="h1",
+                liability_id="PAY_2",
+                maturity_day=3,
+                face_value=Decimal(30),
+                outcome="defaulted",
+                strategy="sell_before",
             ),
         ]
         path = str(tmp_path / "repayment.csv")
@@ -1165,8 +1309,10 @@ class TestRunMetricsExports:
 # Helper: compute_safety_margin
 # ===================================================================
 
+
 class _FakeTicket:
     """Minimal ticket-like object for safety margin tests."""
+
     def __init__(self, bucket_id, face):
         self.bucket_id = bucket_id
         self.face = face
@@ -1174,6 +1320,7 @@ class _FakeTicket:
 
 class _FakeDealer:
     """Minimal dealer-like object for safety margin tests."""
+
     def __init__(self, bid):
         self.bid = bid
 
@@ -1232,11 +1379,14 @@ class TestComputeSaleableValue:
 # LiabilityInfo
 # ===================================================================
 
+
 class TestLiabilityInfo:
     def test_defaults(self):
         li = LiabilityInfo(
-            trader_id="h0", liability_id="PAY_1",
-            maturity_day=5, face_value=Decimal(50),
+            trader_id="h0",
+            liability_id="PAY_1",
+            maturity_day=5,
+            face_value=Decimal(50),
         )
         assert li.settled is False
         assert li.settled_day is None
@@ -1246,13 +1396,26 @@ class TestLiabilityInfo:
 # build_liability_map
 # ===================================================================
 
+
 class TestBuildLiabilityMap:
     def test_basic(self):
         events = [
-            {"kind": "PayableCreated", "day": 1, "payable_id": "PAY_1",
-             "debtor": "h0", "due_day": 5, "amount": 50},
-            {"kind": "PayableCreated", "day": 1, "payable_id": "PAY_2",
-             "debtor": "h1", "due_day": 7, "amount": 30},
+            {
+                "kind": "PayableCreated",
+                "day": 1,
+                "payable_id": "PAY_1",
+                "debtor": "h0",
+                "due_day": 5,
+                "amount": 50,
+            },
+            {
+                "kind": "PayableCreated",
+                "day": 1,
+                "payable_id": "PAY_2",
+                "debtor": "h1",
+                "due_day": 7,
+                "amount": 30,
+            },
             {"kind": "PayableSettled", "day": 5, "payable_id": "PAY_1"},
         ]
         liabilities, final_day = build_liability_map(events)
@@ -1264,8 +1427,14 @@ class TestBuildLiabilityMap:
 
     def test_settled_via_pid(self):
         events = [
-            {"kind": "PayableCreated", "day": 1, "payable_id": "PAY_1",
-             "debtor": "h0", "due_day": 5, "amount": 50},
+            {
+                "kind": "PayableCreated",
+                "day": 1,
+                "payable_id": "PAY_1",
+                "debtor": "h0",
+                "due_day": 5,
+                "amount": 50,
+            },
             {"kind": "PayableSettled", "day": 5, "pid": "PAY_1"},
         ]
         liabilities, _ = build_liability_map(events)
@@ -1273,8 +1442,14 @@ class TestBuildLiabilityMap:
 
     def test_settled_via_contract_id(self):
         events = [
-            {"kind": "PayableCreated", "day": 1, "payable_id": "PAY_1",
-             "debtor": "h0", "due_day": 5, "amount": 50},
+            {
+                "kind": "PayableCreated",
+                "day": 1,
+                "payable_id": "PAY_1",
+                "debtor": "h0",
+                "due_day": 5,
+                "amount": 50,
+            },
             {"kind": "PayableSettled", "day": 5, "contract_id": "PAY_1"},
         ]
         liabilities, _ = build_liability_map(events)
@@ -1288,8 +1463,14 @@ class TestBuildLiabilityMap:
     def test_event_field_alias(self):
         """Tests the 'event' field name fallback (used in some logs)."""
         events = [
-            {"event": "PayableCreated", "day": 1, "payable_id": "PAY_1",
-             "debtor": "h0", "due_day": 5, "amount": 50},
+            {
+                "event": "PayableCreated",
+                "day": 1,
+                "payable_id": "PAY_1",
+                "debtor": "h0",
+                "due_day": 5,
+                "amount": 50,
+            },
         ]
         liabilities, _ = build_liability_map(events)
         assert "PAY_1" in liabilities
@@ -1303,8 +1484,14 @@ class TestBuildLiabilityMap:
 
     def test_missing_payable_id_skipped(self):
         events = [
-            {"kind": "PayableCreated", "day": 1, "payable_id": "",
-             "debtor": "h0", "due_day": 5, "amount": 50},
+            {
+                "kind": "PayableCreated",
+                "day": 1,
+                "payable_id": "",
+                "debtor": "h0",
+                "due_day": 5,
+                "amount": 50,
+            },
         ]
         liabilities, _ = build_liability_map(events)
         assert len(liabilities) == 0
@@ -1313,6 +1500,7 @@ class TestBuildLiabilityMap:
 # ===================================================================
 # compute_trading_stats_by_trader
 # ===================================================================
+
 
 class TestComputeTradingStatsByTrader:
     def test_basic(self):
@@ -1333,6 +1521,7 @@ class TestComputeTradingStatsByTrader:
 # ===================================================================
 # get_trades_before_day
 # ===================================================================
+
 
 class TestGetTradesBeforeDay:
     def test_filters_by_day(self):
@@ -1364,13 +1553,26 @@ class TestGetTradesBeforeDay:
 # build_repayment_events
 # ===================================================================
 
+
 class TestBuildRepaymentEvents:
     def test_basic_repaid_and_defaulted(self):
         event_log = [
-            {"kind": "PayableCreated", "day": 1, "payable_id": "PAY_1",
-             "debtor": "h0", "due_day": 5, "amount": 50},
-            {"kind": "PayableCreated", "day": 1, "payable_id": "PAY_2",
-             "debtor": "h1", "due_day": 4, "amount": 30},
+            {
+                "kind": "PayableCreated",
+                "day": 1,
+                "payable_id": "PAY_1",
+                "debtor": "h0",
+                "due_day": 5,
+                "amount": 50,
+            },
+            {
+                "kind": "PayableCreated",
+                "day": 1,
+                "payable_id": "PAY_2",
+                "debtor": "h1",
+                "due_day": 4,
+                "amount": 30,
+            },
             {"kind": "PayableSettled", "day": 5, "payable_id": "PAY_1"},
             # PAY_2 not settled => defaulted
             {"kind": "day_end", "day": 6},  # ensure final_day >= maturity
@@ -1393,8 +1595,14 @@ class TestBuildRepaymentEvents:
     def test_future_maturity_excluded(self):
         """Liabilities with maturity > final_day are not included."""
         event_log = [
-            {"kind": "PayableCreated", "day": 1, "payable_id": "PAY_1",
-             "debtor": "h0", "due_day": 100, "amount": 50},
+            {
+                "kind": "PayableCreated",
+                "day": 1,
+                "payable_id": "PAY_1",
+                "debtor": "h0",
+                "due_day": 100,
+                "amount": 50,
+            },
             {"kind": "day_end", "day": 5},
         ]
         events = build_repayment_events(event_log, [])
@@ -1402,8 +1610,14 @@ class TestBuildRepaymentEvents:
 
     def test_empty_trader_id_skipped(self):
         event_log = [
-            {"kind": "PayableCreated", "day": 1, "payable_id": "PAY_1",
-             "debtor": "", "due_day": 3, "amount": 50},
+            {
+                "kind": "PayableCreated",
+                "day": 1,
+                "payable_id": "PAY_1",
+                "debtor": "",
+                "due_day": 3,
+                "amount": 50,
+            },
             {"kind": "day_end", "day": 5},
         ]
         events = build_repayment_events(event_log, [])
@@ -1415,8 +1629,14 @@ class TestBuildRepaymentEvents:
 
     def test_run_id_and_regime_propagated(self):
         event_log = [
-            {"kind": "PayableCreated", "day": 1, "payable_id": "PAY_1",
-             "debtor": "h0", "due_day": 3, "amount": 50},
+            {
+                "kind": "PayableCreated",
+                "day": 1,
+                "payable_id": "PAY_1",
+                "debtor": "h0",
+                "due_day": 3,
+                "amount": 50,
+            },
             {"kind": "day_end", "day": 5},
         ]
         events = build_repayment_events(event_log, [], run_id="test_run", regime="passive")
@@ -1427,6 +1647,7 @@ class TestBuildRepaymentEvents:
 # ===================================================================
 # RunMetrics -- Empty state (edge cases)
 # ===================================================================
+
 
 class TestRunMetricsEmpty:
     def test_empty_metrics(self):
@@ -1463,6 +1684,7 @@ class TestRunMetricsEmpty:
 # ===================================================================
 # RunMetrics -- run_id / regime
 # ===================================================================
+
 
 class TestRunMetricsContext:
     def test_run_context(self):

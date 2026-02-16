@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from bilancio.storage.models import RunStatus
 
@@ -42,20 +42,20 @@ class RunOptions:
 
     # Display options (for HTML report)
     show_events: str = "detailed"
-    show_balances: Optional[List[str]] = None
+    show_balances: list[str] | None = None
     t_account: bool = False
 
     # Dealer options
     detailed_dealer_logging: bool = False
-    run_id: Optional[str] = None
-    regime: Optional[str] = None
+    run_id: str | None = None
+    regime: str | None = None
 
     # Run parameters (for Supabase tracking in cloud execution)
-    kappa: Optional[float] = None
-    concentration: Optional[float] = None
-    mu: Optional[float] = None
-    outside_mid_ratio: Optional[float] = None
-    seed: Optional[int] = None
+    kappa: float | None = None
+    concentration: float | None = None
+    mu: float | None = None
+    outside_mid_ratio: float | None = None
+    seed: int | None = None
 
 
 @dataclass
@@ -87,14 +87,14 @@ class ExecutionResult:
     storage_base: str  # "/path/to/run" or "s3://bucket/prefix"
 
     # Artifact references (relative to storage_base)
-    artifacts: Dict[str, str] = field(default_factory=dict)
+    artifacts: dict[str, str] = field(default_factory=dict)
 
     # Error info if failed
-    error: Optional[str] = None
-    execution_time_ms: Optional[int] = None
+    error: str | None = None
+    execution_time_ms: int | None = None
 
     # Cloud execution info
-    modal_call_id: Optional[str] = None
+    modal_call_id: str | None = None
 
     # Computed metrics (from cloud execution)
-    metrics: Optional[Dict[str, Any]] = None
+    metrics: dict[str, Any] | None = None

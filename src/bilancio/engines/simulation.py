@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass
-from typing import Any, Protocol, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
 from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.engines.clearing import settle_intraday_nets
-from bilancio.engines.settlement import settle_due, rollover_settled_payables
+from bilancio.engines.settlement import rollover_settled_payables, settle_due
 
 if TYPE_CHECKING:
     from bilancio.engines.system import System
@@ -40,12 +40,16 @@ class DayReport:
 
 
 def _impacted_today(system: System, day: int) -> int:
-    return sum(1 for e in system.state.events if e.get("day") == day and e.get("kind") in IMPACT_EVENTS)
+    return sum(
+        1 for e in system.state.events if e.get("day") == day and e.get("kind") in IMPACT_EVENTS
+    )
 
 
 def _defaults_today(system: System, day: int) -> int:
     """Count default events that occurred on a given day."""
-    return sum(1 for e in system.state.events if e.get("day") == day and e.get("kind") in DEFAULT_EVENTS)
+    return sum(
+        1 for e in system.state.events if e.get("day") == day and e.get("kind") in DEFAULT_EVENTS
+    )
 
 
 def _has_open_obligations(system: System) -> bool:
@@ -61,10 +65,10 @@ class SimulationEngine(Protocol):
     def run(self, scenario: Any) -> Any:
         """
         Run a simulation for a given scenario.
-        
+
         Args:
             scenario: The scenario to simulate
-            
+
         Returns:
             Simulation results
         """
@@ -74,10 +78,15 @@ class SimulationEngine(Protocol):
 class MonteCarloEngine:
     """Monte Carlo simulation engine for financial scenarios."""
 
-    def __init__(self, num_simulations: int = 1000, n_simulations: int | None = None, random_seed: int | None = None):
+    def __init__(
+        self,
+        num_simulations: int = 1000,
+        n_simulations: int | None = None,
+        random_seed: int | None = None,
+    ):
         """
         Initialize the Monte Carlo engine.
-        
+
         Args:
             num_simulations: Number of simulation runs to perform
             n_simulations: Alternative parameter name for num_simulations (for compatibility)
@@ -97,16 +106,16 @@ class MonteCarloEngine:
     def run(self, scenario: Any) -> dict[str, Any]:
         """
         Run Monte Carlo simulation for a scenario.
-        
+
         This is a placeholder implementation. A real implementation would:
         1. Extract parameters and distributions from the scenario
         2. Generate random samples according to those distributions
         3. Run the scenario multiple times with different random inputs
         4. Aggregate and return statistical results
-        
+
         Args:
             scenario: The scenario to simulate
-            
+
         Returns:
             Dictionary containing simulation results and statistics
         """
@@ -121,20 +130,20 @@ class MonteCarloEngine:
 
             # For now, just generate dummy results
             result = {
-                'run_id': i,
-                'outcome': random.gauss(100, 20),  # Placeholder random outcome
-                'scenario': scenario
+                "run_id": i,
+                "outcome": random.gauss(100, 20),  # Placeholder random outcome
+                "scenario": scenario,
             }
             results.append(result)
 
         # Calculate summary statistics
-        outcomes = [r['outcome'] for r in results]
+        outcomes = [r["outcome"] for r in results]
         summary = {
-            'num_simulations': self.num_simulations,
-            'mean': sum(outcomes) / len(outcomes),
-            'min': min(outcomes),
-            'max': max(outcomes),
-            'results': results
+            "num_simulations": self.num_simulations,
+            "mean": sum(outcomes) / len(outcomes),
+            "min": min(outcomes),
+            "max": max(outcomes),
+            "results": results,
         }
 
         return summary
@@ -144,7 +153,7 @@ class MonteCarloEngine:
         self.num_simulations = num_simulations
 
 
-def _log_rating_estimates(system: "System", current_day: int) -> None:
+def _log_rating_estimates(system: System, current_day: int) -> None:
     """Log rating agency estimates to the estimate log."""
     from bilancio.information.estimates import Estimate
 
@@ -165,9 +174,8 @@ def _log_rating_estimates(system: "System", current_day: int) -> None:
         system.log_estimate(est)
 
 
-def _log_dealer_estimates(system: "System", current_day: int) -> None:
+def _log_dealer_estimates(system: System, current_day: int) -> None:
     """Log dealer risk assessor estimates to the estimate log."""
-    from bilancio.information.estimates import Estimate
 
     dealer_sub = system.state.dealer_subsystem
     if dealer_sub is None or dealer_sub.risk_assessor is None:
@@ -178,12 +186,19 @@ def _log_dealer_estimates(system: "System", current_day: int) -> None:
         if agent.defaulted:
             continue
         est = assessor.estimate_default_prob_detail(
-            agent_id, current_day, estimator_id="dealer_risk_assessor",
+            agent_id,
+            current_day,
+            estimator_id="dealer_risk_assessor",
         )
         system.log_estimate(est)
 
 
-def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = False, enable_rating: bool = False) -> None:
+def run_day(
+    system: System,
+    enable_dealer: bool = False,
+    enable_lender: bool = False,
+    enable_rating: bool = False,
+) -> None:
     """
     Run a single day's simulation with three phases.
 
@@ -202,7 +217,7 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
     Note: Rollover is controlled by system.state.rollover_enabled (Plan 024)
     """
     current_day = system.state.day
-    rollover_enabled = getattr(system.state, 'rollover_enabled', False)
+    rollover_enabled = getattr(system.state, "rollover_enabled", False)
     logger.debug("run_day: day=%d phase=%s", current_day, system.state.phase)
 
     # Phase A: Log PhaseA event (reserved)
@@ -217,6 +232,7 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
         if actions_today:
             # Lazy import to avoid heavy imports at module load
             from bilancio.config.apply import apply_action
+
             agents = system.state.agents
             for action_dict in actions_today:
                 apply_action(system, action_dict, agents)
@@ -229,6 +245,7 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
     if enable_rating and system.state.rating_config is not None:
         system.log("SubphaseB_Rating")
         from bilancio.engines.rating import run_rating_phase
+
         rating_events = run_rating_phase(system, current_day, system.state.rating_config)
         system.state.events.extend(rating_events)
 
@@ -242,6 +259,7 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
     if enable_lender and system.state.lender_config is not None:
         system.log("SubphaseB_Lending")
         from bilancio.engines.lending import run_lending_phase
+
         lending_events = run_lending_phase(system, current_day, system.state.lender_config)
         system.state.events.extend(lending_events)
 
@@ -249,7 +267,10 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
     if enable_dealer and system.state.dealer_subsystem is not None:
         system.log("SubphaseB_Dealer")
         # Lazy import to avoid circular dependencies
-        from bilancio.engines.dealer_integration import run_dealer_trading_phase, sync_dealer_to_system
+        from bilancio.engines.dealer_integration import (
+            run_dealer_trading_phase,
+            sync_dealer_to_system,
+        )
 
         # Run dealer trading and collect events
         dealer_events = run_dealer_trading_phase(system.state.dealer_subsystem, system, current_day)
@@ -269,9 +290,10 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
     # Plan 024: Rollover - create new payables for settled ones
     if rollover_enabled and settled_for_rollover:
         system.log("SubphaseB_Rollover")
-        dealer_active = (enable_dealer and system.state.dealer_subsystem is not None)
-        rollover_settled_payables(system, current_day, settled_for_rollover,
-                                  dealer_active=dealer_active)
+        dealer_active = enable_dealer and system.state.dealer_subsystem is not None
+        rollover_settled_payables(
+            system, current_day, settled_for_rollover, dealer_active=dealer_active
+        )
 
     # Phase C: Clear intraday nets for the current day
     system.log("PhaseC")  # optional: helps timeline
@@ -288,16 +310,26 @@ def run_day(system: System, enable_dealer: bool = False, enable_lender: bool = F
             system.cb_repay_loan(loan_id, loan.liability_issuer_id)
 
     # Non-bank loan repayment
-    has_lender = any(agent.kind == AgentKind.NON_BANK_LENDER for agent in system.state.agents.values())
+    has_lender = any(
+        agent.kind == AgentKind.NON_BANK_LENDER for agent in system.state.agents.values()
+    )
     if has_lender:
         from bilancio.engines.lending import run_loan_repayments
+
         run_loan_repayments(system, current_day)
 
     # Increment system day
     system.state.day += 1
 
 
-def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, enable_dealer: bool = False, enable_lender: bool = False, enable_rating: bool = False) -> list[DayReport]:
+def run_until_stable(
+    system: System,
+    max_days: int = 365,
+    quiet_days: int = 2,
+    enable_dealer: bool = False,
+    enable_lender: bool = False,
+    enable_rating: bool = False,
+) -> list[DayReport]:
     """
     Advance day by day until the system is stable:
     - No impactful events happen for `quiet_days` consecutive days, AND
@@ -316,12 +348,16 @@ def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, e
     reports = []
     consecutive_quiet = 0
     consecutive_no_defaults = 0
-    start_day = system.state.day
-    rollover_enabled = getattr(system.state, 'rollover_enabled', False)
+    rollover_enabled = getattr(system.state, "rollover_enabled", False)
 
     for _ in range(max_days):
         day_before = system.state.day
-        run_day(system, enable_dealer=enable_dealer, enable_lender=enable_lender, enable_rating=enable_rating)
+        run_day(
+            system,
+            enable_dealer=enable_dealer,
+            enable_lender=enable_lender,
+            enable_rating=enable_rating,
+        )
         impacted = _impacted_today(system, day_before)
         defaults = _defaults_today(system, day_before)
         reports.append(DayReport(day=day_before, impacted=impacted))
@@ -342,7 +378,9 @@ def run_until_stable(system: System, max_days: int = 365, quiet_days: int = 2, e
         if rollover_enabled:
             stability_condition = consecutive_no_defaults >= quiet_days
         else:
-            stability_condition = consecutive_quiet >= quiet_days and not _has_open_obligations(system)
+            stability_condition = consecutive_quiet >= quiet_days and not _has_open_obligations(
+                system
+            )
 
         if stability_condition:
             break

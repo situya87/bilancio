@@ -1,12 +1,12 @@
 import pytest
 
 from bilancio.core.errors import DefaultError
+from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.domain.agents.firm import Firm
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.settlement import settle_due
 from bilancio.engines.system import System
-from bilancio.domain.agents.central_bank import CentralBank
-from bilancio.domain.agents.firm import Firm
 
 
 def _basic_system(default_mode: str = "fail-fast"):
@@ -20,7 +20,9 @@ def _basic_system(default_mode: str = "fail-fast"):
     return system, cb, debtor, creditor
 
 
-def _make_payable(system: System, debtor: Firm, creditor: Firm, amount: int, due_day: int) -> Payable:
+def _make_payable(
+    system: System, debtor: Firm, creditor: Firm, amount: int, due_day: int
+) -> Payable:
     payable = Payable(
         id=system.new_contract_id("PAY"),
         kind=InstrumentKind.PAYABLE,
@@ -53,9 +55,7 @@ def test_expel_mode_handles_partial_payment_and_marks_agent():
     system.mint_cash(debtor.id, 60)
 
     # Scheduled action involving debtor should be cancelled once defaulted
-    system.state.scheduled_actions_by_day[2] = [
-        {"mint_cash": {"to": debtor.id, "amount": 10}}
-    ]
+    system.state.scheduled_actions_by_day[2] = [{"mint_cash": {"to": debtor.id, "amount": 10}}]
     system.state.scheduled_actions_by_day[3] = [
         {"transfer_claim": {"contract_alias": "PAY1", "to_agent": creditor.id}}
     ]
@@ -96,7 +96,9 @@ def test_expel_mode_handles_partial_payment_and_marks_agent():
     assert default_event["shortfall"] == 40
     assert default_event["amount"] == 40
 
-    written_off_ids = [e["contract_id"] for e in system.state.events if e["kind"] == "ObligationWrittenOff"]
+    written_off_ids = [
+        e["contract_id"] for e in system.state.events if e["kind"] == "ObligationWrittenOff"
+    ]
     assert trailing_payable.id in written_off_ids
 
     agent_event = next(e for e in system.state.events if e["kind"] == "AgentDefaulted")

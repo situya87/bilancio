@@ -7,23 +7,21 @@ Verifies that:
 - RingSweepRunner._prepare_run injects the balanced_dealer section into scenario dicts
 """
 
-import pytest
 from decimal import Decimal
-from pathlib import Path
 
+import pytest
 from pydantic import ValidationError
 
-from bilancio.config.models import BalancedDealerConfig, ScenarioConfig
 from bilancio.config.apply import apply_to_system
+from bilancio.config.models import BalancedDealerConfig, ScenarioConfig
 from bilancio.engines.system import System
-
 
 # ---------------------------------------------------------------------------
 # Group 1: TestBalancedDealerConfig — Model validation (models.py)
 # ---------------------------------------------------------------------------
 
-class TestBalancedDealerConfig:
 
+class TestBalancedDealerConfig:
     def test_big_entity_share_allows_zero(self):
         """big_entity_share=0 should be valid (0 <= v < 1)."""
         cfg = BalancedDealerConfig(big_entity_share=Decimal("0"))
@@ -72,6 +70,7 @@ class TestBalancedDealerConfig:
 # ---------------------------------------------------------------------------
 # Group 2: TestApplyBalancedDealer — Config apply wiring (apply.py)
 # ---------------------------------------------------------------------------
+
 
 def _balanced_scenario_config(*, enabled=True, mode="active"):
     """Build a minimal ScenarioConfig dict for balanced dealer testing.
@@ -155,7 +154,6 @@ def _balanced_scenario_config(*, enabled=True, mode="active"):
 
 
 class TestApplyBalancedDealer:
-
     def test_balanced_dealer_uses_correct_vbt_anchors(self):
         """With balanced_dealer.enabled=True: VBT anchor M = 1 - P_default_prior.
 
@@ -220,17 +218,15 @@ class TestApplyBalancedDealer:
 
         subsystem = system.state.dealer_subsystem
         assert subsystem is not None
-        assert subsystem.enabled is False, (
-            "Passive mode should set subsystem.enabled=False"
-        )
+        assert subsystem.enabled is False, "Passive mode should set subsystem.enabled=False"
 
 
 # ---------------------------------------------------------------------------
 # Group 3: TestRingScenarioDictInjection — Scenario dict construction (ring.py)
 # ---------------------------------------------------------------------------
 
-class TestRingScenarioDictInjection:
 
+class TestRingScenarioDictInjection:
     def _make_runner(self, tmp_path, *, balanced_mode, dealer_enabled):
         """Create a RingSweepRunner with minimal config."""
         from bilancio.experiments.ring import RingSweepRunner

@@ -16,14 +16,12 @@ References:
 - "Banks-as-Dealers with deposits on demand" specification Section 6
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.banking.types import Ticket, TicketType
+from bilancio.banking.pricing_kernel import PricingParams, compute_midline
 from bilancio.banking.state import BankDealerState, CentralBankParams
-from bilancio.banking.pricing_kernel import PricingParams, compute_quotes, compute_midline
 from bilancio.banking.ticket_processor import TicketProcessor
-from bilancio.banking.day_runner import DayRunner
+from bilancio.banking.types import Ticket, TicketType
 
 
 def create_processor_with_cb_params(
@@ -131,8 +129,8 @@ class TestParallelCorridorShift:
         base_processor = create_processor_with_cb_params(base_cb)
         base_processor.initialize_day(day=1)
         base_spread = (
-            base_processor.state.current_quote.loan_rate -
-            base_processor.state.current_quote.deposit_rate
+            base_processor.state.current_quote.loan_rate
+            - base_processor.state.current_quote.deposit_rate
         )
 
         # Shifted corridor: 3% - 5% (still 2% width)
@@ -143,8 +141,8 @@ class TestParallelCorridorShift:
         shifted_processor = create_processor_with_cb_params(shifted_cb)
         shifted_processor.initialize_day(day=1)
         shifted_spread = (
-            shifted_processor.state.current_quote.loan_rate -
-            shifted_processor.state.current_quote.deposit_rate
+            shifted_processor.state.current_quote.loan_rate
+            - shifted_processor.state.current_quote.deposit_rate
         )
 
         # Spread should be the same (same corridor width)
@@ -189,8 +187,8 @@ class TestFloorOnlyChange:
         wide_processor = create_processor_with_cb_params(wide_cb)
         wide_processor.initialize_day(day=1)
         wide_spread = (
-            wide_processor.state.current_quote.loan_rate -
-            wide_processor.state.current_quote.deposit_rate
+            wide_processor.state.current_quote.loan_rate
+            - wide_processor.state.current_quote.deposit_rate
         )
 
         # Narrower corridor: 2% - 4% (2% width)
@@ -201,8 +199,8 @@ class TestFloorOnlyChange:
         narrow_processor = create_processor_with_cb_params(narrow_cb)
         narrow_processor.initialize_day(day=1)
         narrow_spread = (
-            narrow_processor.state.current_quote.loan_rate -
-            narrow_processor.state.current_quote.deposit_rate
+            narrow_processor.state.current_quote.loan_rate
+            - narrow_processor.state.current_quote.deposit_rate
         )
 
         # Narrower corridor means narrower bank spread
@@ -247,8 +245,8 @@ class TestCeilingOnlyChange:
         narrow_processor = create_processor_with_cb_params(narrow_cb)
         narrow_processor.initialize_day(day=1)
         narrow_spread = (
-            narrow_processor.state.current_quote.loan_rate -
-            narrow_processor.state.current_quote.deposit_rate
+            narrow_processor.state.current_quote.loan_rate
+            - narrow_processor.state.current_quote.deposit_rate
         )
 
         # Wide ceiling: 1% - 5%
@@ -259,8 +257,8 @@ class TestCeilingOnlyChange:
         wide_processor = create_processor_with_cb_params(wide_cb)
         wide_processor.initialize_day(day=1)
         wide_spread = (
-            wide_processor.state.current_quote.loan_rate -
-            wide_processor.state.current_quote.deposit_rate
+            wide_processor.state.current_quote.loan_rate
+            - wide_processor.state.current_quote.deposit_rate
         )
 
         # Wider corridor means wider bank spread
@@ -396,7 +394,7 @@ class TestRateChangeDuringSimulation:
             created_day=1,
             counterparty_bank_id="BankB",
         )
-        result1 = processor.process_ticket(ticket1)
+        processor.process_ticket(ticket1)
         old_rate = ticket1.stamped_deposit_rate
 
         # Change rates
@@ -425,7 +423,7 @@ class TestRateChangeDuringSimulation:
             created_day=1,
             counterparty_bank_id="BankC",
         )
-        result2 = processor.process_ticket(ticket2)
+        processor.process_ticket(ticket2)
         new_rate = ticket2.stamped_deposit_rate
 
         # Old deposit keeps its stamped rate

@@ -2,26 +2,21 @@
 Tests for bank-dealer integration module.
 """
 
-import pytest
 from decimal import Decimal
 
 from bilancio.dealer.bank_integration import (
-    TraderLoan,
-    DepositCohort,
     BankAwareTraderState,
-    InterbankPosition,
-    InterbankLedger,
-    InterbankSettlementResult,
     BankDealerRingConfig,
+    DepositCohort,
     IntegratedBankState,
-    Claim,
-    DefaultResolution,
-    settle_interbank_positions,
-    resolve_default,
+    InterbankLedger,
+    TraderLoan,
     accrue_deposit_interest,
     compute_borrow_vs_sell_decision,
-    compute_yield_sell_decision,
     compute_yield_buy_decision,
+    compute_yield_sell_decision,
+    resolve_default,
+    settle_interbank_positions,
 )
 
 

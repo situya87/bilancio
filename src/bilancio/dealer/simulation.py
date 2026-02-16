@@ -20,29 +20,33 @@ References:
 """
 
 import logging
-from dataclasses import dataclass, field
-from decimal import Decimal, ROUND_HALF_UP
-from pathlib import Path
 import random
-from copy import deepcopy
+from dataclasses import dataclass, field
+from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
 from typing import Any
+
+from bilancio.core.ids import AgentId, new_id
+
+from .events import EventLog
+from .kernel import KernelParams, recompute_dealer_state
+from .models import (
+    DEFAULT_BUCKETS,
+    BucketConfig,
+    DealerState,
+    Ticket,
+    TicketId,
+    TraderState,
+    VBTState,
+)
+from .risk_assessment import RiskAssessor
+from .trading import TradeExecutor
 
 logger = logging.getLogger(__name__)
 
 # Cash precision for settlement calculations to avoid floating-point accumulation errors
 # Uses 6 decimal places which is standard for financial calculations
 CASH_PRECISION = Decimal("0.000001")
-
-from bilancio.core.ids import AgentId, new_id
-from .models import (
-    Ticket, DealerState, VBTState, TraderState,
-    BucketConfig, DEFAULT_BUCKETS, TicketId,
-)
-from .kernel import KernelParams, recompute_dealer_state
-from .trading import TradeExecutor
-from .events import EventLog
-from .assertions import run_all_assertions, assert_c6_anchor_timing
-from .risk_assessment import RiskAssessor, RiskAssessmentParams
 
 
 @dataclass
@@ -60,12 +64,13 @@ class DaySnapshot:
         tickets: All tickets as serializable dicts
         events: Events that occurred on this day
     """
+
     day: int
     dealers: dict[str, dict[str, Any]]  # bucket_id -> dealer state dict
-    vbts: dict[str, dict[str, Any]]      # bucket_id -> VBT state dict
-    traders: dict[str, dict[str, Any]]   # agent_id -> trader state dict
-    tickets: dict[str, dict[str, Any]]   # ticket_id -> ticket dict
-    events: list[dict[str, Any]]         # Events for this day only
+    vbts: dict[str, dict[str, Any]]  # bucket_id -> VBT state dict
+    traders: dict[str, dict[str, Any]]  # agent_id -> trader state dict
+    tickets: dict[str, dict[str, Any]]  # ticket_id -> ticket dict
+    events: list[dict[str, Any]]  # Events for this day only
 
 
 @dataclass
@@ -97,6 +102,7 @@ class DealerRingConfig:
         - Section 10: Trading policies (horizon_H, buffer_B)
         - Section 11: Order flow (pi_sell, N_max)
     """
+
     # Tickets
     ticket_size: Decimal = Decimal(1)  # S
 
@@ -104,11 +110,13 @@ class DealerRingConfig:
     buckets: list[BucketConfig] = field(default_factory=lambda: list(DEFAULT_BUCKETS))
 
     # VBT anchors per bucket: {bucket_name: (M, O)}
-    vbt_anchors: dict[str, tuple[Decimal, Decimal]] = field(default_factory=lambda: {
-        "short": (Decimal(1), Decimal("0.20")),
-        "mid": (Decimal(1), Decimal("0.30")),
-        "long": (Decimal(1), Decimal("0.40")),
-    })
+    vbt_anchors: dict[str, tuple[Decimal, Decimal]] = field(
+        default_factory=lambda: {
+            "short": (Decimal(1), Decimal("0.20")),
+            "mid": (Decimal(1), Decimal("0.30")),
+            "long": (Decimal(1), Decimal("0.40")),
+        }
+    )
 
     # VBT sensitivity
     phi_M: Decimal = Decimal(1)
@@ -191,7 +199,7 @@ class DealerRingSimulation:
         # State
         self.day: int = 0
         self.dealers: dict[str, DealerState] = {}  # bucket -> dealer
-        self.vbts: dict[str, VBTState] = {}        # bucket -> VBT
+        self.vbts: dict[str, VBTState] = {}  # bucket -> VBT
         self.traders: dict[AgentId, TraderState] = {}
         self.all_tickets: dict[TicketId, Ticket] = {}  # Global ticket registry
 
@@ -230,12 +238,14 @@ class DealerRingSimulation:
             self.dealers[bucket_id] = dealer
 
             # Create VBT with configured anchors
-            M, O = self.config.vbt_anchors.get(bucket_id, (Decimal(1), Decimal("0.30")))
+            mid_anchor, spread_anchor = self.config.vbt_anchors.get(
+                bucket_id, (Decimal(1), Decimal("0.30"))
+            )
             vbt = VBTState(
                 bucket_id=bucket_id,
                 agent_id=new_id(f"vbt_{bucket_id}"),
-                M=M,
-                O=O,
+                M=mid_anchor,
+                O=spread_anchor,
                 phi_M=self.config.phi_M,
                 phi_O=self.config.phi_O,
                 O_min=Decimal(0),
@@ -272,7 +282,12 @@ class DealerRingSimulation:
                 "is_pinned_bid": dealer.is_pinned_bid,
                 "is_pinned_ask": dealer.is_pinned_ask,
                 "inventory": [
-                    {"id": t.id, "issuer_id": t.issuer_id, "face": t.face, "remaining_tau": t.remaining_tau}
+                    {
+                        "id": t.id,
+                        "issuer_id": t.issuer_id,
+                        "face": t.face,
+                        "remaining_tau": t.remaining_tau,
+                    }
                     for t in dealer.inventory
                 ],
             }
@@ -289,7 +304,12 @@ class DealerRingSimulation:
                 "B": vbt.B,
                 "cash": vbt.cash,
                 "inventory": [
-                    {"id": t.id, "issuer_id": t.issuer_id, "face": t.face, "remaining_tau": t.remaining_tau}
+                    {
+                        "id": t.id,
+                        "issuer_id": t.issuer_id,
+                        "face": t.face,
+                        "remaining_tau": t.remaining_tau,
+                    }
                     for t in vbt.inventory
                 ],
             }
@@ -303,11 +323,22 @@ class DealerRingSimulation:
                 "defaulted": trader.defaulted,
                 "asset_issuer_id": trader.asset_issuer_id,
                 "tickets_owned": [
-                    {"id": t.id, "issuer_id": t.issuer_id, "face": t.face, "remaining_tau": t.remaining_tau, "bucket_id": t.bucket_id}
+                    {
+                        "id": t.id,
+                        "issuer_id": t.issuer_id,
+                        "face": t.face,
+                        "remaining_tau": t.remaining_tau,
+                        "bucket_id": t.bucket_id,
+                    }
                     for t in trader.tickets_owned
                 ],
                 "obligations": [
-                    {"id": t.id, "owner_id": t.owner_id, "face": t.face, "maturity_day": t.maturity_day}
+                    {
+                        "id": t.id,
+                        "owner_id": t.owner_id,
+                        "face": t.face,
+                        "maturity_day": t.maturity_day,
+                    }
                     for t in trader.obligations
                 ],
             }
@@ -396,7 +427,7 @@ class DealerRingSimulation:
             # Compute allocation counts
             n_dealer = int(n_total * self.config.dealer_share)
             n_vbt = int(n_total * self.config.vbt_share)
-            n_trader = n_total - n_dealer - n_vbt  # Remainder to traders
+            n_total - n_dealer - n_vbt  # Remainder to traders
 
             # Allocate to dealer
             dealer = self.dealers[bucket_id]
@@ -458,7 +489,9 @@ class DealerRingSimulation:
             - Section 11: Full Event Loop
         """
         self.day += 1
-        logger.debug("dealer day %d: starting event loop (%d tickets)", self.day, len(self.all_tickets))
+        logger.debug(
+            "dealer day %d: starting event loop (%d tickets)", self.day, len(self.all_tickets)
+        )
         self.events.log_day_start(self.day)
 
         # Phase 1: Update maturities and buckets
@@ -500,8 +533,12 @@ class DealerRingSimulation:
             max_days: Number of days to simulate (defaults to config.max_days)
         """
         days = max_days or self.config.max_days
-        logger.info("dealer simulation: running %d days (%d traders, %d tickets)",
-                     days, len(self.traders), len(self.all_tickets))
+        logger.info(
+            "dealer simulation: running %d days (%d traders, %d tickets)",
+            days,
+            len(self.traders),
+            len(self.all_tickets),
+        )
         for _ in range(days):
             self.run_day()
 
@@ -910,7 +947,7 @@ class DealerRingSimulation:
 
         bucket_id = ticket.bucket_id
         dealer = self.dealers[bucket_id]
-        vbt = self.vbts[bucket_id]
+        self.vbts[bucket_id]
 
         # Check if buyer can afford the ask price
         if buyer.cash < dealer.ask:
@@ -919,8 +956,7 @@ class DealerRingSimulation:
         # Risk-based sell decision (if risk assessor configured)
         if self.risk_assessor:
             asset_value = sum(
-                (self.risk_assessor.expected_value(t, self.day)
-                for t in seller.tickets_owned),
+                (self.risk_assessor.expected_value(t, self.day) for t in seller.tickets_owned),
                 Decimal(0),
             )
             if not self.risk_assessor.should_sell(
@@ -936,8 +972,7 @@ class DealerRingSimulation:
         # Risk-based buy decision (if risk assessor configured)
         if self.risk_assessor:
             buyer_asset_value = sum(
-                (self.risk_assessor.expected_value(t, self.day)
-                for t in buyer.tickets_owned),
+                (self.risk_assessor.expected_value(t, self.day) for t in buyer.tickets_owned),
                 Decimal(0),
             )
             if not self.risk_assessor.should_buy(
@@ -965,7 +1000,7 @@ class DealerRingSimulation:
         # Dealer's net position: bought at bid, sold at ask
         # Cash: +buy_price - sell_price = spread (earned)
         # Inventory: +1 - 1 = 0 (unchanged)
-        dealer.cash += (buy_price - sell_price)
+        dealer.cash += buy_price - sell_price
 
         # Update seller's asset issuer constraint
         if len(seller.tickets_owned) == 0:
@@ -1043,8 +1078,7 @@ class DealerRingSimulation:
         if self.risk_assessor:
             # Compute total asset value for urgency calculation
             asset_value = sum(
-                (self.risk_assessor.expected_value(t, self.day)
-                for t in trader.tickets_owned),
+                (self.risk_assessor.expected_value(t, self.day) for t in trader.tickets_owned),
                 Decimal(0),
             )
 
@@ -1155,8 +1189,7 @@ class DealerRingSimulation:
         # Risk-based buy validation (post-execution since we need actual ticket)
         if result.ticket and self.risk_assessor:
             asset_value = sum(
-                (self.risk_assessor.expected_value(t, self.day)
-                for t in trader.tickets_owned),
+                (self.risk_assessor.expected_value(t, self.day) for t in trader.tickets_owned),
                 Decimal(0),
             )
 
@@ -1185,7 +1218,10 @@ class DealerRingSimulation:
 
                 # Log rejection
                 ev = self.risk_assessor.expected_value(result.ticket, self.day)
-                threshold = self.risk_assessor.params.base_risk_premium * self.risk_assessor.params.buy_premium_multiplier
+                threshold = (
+                    self.risk_assessor.params.base_risk_premium
+                    * self.risk_assessor.params.buy_premium_multiplier
+                )
                 self.events.log_buy_rejected(
                     day=self.day,
                     trader_id=agent_id,
@@ -1301,8 +1337,11 @@ class DealerRingSimulation:
 
         # Settle each issuer
         if maturing_by_issuer:
-            logger.debug("dealer day %d: settling %d issuers with maturing debt",
-                         self.day, len(maturing_by_issuer))
+            logger.debug(
+                "dealer day %d: settling %d issuers with maturing debt",
+                self.day,
+                len(maturing_by_issuer),
+            )
         for issuer_id, tickets in maturing_by_issuer.items():
             self._settle_issuer(issuer_id, tickets)
 
@@ -1401,9 +1440,7 @@ class DealerRingSimulation:
         if self.risk_assessor:
             defaulted = recovery_rate < Decimal(1)
             self.risk_assessor.update_history(
-                day=self.day,
-                issuer_id=issuer_id,
-                defaulted=defaulted
+                day=self.day, issuer_id=issuer_id, defaulted=defaulted
             )
 
         # Remove tickets from issuer's obligations
@@ -1522,6 +1559,7 @@ class DealerRingSimulation:
             subtitle: Report subtitle (optional)
         """
         from .report import export_dealer_ring_html
+
         export_dealer_ring_html(
             snapshots=self.snapshots,
             config=self.config,

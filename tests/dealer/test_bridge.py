@@ -8,18 +8,19 @@ This test file covers the four main functions in bilancio.dealer.bridge:
 4. apply_trade_results_to_payables - updates payable holders from trades
 """
 
-import pytest
 from decimal import Decimal
 
+import pytest
+
 from bilancio.dealer.bridge import (
+    apply_trade_results_to_payables,
     assign_bucket,
     payables_to_tickets,
     tickets_to_trader_holdings,
-    apply_trade_results_to_payables,
 )
 from bilancio.dealer.models import DEFAULT_BUCKETS, BucketConfig, Ticket
-from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.base import InstrumentKind
+from bilancio.domain.instruments.credit import Payable
 
 
 class TestAssignBucket:

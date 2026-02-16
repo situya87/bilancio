@@ -3,16 +3,19 @@
 
 class BilancioError(Exception):
     """Base exception class for bilancio-related errors."""
+
     pass
 
 
 class ValidationError(BilancioError):
     """Raised when data validation fails."""
+
     pass
 
 
 class DefaultError(BilancioError):
     """Raised when a debtor cannot settle their obligations."""
+
     pass
 
 
@@ -31,4 +34,5 @@ class ConfigurationError(BilancioError, ValueError):
     ``except ValueError`` handlers (e.g. in apply_action's error wrapping)
     continue to catch configuration errors without modification.
     """
+
     pass

@@ -1,18 +1,19 @@
 """Unit tests for semantic HTML export."""
 
 from pathlib import Path
-from decimal import Decimal
 
-from bilancio.engines.system import System
-from bilancio.config.apply import create_agent
 from bilancio.analysis.balances import agent_balance
+from bilancio.config.apply import create_agent
+from bilancio.engines.system import System
 from bilancio.ui.html_export import export_pretty_html
 
 
 def test_export_pretty_html_minimal(tmp_path: Path):
     sys = System()
-    cb = create_agent(type("Spec", (), {"id":"CB","kind":"central_bank","name":"Central Bank"}))
-    h1 = create_agent(type("Spec", (), {"id":"H1","kind":"household","name":"Alice"}))
+    cb = create_agent(
+        type("Spec", (), {"id": "CB", "kind": "central_bank", "name": "Central Bank"})
+    )
+    h1 = create_agent(type("Spec", (), {"id": "H1", "kind": "household", "name": "Alice"}))
     sys.add_agent(cb)
     sys.add_agent(h1)
     # seed a simple cash position
@@ -48,7 +49,7 @@ def test_export_pretty_html_minimal(tmp_path: Path):
 
 def test_export_pretty_html_handles_numeric_strings(tmp_path: Path):
     sys = System()
-    f1 = create_agent(type("Spec", (), {"id":"F1","kind":"firm","name":"Firm One"}))
+    f1 = create_agent(type("Spec", (), {"id": "F1", "kind": "firm", "name": "Firm One"}))
     sys.add_agent(f1)
 
     out = tmp_path / "report2.html"

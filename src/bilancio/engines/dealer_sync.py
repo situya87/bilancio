@@ -7,29 +7,27 @@ system, manage ticket maturities, and capture metric snapshots.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bilancio.engines.system import System
     from bilancio.engines.dealer_integration import DealerSubsystem
+    from bilancio.engines.system import System
 
-from bilancio.domain.instruments.base import InstrumentKind
-from bilancio.dealer.models import (
-    DealerState,
-    VBTState,
-    Ticket,
-)
-from bilancio.dealer.kernel import recompute_dealer_state
 from bilancio.dealer.metrics import (
     DealerSnapshot,
-    TraderSnapshot,
     SystemStateSnapshot,
+    TraderSnapshot,
     compute_safety_margin,
     compute_saleable_value,
 )
+from bilancio.dealer.models import (
+    Ticket,
+)
 
 
-def _reassign_payable_owner(system: "System", contract_id: str, old_owner: str, new_owner: str) -> None:
+def _reassign_payable_owner(
+    system: System, contract_id: str, old_owner: str, new_owner: str
+) -> None:
     """Transfer payable ownership in the main system when bucket changes.
 
     Called during ingestion when a VBT/Dealer payable rolled over to a
@@ -56,7 +54,7 @@ def _reassign_payable_owner(system: "System", contract_id: str, old_owner: str, 
     payable.holder_id = None  # Reset secondary holder since asset_holder_id is now correct
 
 
-def _ingest_new_payables(subsystem: "DealerSubsystem", system: "System", current_day: int) -> int:
+def _ingest_new_payables(subsystem: DealerSubsystem, system: System, current_day: int) -> int:
     """Create tickets for new payables (from rollover) that have no ticket yet.
 
     Called during the dealer trading phase to pick up payables created by
@@ -70,9 +68,9 @@ def _ingest_new_payables(subsystem: "DealerSubsystem", system: "System", current
     Returns:
         Number of new tickets created
     """
+    from bilancio.dealer.models import Ticket
     from bilancio.domain.instruments.credit import Payable
     from bilancio.engines.dealer_integration import _assign_bucket
-    from bilancio.dealer.models import Ticket
 
     new_count = 0
     for contract_id, contract in list(system.state.contracts.items()):
@@ -153,7 +151,7 @@ def _ingest_new_payables(subsystem: "DealerSubsystem", system: "System", current
     return new_count
 
 
-def _pool_desk_cash(subsystem: "DealerSubsystem") -> None:
+def _pool_desk_cash(subsystem: DealerSubsystem) -> None:
     """Redistribute cash equally across dealer desks and VBT desks.
 
     The three dealer desks (short/mid/long) are conceptually one firm with
@@ -182,7 +180,7 @@ def _pool_desk_cash(subsystem: "DealerSubsystem") -> None:
             vbt.cash = per_desk
 
 
-def _update_vbt_credit_mids(subsystem: "DealerSubsystem", current_day: int) -> None:
+def _update_vbt_credit_mids(subsystem: DealerSubsystem, current_day: int) -> None:
     """Update VBT mid prices to reflect the risk assessor's current default estimate.
 
     When a VBT pricing model is attached to the subsystem, delegates to it.
@@ -234,8 +232,8 @@ def _update_vbt_credit_mids(subsystem: "DealerSubsystem", current_day: int) -> N
 
 
 def _sync_trader_cash_from_system(
-    subsystem: "DealerSubsystem",
-    system: "System",
+    subsystem: DealerSubsystem,
+    system: System,
 ) -> None:
     """Sync trader cash balances from the main system.
 
@@ -249,8 +247,8 @@ def _sync_trader_cash_from_system(
 
 
 def _cleanup_orphaned_tickets(
-    subsystem: "DealerSubsystem",
-    system: "System",
+    subsystem: DealerSubsystem,
+    system: System,
 ) -> None:
     """Remove tickets whose payables were removed from the system.
 
@@ -293,8 +291,8 @@ def _cleanup_orphaned_tickets(
 
 
 def _remove_ticket_from_holdings(
-    ticket: "Ticket",
-    subsystem: "DealerSubsystem",
+    ticket: Ticket,
+    subsystem: DealerSubsystem,
 ) -> None:
     """Remove a ticket from all dealer/VBT inventories and trader holdings."""
     bucket = ticket.bucket_id
@@ -312,8 +310,8 @@ def _remove_ticket_from_holdings(
 
 
 def _update_ticket_maturities(
-    subsystem: "DealerSubsystem",
-    system: "System",
+    subsystem: DealerSubsystem,
+    system: System,
     current_day: int,
 ) -> None:
     """Update ticket maturities, reassign buckets, and remove matured tickets.
@@ -350,8 +348,8 @@ def _update_ticket_maturities(
 
 
 def _move_ticket_to_new_bucket(
-    subsystem: "DealerSubsystem",
-    system: "System",
+    subsystem: DealerSubsystem,
+    system: System,
     ticket: Ticket,
     old_bucket: str,
     new_bucket: str,
@@ -402,8 +400,8 @@ def _move_ticket_to_new_bucket(
 
 
 def _sync_payable_ownership(
-    subsystem: "DealerSubsystem",
-    system: "System",
+    subsystem: DealerSubsystem,
+    system: System,
 ) -> None:
     """Update Payable ownership in the main system to match ticket ownership.
 
@@ -453,13 +451,13 @@ def _sync_payable_ownership(
                 from_holder=current_holder,
                 to_holder=new_holder,
                 amount=payable.amount,
-                due_day=payable.due_day
+                due_day=payable.due_day,
             )
 
 
 def _sync_trader_cash_to_system(
-    subsystem: "DealerSubsystem",
-    system: "System",
+    subsystem: DealerSubsystem,
+    system: System,
 ) -> None:
     """Sync trader cash balances from dealer subsystem back to main system.
 
@@ -486,8 +484,8 @@ def _sync_trader_cash_to_system(
 
 
 def _sync_dealer_vbt_cash_from_system(
-    subsystem: "DealerSubsystem",
-    system: "System",
+    subsystem: DealerSubsystem,
+    system: System,
 ) -> None:
     """Sync dealer and VBT cash balances from the main system into the subsystem.
 
@@ -509,8 +507,8 @@ def _sync_dealer_vbt_cash_from_system(
 
 
 def _sync_dealer_vbt_cash_to_system(
-    subsystem: "DealerSubsystem",
-    system: "System",
+    subsystem: DealerSubsystem,
+    system: System,
 ) -> None:
     """Sync dealer and VBT cash from subsystem back to the main system.
 
@@ -544,10 +542,7 @@ def _sync_dealer_vbt_cash_to_system(
                     system.retire_cash(from_agent_id=agent_id, amount=burn_amount)
 
 
-def _capture_dealer_snapshots(
-    subsystem: "DealerSubsystem",
-    current_day: int
-) -> None:
+def _capture_dealer_snapshots(subsystem: DealerSubsystem, current_day: int) -> None:
     """
     Capture dealer state snapshots for metrics (Section 8.1).
 
@@ -602,10 +597,7 @@ def _capture_dealer_snapshots(
         subsystem.metrics.dealer_snapshots.append(snapshot)
 
 
-def _capture_trader_snapshots(
-    subsystem: "DealerSubsystem",
-    current_day: int
-) -> None:
+def _capture_trader_snapshots(subsystem: DealerSubsystem, current_day: int) -> None:
     """
     Capture trader state snapshots for metrics (Section 8.1).
 
@@ -618,7 +610,7 @@ def _capture_trader_snapshots(
             tickets_held=trader.tickets_owned,
             obligations=trader.obligations,
             dealers=subsystem.dealers,
-            ticket_size=subsystem.params.S
+            ticket_size=subsystem.params.S,
         )
 
         # Calculate saleable value
@@ -642,17 +634,14 @@ def _capture_trader_snapshots(
         subsystem.metrics.trader_snapshots.append(snapshot)
 
 
-def _capture_system_state_snapshot(
-    subsystem: "DealerSubsystem",
-    current_day: int
-) -> None:
+def _capture_system_state_snapshot(subsystem: DealerSubsystem, current_day: int) -> None:
     """
     Capture system-level state snapshot for metrics (Plan 022 - Phase 4).
 
     Records total face value, cash, and debt-to-money ratio across the system.
     """
     # Calculate total face value by bucket
-    face_by_bucket: Dict[str, Decimal] = {}
+    face_by_bucket: dict[str, Decimal] = {}
     total_face = Decimal(0)
 
     for bucket_id in subsystem.dealers.keys():

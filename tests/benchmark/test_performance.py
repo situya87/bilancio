@@ -11,7 +11,6 @@ bounds to avoid flaky failures while still catching major regressions.
 """
 
 import time
-from decimal import Decimal
 
 import pytest
 
@@ -26,10 +25,10 @@ from bilancio.engines.simulation import run_day
 from bilancio.engines.system import System
 from bilancio.scenarios.ring_explorer import compile_ring_explorer
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _build_ring_system(n_agents: int, *, seed: int = 42) -> System:
     """Build a ring system with *n_agents* households, ready for simulation."""
@@ -109,7 +108,9 @@ class TestSettlementThroughput:
         run_day(system)
         elapsed = time.perf_counter() - start
 
-        print(f"\n  settlement_throughput: {payable_count_before} payables settled in {elapsed:.4f}s")
+        print(
+            f"\n  settlement_throughput: {payable_count_before} payables settled in {elapsed:.4f}s"
+        )
 
         # Generous bound: should complete well under 5 seconds even on slow CI
         assert elapsed < 5.0, f"Settlement took {elapsed:.2f}s, expected < 5s"
@@ -250,11 +251,7 @@ class TestContractLookupPerformance:
         start_naive = time.perf_counter()
         for i in range(n_lookups):
             day = (i % n_due_days) + 1
-            _ = [
-                c
-                for c in system.state.contracts.values()
-                if getattr(c, "due_day", None) == day
-            ]
+            _ = [c for c in system.state.contracts.values() if getattr(c, "due_day", None) == day]
         elapsed_naive = time.perf_counter() - start_naive
 
         per_lookup_naive_us = (elapsed_naive / n_lookups) * 1_000_000

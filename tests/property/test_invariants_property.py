@@ -1,19 +1,18 @@
 """Property-based tests for financial system invariants using Hypothesis."""
-import pytest
-from hypothesis import given, settings, assume
+
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from bilancio.engines.system import System
-from bilancio.domain.agents.central_bank import CentralBank
-from bilancio.domain.agents.household import Household
-from bilancio.domain.agents.bank import Bank
-from bilancio.domain.agents.firm import Firm
 from bilancio.core.invariants import (
     assert_cb_cash_matches_outstanding,
-    assert_no_negative_balances,
     assert_cb_reserves_match,
     assert_double_entry_numeric,
+    assert_no_negative_balances,
 )
+from bilancio.domain.agents.bank import Bank
+from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.domain.agents.household import Household
+from bilancio.engines.system import System
 from bilancio.ops.banking import deposit_cash, withdraw_cash
 
 
@@ -141,7 +140,9 @@ class TestBankingInvariantsProperty:
 
     @given(cash_amount=amounts, deposit_amount=small_amounts, withdraw_amount=small_amounts)
     @settings(max_examples=50)
-    def test_deposit_then_withdraw_preserves_invariants(self, cash_amount, deposit_amount, withdraw_amount):
+    def test_deposit_then_withdraw_preserves_invariants(
+        self, cash_amount, deposit_amount, withdraw_amount
+    ):
         """Deposit then withdraw preserves all invariants."""
         assume(deposit_amount <= cash_amount)
         assume(withdraw_amount <= deposit_amount)

@@ -6,14 +6,13 @@ Implements the cohortized balance sheet from Section 5 of the specification.
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 from bilancio.banking.types import (
+    CBBorrowingCohort,
     DepositCohort,
     LoanCohort,
-    CBBorrowingCohort,
-    ScheduledLeg,
     Quote,
+    ScheduledLeg,
 )
 
 
@@ -24,6 +23,7 @@ class CentralBankParams:
 
     These define the corridor within which the BankDealer operates.
     """
+
     # 2-day reserve remuneration rate (floor)
     reserve_remuneration_rate: Decimal = Decimal("0.01")  # i_R^(2)
 
@@ -51,6 +51,7 @@ class BankDealerState:
     Assets = Liabilities + Equity
     (Reserves + Loans) = (Deposits + CB Borrowing) + Equity
     """
+
     bank_id: str
     current_day: int = 0
 
@@ -62,18 +63,18 @@ class BankDealerState:
 
     # Loans by cohort, keyed by issuance_day
     # Each cohort matures at issuance_day + 10
-    loan_cohorts: Dict[int, LoanCohort] = field(default_factory=dict)
+    loan_cohorts: dict[int, LoanCohort] = field(default_factory=dict)
 
     # === Liabilities ===
 
     # Deposits by cohort, keyed by (issuance_day, origin)
     # origin is "payment" or "loan"
     # Deposits are ON DEMAND - no fixed maturity
-    deposit_cohorts: Dict[tuple[int, str], DepositCohort] = field(default_factory=dict)
+    deposit_cohorts: dict[tuple[int, str], DepositCohort] = field(default_factory=dict)
 
     # CB borrowing by cohort, keyed by issuance_day
     # Each cohort matures at issuance_day + 2
-    cb_borrowing_cohorts: Dict[int, CBBorrowingCohort] = field(default_factory=dict)
+    cb_borrowing_cohorts: dict[int, CBBorrowingCohort] = field(default_factory=dict)
 
     # === Intraday tracking ===
 
@@ -87,10 +88,10 @@ class BankDealerState:
     ticket_count: int = 0
 
     # Current quotes (updated after each ticket)
-    current_quote: Optional[Quote] = None
+    current_quote: Quote | None = None
 
     # === History (for diagnostics) ===
-    quote_history: List[Quote] = field(default_factory=list)
+    quote_history: list[Quote] = field(default_factory=list)
 
     # =========================================================================
     # Balance Sheet Properties
@@ -109,20 +110,12 @@ class BankDealerState:
     @property
     def deposits_payment_origin(self) -> int:
         """D^pay_t: Payment-origin deposits."""
-        return sum(
-            c.total_balance
-            for k, c in self.deposit_cohorts.items()
-            if k[1] == "payment"
-        )
+        return sum(c.total_balance for k, c in self.deposit_cohorts.items() if k[1] == "payment")
 
     @property
     def deposits_loan_origin(self) -> int:
         """D^loan_t: Loan-origin deposits."""
-        return sum(
-            c.total_balance
-            for k, c in self.deposit_cohorts.items()
-            if k[1] == "loan"
-        )
+        return sum(c.total_balance for k, c in self.deposit_cohorts.items() if k[1] == "loan")
 
     @property
     def total_cb_borrowing(self) -> int:
@@ -153,7 +146,7 @@ class BankDealerState:
     # Scheduled Legs (for reserve projection)
     # =========================================================================
 
-    def get_scheduled_legs(self, from_day: int, to_day: int) -> List[ScheduledLeg]:
+    def get_scheduled_legs(self, from_day: int, to_day: int) -> list[ScheduledLeg]:
         """
         Get all scheduled reserve legs in the range [from_day, to_day].
 
@@ -170,26 +163,30 @@ class BankDealerState:
         # CB borrowing repayments
         for issuance_day, cohort in self.cb_borrowing_cohorts.items():
             if from_day <= cohort.maturity_day <= to_day:
-                legs.append(ScheduledLeg(
-                    day=cohort.maturity_day,
-                    amount=-cohort.repayment_amount,  # Outflow
-                    leg_type="cb_repay",
-                    source_cohort=f"CB_borrow_{issuance_day}",
-                ))
+                legs.append(
+                    ScheduledLeg(
+                        day=cohort.maturity_day,
+                        amount=-cohort.repayment_amount,  # Outflow
+                        leg_type="cb_repay",
+                        source_cohort=f"CB_borrow_{issuance_day}",
+                    )
+                )
 
         # Loan repayments
         for issuance_day, loan_cohort in self.loan_cohorts.items():
             if from_day <= loan_cohort.maturity_day <= to_day:
-                legs.append(ScheduledLeg(
-                    day=loan_cohort.maturity_day,
-                    amount=loan_cohort.repayment_amount,  # Inflow
-                    leg_type="loan_repay",
-                    source_cohort=f"Loan_{issuance_day}",
-                ))
+                legs.append(
+                    ScheduledLeg(
+                        day=loan_cohort.maturity_day,
+                        amount=loan_cohort.repayment_amount,  # Inflow
+                        leg_type="loan_repay",
+                        source_cohort=f"Loan_{issuance_day}",
+                    )
+                )
 
         return sorted(legs, key=lambda x: x.day)
 
-    def get_deposit_interest_legs(self, from_day: int, to_day: int) -> List[ScheduledLeg]:
+    def get_deposit_interest_legs(self, from_day: int, to_day: int) -> list[ScheduledLeg]:
         """
         Get scheduled deposit interest legs (deposit-only, no R movement).
 
@@ -206,12 +203,14 @@ class BankDealerState:
             while next_int_day <= to_day:
                 if next_int_day >= from_day:
                     interest = cohort.compute_interest()
-                    legs.append(ScheduledLeg(
-                        day=next_int_day,
-                        amount=interest,  # Deposit credit (not reserve)
-                        leg_type="deposit_interest",
-                        source_cohort=f"Dep_{cohort_key[0]}_{cohort_key[1]}",
-                    ))
+                    legs.append(
+                        ScheduledLeg(
+                            day=next_int_day,
+                            amount=interest,  # Deposit credit (not reserve)
+                            leg_type="deposit_interest",
+                            source_cohort=f"Dep_{cohort_key[0]}_{cohort_key[1]}",
+                        )
+                    )
                 next_int_day += 2
 
         return sorted(legs, key=lambda x: x.day)
@@ -440,7 +439,7 @@ class BankDealerState:
     # Diagnostics
     # =========================================================================
 
-    def balance_sheet_summary(self) -> Dict[str, object]:
+    def balance_sheet_summary(self) -> dict[str, object]:
         """Return a summary of the balance sheet for diagnostics."""
         return {
             "bank_id": self.bank_id,
@@ -467,7 +466,7 @@ class BankDealerState:
 
     def __str__(self) -> str:
         """Pretty-print balance sheet."""
-        summary = self.balance_sheet_summary()
+        self.balance_sheet_summary()
         lines = [
             f"=== BankDealer {self.bank_id} (Day {self.current_day}) ===",
             "Assets:",
@@ -480,7 +479,7 @@ class BankDealerState:
             f"  CB Borrowing:  {self.total_cb_borrowing:>12,}",
             f"  Total Liab:    {self.total_liabilities:>12,}",
             f"Equity:          {self.equity:>12,}",
-            f"---",
+            "---",
             f"Cohorts: {len(self.deposit_cohorts)} dep, {len(self.loan_cohorts)} loan, {len(self.cb_borrowing_cohorts)} CB",
         ]
         return "\n".join(lines)

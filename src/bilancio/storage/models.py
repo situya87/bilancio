@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
 from enum import Enum
+from typing import Any
 
 
 class RunStatus(Enum):
     """Status of a simulation run."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -18,36 +19,39 @@ class RunStatus(Enum):
 @dataclass
 class RunArtifacts:
     """References to simulation output artifacts."""
-    scenario_yaml: Optional[str] = None
-    events_jsonl: Optional[str] = None
-    balances_csv: Optional[str] = None
-    metrics_csv: Optional[str] = None
-    metrics_json: Optional[str] = None
-    run_html: Optional[str] = None
-    dealer_metrics_json: Optional[str] = None
-    trades_csv: Optional[str] = None
-    repayment_events_csv: Optional[str] = None
+
+    scenario_yaml: str | None = None
+    events_jsonl: str | None = None
+    balances_csv: str | None = None
+    metrics_csv: str | None = None
+    metrics_json: str | None = None
+    run_html: str | None = None
+    dealer_metrics_json: str | None = None
+    trades_csv: str | None = None
+    repayment_events_csv: str | None = None
 
 
 @dataclass
 class RunResult:
     """Complete result of a single simulation run."""
+
     run_id: str
     status: RunStatus
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
     artifacts: RunArtifacts = field(default_factory=RunArtifacts)
-    error: Optional[str] = None
-    execution_time_ms: Optional[int] = None
+    error: str | None = None
+    execution_time_ms: int | None = None
 
 
 @dataclass
 class RegistryEntry:
     """Metadata for registry storage."""
+
     run_id: str
     experiment_id: str
     status: RunStatus
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    artifact_paths: Dict[str, str] = field(default_factory=dict)
-    error: Optional[str] = None
+    parameters: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
+    artifact_paths: dict[str, str] = field(default_factory=dict)
+    error: str | None = None

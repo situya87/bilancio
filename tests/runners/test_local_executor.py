@@ -13,17 +13,16 @@ no longer computes metrics. That's MetricsComputer's job.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 import pytest
 
 from bilancio.runners.local_executor import LocalExecutor
-from bilancio.runners.models import RunOptions, ExecutionResult
+from bilancio.runners.models import ExecutionResult, RunOptions
 from bilancio.storage.models import RunStatus
 
-
 # Minimal scenario configuration for testing
-MINIMAL_SCENARIO: Dict[str, Any] = {
+MINIMAL_SCENARIO: dict[str, Any] = {
     "version": 1,
     "name": "Test Scenario",
     "description": "Minimal test scenario",
@@ -37,7 +36,7 @@ MINIMAL_SCENARIO: Dict[str, Any] = {
 }
 
 # Scenario with activity that produces events
-SCENARIO_WITH_ACTIVITY: Dict[str, Any] = {
+SCENARIO_WITH_ACTIVITY: dict[str, Any] = {
     "version": 1,
     "name": "Activity Test Scenario",
     "description": "Scenario with payment activity to generate events",
@@ -234,7 +233,7 @@ class TestLocalExecutorErrorHandling:
         executor = LocalExecutor()
 
         # Invalid scenario - missing required fields
-        invalid_scenario: Dict[str, Any] = {
+        invalid_scenario: dict[str, Any] = {
             "agents": "not_a_list",  # Should be a list
             "setup": [],
         }
@@ -254,7 +253,7 @@ class TestLocalExecutorErrorHandling:
         executor = LocalExecutor()
 
         # Invalid scenario configuration
-        invalid_scenario: Dict[str, Any] = {
+        invalid_scenario: dict[str, Any] = {
             "agents": [{"id": "bank"}],  # Missing 'kind'
             "setup": [],
         }
@@ -275,7 +274,7 @@ class TestLocalExecutorErrorHandling:
         """execute() records execution_time_ms even on failure."""
         executor = LocalExecutor()
 
-        invalid_scenario: Dict[str, Any] = {
+        invalid_scenario: dict[str, Any] = {
             "agents": "invalid",
             "setup": [],
         }
@@ -295,7 +294,7 @@ class TestLocalExecutorErrorHandling:
         """execute() includes scenario_yaml artifact even on failure."""
         executor = LocalExecutor()
 
-        invalid_scenario: Dict[str, Any] = {
+        invalid_scenario: dict[str, Any] = {
             "agents": "invalid",
             "setup": [],
         }

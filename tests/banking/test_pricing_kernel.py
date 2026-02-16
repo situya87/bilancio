@@ -12,15 +12,14 @@ References:
 - "Banks-as-Dealers with deposits on demand" specification Section 6
 """
 
-import pytest
 from decimal import Decimal
 
 from bilancio.banking.pricing_kernel import (
     PricingParams,
-    compute_midline,
-    compute_tilted_midline,
-    compute_quotes,
     compute_inventory,
+    compute_midline,
+    compute_quotes,
+    compute_tilted_midline,
     simple_risk_index,
 )
 
@@ -473,7 +472,7 @@ class TestCBRateSensitivity:
 
         raised_params = PricingParams(
             reserve_remuneration_rate=Decimal("0.02"),  # Floor raised by 1%
-            cb_borrowing_rate=Decimal("0.04"),          # Ceiling raised by 1%
+            cb_borrowing_rate=Decimal("0.04"),  # Ceiling raised by 1%
             reserve_target=100000,
             symmetric_capacity=50000,
             ticket_size=10000,

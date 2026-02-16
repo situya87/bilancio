@@ -12,30 +12,10 @@ Covers:
 """
 
 import dataclasses
-import random
 from decimal import Decimal
 
 import pytest
 
-from bilancio.information import (
-    AccessLevel,
-    CategoryAccess,
-    CounterpartyAccess,
-    CounterpartyView,
-    EstimationNoise,
-    InformationProfile,
-    InformationService,
-    InstrumentAccess,
-    InstrumentView,
-    LENDER_REALISTIC,
-    LENDER_REALISTIC_V2,
-    OMNISCIENT,
-    SampleNoise,
-    SystemAccess,
-    SystemView,
-    TransactionAccess,
-    TransactionView,
-)
 from bilancio.decision import (
     CounterpartyScreener,
     FixedMaturitySelector,
@@ -46,7 +26,24 @@ from bilancio.decision import (
     ThresholdScreener,
     TransactionPricer,
 )
-
+from bilancio.information import (
+    LENDER_REALISTIC,
+    LENDER_REALISTIC_V2,
+    OMNISCIENT,
+    AccessLevel,
+    CategoryAccess,
+    CounterpartyAccess,
+    CounterpartyView,
+    EstimationNoise,
+    InformationProfile,
+    InformationService,
+    InstrumentAccess,
+    InstrumentView,
+    SystemAccess,
+    SystemView,
+    TransactionAccess,
+    TransactionView,
+)
 
 # ═══════════════════════════════════════════════════════════════════════
 # Test helpers
@@ -150,27 +147,19 @@ class TestSubProfileDefaults:
 
 class TestProfileToSubProfile:
     def test_counterparty_cash_maps_correctly(self):
-        p = InformationProfile(
-            counterparty_cash=CategoryAccess(AccessLevel.NONE)
-        )
+        p = InformationProfile(counterparty_cash=CategoryAccess(AccessLevel.NONE))
         assert p.counterparty.cash.level == AccessLevel.NONE
 
     def test_system_liquidity_maps_correctly(self):
-        p = InformationProfile(
-            system_liquidity=CategoryAccess(AccessLevel.NONE)
-        )
+        p = InformationProfile(system_liquidity=CategoryAccess(AccessLevel.NONE))
         assert p.system.system_liquidity.level == AccessLevel.NONE
 
     def test_dealer_quotes_maps_correctly(self):
-        p = InformationProfile(
-            dealer_quotes=CategoryAccess(AccessLevel.NONE)
-        )
+        p = InformationProfile(dealer_quotes=CategoryAccess(AccessLevel.NONE))
         assert p.instrument.dealer_quotes.level == AccessLevel.NONE
 
     def test_bilateral_history_maps_correctly(self):
-        p = InformationProfile(
-            bilateral_history=CategoryAccess(AccessLevel.NONE)
-        )
+        p = InformationProfile(bilateral_history=CategoryAccess(AccessLevel.NONE))
         assert p.transaction.bilateral_history.level == AccessLevel.NONE
 
     def test_omniscient_all_sub_profiles_perfect(self):
@@ -210,9 +199,7 @@ class TestFromHierarchy:
 
     def test_counterparty_cash_none_round_trip(self):
         p = InformationProfile.from_hierarchy(
-            counterparty=CounterpartyAccess(
-                cash=CategoryAccess(AccessLevel.NONE)
-            )
+            counterparty=CounterpartyAccess(cash=CategoryAccess(AccessLevel.NONE))
         )
         assert p.counterparty_cash.level == AccessLevel.NONE
         # Other counterparty fields remain PERFECT
@@ -220,12 +207,8 @@ class TestFromHierarchy:
 
     def test_system_and_transaction_together(self):
         p = InformationProfile.from_hierarchy(
-            system=SystemAccess(
-                system_liquidity=CategoryAccess(AccessLevel.NONE)
-            ),
-            transaction=TransactionAccess(
-                obligation_graph=CategoryAccess(AccessLevel.NONE)
-            ),
+            system=SystemAccess(system_liquidity=CategoryAccess(AccessLevel.NONE)),
+            transaction=TransactionAccess(obligation_graph=CategoryAccess(AccessLevel.NONE)),
         )
         assert p.system_liquidity.level == AccessLevel.NONE
         assert p.obligation_graph.level == AccessLevel.NONE
@@ -236,9 +219,7 @@ class TestFromHierarchy:
     def test_round_trip_with_noise(self):
         noise = EstimationNoise(Decimal("0.25"))
         p = InformationProfile.from_hierarchy(
-            counterparty=CounterpartyAccess(
-                cash=CategoryAccess(AccessLevel.NOISY, noise)
-            )
+            counterparty=CounterpartyAccess(cash=CategoryAccess(AccessLevel.NOISY, noise))
         )
         assert p.counterparty_cash.level == AccessLevel.NOISY
         assert p.counterparty_cash.noise == noise

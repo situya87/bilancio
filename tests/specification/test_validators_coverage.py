@@ -22,24 +22,23 @@ Uncovered lines:
 import pytest
 
 from bilancio.specification import (
-    AgentSpec,
-    InstrumentSpec,
-    InstrumentRelation,
     AgentRelation,
-    DecisionSpec,
-    LifecycleSpec,
+    AgentSpec,
     BalanceSheetPosition,
+    DecisionSpec,
+    InstrumentRelation,
+    InstrumentSpec,
+    LifecycleSpec,
     SpecificationRegistry,
     ValidationResult,
 )
 from bilancio.specification.models import InstrumentInteraction
 from bilancio.specification.validators import (
-    validate_agent_completeness,
-    validate_instrument_completeness,
-    validate_all_relationships,
     generate_stub_relations,
+    validate_agent_completeness,
+    validate_all_relationships,
+    validate_instrument_completeness,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -166,9 +165,7 @@ class TestAgentIncompleteRelation:
 
         result = validate_agent_completeness(agent, empty_registry)
         assert not result.is_valid
-        incomplete_errors = [
-            e for e in result.errors if e.category == "incomplete_relation"
-        ]
+        incomplete_errors = [e for e in result.errors if e.category == "incomplete_relation"]
         assert len(incomplete_errors) >= 1
 
 
@@ -189,7 +186,7 @@ class TestAgentIncompleteDecision:
                 DecisionSpec(
                     name="bad_decision",
                     trigger="",  # Empty => incomplete
-                    inputs=[],   # Empty => incomplete
+                    inputs=[],  # Empty => incomplete
                     instruments_involved=[],
                     outputs=[],  # Empty => incomplete
                     logic_description="",  # Empty => incomplete
@@ -200,9 +197,7 @@ class TestAgentIncompleteDecision:
 
         result = validate_agent_completeness(agent, empty_registry)
         assert not result.is_valid
-        decision_errors = [
-            e for e in result.errors if e.category == "incomplete_decision"
-        ]
+        decision_errors = [e for e in result.errors if e.category == "incomplete_decision"]
         assert len(decision_errors) >= 1
 
 
@@ -318,9 +313,7 @@ class TestInstrumentIncompleteRelation:
 
         result = validate_instrument_completeness(instr, empty_registry)
         assert not result.is_valid
-        incomplete_errors = [
-            e for e in result.errors if e.category == "incomplete_relation"
-        ]
+        incomplete_errors = [e for e in result.errors if e.category == "incomplete_relation"]
         assert len(incomplete_errors) >= 1
 
 
@@ -347,9 +340,7 @@ class TestInstrumentIncompleteLifecycle:
 
         result = validate_instrument_completeness(instr, empty_registry)
         assert not result.is_valid
-        lifecycle_errors = [
-            e for e in result.errors if e.category == "incomplete_lifecycle"
-        ]
+        lifecycle_errors = [e for e in result.errors if e.category == "incomplete_lifecycle"]
         assert len(lifecycle_errors) >= 1
 
 
@@ -387,9 +378,7 @@ class TestInstrumentIncompleteInteraction:
 
         result = validate_instrument_completeness(instr_a, empty_registry)
         assert not result.is_valid
-        interaction_errors = [
-            e for e in result.errors if e.category == "incomplete_interaction"
-        ]
+        interaction_errors = [e for e in result.errors if e.category == "incomplete_interaction"]
         assert len(interaction_errors) >= 1
 
 
@@ -418,9 +407,7 @@ class TestAllRelationshipsMissingPairs:
         missing_errors = [
             e
             for e in result.errors
-            if e.category == "missing_relation"
-            and "Trader" in e.entity
-            and "Payable" in e.entity
+            if e.category == "missing_relation" and "Trader" in e.entity and "Payable" in e.entity
         ]
         assert len(missing_errors) >= 1
 
@@ -471,9 +458,7 @@ class TestAllRelationshipsInconsistentCreateIssue:
 
         result = validate_all_relationships(empty_registry)
         inconsistency_errors = [
-            e
-            for e in result.errors
-            if e.category == "inconsistency" and "can_create" in e.field
+            e for e in result.errors if e.category == "inconsistency" and "can_create" in e.field
         ]
         assert len(inconsistency_errors) >= 1
 
@@ -523,9 +508,7 @@ class TestAllRelationshipsInconsistentPosition:
 
         result = validate_all_relationships(empty_registry)
         position_errors = [
-            e
-            for e in result.errors
-            if e.category == "inconsistency" and "position" in e.field
+            e for e in result.errors if e.category == "inconsistency" and "position" in e.field
         ]
         assert len(position_errors) >= 1
 
@@ -623,9 +606,7 @@ class TestGenerateStubRelations:
     def test_stubs_for_multiple_missing_pairs(self, empty_registry):
         """Stubs for 2 agents x 2 instruments with no relations."""
         for name in ("A1", "A2"):
-            empty_registry.register_agent(
-                AgentSpec(name=name, description=f"Agent {name}")
-            )
+            empty_registry.register_agent(AgentSpec(name=name, description=f"Agent {name}"))
         for name in ("I1", "I2"):
             empty_registry.register_instrument(
                 InstrumentSpec(

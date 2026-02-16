@@ -34,63 +34,63 @@ References:
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, List, Optional, Any, TYPE_CHECKING
-import random
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from bilancio.decision.protocols import VBTPricingModel
     from bilancio.engines.system import System
 
 from bilancio.core.ids import AgentId, InstrId
+from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
+from bilancio.dealer.metrics import RunMetrics
+from bilancio.dealer.models import (
+    DEFAULT_BUCKETS,
+    BucketConfig,
+    DealerState,
+    Ticket,
+    TicketId,
+    TraderState,
+    VBTState,
+)
+from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
+from bilancio.dealer.simulation import DealerRingConfig
+from bilancio.dealer.trading import TradeExecutor
+from bilancio.decision.profiles import TraderProfile, VBTProfile
 from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
-from bilancio.dealer.models import (
-    DealerState,
-    VBTState,
-    TraderState,
-    Ticket,
-    BucketConfig,
-    DEFAULT_BUCKETS,
-    TicketId,
+from bilancio.engines.dealer_sync import (
+    _capture_dealer_snapshots,
+    _capture_system_state_snapshot,
+    _capture_trader_snapshots,
+    _cleanup_orphaned_tickets,
+    _ingest_new_payables,
+    _pool_desk_cash,
+    _sync_dealer_vbt_cash_from_system,
+    _sync_dealer_vbt_cash_to_system,
+    _sync_payable_ownership,
+    _sync_trader_cash_from_system,
+    _sync_trader_cash_to_system,
+    _update_ticket_maturities,
+    _update_vbt_credit_mids,
 )
-from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
-from bilancio.dealer.trading import TradeExecutor
-from bilancio.dealer.simulation import DealerRingConfig
-from bilancio.dealer.metrics import RunMetrics
-from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
-from bilancio.decision.profiles import TraderProfile, VBTProfile
+from bilancio.engines.dealer_trades import (
+    _build_eligible_buyers,
+    _build_eligible_sellers,
+    _execute_interleaved_order_flow,
+)
 
 # --- Submodule imports (implementation) ---
 from bilancio.engines.dealer_wiring import (
-    _ensure_dealer_vbt_agents,
-    _convert_payables_to_tickets,
-    _initialize_market_makers,
-    _initialize_traders,
     _capture_initial_debt_to_money,
     _categorize_tickets_by_holder,
+    _convert_payables_to_tickets,
+    _ensure_dealer_vbt_agents,
     _initialize_balanced_market_makers,
-)
-from bilancio.engines.dealer_trades import (
-    _build_eligible_sellers,
-    _build_eligible_buyers,
-    _execute_interleaved_order_flow,
-)
-from bilancio.engines.dealer_sync import (
-    _sync_trader_cash_from_system,
-    _cleanup_orphaned_tickets,
-    _ingest_new_payables,
-    _update_ticket_maturities,
-    _pool_desk_cash,
-    _update_vbt_credit_mids,
-    _capture_dealer_snapshots,
-    _capture_trader_snapshots,
-    _capture_system_state_snapshot,
-    _sync_payable_ownership,
-    _sync_trader_cash_to_system,
-    _sync_dealer_vbt_cash_from_system,
-    _sync_dealer_vbt_cash_to_system,
+    _initialize_market_makers,
+    _initialize_traders,
 )
 
 
@@ -132,15 +132,15 @@ class DealerSubsystem:
         rng: Random number generator for order flow
     """
 
-    dealers: Dict[str, DealerState] = field(default_factory=dict)
-    vbts: Dict[str, VBTState] = field(default_factory=dict)
-    traders: Dict[AgentId, TraderState] = field(default_factory=dict)
-    tickets: Dict[TicketId, Ticket] = field(default_factory=dict)
-    ticket_to_payable: Dict[TicketId, InstrId] = field(default_factory=dict)
-    payable_to_ticket: Dict[InstrId, TicketId] = field(default_factory=dict)
-    bucket_configs: List[BucketConfig] = field(default_factory=lambda: list(DEFAULT_BUCKETS))
+    dealers: dict[str, DealerState] = field(default_factory=dict)
+    vbts: dict[str, VBTState] = field(default_factory=dict)
+    traders: dict[AgentId, TraderState] = field(default_factory=dict)
+    tickets: dict[TicketId, Ticket] = field(default_factory=dict)
+    ticket_to_payable: dict[TicketId, InstrId] = field(default_factory=dict)
+    payable_to_ticket: dict[InstrId, TicketId] = field(default_factory=dict)
+    bucket_configs: list[BucketConfig] = field(default_factory=lambda: list(DEFAULT_BUCKETS))
     params: KernelParams = field(default_factory=lambda: KernelParams())
-    executor: Optional[TradeExecutor] = None
+    executor: TradeExecutor | None = None
     enabled: bool = True
     rng: random.Random = field(default_factory=lambda: random.Random(42))
 
@@ -159,7 +159,7 @@ class DealerSubsystem:
     # Informedness parameters (Plan: credit-informed pricing)
     alpha_vbt: Decimal = Decimal(0)
     alpha_trader: Decimal = Decimal(0)
-    kappa: Optional[Decimal] = None
+    kappa: Decimal | None = None
 
     # VBT credit facility: inventory ratio below which VBT injects cash
     layoff_threshold: Decimal = Decimal("0.7")
@@ -172,13 +172,13 @@ class DealerSubsystem:
     vbt_profile: VBTProfile = field(default_factory=VBTProfile)
 
     # Initial spread per bucket (for spread_sensitivity computation)
-    initial_spread_by_bucket: Dict[str, Decimal] = field(default_factory=dict)
+    initial_spread_by_bucket: dict[str, Decimal] = field(default_factory=dict)
 
     # Base spread per bucket (for per-bucket daily VBT spread updates)
-    base_spread_by_bucket: Dict[str, Decimal] = field(default_factory=dict)
+    base_spread_by_bucket: dict[str, Decimal] = field(default_factory=dict)
 
     # VBT pricing model (optional — when None, uses inline logic for backward compat)
-    vbt_pricing_model: Optional["VBTPricingModel"] = None
+    vbt_pricing_model: VBTPricingModel | None = None
 
 
 def _get_agent_cash(system: System, agent_id: str) -> Decimal:
@@ -207,7 +207,7 @@ def _get_agent_cash(system: System, agent_id: str) -> Decimal:
     return total_cash
 
 
-def _assign_bucket(remaining_tau: int, bucket_configs: List[BucketConfig]) -> str:
+def _assign_bucket(remaining_tau: int, bucket_configs: list[BucketConfig]) -> str:
     """
     Assign a ticket to a maturity bucket based on remaining tau.
 
@@ -237,6 +237,7 @@ def _assign_bucket(remaining_tau: int, bucket_configs: List[BucketConfig]) -> st
 # ---------------------------------------------------------------------------
 # Public orchestration functions
 # ---------------------------------------------------------------------------
+
 
 def initialize_dealer_subsystem(
     system: System,
@@ -337,8 +338,10 @@ def initialize_dealer_subsystem(
 
     # Step 3: Initialize market makers
     _initialize_market_makers(
-        subsystem, dealer_config,
-        dealer_capital_per_bucket, vbt_capital_per_bucket,
+        subsystem,
+        dealer_config,
+        dealer_capital_per_bucket,
+        vbt_capital_per_bucket,
     )
 
     # Step 4: Initialize traders (households only)
@@ -404,6 +407,7 @@ def initialize_balanced_dealer_subsystem(
     # Compute shared kappa-informed prior (replaces alpha blending).
     # Both VBT and traders use the same prior to prevent adverse selection.
     from bilancio.dealer.priors import kappa_informed_prior
+
     if kappa is not None:
         shared_prior = kappa_informed_prior(kappa)
     else:
@@ -412,13 +416,18 @@ def initialize_balanced_dealer_subsystem(
     # Override risk_params from trader_profile and shared prior
     if risk_params is not None:
         from dataclasses import replace as dc_replace
-        overrides: dict = {"initial_prior": shared_prior}
+
         if trader_profile is not None:
-            overrides["base_risk_premium"] = trader_profile.base_risk_premium
-            overrides["buy_risk_premium"] = trader_profile.buy_risk_premium
-            overrides["buy_premium_multiplier"] = trader_profile.buy_premium_multiplier
-            overrides["default_observability"] = trader_profile.default_observability
-        risk_params = dc_replace(risk_params, **overrides)
+            risk_params = dc_replace(
+                risk_params,
+                initial_prior=shared_prior,
+                base_risk_premium=trader_profile.base_risk_premium,
+                buy_risk_premium=trader_profile.buy_risk_premium,
+                buy_premium_multiplier=trader_profile.buy_premium_multiplier,
+                default_observability=trader_profile.default_observability,
+            )
+        else:
+            risk_params = dc_replace(risk_params, initial_prior=shared_prior)
 
     subsystem = DealerSubsystem(
         bucket_configs=dealer_config.buckets,
@@ -440,6 +449,7 @@ def initialize_balanced_dealer_subsystem(
 
     # Construct VBT pricing model from config params
     from bilancio.decision.valuers import CreditAdjustedVBTPricing
+
     effective_vbt_profile = vbt_profile or VBTProfile()
     subsystem.vbt_pricing_model = CreditAdjustedVBTPricing(
         mid_sensitivity=effective_vbt_profile.mid_sensitivity,
@@ -454,7 +464,9 @@ def initialize_balanced_dealer_subsystem(
     _ensure_dealer_vbt_agents(system, dealer_config.buckets)
 
     # Initialize trade executor (with layoff threshold for VBT credit facility)
-    subsystem.executor = TradeExecutor(subsystem.params, subsystem.rng, layoff_threshold=subsystem.layoff_threshold)
+    subsystem.executor = TradeExecutor(
+        subsystem.params, subsystem.rng, layoff_threshold=subsystem.layoff_threshold
+    )
 
     # Step 1: Convert Payables to Tickets
     serial_counter = _convert_payables_to_tickets(subsystem, system, current_day)
@@ -462,25 +474,31 @@ def initialize_balanced_dealer_subsystem(
     # Categorize tickets by holder type
     bucket_names = [bc.name for bc in dealer_config.buckets]
     vbt_tickets, dealer_tickets, _ = _categorize_tickets_by_holder(
-        subsystem, bucket_names,
+        subsystem,
+        bucket_names,
     )
 
     # Step 2: Initialize VBT and Dealer states per bucket (with inventory)
     _initialize_balanced_market_makers(
-        subsystem, system, dealer_config,
-        vbt_tickets, dealer_tickets,
+        subsystem,
+        system,
+        dealer_config,
+        vbt_tickets,
+        dealer_tickets,
         shared_prior=shared_prior,
     )
 
     # Step 3: Initialize traders (regular household agents, skip VBT/Dealer/big)
     _initialize_traders(
-        subsystem, system,
+        subsystem,
+        system,
         skip_prefixes=("vbt_", "dealer_", "big_"),
     )
 
     # Step 4: Capture initial debt-to-money ratio
     _capture_initial_debt_to_money(
-        subsystem, system,
+        subsystem,
+        system,
         exclude_kinds=("dealer", "vbt"),
         exclude_prefixes=("vbt_", "dealer_", "big_"),
     )
@@ -492,10 +510,8 @@ def initialize_balanced_dealer_subsystem(
 
 
 def run_dealer_trading_phase(
-    subsystem: DealerSubsystem,
-    system: System,
-    current_day: int
-) -> List[dict[str, object]]:
+    subsystem: DealerSubsystem, system: System, current_day: int
+) -> list[dict[str, object]]:
     """
     Execute one dealer trading phase for the current day.
 
@@ -553,7 +569,7 @@ def run_dealer_trading_phase(
     if not subsystem.enabled:
         return []
 
-    events: List[dict[str, object]] = []
+    events: list[dict[str, object]] = []
 
     # Phase 0.5: Clean up tickets whose payables were removed
     _cleanup_orphaned_tickets(subsystem, system)
@@ -592,8 +608,12 @@ def run_dealer_trading_phase(
 
     # Phase 4: Interleaved order flow in batches
     _execute_interleaved_order_flow(
-        subsystem, system, current_day,
-        eligible_sellers, eligible_buyers, events,
+        subsystem,
+        system,
+        current_day,
+        eligible_sellers,
+        eligible_buyers,
+        events,
     )
 
     return events
@@ -602,7 +622,7 @@ def run_dealer_trading_phase(
 def compute_passive_pnl(
     subsystem: DealerSubsystem,
     system: System,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Compute PnL for passive dealer entities (hold-only, no trading).
 
     In passive mode, dealers and VBTs hold their initial inventory but never
@@ -623,8 +643,8 @@ def compute_passive_pnl(
     Returns:
         Dictionary compatible with dealer_metrics.json format (summary dict)
     """
-    pnl_by_bucket: Dict[str, float] = {}
-    return_by_bucket: Dict[str, float] = {}
+    pnl_by_bucket: dict[str, float] = {}
+    return_by_bucket: dict[str, float] = {}
     total_pnl = Decimal(0)
     total_initial_equity = Decimal(0)
 
