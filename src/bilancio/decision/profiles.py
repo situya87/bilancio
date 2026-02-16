@@ -28,7 +28,9 @@ class TraderProfile:
         if not (Decimal("0") <= self.buy_reserve_fraction <= Decimal("1")):
             raise ValueError("buy_reserve_fraction must be between 0 and 1")
         if self.trading_motive not in ("liquidity_only", "liquidity_then_earning", "unrestricted"):
-            raise ValueError("trading_motive must be one of: liquidity_only, liquidity_then_earning, unrestricted")
+            raise ValueError(
+                "trading_motive must be one of: liquidity_only, liquidity_then_earning, unrestricted"
+            )
 
     @property
     def base_risk_premium(self) -> Decimal:

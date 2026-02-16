@@ -1,12 +1,10 @@
 """Fixtures for performance benchmarks."""
 
-from decimal import Decimal
-
 import pytest
 
 from bilancio.config.apply import apply_to_system
-from bilancio.config.models import RingExplorerGeneratorConfig, ScenarioConfig
 from bilancio.config.loaders import preprocess_config
+from bilancio.config.models import RingExplorerGeneratorConfig, ScenarioConfig
 from bilancio.engines.system import System
 from bilancio.scenarios.ring_explorer import compile_ring_explorer
 

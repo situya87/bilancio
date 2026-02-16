@@ -17,6 +17,7 @@ class AtomicValue(Protocol):
 @dataclass
 class Money:
     """Represents a monetary amount with currency."""
+
     amount: Decimal
     currency: str
 
@@ -29,6 +30,7 @@ class Money:
 @dataclass
 class Quantity:
     """Represents a quantity with a unit."""
+
     value: float
     unit: str
 
@@ -36,5 +38,6 @@ class Quantity:
 @dataclass
 class Rate:
     """Represents a rate with a basis."""
+
     value: Decimal
     basis: str

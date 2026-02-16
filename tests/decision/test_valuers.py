@@ -4,12 +4,11 @@ from decimal import Decimal
 
 import pytest
 
+from bilancio.dealer.models import Ticket
+from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
 from bilancio.decision.protocols import InstrumentValuer
 from bilancio.decision.valuers import CoverageRatioValuer, EVHoldValuer
-from bilancio.dealer.models import Ticket
-from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
 from bilancio.information.estimates import Estimate
-
 
 # ── Fixtures ───────────────────────────────────────────────────────
 
@@ -171,7 +170,8 @@ class TestRiskAssessorDelegation:
             rating_registry={"firm_1": Decimal("0.05")},
         )
         assessor = RiskAssessor(
-            RiskAssessmentParams(), instrument_valuer=coverage,
+            RiskAssessmentParams(),
+            instrument_valuer=coverage,
         )
         # Should use coverage ratio: (1 - 0.05) * 100 = 95
         assert assessor.expected_value(ticket, 5) == Decimal("95")
@@ -182,7 +182,8 @@ class TestRiskAssessorDelegation:
             rating_registry={"firm_1": Decimal("0.05")},
         )
         assessor = RiskAssessor(
-            RiskAssessmentParams(), instrument_valuer=coverage,
+            RiskAssessmentParams(),
+            instrument_valuer=coverage,
         )
         est = assessor.expected_value_detail(ticket, 5)
         assert isinstance(est, Estimate)
@@ -196,14 +197,21 @@ class TestRiskAssessorDelegation:
             rating_registry={"firm_1": Decimal("0.01")},  # nearly risk-free
         )
         assessor = RiskAssessor(
-            RiskAssessmentParams(), instrument_valuer=coverage,
+            RiskAssessmentParams(),
+            instrument_valuer=coverage,
         )
         # EV = (1 - 0.01) * 100 = 99. Bid at 0.80 → offer = 80 < 99
-        assert assessor.should_sell(
-            ticket, dealer_bid=Decimal("0.80"), current_day=5,
-            trader_cash=Decimal("50"), trader_shortfall=Decimal("0"),
-            trader_asset_value=Decimal("100"),
-        ) is False
+        assert (
+            assessor.should_sell(
+                ticket,
+                dealer_bid=Decimal("0.80"),
+                current_day=5,
+                trader_cash=Decimal("50"),
+                trader_shortfall=Decimal("0"),
+                trader_asset_value=Decimal("100"),
+            )
+            is False
+        )
 
     def test_should_buy_uses_delegated_valuer(self, ticket):
         """should_buy() sees the delegated expected value."""
@@ -212,14 +220,21 @@ class TestRiskAssessorDelegation:
             rating_registry={"firm_1": Decimal("0.50")},  # very risky
         )
         assessor = RiskAssessor(
-            RiskAssessmentParams(), instrument_valuer=coverage,
+            RiskAssessmentParams(),
+            instrument_valuer=coverage,
         )
         # EV = (1 - 0.50) * 100 = 50. Ask at 0.90 → cost = 90 > 50
-        assert assessor.should_buy(
-            ticket, dealer_ask=Decimal("0.90"), current_day=5,
-            trader_cash=Decimal("100"), trader_shortfall=Decimal("0"),
-            trader_asset_value=Decimal("100"),
-        ) is False
+        assert (
+            assessor.should_buy(
+                ticket,
+                dealer_ask=Decimal("0.90"),
+                current_day=5,
+                trader_cash=Decimal("100"),
+                trader_shortfall=Decimal("0"),
+                trader_asset_value=Decimal("100"),
+            )
+            is False
+        )
 
     def test_backward_compat_no_valuer(self, params, ticket):
         """RiskAssessor with no valuer behaves exactly as before."""

@@ -1,17 +1,16 @@
 """Tests for dealer ring HTML report generation."""
 
-import pytest
+import tempfile
 from decimal import Decimal
 from pathlib import Path
-import tempfile
 
 from bilancio.dealer import (
     DealerRingConfig,
     DealerRingSimulation,
     Ticket,
     TraderState,
-    generate_dealer_ring_html,
     export_dealer_ring_html,
+    generate_dealer_ring_html,
 )
 
 
@@ -89,6 +88,7 @@ class TestReportGeneration:
 
         # Manually trigger a trade by executing sell
         from bilancio.dealer import recompute_dealer_state
+
         dealer = sim.dealers["long"]
         vbt = sim.vbts["long"]
         recompute_dealer_state(dealer, vbt, sim.params)

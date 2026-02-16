@@ -1,15 +1,16 @@
 """Unit tests for the decision module (TraderProfile and VBTProfile)."""
 
-import pytest
 from decimal import Decimal
 
-from bilancio.decision.profiles import TraderProfile, VBTProfile
-from bilancio.decision.presets import BASELINE, CAUTIOUS, AGGRESSIVE
+import pytest
 
+from bilancio.decision.presets import AGGRESSIVE, BASELINE, CAUTIOUS
+from bilancio.decision.profiles import TraderProfile, VBTProfile
 
 # ---------------------------------------------------------------------------
 # TraderProfile defaults (backward compatibility)
 # ---------------------------------------------------------------------------
+
 
 class TestTraderProfileDefaults:
     """Default TraderProfile must reproduce current hardcoded behavior."""
@@ -43,8 +44,8 @@ class TestTraderProfileDefaults:
 # TraderProfile computed properties
 # ---------------------------------------------------------------------------
 
-class TestTraderProfileProperties:
 
+class TestTraderProfileProperties:
     def test_risk_aversion_seller_premium_always_zero(self):
         tp = TraderProfile(risk_aversion=Decimal("0.5"))
         assert tp.base_risk_premium == Decimal("0")  # Always 0 regardless of risk aversion
@@ -92,8 +93,8 @@ class TestTraderProfileProperties:
 # TraderProfile validation
 # ---------------------------------------------------------------------------
 
-class TestTraderProfileValidation:
 
+class TestTraderProfileValidation:
     def test_planning_horizon_too_low(self):
         with pytest.raises(ValueError, match="planning_horizon"):
             TraderProfile(planning_horizon=0)
@@ -115,8 +116,8 @@ class TestTraderProfileValidation:
 # TraderProfile immutability
 # ---------------------------------------------------------------------------
 
-class TestTraderProfileFrozen:
 
+class TestTraderProfileFrozen:
     def test_frozen(self):
         tp = TraderProfile()
         with pytest.raises(AttributeError):
@@ -127,8 +128,8 @@ class TestTraderProfileFrozen:
 # VBTProfile
 # ---------------------------------------------------------------------------
 
-class TestVBTProfileDefaults:
 
+class TestVBTProfileDefaults:
     def test_default_mid_sensitivity(self):
         vp = VBTProfile()
         assert vp.mid_sensitivity == Decimal("1.0")
@@ -152,8 +153,8 @@ class TestVBTProfileDefaults:
 # Presets
 # ---------------------------------------------------------------------------
 
-class TestPresets:
 
+class TestPresets:
     def test_baseline_is_default(self):
         tp, vp = BASELINE
         assert tp == TraderProfile()

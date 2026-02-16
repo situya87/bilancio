@@ -15,33 +15,31 @@ in run_dealer_trading_phase(). These tests verify:
   3. A disabled subsystem preserves cash after the full trading+sync cycle.
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.engines.system import System
+from bilancio.dealer.models import DEFAULT_BUCKETS
+from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.domain.agents.bank import Bank
-from bilancio.domain.agents.household import Household
 from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.domain.agents.household import Household
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.dealer_integration import (
-    DealerSubsystem,
+    _get_agent_cash,
     initialize_dealer_subsystem,
     run_dealer_trading_phase,
     sync_dealer_to_system,
-    _get_agent_cash,
 )
 from bilancio.engines.dealer_sync import (
     _sync_trader_cash_from_system,
     _sync_trader_cash_to_system,
 )
-from bilancio.dealer.simulation import DealerRingConfig
-from bilancio.dealer.models import DEFAULT_BUCKETS
-
+from bilancio.engines.system import System
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def create_test_system_with_payables() -> System:
     """Create a minimal test system with agents, cash, and payables."""

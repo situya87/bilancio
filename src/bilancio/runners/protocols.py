@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol, Optional, Dict, Any, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-from bilancio.runners.models import RunOptions, ExecutionResult
-from bilancio.storage.models import RunStatus, RunResult
+from bilancio.runners.models import ExecutionResult, RunOptions
+from bilancio.storage.models import RunResult, RunStatus
 
 
 @runtime_checkable
@@ -19,7 +19,7 @@ class SimulationExecutor(Protocol):
 
     def execute(
         self,
-        scenario_config: Dict[str, Any],
+        scenario_config: dict[str, Any],
         run_id: str,
         output_dir: Path,
         options: RunOptions,
@@ -42,7 +42,7 @@ class SimulationExecutor(Protocol):
 class JobExecutor(Protocol):
     """Protocol for async/distributed job execution (future use)."""
 
-    def submit(self, scenario_config: Dict[str, Any], run_id: str) -> str:
+    def submit(self, scenario_config: dict[str, Any], run_id: str) -> str:
         """Submit job, return job_id."""
         ...
 
@@ -50,7 +50,7 @@ class JobExecutor(Protocol):
         """Check job status."""
         ...
 
-    def result(self, job_id: str) -> Optional[RunResult]:
+    def result(self, job_id: str) -> RunResult | None:
         """Get result if completed."""
         ...
 

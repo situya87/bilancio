@@ -7,9 +7,7 @@ Covers:
 """
 
 import json
-import tempfile
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 
@@ -23,10 +21,10 @@ from bilancio.dealer.models import (
     VBTState,
 )
 
-
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
 
 def _ticket(
     tid: str = "t1",
@@ -465,8 +463,13 @@ class TestEventLog:
     def test_log_trade_indexes_by_day(self):
         log = EventLog()
         log.log_trade(
-            day=3, side="SELL", trader_id="t", ticket_id="tk",
-            bucket="mid", price=Decimal(1), is_passthrough=True,
+            day=3,
+            side="SELL",
+            trader_id="t",
+            ticket_id="tk",
+            bucket="mid",
+            price=Decimal(1),
+            is_passthrough=True,
         )
         assert 3 in log.trades_by_day
         assert len(log.trades_by_day[3]) == 1
@@ -474,8 +477,13 @@ class TestEventLog:
     def test_log_trade_passthrough(self):
         log = EventLog()
         log.log_trade(
-            day=1, side="BUY", trader_id="t", ticket_id="tk",
-            bucket="short", price=Decimal("0.80"), is_passthrough=True,
+            day=1,
+            side="BUY",
+            trader_id="t",
+            ticket_id="tk",
+            bucket="short",
+            price=Decimal("0.80"),
+            is_passthrough=True,
         )
         assert log.events[0]["is_passthrough"] is True
 
@@ -589,9 +597,13 @@ class TestEventLog:
     def test_log_default_indexes_by_day(self):
         log = EventLog()
         log.log_default(
-            day=3, issuer_id="iss", recovery_rate=Decimal(0),
-            total_due=Decimal(100), total_paid=Decimal(0),
-            n_tickets=1, bucket="short",
+            day=3,
+            issuer_id="iss",
+            recovery_rate=Decimal(0),
+            total_due=Decimal(100),
+            total_paid=Decimal(0),
+            n_tickets=1,
+            bucket="short",
         )
         assert 3 in log.defaults_by_day
         assert len(log.defaults_by_day[3]) == 1
@@ -647,18 +659,26 @@ class TestEventLog:
         """Recovery 0 => loss rate 1."""
         log = EventLog()
         log.log_default(
-            day=3, issuer_id="iss", recovery_rate=Decimal(0),
-            total_due=Decimal(100), total_paid=Decimal(0),
-            n_tickets=1, bucket="short",
+            day=3,
+            issuer_id="iss",
+            recovery_rate=Decimal(0),
+            total_due=Decimal(100),
+            total_paid=Decimal(0),
+            n_tickets=1,
+            bucket="short",
         )
         assert log.get_bucket_loss_rate(day=3, bucket_id="short") == Decimal(1)
 
     def test_get_bucket_loss_rate_partial_recovery(self):
         log = EventLog()
         log.log_default(
-            day=3, issuer_id="iss", recovery_rate=Decimal("0.40"),
-            total_due=Decimal(100), total_paid=Decimal(40),
-            n_tickets=1, bucket="short",
+            day=3,
+            issuer_id="iss",
+            recovery_rate=Decimal("0.40"),
+            total_due=Decimal(100),
+            total_paid=Decimal(40),
+            n_tickets=1,
+            bucket="short",
         )
         # loss = 100 - 40 = 60, face = 100, rate = 0.60
         assert log.get_bucket_loss_rate(day=3, bucket_id="short") == Decimal("0.6")
@@ -666,18 +686,26 @@ class TestEventLog:
     def test_get_bucket_loss_rate_wrong_bucket(self):
         log = EventLog()
         log.log_default(
-            day=3, issuer_id="iss", recovery_rate=Decimal(0),
-            total_due=Decimal(100), total_paid=Decimal(0),
-            n_tickets=1, bucket="short",
+            day=3,
+            issuer_id="iss",
+            recovery_rate=Decimal(0),
+            total_due=Decimal(100),
+            total_paid=Decimal(0),
+            n_tickets=1,
+            bucket="short",
         )
         assert log.get_bucket_loss_rate(day=3, bucket_id="mid") == Decimal(0)
 
     def test_get_bucket_loss_rate_wrong_day(self):
         log = EventLog()
         log.log_default(
-            day=3, issuer_id="iss", recovery_rate=Decimal(0),
-            total_due=Decimal(100), total_paid=Decimal(0),
-            n_tickets=1, bucket="short",
+            day=3,
+            issuer_id="iss",
+            recovery_rate=Decimal(0),
+            total_due=Decimal(100),
+            total_paid=Decimal(0),
+            n_tickets=1,
+            bucket="short",
         )
         assert log.get_bucket_loss_rate(day=4, bucket_id="short") == Decimal(0)
 
@@ -685,15 +713,23 @@ class TestEventLog:
         log = EventLog()
         # default 1: due 100, paid 60 => loss 40
         log.log_default(
-            day=3, issuer_id="A", recovery_rate=Decimal("0.60"),
-            total_due=Decimal(100), total_paid=Decimal(60),
-            n_tickets=1, bucket="short",
+            day=3,
+            issuer_id="A",
+            recovery_rate=Decimal("0.60"),
+            total_due=Decimal(100),
+            total_paid=Decimal(60),
+            n_tickets=1,
+            bucket="short",
         )
         # default 2: due 200, paid 100 => loss 100
         log.log_default(
-            day=3, issuer_id="B", recovery_rate=Decimal("0.50"),
-            total_due=Decimal(200), total_paid=Decimal(100),
-            n_tickets=2, bucket="short",
+            day=3,
+            issuer_id="B",
+            recovery_rate=Decimal("0.50"),
+            total_due=Decimal(200),
+            total_paid=Decimal(100),
+            n_tickets=2,
+            bucket="short",
         )
         # total_loss = 40 + 100 = 140, total_face = 100 + 200 = 300
         # loss_rate = 140/300
@@ -705,12 +741,22 @@ class TestEventLog:
     def test_get_trades_for_day(self):
         log = EventLog()
         log.log_trade(
-            day=1, side="BUY", trader_id="t", ticket_id="tk1",
-            bucket="short", price=Decimal(1), is_passthrough=False,
+            day=1,
+            side="BUY",
+            trader_id="t",
+            ticket_id="tk1",
+            bucket="short",
+            price=Decimal(1),
+            is_passthrough=False,
         )
         log.log_trade(
-            day=2, side="SELL", trader_id="t", ticket_id="tk2",
-            bucket="short", price=Decimal(1), is_passthrough=False,
+            day=2,
+            side="SELL",
+            trader_id="t",
+            ticket_id="tk2",
+            bucket="short",
+            price=Decimal(1),
+            is_passthrough=False,
         )
         assert len(log.get_trades_for_day(1)) == 1
         assert len(log.get_trades_for_day(2)) == 1
@@ -719,9 +765,13 @@ class TestEventLog:
     def test_get_defaults_for_day(self):
         log = EventLog()
         log.log_default(
-            day=3, issuer_id="iss", recovery_rate=Decimal(0),
-            total_due=Decimal(50), total_paid=Decimal(0),
-            n_tickets=1, bucket="short",
+            day=3,
+            issuer_id="iss",
+            recovery_rate=Decimal(0),
+            total_due=Decimal(50),
+            total_paid=Decimal(0),
+            n_tickets=1,
+            bucket="short",
         )
         assert len(log.get_defaults_for_day(3)) == 1
         assert len(log.get_defaults_for_day(4)) == 0
@@ -736,8 +786,13 @@ class TestEventLog:
         log = EventLog()
         log.log_day_start(day=1)
         log.log_trade(
-            day=1, side="BUY", trader_id="t", ticket_id="tk",
-            bucket="short", price=Decimal(1), is_passthrough=False,
+            day=1,
+            side="BUY",
+            trader_id="t",
+            ticket_id="tk",
+            bucket="short",
+            price=Decimal(1),
+            is_passthrough=False,
         )
         log.log_day_start(day=2)
         assert len(log.get_events_for_day(1)) == 2
@@ -760,8 +815,13 @@ class TestEventLog:
         log = EventLog()
         log.log_day_start(day=1)
         log.log_trade(
-            day=1, side="BUY", trader_id="t", ticket_id="tk",
-            bucket="short", price=Decimal("0.90"), is_passthrough=False,
+            day=1,
+            side="BUY",
+            trader_id="t",
+            ticket_id="tk",
+            bucket="short",
+            price=Decimal("0.90"),
+            is_passthrough=False,
         )
         out = tmp_path / "events.jsonl"
         log.to_jsonl(str(out))
@@ -790,12 +850,17 @@ class TestEventLog:
     # --- to_dataframe ---------------------------------------------------
 
     def test_to_dataframe(self):
-        pd = pytest.importorskip("pandas")
+        pytest.importorskip("pandas")
         log = EventLog()
         log.log_day_start(day=1)
         log.log_trade(
-            day=1, side="BUY", trader_id="t", ticket_id="tk",
-            bucket="short", price=Decimal(1), is_passthrough=False,
+            day=1,
+            side="BUY",
+            trader_id="t",
+            ticket_id="tk",
+            bucket="short",
+            price=Decimal(1),
+            is_passthrough=False,
         )
         df = log.to_dataframe()
         assert len(df) == 2
@@ -804,7 +869,7 @@ class TestEventLog:
         assert df.iloc[1]["kind"] == "trade"
 
     def test_to_dataframe_empty(self):
-        pd = pytest.importorskip("pandas")
+        pytest.importorskip("pandas")
         log = EventLog()
         df = log.to_dataframe()
         assert len(df) == 0
@@ -815,9 +880,13 @@ class TestEventLog:
         log1 = EventLog()
         log2 = EventLog()
         log1.log_default(
-            day=1, issuer_id="iss", recovery_rate=Decimal(0),
-            total_due=Decimal(100), total_paid=Decimal(0),
-            n_tickets=1, bucket="short",
+            day=1,
+            issuer_id="iss",
+            recovery_rate=Decimal(0),
+            total_due=Decimal(100),
+            total_paid=Decimal(0),
+            n_tickets=1,
+            bucket="short",
         )
         assert len(log2.defaults_by_day) == 0
         assert len(log2.trades_by_day) == 0
@@ -829,15 +898,24 @@ class TestEventLog:
         log = EventLog()
         log.log_day_start(day=1)
         log.log_trade(
-            day=1, side="BUY", trader_id="t", ticket_id="tk",
-            bucket="short", price=Decimal(1), is_passthrough=False,
+            day=1,
+            side="BUY",
+            trader_id="t",
+            ticket_id="tk",
+            bucket="short",
+            price=Decimal(1),
+            is_passthrough=False,
         )
         log.log_settlement(day=1, issuer_id="iss", total_paid=Decimal(100), n_tickets=1)
         log.log_day_start(day=2)
         log.log_default(
-            day=2, issuer_id="iss2", recovery_rate=Decimal(0),
-            total_due=Decimal(50), total_paid=Decimal(0),
-            n_tickets=1, bucket="mid",
+            day=2,
+            issuer_id="iss2",
+            recovery_rate=Decimal(0),
+            total_due=Decimal(50),
+            total_paid=Decimal(0),
+            n_tickets=1,
+            bucket="mid",
         )
         all_events = log.get_all_events()
         assert len(all_events) == 5
@@ -850,8 +928,13 @@ class TestEventLog:
         log = EventLog()
         for i in range(5):
             log.log_trade(
-                day=3, side="BUY", trader_id=f"t{i}", ticket_id=f"tk{i}",
-                bucket="short", price=Decimal(1), is_passthrough=False,
+                day=3,
+                side="BUY",
+                trader_id=f"t{i}",
+                ticket_id=f"tk{i}",
+                bucket="short",
+                price=Decimal(1),
+                is_passthrough=False,
             )
         assert len(log.trades_by_day[3]) == 5
         assert len(log.get_trades_for_day(3)) == 5
@@ -861,7 +944,8 @@ class TestEventLog:
     def test_serialize_deeply_nested(self):
         log = EventLog()
         log.log(
-            "complex", day=1,
+            "complex",
+            day=1,
             data={"a": [Decimal(1), {"b": Decimal(2)}]},
         )
         e = log.events[0]

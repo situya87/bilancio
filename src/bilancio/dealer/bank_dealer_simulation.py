@@ -25,42 +25,40 @@ References:
 - docs/plans/banks_dealers_integration.md
 """
 
-from dataclasses import dataclass, field
-from decimal import Decimal, ROUND_HALF_UP
 import random
-from copy import deepcopy
+from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
+from bilancio.banking.pricing_kernel import (
+    PricingParams,
+    compute_inventory,
+    compute_quotes,
+)
 from bilancio.core.ids import AgentId, new_id
 
-from .models import (
-    Ticket, DealerState, VBTState, TraderState,
-    BucketConfig, DEFAULT_BUCKETS, TicketId,
-)
-from .kernel import KernelParams, recompute_dealer_state
-from .trading import TradeExecutor
-from .events import EventLog
-from .risk_assessment import RiskAssessor, RiskAssessmentParams
 from .bank_integration import (
     BankAwareTraderState,
     BankDealerRingConfig,
     IntegratedBankState,
     InterbankLedger,
-    TraderLoan,
-    DepositCohort,
     accrue_deposit_interest,
-    settle_interbank_positions,
-    resolve_default,
     compute_borrow_vs_sell_decision,
     compute_yield_sell_decision,
-    compute_yield_buy_decision,
+    resolve_default,
+    settle_interbank_positions,
 )
-from bilancio.banking.pricing_kernel import (
-    PricingParams,
-    compute_quotes,
-    compute_inventory,
+from .events import EventLog
+from .kernel import KernelParams, recompute_dealer_state
+from .models import (
+    DEFAULT_BUCKETS,
+    DealerState,
+    Ticket,
+    TicketId,
+    VBTState,
 )
-
+from .risk_assessment import RiskAssessmentParams, RiskAssessor
+from .trading import TradeExecutor
 
 # Cash precision for settlement calculations
 CASH_PRECISION = Decimal("0.000001")
@@ -73,13 +71,14 @@ class BankDealerDaySnapshot:
 
     Extended from DaySnapshot to include bank states.
     """
+
     day: int
     dealers: dict[str, dict[str, Any]]  # bucket_id -> dealer state dict
-    vbts: dict[str, dict[str, Any]]     # bucket_id -> VBT state dict
+    vbts: dict[str, dict[str, Any]]  # bucket_id -> VBT state dict
     traders: dict[str, dict[str, Any]]  # agent_id -> bank-aware trader state dict
-    banks: dict[str, dict[str, Any]]    # bank_id -> bank state dict
+    banks: dict[str, dict[str, Any]]  # bank_id -> bank state dict
     tickets: dict[str, dict[str, Any]]  # ticket_id -> ticket dict
-    events: list[dict[str, Any]]        # Events for this day only
+    events: list[dict[str, Any]]  # Events for this day only
 
 
 class BankDealerSimulation:
@@ -182,12 +181,14 @@ class BankDealerSimulation:
             self.dealers[bucket_id] = dealer
 
             # Create VBT
-            M, O = self.vbt_anchors.get(bucket_id, (Decimal(1), Decimal("0.30")))
+            mid_anchor, spread_anchor = self.vbt_anchors.get(
+                bucket_id, (Decimal(1), Decimal("0.30"))
+            )
             vbt = VBTState(
                 bucket_id=bucket_id,
                 agent_id=new_id(f"vbt_{bucket_id}"),
-                M=M,
-                O=O,
+                M=mid_anchor,
+                O=spread_anchor,
                 phi_M=self.phi_M,
                 phi_O=self.phi_O,
                 O_min=Decimal(0),
@@ -231,18 +232,21 @@ class BankDealerSimulation:
         """
         # Compute total deposits from traders at this bank
         total_deposits = sum(
-            t.deposit_balance for t in self.traders.values()
-            if t.bank_id == bank.bank_id
+            t.deposit_balance for t in self.traders.values() if t.bank_id == bank.bank_id
         )
 
         # Compute targets from config ratios
-        reserve_target = int(
-            total_deposits * self.config.reserve_target_ratio
-        ) if total_deposits > 0 else self.config.bank_ticket_size
+        reserve_target = (
+            int(total_deposits * self.config.reserve_target_ratio)
+            if total_deposits > 0
+            else self.config.bank_ticket_size
+        )
 
-        symmetric_capacity = int(
-            reserve_target * self.config.symmetric_capacity_ratio
-        ) if reserve_target > 0 else self.config.bank_ticket_size
+        symmetric_capacity = (
+            int(reserve_target * self.config.symmetric_capacity_ratio)
+            if reserve_target > 0
+            else self.config.bank_ticket_size
+        )
 
         return PricingParams(
             reserve_remuneration_rate=self.config.cb_deposit_rate,
@@ -257,7 +261,7 @@ class BankDealerSimulation:
 
     def _update_bank_rates(self) -> None:
         """Update all bank rates based on current inventory."""
-        for bank_id, bank in self.banks.items():
+        for _bank_id, bank in self.banks.items():
             # Get pricing params
             params = self._get_bank_pricing_params(bank)
 
@@ -527,10 +531,7 @@ class BankDealerSimulation:
                 continue
 
             # Find loans due today
-            loans_due = [
-                loan for loan in trader.loans
-                if loan.maturity_day == self.day
-            ]
+            loans_due = [loan for loan in trader.loans if loan.maturity_day == self.day]
 
             for loan in loans_due:
                 repayment = loan.repayment_amount
@@ -776,7 +777,7 @@ class BankDealerSimulation:
 
         bucket_id = ticket.bucket_id
         dealer = self.dealers[bucket_id]
-        vbt = self.vbts[bucket_id]
+        self.vbts[bucket_id]
 
         # Check affordability
         if buyer.deposit_balance < dealer.ask:
@@ -784,8 +785,7 @@ class BankDealerSimulation:
 
         # Risk-based decisions
         asset_value = sum(
-            (self.risk_assessor.expected_value(t, self.day)
-            for t in seller.tickets_owned),
+            (self.risk_assessor.expected_value(t, self.day) for t in seller.tickets_owned),
             Decimal(0),
         )
         if not self.risk_assessor.should_sell(
@@ -799,8 +799,7 @@ class BankDealerSimulation:
             return False
 
         buyer_asset_value = sum(
-            (self.risk_assessor.expected_value(t, self.day)
-            for t in buyer.tickets_owned),
+            (self.risk_assessor.expected_value(t, self.day) for t in buyer.tickets_owned),
             Decimal(0),
         )
         if not self.risk_assessor.should_buy(
@@ -828,7 +827,7 @@ class BankDealerSimulation:
         buyer.tickets_owned.append(ticket)
 
         # Dealer spread
-        dealer.cash += (buy_price - sell_price)
+        dealer.cash += buy_price - sell_price
 
         # Interbank tracking (if different banks)
         if seller.bank_id != buyer.bank_id:
@@ -914,8 +913,7 @@ class BankDealerSimulation:
 
         # Risk-based sell decision
         asset_value = sum(
-            (self.risk_assessor.expected_value(t, self.day)
-            for t in trader.tickets_owned),
+            (self.risk_assessor.expected_value(t, self.day) for t in trader.tickets_owned),
             Decimal(0),
         )
         if not self.risk_assessor.should_sell(
@@ -994,8 +992,7 @@ class BankDealerSimulation:
 
         # Risk-based buy check
         buyer_asset_value = sum(
-            (self.risk_assessor.expected_value(t, self.day)
-            for t in trader.tickets_owned),
+            (self.risk_assessor.expected_value(t, self.day) for t in trader.tickets_owned),
             Decimal(0),
         )
         if not self.risk_assessor.should_buy(
@@ -1148,7 +1145,7 @@ class BankDealerSimulation:
         # Check if issuer can pay
         if issuer.deposit_balance >= total_due:
             # Full settlement
-            recovery_rate = Decimal(1)
+            Decimal(1)
             issuer.withdraw_deposits(total_due)
 
             # Pay holders
@@ -1300,9 +1297,7 @@ class BankDealerSimulation:
 
     def _settle_interbank(self) -> None:
         """Settle interbank positions at end of day."""
-        bank_reserves = {
-            bank_id: bank.reserves for bank_id, bank in self.banks.items()
-        }
+        bank_reserves = {bank_id: bank.reserves for bank_id, bank in self.banks.items()}
 
         updated_reserves, results, cb_borrowing = settle_interbank_positions(
             ledger=self.interbank_ledger,
@@ -1351,9 +1346,6 @@ class BankDealerSimulation:
         """Update VBT anchors based on loss rates."""
         for bucket_id in self.vbts:
             vbt = self.vbts[bucket_id]
-
-            M_old = vbt.M
-            O_old = vbt.O
 
             loss_rate = self.events.get_bucket_loss_rate(self.day, bucket_id)
 
@@ -1456,14 +1448,11 @@ class BankDealerSimulation:
         total_cb = sum(bank.total_cb_borrowing for bank in self.banks.values())
 
         # Compute average recovery from events
-        default_events = [
-            e for e in self.events.events
-            if e.get("type") == "trader_default"
-        ]
+        default_events = [e for e in self.events.events if e.get("type") == "trader_default"]
         if default_events:
-            avg_recovery = sum(
-                e.get("recovery_rate", 0) for e in default_events
-            ) / len(default_events)
+            avg_recovery = sum(e.get("recovery_rate", 0) for e in default_events) / len(
+                default_events
+            )
         else:
             avg_recovery = 1.0
 

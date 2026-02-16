@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import csv
 import json
+from collections.abc import Iterator
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List
+from typing import Any
 
 
 def _to_decimal(val: object) -> Decimal:
@@ -28,7 +29,7 @@ def _to_decimal(val: object) -> Decimal:
         return Decimal("0")
 
 
-def read_events_jsonl(path: Path | str) -> Iterator[Dict[str, Any]]:
+def read_events_jsonl(path: Path | str) -> Iterator[dict[str, Any]]:
     """Yield events (dict) from a JSONL file in recorded order.
 
     Ensures numeric fields like amount/day/due_day are normalized to Python types
@@ -56,17 +57,16 @@ def read_events_jsonl(path: Path | str) -> Iterator[Dict[str, Any]]:
             yield evt
 
 
-def read_balances_csv(path: Path | str) -> List[Dict[str, Any]]:
+def read_balances_csv(path: Path | str) -> list[dict[str, Any]]:
     """Read balances CSV produced by export.writers.write_balances_csv.
 
     Returns a list of dict rows. Numeric fields remain as strings unless parsed explicitly
     by downstream code. Rows with ad-hoc summary fields (e.g., item_type) are preserved.
     """
     p = Path(path)
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     with p.open("r", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             rows.append(row)
     return rows
-

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from bilancio.analysis.strategy_outcomes import (
     STRATEGIES,
@@ -13,7 +13,6 @@ from bilancio.analysis.strategy_outcomes import (
     build_strategy_outcomes_overall,
     run_strategy_analysis,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build a minimal experiment directory tree on disk
@@ -26,8 +25,7 @@ COMPARISON_CSV_HEADER = (
 )
 
 REPAYMENT_EVENTS_HEADER = (
-    "agent_id,instrument_id,face_value,due_day,outcome,strategy,"
-    "buy_count,sell_count\n"
+    "agent_id,instrument_id,face_value,due_day,outcome,strategy,buy_count,sell_count\n"
 )
 
 
@@ -339,9 +337,7 @@ class TestBuildStrategyOutcomesOverall:
 
     def test_no_matching_group_cols(self, experiment_root: Path) -> None:
         by_run = build_strategy_outcomes_by_run(experiment_root)
-        overall = build_strategy_outcomes_overall(
-            by_run, group_cols=["nonexistent_column"]
-        )
+        overall = build_strategy_outcomes_overall(by_run, group_cols=["nonexistent_column"])
         assert overall.empty
 
     def test_single_group_col(self, experiment_root: Path) -> None:

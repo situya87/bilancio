@@ -1,17 +1,20 @@
 """Tests for cascade/contagion metrics."""
 
 from decimal import Decimal
-from typing import List
 
-import pytest
-
-from bilancio.analysis.metrics import count_defaults, cascade_fraction
+from bilancio.analysis.metrics import cascade_fraction, count_defaults
 
 
 class TestCountDefaults:
     def test_zero_defaults(self):
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
             {"kind": "PayableSettled", "day": 1, "amount": "100"},
         ]
         assert count_defaults(events) == 0
@@ -43,7 +46,13 @@ class TestCountDefaults:
 
     def test_mixed_events(self):
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
             {"kind": "AgentDefaulted", "agent": "firm_1", "frm": "firm_1"},
             {"kind": "PayableSettled", "day": 1, "amount": "50"},
             {"kind": "AgentDefaulted", "agent": "firm_2", "frm": "firm_2"},
@@ -85,14 +94,26 @@ class TestCountDefaults:
 class TestCascadeFraction:
     def test_none_for_zero_defaults(self):
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
         ]
         assert cascade_fraction(events) is None
 
     def test_zero_for_single_default(self):
         """A single default can't be secondary."""
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
             {"kind": "AgentDefaulted", "agent": "A", "frm": "A"},
         ]
         assert cascade_fraction(events) == Decimal("0")
@@ -100,8 +121,20 @@ class TestCascadeFraction:
     def test_zero_for_independent_defaults(self):
         """Two defaults with no obligation link between them."""
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "C", "amount": "100", "due_day": 1},
-            {"kind": "PayableCreated", "debtor": "B", "creditor": "D", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "C",
+                "amount": "100",
+                "due_day": 1,
+            },
+            {
+                "kind": "PayableCreated",
+                "debtor": "B",
+                "creditor": "D",
+                "amount": "100",
+                "due_day": 1,
+            },
             {"kind": "AgentDefaulted", "agent": "A", "frm": "A"},
             {"kind": "AgentDefaulted", "agent": "B", "frm": "B"},
         ]
@@ -116,8 +149,20 @@ class TestCascadeFraction:
         Result: 2/3 secondary.
         """
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
-            {"kind": "PayableCreated", "debtor": "B", "creditor": "C", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
+            {
+                "kind": "PayableCreated",
+                "debtor": "B",
+                "creditor": "C",
+                "amount": "100",
+                "due_day": 1,
+            },
             {"kind": "AgentDefaulted", "agent": "A", "frm": "A"},
             {"kind": "AgentDefaulted", "agent": "B", "frm": "B"},
             {"kind": "AgentDefaulted", "agent": "C", "frm": "C"},
@@ -136,8 +181,20 @@ class TestCascadeFraction:
         Result: 2/4 = 0.5.
         """
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
-            {"kind": "PayableCreated", "debtor": "C", "creditor": "D", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
+            {
+                "kind": "PayableCreated",
+                "debtor": "C",
+                "creditor": "D",
+                "amount": "100",
+                "due_day": 1,
+            },
             {"kind": "AgentDefaulted", "agent": "A", "frm": "A"},
             {"kind": "AgentDefaulted", "agent": "B", "frm": "B"},
             {"kind": "AgentDefaulted", "agent": "C", "frm": "C"},
@@ -153,8 +210,20 @@ class TestCascadeFraction:
         # A owes B, but B defaults before A (so A doesn't count as secondary from this)
         # Actually, let's make it simpler: no obligations between defaulters
         events = [
-            {"kind": "PayableCreated", "debtor": "X", "creditor": "A", "amount": "100", "due_day": 1},
-            {"kind": "PayableCreated", "debtor": "Y", "creditor": "B", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "X",
+                "creditor": "A",
+                "amount": "100",
+                "due_day": 1,
+            },
+            {
+                "kind": "PayableCreated",
+                "debtor": "Y",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
             {"kind": "AgentDefaulted", "agent": "A", "frm": "A"},
             {"kind": "AgentDefaulted", "agent": "B", "frm": "B"},
         ]
@@ -165,9 +234,27 @@ class TestCascadeFraction:
     def test_all_secondary_except_first(self):
         """Ring: A->B->C->A. A defaults first (primary), then B (secondary), then C (secondary)."""
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
-            {"kind": "PayableCreated", "debtor": "B", "creditor": "C", "amount": "100", "due_day": 1},
-            {"kind": "PayableCreated", "debtor": "C", "creditor": "A", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
+            {
+                "kind": "PayableCreated",
+                "debtor": "B",
+                "creditor": "C",
+                "amount": "100",
+                "due_day": 1,
+            },
+            {
+                "kind": "PayableCreated",
+                "debtor": "C",
+                "creditor": "A",
+                "amount": "100",
+                "due_day": 1,
+            },
             {"kind": "AgentDefaulted", "agent": "A", "frm": "A"},
             {"kind": "AgentDefaulted", "agent": "B", "frm": "B"},
             {"kind": "AgentDefaulted", "agent": "C", "frm": "C"},
@@ -181,7 +268,13 @@ class TestCascadeFraction:
     def test_malformed_default_events_skipped(self):
         """AgentDefaulted events with missing/empty agent fields are ignored."""
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
             {"kind": "AgentDefaulted"},  # no agent field
             {"kind": "AgentDefaulted", "agent": "", "frm": ""},  # empty
             {"kind": "AgentDefaulted", "agent": "A", "frm": "A"},

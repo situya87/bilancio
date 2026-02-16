@@ -1,11 +1,10 @@
 """Tests for Estimate provenance from companion _detail methods."""
 
-import pytest
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
+from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
 from bilancio.information.estimates import Estimate
-from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
 
 
 class TestRiskAssessorDetail:
@@ -109,8 +108,8 @@ class TestRatingEstimate:
 
     def test_returns_estimate_when_requested(self):
         """_compute_rating(return_estimate=True) should return an Estimate."""
-        from bilancio.engines.rating import _compute_rating
         from bilancio.decision.profiles import RatingProfile
+        from bilancio.engines.rating import _compute_rating
 
         system = self._make_mock_system()
         profile = RatingProfile()
@@ -123,8 +122,8 @@ class TestRatingEstimate:
 
     def test_returns_decimal_by_default(self):
         """_compute_rating(return_estimate=False) should return plain Decimal."""
-        from bilancio.engines.rating import _compute_rating
         from bilancio.decision.profiles import RatingProfile
+        from bilancio.engines.rating import _compute_rating
 
         system = self._make_mock_system()
         profile = RatingProfile()
@@ -133,8 +132,8 @@ class TestRatingEstimate:
 
     def test_estimate_value_matches_decimal(self):
         """Estimate.value should equal the Decimal result."""
-        from bilancio.engines.rating import _compute_rating
         from bilancio.decision.profiles import RatingProfile
+        from bilancio.engines.rating import _compute_rating
 
         system = self._make_mock_system()
         profile = RatingProfile()
@@ -144,8 +143,8 @@ class TestRatingEstimate:
 
     def test_estimate_captures_inputs(self):
         """Estimate should capture balance sheet and history inputs."""
-        from bilancio.engines.rating import _compute_rating
         from bilancio.decision.profiles import RatingProfile
+        from bilancio.engines.rating import _compute_rating
 
         system = self._make_mock_system()
         profile = RatingProfile()
@@ -162,9 +161,8 @@ class TestInformationServiceDetail:
 
     def _make_service(self, access_level):
         """Helper to create an InformationService with a specific access level."""
+        from bilancio.information.profile import CategoryAccess, InformationProfile
         from bilancio.information.service import InformationService
-        from bilancio.information.profile import InformationProfile, CategoryAccess
-        from bilancio.information.levels import AccessLevel
 
         profile = InformationProfile(
             counterparty_default_history=CategoryAccess(level=access_level),
@@ -202,9 +200,9 @@ class TestInformationServiceDetail:
 
     def test_channel_source_tracks_dealer(self):
         """When dealer risk assessor exists, channel_source should be 'dealer_risk_assessor'."""
-        from bilancio.information.service import InformationService
-        from bilancio.information.profile import InformationProfile, CategoryAccess
         from bilancio.information.levels import AccessLevel
+        from bilancio.information.profile import CategoryAccess, InformationProfile
+        from bilancio.information.service import InformationService
 
         profile = InformationProfile(
             counterparty_default_history=CategoryAccess(level=AccessLevel.PERFECT),
@@ -267,7 +265,7 @@ class TestSystemEstimateLogging:
         assert len(sys.state.estimate_log) == 0
 
     def test_log_defaults_to_empty(self):
-        from bilancio.engines.system import System, State
+        from bilancio.engines.system import State
 
         state = State()
         assert state.estimate_log == []
@@ -279,9 +277,9 @@ class TestLendingEstimateLogging:
 
     def test_estimates_logged_when_enabled(self):
         """When log_estimates=True and dealer assessor exists, estimates should be logged."""
+        from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
         from bilancio.engines.lending import _estimate_default_probs
         from bilancio.engines.system import System
-        from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
 
         sys = System()
         sys.state.estimate_logging_enabled = True

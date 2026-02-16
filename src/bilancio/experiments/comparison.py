@@ -13,14 +13,14 @@ from __future__ import annotations
 import csv
 import json
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, Field
 
-from bilancio.experiments.ring import RingSweepRunner, RingRunSummary, _decimal_list
+from bilancio.experiments.ring import RingSweepRunner
 
 logger = logging.getLogger(__name__)
 
@@ -36,49 +36,49 @@ class ComparisonResult:
     seed: int
 
     # Control metrics (no dealer)
-    delta_control: Optional[Decimal]
-    phi_control: Optional[Decimal]
+    delta_control: Decimal | None
+    phi_control: Decimal | None
     control_run_id: str
     control_status: str
 
     # Treatment metrics (with dealer)
-    delta_treatment: Optional[Decimal]
-    phi_treatment: Optional[Decimal]
+    delta_treatment: Decimal | None
+    phi_treatment: Decimal | None
     treatment_run_id: str
     treatment_status: str
 
     # Dealer metrics (Section 8 of functional dealer specification)
     # From treatment run only (dealer_metrics dictionary)
-    dealer_total_pnl: Optional[float] = None
-    dealer_total_return: Optional[float] = None
-    dealer_profitable: Optional[bool] = None
-    spread_income_total: Optional[float] = None
-    mean_trader_return: Optional[float] = None
-    fraction_profitable_traders: Optional[float] = None
-    liquidity_driven_sales: Optional[int] = None
-    rescue_events: Optional[int] = None
-    total_trades: Optional[int] = None
-    unsafe_buy_count: Optional[int] = None
-    fraction_unsafe_buys: Optional[float] = None
+    dealer_total_pnl: float | None = None
+    dealer_total_return: float | None = None
+    dealer_profitable: bool | None = None
+    spread_income_total: float | None = None
+    mean_trader_return: float | None = None
+    fraction_profitable_traders: float | None = None
+    liquidity_driven_sales: int | None = None
+    rescue_events: int | None = None
+    total_trades: int | None = None
+    unsafe_buy_count: int | None = None
+    fraction_unsafe_buys: float | None = None
 
     # Plan 020 metrics: debt-to-money ratio and mid prices
-    initial_total_debt: Optional[float] = None
-    initial_total_money: Optional[float] = None
-    debt_to_money_ratio: Optional[float] = None
-    dealer_mid_final: Optional[Dict[str, float]] = None
-    vbt_mid_final: Optional[Dict[str, float]] = None
-    dealer_premium_final_pct: Optional[Dict[str, float]] = None
-    vbt_premium_final_pct: Optional[Dict[str, float]] = None
+    initial_total_debt: float | None = None
+    initial_total_money: float | None = None
+    debt_to_money_ratio: float | None = None
+    dealer_mid_final: dict[str, float] | None = None
+    vbt_mid_final: dict[str, float] | None = None
+    dealer_premium_final_pct: dict[str, float] | None = None
+    vbt_premium_final_pct: dict[str, float] | None = None
 
     @property
-    def delta_reduction(self) -> Optional[Decimal]:
+    def delta_reduction(self) -> Decimal | None:
         """Absolute reduction in default rate."""
         if self.delta_control is None or self.delta_treatment is None:
             return None
         return self.delta_control - self.delta_treatment
 
     @property
-    def relief_ratio(self) -> Optional[Decimal]:
+    def relief_ratio(self) -> Decimal | None:
         """Percentage reduction in defaults (0 if no baseline defaults)."""
         if self.delta_control is None or self.delta_treatment is None:
             return None
@@ -98,23 +98,53 @@ class ComparisonSweepConfig(BaseModel):
     max_simulation_days: int = Field(default=15, description="Max days to run simulation")
     Q_total: Decimal = Field(default=Decimal("10000"), description="Total debt amount")
     liquidity_mode: str = Field(default="uniform", description="Liquidity allocation mode")
-    liquidity_agent: Optional[str] = Field(default=None, description="Target agent for single_at mode")
+    liquidity_agent: str | None = Field(default=None, description="Target agent for single_at mode")
     base_seed: int = Field(default=42, description="Base random seed")
     name_prefix: str = Field(default="Dealer Comparison", description="Scenario name prefix")
     default_handling: str = Field(default="fail-fast", description="Default handling mode")
 
     # Grid parameters
-    kappas: List[Decimal] = Field(default_factory=lambda: [Decimal("0.25"), Decimal("0.5"), Decimal("1"), Decimal("2"), Decimal("4")])
-    concentrations: List[Decimal] = Field(default_factory=lambda: [Decimal("0.2"), Decimal("0.5"), Decimal("1"), Decimal("2"), Decimal("5")])
-    mus: List[Decimal] = Field(default_factory=lambda: [Decimal("0"), Decimal("0.25"), Decimal("0.5"), Decimal("0.75"), Decimal("1")])
-    monotonicities: List[Decimal] = Field(default_factory=lambda: [Decimal("0")])
+    kappas: list[Decimal] = Field(
+        default_factory=lambda: [
+            Decimal("0.25"),
+            Decimal("0.5"),
+            Decimal("1"),
+            Decimal("2"),
+            Decimal("4"),
+        ]
+    )
+    concentrations: list[Decimal] = Field(
+        default_factory=lambda: [
+            Decimal("0.2"),
+            Decimal("0.5"),
+            Decimal("1"),
+            Decimal("2"),
+            Decimal("5"),
+        ]
+    )
+    mus: list[Decimal] = Field(
+        default_factory=lambda: [
+            Decimal("0"),
+            Decimal("0.25"),
+            Decimal("0.5"),
+            Decimal("0.75"),
+            Decimal("1"),
+        ]
+    )
+    monotonicities: list[Decimal] = Field(default_factory=lambda: [Decimal("0")])
 
     # Dealer configuration for treatment runs
     # Per specification: Dealer and VBT bring NEW outside money (not taken from traders)
     # Traders keep 100% of their receivables. Dealer/VBT start empty and buy from traders.
     dealer_ticket_size: Decimal = Field(default=Decimal("1"), description="Ticket size for dealer")
-    dealer_share: Decimal = Field(default=Decimal("0.25"), description="Dealer capital as fraction of system cash (NEW outside money)")
-    vbt_share: Decimal = Field(default=Decimal("0.50"), description="VBT capital as fraction of system cash (NEW outside money)")
+    dealer_share: Decimal = Field(
+        default=Decimal("0.25"),
+        description="Dealer capital as fraction of system cash (NEW outside money)",
+    )
+    vbt_share: Decimal = Field(
+        default=Decimal("0.50"),
+        description="VBT capital as fraction of system cash (NEW outside money)",
+    )
 
 
 class ComparisonSweepRunner:
@@ -182,7 +212,7 @@ class ComparisonSweepRunner:
         self.treatment_dir.mkdir(parents=True, exist_ok=True)
         self.aggregate_dir.mkdir(parents=True, exist_ok=True)
 
-        self.comparison_results: List[ComparisonResult] = []
+        self.comparison_results: list[ComparisonResult] = []
         self.comparison_path = self.aggregate_dir / "comparison.csv"
         self.summary_path = self.aggregate_dir / "summary.json"
 
@@ -194,8 +224,8 @@ class ComparisonSweepRunner:
         }
 
         # Initialize runners
-        self._control_runner: Optional[RingSweepRunner] = None
-        self._treatment_runner: Optional[RingSweepRunner] = None
+        self._control_runner: RingSweepRunner | None = None
+        self._treatment_runner: RingSweepRunner | None = None
 
     def _get_control_runner(self) -> RingSweepRunner:
         """Get or create control runner (no dealer)."""
@@ -233,7 +263,7 @@ class ComparisonSweepRunner:
             )
         return self._treatment_runner
 
-    def run_all(self) -> List[ComparisonResult]:
+    def run_all(self) -> list[ComparisonResult]:
         """Execute all control/treatment pairs and return comparison results."""
         logger.info(
             "Starting comparison sweep: %d kappas × %d concentrations × %d mus = %d pairs",
@@ -380,36 +410,84 @@ class ComparisonSweepRunner:
                     "mu": str(result.mu),
                     "monotonicity": str(result.monotonicity),
                     "seed": str(result.seed),
-                    "delta_control": str(result.delta_control) if result.delta_control is not None else "",
-                    "delta_treatment": str(result.delta_treatment) if result.delta_treatment is not None else "",
-                    "delta_reduction": str(result.delta_reduction) if result.delta_reduction is not None else "",
-                    "relief_ratio": str(result.relief_ratio) if result.relief_ratio is not None else "",
-                    "phi_control": str(result.phi_control) if result.phi_control is not None else "",
-                    "phi_treatment": str(result.phi_treatment) if result.phi_treatment is not None else "",
+                    "delta_control": str(result.delta_control)
+                    if result.delta_control is not None
+                    else "",
+                    "delta_treatment": str(result.delta_treatment)
+                    if result.delta_treatment is not None
+                    else "",
+                    "delta_reduction": str(result.delta_reduction)
+                    if result.delta_reduction is not None
+                    else "",
+                    "relief_ratio": str(result.relief_ratio)
+                    if result.relief_ratio is not None
+                    else "",
+                    "phi_control": str(result.phi_control)
+                    if result.phi_control is not None
+                    else "",
+                    "phi_treatment": str(result.phi_treatment)
+                    if result.phi_treatment is not None
+                    else "",
                     "control_run_id": result.control_run_id,
                     "control_status": result.control_status,
                     "treatment_run_id": result.treatment_run_id,
                     "treatment_status": result.treatment_status,
                     # Dealer metrics (Section 8)
-                    "dealer_total_pnl": str(result.dealer_total_pnl) if result.dealer_total_pnl is not None else "",
-                    "dealer_total_return": str(result.dealer_total_return) if result.dealer_total_return is not None else "",
-                    "dealer_profitable": str(result.dealer_profitable) if result.dealer_profitable is not None else "",
-                    "spread_income_total": str(result.spread_income_total) if result.spread_income_total is not None else "",
-                    "mean_trader_return": str(result.mean_trader_return) if result.mean_trader_return is not None else "",
-                    "fraction_profitable_traders": str(result.fraction_profitable_traders) if result.fraction_profitable_traders is not None else "",
-                    "liquidity_driven_sales": str(result.liquidity_driven_sales) if result.liquidity_driven_sales is not None else "",
-                    "rescue_events": str(result.rescue_events) if result.rescue_events is not None else "",
-                    "total_trades": str(result.total_trades) if result.total_trades is not None else "",
-                    "unsafe_buy_count": str(result.unsafe_buy_count) if result.unsafe_buy_count is not None else "",
-                    "fraction_unsafe_buys": str(result.fraction_unsafe_buys) if result.fraction_unsafe_buys is not None else "",
+                    "dealer_total_pnl": str(result.dealer_total_pnl)
+                    if result.dealer_total_pnl is not None
+                    else "",
+                    "dealer_total_return": str(result.dealer_total_return)
+                    if result.dealer_total_return is not None
+                    else "",
+                    "dealer_profitable": str(result.dealer_profitable)
+                    if result.dealer_profitable is not None
+                    else "",
+                    "spread_income_total": str(result.spread_income_total)
+                    if result.spread_income_total is not None
+                    else "",
+                    "mean_trader_return": str(result.mean_trader_return)
+                    if result.mean_trader_return is not None
+                    else "",
+                    "fraction_profitable_traders": str(result.fraction_profitable_traders)
+                    if result.fraction_profitable_traders is not None
+                    else "",
+                    "liquidity_driven_sales": str(result.liquidity_driven_sales)
+                    if result.liquidity_driven_sales is not None
+                    else "",
+                    "rescue_events": str(result.rescue_events)
+                    if result.rescue_events is not None
+                    else "",
+                    "total_trades": str(result.total_trades)
+                    if result.total_trades is not None
+                    else "",
+                    "unsafe_buy_count": str(result.unsafe_buy_count)
+                    if result.unsafe_buy_count is not None
+                    else "",
+                    "fraction_unsafe_buys": str(result.fraction_unsafe_buys)
+                    if result.fraction_unsafe_buys is not None
+                    else "",
                     # Plan 020 metrics
-                    "initial_total_debt": str(result.initial_total_debt) if result.initial_total_debt is not None else "",
-                    "initial_total_money": str(result.initial_total_money) if result.initial_total_money is not None else "",
-                    "debt_to_money_ratio": str(result.debt_to_money_ratio) if result.debt_to_money_ratio is not None else "",
-                    "dealer_mid_final": json.dumps(result.dealer_mid_final) if result.dealer_mid_final is not None else "",
-                    "vbt_mid_final": json.dumps(result.vbt_mid_final) if result.vbt_mid_final is not None else "",
-                    "dealer_premium_final_pct": json.dumps(result.dealer_premium_final_pct) if result.dealer_premium_final_pct is not None else "",
-                    "vbt_premium_final_pct": json.dumps(result.vbt_premium_final_pct) if result.vbt_premium_final_pct is not None else "",
+                    "initial_total_debt": str(result.initial_total_debt)
+                    if result.initial_total_debt is not None
+                    else "",
+                    "initial_total_money": str(result.initial_total_money)
+                    if result.initial_total_money is not None
+                    else "",
+                    "debt_to_money_ratio": str(result.debt_to_money_ratio)
+                    if result.debt_to_money_ratio is not None
+                    else "",
+                    "dealer_mid_final": json.dumps(result.dealer_mid_final)
+                    if result.dealer_mid_final is not None
+                    else "",
+                    "vbt_mid_final": json.dumps(result.vbt_mid_final)
+                    if result.vbt_mid_final is not None
+                    else "",
+                    "dealer_premium_final_pct": json.dumps(result.dealer_premium_final_pct)
+                    if result.dealer_premium_final_pct is not None
+                    else "",
+                    "vbt_premium_final_pct": json.dumps(result.vbt_premium_final_pct)
+                    if result.vbt_premium_final_pct is not None
+                    else "",
                 }
                 writer.writerow(row)
 
@@ -421,12 +499,20 @@ class ComparisonSweepRunner:
 
         # Compute statistics
         if completed:
-            delta_controls = [float(r.delta_control) for r in completed if r.delta_control is not None]
-            delta_treatments = [float(r.delta_treatment) for r in completed if r.delta_treatment is not None]
+            delta_controls = [
+                float(r.delta_control) for r in completed if r.delta_control is not None
+            ]
+            delta_treatments = [
+                float(r.delta_treatment) for r in completed if r.delta_treatment is not None
+            ]
             relief_ratios = [float(r.relief_ratio) for r in completed if r.relief_ratio is not None]
 
-            mean_delta_control = sum(delta_controls) / len(delta_controls) if delta_controls else None
-            mean_delta_treatment = sum(delta_treatments) / len(delta_treatments) if delta_treatments else None
+            mean_delta_control = (
+                sum(delta_controls) / len(delta_controls) if delta_controls else None
+            )
+            mean_delta_treatment = (
+                sum(delta_treatments) / len(delta_treatments) if delta_treatments else None
+            )
             mean_relief_ratio = sum(relief_ratios) / len(relief_ratios) if relief_ratios else None
 
             improved = sum(1 for r in completed if r.delta_reduction and r.delta_reduction > 0)
@@ -475,16 +561,16 @@ def run_comparison_sweep(
     kappas: Sequence[Decimal],
     concentrations: Sequence[Decimal],
     mus: Sequence[Decimal],
-    monotonicities: Optional[Sequence[Decimal]] = None,
+    monotonicities: Sequence[Decimal] | None = None,
     base_seed: int = 42,
     default_handling: str = "fail-fast",
     dealer_ticket_size: Decimal = Decimal("1"),
     dealer_share: Decimal = Decimal("0.25"),
     vbt_share: Decimal = Decimal("0.50"),
     liquidity_mode: str = "uniform",
-    liquidity_agent: Optional[str] = None,
+    liquidity_agent: str | None = None,
     name_prefix: str = "Dealer Comparison",
-) -> List[ComparisonResult]:
+) -> list[ComparisonResult]:
     """
     Convenience function to run a comparison sweep.
 

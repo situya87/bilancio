@@ -2,10 +2,8 @@
 
 from decimal import Decimal
 
-import pytest
-
-from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
 from bilancio.dealer.models import Ticket
+from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
 
 
 def test_default_probability_estimation_no_history():
@@ -275,7 +273,7 @@ def test_diagnostics():
     # Add some history
     for i in range(10):
         defaulted = i % 3 == 0  # Every 3rd payment defaults
-        assessor.update_history(day=i, issuer_id=f"issuer_{i%2}", defaulted=defaulted)
+        assessor.update_history(day=i, issuer_id=f"issuer_{i % 2}", defaulted=defaulted)
 
     diag = assessor.get_diagnostics(current_day=10)
 

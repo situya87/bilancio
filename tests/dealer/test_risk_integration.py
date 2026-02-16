@@ -2,17 +2,12 @@
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.dealer.models import (
     Ticket,
     TraderState,
-    DealerState,
-    VBTState,
-    BucketConfig,
 )
-from bilancio.dealer.simulation import DealerRingSimulation, DealerRingConfig
-from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
+from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
+from bilancio.dealer.simulation import DealerRingConfig, DealerRingSimulation
 
 
 class TestRiskAssessorInSimulation:
@@ -110,9 +105,7 @@ class TestRiskAssessorInSimulation:
 
         # Check that trader_1 (had enough cash) is recorded as success
         # and trader_2 (insufficient cash) is recorded as default
-        history_dict = {
-            h[1]: h[2] for h in risk_assessor.payment_history
-        }  # issuer_id -> defaulted
+        history_dict = {h[1]: h[2] for h in risk_assessor.payment_history}  # issuer_id -> defaulted
         assert history_dict["trader_1"] is False  # Full settlement
         assert history_dict["trader_2"] is True  # Defaulted
 
@@ -232,9 +225,7 @@ class TestSellRejection:
         sim.run_day()
 
         # Check that a sell_rejected event was logged
-        sell_rejected_events = [
-            e for e in sim.events.events if e.get("kind") == "sell_rejected"
-        ]
+        [e for e in sim.events.events if e.get("kind") == "sell_rejected"]
 
         # With 50% threshold and low VBT bid (0.50), rejection is likely
         # The exact behavior depends on the simulation details
@@ -307,7 +298,7 @@ class TestSellRejection:
         sim.run_day()
 
         # Check for successful trade events
-        trade_events = [e for e in sim.events.events if e.get("kind") == "trade"]
+        [e for e in sim.events.events if e.get("kind") == "trade"]
         # With high bid and low threshold, trade should execute
 
 
@@ -377,9 +368,7 @@ class TestBuyRejection:
         sim.run_day()
 
         # With high ask price and low EV, buy rejections should occur
-        buy_rejected_events = [
-            e for e in sim.events.events if e.get("kind") == "buy_rejected"
-        ]
+        [e for e in sim.events.events if e.get("kind") == "buy_rejected"]
         # Exact count depends on simulation randomness
 
 
@@ -449,9 +438,7 @@ class TestEventLogging:
         sim.setup_ring(traders, [ticket, obligation])
         sim.run_day()
 
-        sell_rejected_events = [
-            e for e in sim.events.events if e.get("kind") == "sell_rejected"
-        ]
+        sell_rejected_events = [e for e in sim.events.events if e.get("kind") == "sell_rejected"]
 
         if sell_rejected_events:
             event = sell_rejected_events[0]

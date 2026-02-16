@@ -23,12 +23,10 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Union
 
 from bilancio.information.levels import AccessLevel
 from bilancio.information.noise import EstimationNoise, LagNoise, NoiseConfig, SampleNoise
 from bilancio.information.profile import CategoryAccess
-
 
 # ── Channel dataclasses ─────────────────────────────────────────────────
 
@@ -102,12 +100,12 @@ class InstitutionalChannel:
 
 
 #: Union of all channel types.
-Channel = Union[
-    SelfDerivedChannel,
-    MarketDerivedChannel,
-    NetworkDerivedChannel,
-    InstitutionalChannel,
-]
+Channel = (
+    SelfDerivedChannel
+    | MarketDerivedChannel
+    | NetworkDerivedChannel
+    | InstitutionalChannel
+)
 
 
 #: Known source identifiers for channel bindings.

@@ -1,26 +1,27 @@
 """YAML loading utilities for Bilancio configuration."""
 
-import yaml  # type: ignore[import-untyped]
+from decimal import Decimal, DecimalException, InvalidOperation
 from pathlib import Path
-from typing import Any, Dict
-from decimal import Decimal, InvalidOperation, DecimalException
-from pydantic import ValidationError, TypeAdapter
+from typing import Any
+
+import yaml
+from pydantic import TypeAdapter, ValidationError
 
 from .models import (
-    ScenarioConfig,
-    MintReserves,
-    MintCash,
-    TransferReserves,
-    TransferCash,
-    DepositCash,
-    WithdrawCash,
+    Action,
     ClientPayment,
-    CreateStock,
-    TransferStock,
     CreateDeliveryObligation,
     CreatePayable,
-    Action,
+    CreateStock,
+    DepositCash,
     GeneratorConfig,
+    MintCash,
+    MintReserves,
+    ScenarioConfig,
+    TransferCash,
+    TransferReserves,
+    TransferStock,
+    WithdrawCash,
 )
 
 
@@ -31,18 +32,18 @@ def decimal_constructor(loader: Any, node: Any) -> Decimal:
 
 
 # Register Decimal constructor for YAML
-yaml.SafeLoader.add_constructor('!decimal', decimal_constructor)
+yaml.SafeLoader.add_constructor("!decimal", decimal_constructor)
 
 
-def parse_action(action_dict: Dict[str, Any]) -> Action:
+def parse_action(action_dict: dict[str, Any]) -> Action:
     """Parse a single action dictionary into the appropriate Action model.
-    
+
     Args:
         action_dict: Dictionary containing action specification
-        
+
     Returns:
         Parsed Action model instance
-        
+
     Raises:
         ValueError: If action type is unknown or validation fails
     """
@@ -85,23 +86,25 @@ def parse_action(action_dict: Dict[str, Any]) -> Action:
     elif "transfer_claim" in action_dict:
         data = action_dict["transfer_claim"]
         from .models import TransferClaim
+
         return TransferClaim(**data)
     else:
         raise ValueError(f"Unknown action type in: {action_dict}")
 
 
-def preprocess_config(data: Dict[str, Any]) -> Dict[str, Any]:
+def preprocess_config(data: dict[str, Any]) -> dict[str, Any]:
     """Preprocess configuration data before validation.
-    
+
     Converts string decimals to Decimal objects and handles
     other necessary transformations.
-    
+
     Args:
         data: Raw configuration dictionary
-        
+
     Returns:
         Preprocessed configuration dictionary
     """
+
     def convert_decimals(obj: Any) -> Any:
         """Recursively convert string decimals to Decimal objects."""
         if isinstance(obj, dict):
@@ -125,19 +128,19 @@ def preprocess_config(data: Dict[str, Any]) -> Dict[str, Any]:
                 return obj
         else:
             return obj
-    
+
     return convert_decimals(data)  # type: ignore[no-any-return]
 
 
 def load_yaml(path: Path | str) -> ScenarioConfig:
     """Load and validate a scenario configuration from a YAML file.
-    
+
     Args:
         path: Path to the YAML configuration file
-        
+
     Returns:
         Validated ScenarioConfig instance
-        
+
     Raises:
         FileNotFoundError: If the configuration file doesn't exist
         yaml.YAMLError: If the YAML is malformed
@@ -145,22 +148,22 @@ def load_yaml(path: Path | str) -> ScenarioConfig:
         ValueError: If there are semantic errors in the configuration
     """
     path = Path(path)
-    
+
     if not path.exists():
         raise FileNotFoundError(f"Configuration file not found: {path}")
-    
+
     try:
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        raise yaml.YAMLError(f"Failed to parse YAML from {path}: {e}")
-    
+        raise yaml.YAMLError(f"Failed to parse YAML from {path}: {e}") from e
+
     if not isinstance(data, dict):
         raise ValueError(f"Configuration file must contain a YAML dictionary, got {type(data)}")
-    
+
     # Preprocess the configuration
     data = preprocess_config(data)
-    
+
     # Handle generator specs by compiling into a concrete scenario first
     if "generator" in data:
         adapter = TypeAdapter(GeneratorConfig)
@@ -169,10 +172,10 @@ def load_yaml(path: Path | str) -> ScenarioConfig:
         except ValidationError as e:
             errors = []
             for error in e.errors():
-                loc = " -> ".join(str(l) for l in error['loc'])
-                msg = error['msg']
+                loc = " -> ".join(str(part) for part in error["loc"])
+                msg = error["msg"]
                 errors.append(f"  - {loc}: {msg}")
-            error_msg = f"Generator validation failed:\n" + "\n".join(errors)
+            error_msg = "Generator validation failed:\n" + "\n".join(errors)
             raise ValueError(error_msg) from e
 
         from bilancio.scenarios import compile_generator
@@ -180,7 +183,9 @@ def load_yaml(path: Path | str) -> ScenarioConfig:
         try:
             compiled = compile_generator(generator_spec, source_path=path)
         except (ValueError, KeyError, TypeError, AttributeError) as e:
-            raise ValueError(f"Failed to compile generator '{generator_spec.generator}': {e}") from e
+            raise ValueError(
+                f"Failed to compile generator '{generator_spec.generator}': {e}"
+            ) from e
 
         data = preprocess_config(compiled)
 
@@ -193,8 +198,8 @@ def load_yaml(path: Path | str) -> ScenarioConfig:
                 parsed_actions.append(action_dict)
             data["initial_actions"] = parsed_actions
         except (ValueError, ValidationError) as e:
-            raise ValueError(f"Failed to parse initial_actions: {e}")
-    
+            raise ValueError(f"Failed to parse initial_actions: {e}") from e
+
     # Validate using pydantic
     try:
         config = ScenarioConfig(**data)
@@ -202,11 +207,11 @@ def load_yaml(path: Path | str) -> ScenarioConfig:
         # Format validation errors nicely
         errors = []
         for error in e.errors():
-            loc = " -> ".join(str(l) for l in error['loc'])
-            msg = error['msg']
+            loc = " -> ".join(str(part) for part in error["loc"])
+            msg = error["msg"]
             errors.append(f"  - {loc}: {msg}")
-        
-        error_msg = f"Configuration validation failed:\n" + "\n".join(errors)
-        raise ValueError(error_msg)
-    
+
+        error_msg = "Configuration validation failed:\n" + "\n".join(errors)
+        raise ValueError(error_msg) from e
+
     return config

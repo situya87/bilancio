@@ -8,27 +8,25 @@ by measuring total system cash before and after each phase and asserting
 equality.
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.engines.system import System
+from bilancio.dealer.models import DEFAULT_BUCKETS
+from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.domain.agents.bank import Bank
-from bilancio.domain.agents.household import Household
 from bilancio.domain.agents.central_bank import CentralBank
-from bilancio.domain.agents.non_bank_lender import NonBankLender
 from bilancio.domain.agents.firm import Firm
+from bilancio.domain.agents.household import Household
+from bilancio.domain.agents.non_bank_lender import NonBankLender
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
-from bilancio.engines.simulation import run_day
 from bilancio.engines.dealer_integration import (
     initialize_dealer_subsystem,
     run_dealer_trading_phase,
     sync_dealer_to_system,
 )
 from bilancio.engines.lending import LendingConfig, run_lending_phase
-from bilancio.dealer.simulation import DealerRingConfig
-from bilancio.dealer.models import DEFAULT_BUCKETS
-
+from bilancio.engines.simulation import run_day
+from bilancio.engines.system import System
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -275,8 +273,7 @@ class TestCashConservation:
         cash_after = total_system_cash(sys)
 
         assert cash_after == cash_before, (
-            f"Total cash changed across settlement day: "
-            f"before={cash_before}, after={cash_after}"
+            f"Total cash changed across settlement day: before={cash_before}, after={cash_after}"
         )
 
     def test_cash_conservation_full_day(self):

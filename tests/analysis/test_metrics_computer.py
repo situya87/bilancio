@@ -1,13 +1,11 @@
 """Tests for MetricsComputer."""
 
-import json
-import pytest
 from pathlib import Path
-from typing import Dict, Any, List
 
+import pytest
+
+from bilancio.analysis.metrics_computer import MetricsBundle, MetricsComputer
 from bilancio.storage.artifact_loaders import LocalArtifactLoader
-from bilancio.analysis.metrics_computer import MetricsComputer, MetricsBundle
-
 
 # Sample events in JSONL format for testing
 SAMPLE_EVENTS_JSONL = """{"type": "setup", "event": "mint_reserves", "day": 0, "amount": 10000, "to": "Bank1"}
@@ -63,9 +61,7 @@ def computer(loader: LocalArtifactLoader) -> MetricsComputer:
 class TestMetricsComputerCompute:
     """Tests for MetricsComputer.compute()."""
 
-    def test_compute_with_events_only(
-        self, computer: MetricsComputer, sample_events_file: Path
-    ):
+    def test_compute_with_events_only(self, computer: MetricsComputer, sample_events_file: Path):
         """compute() works with only events_jsonl artifact."""
         artifacts = {"events_jsonl": "events.jsonl"}
         bundle = computer.compute(artifacts)
@@ -93,20 +89,16 @@ class TestMetricsComputerCompute:
         # With balances, M_t and G_t should potentially be computed
         assert bundle.day_metrics is not None
 
-    def test_compute_raises_keyerror_when_events_missing(
-        self, computer: MetricsComputer
-    ):
+    def test_compute_raises_keyerror_when_events_missing(self, computer: MetricsComputer):
         """compute() raises KeyError when events_jsonl is missing."""
-        artifacts: Dict[str, str] = {}
+        artifacts: dict[str, str] = {}
 
         with pytest.raises(KeyError) as exc_info:
             computer.compute(artifacts)
 
         assert "events_jsonl" in str(exc_info.value)
 
-    def test_compute_raises_keyerror_when_events_none(
-        self, computer: MetricsComputer
-    ):
+    def test_compute_raises_keyerror_when_events_none(self, computer: MetricsComputer):
         """compute() raises KeyError when events_jsonl is None."""
         artifacts = {"events_jsonl": None}
 
@@ -122,9 +114,7 @@ class TestMetricsComputerCompute:
         with pytest.raises(FileNotFoundError):
             computer.compute(artifacts)
 
-    def test_compute_with_day_list(
-        self, computer: MetricsComputer, sample_events_file: Path
-    ):
+    def test_compute_with_day_list(self, computer: MetricsComputer, sample_events_file: Path):
         """compute() accepts optional day_list parameter."""
         artifacts = {"events_jsonl": "events.jsonl"}
         bundle = computer.compute(artifacts, day_list=[1])

@@ -5,6 +5,7 @@ A NonBankLender provides cash loans to traders before settlement.
 It holds only cash and loan assets (no claims on the ring).
 It uses a profit-seeking strategy: earn interest while managing risk.
 """
+
 from dataclasses import dataclass, field
 
 from bilancio.domain.agent import Agent, AgentKind

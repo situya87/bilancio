@@ -2,26 +2,29 @@
 
 import pytest
 
-from bilancio.runners.models import RunOptions, ExecutionResult
+from bilancio.runners.models import ExecutionResult, RunOptions
 from bilancio.storage.models import RunStatus
 
 
 class TestRunOptionsDefaults:
     """Tests for RunOptions default values."""
 
-    @pytest.mark.parametrize("attr,expected", [
-        ("mode", "until_stable"),
-        ("max_days", 90),
-        ("quiet_days", 2),
-        ("check_invariants", "daily"),
-        ("default_handling", "fail-fast"),
-        ("show_events", "detailed"),
-        ("show_balances", None),
-        ("t_account", False),
-        ("detailed_dealer_logging", False),
-        ("run_id", None),
-        ("regime", None),
-    ])
+    @pytest.mark.parametrize(
+        "attr,expected",
+        [
+            ("mode", "until_stable"),
+            ("max_days", 90),
+            ("quiet_days", 2),
+            ("check_invariants", "daily"),
+            ("default_handling", "fail-fast"),
+            ("show_events", "detailed"),
+            ("show_balances", None),
+            ("t_account", False),
+            ("detailed_dealer_logging", False),
+            ("run_id", None),
+            ("regime", None),
+        ],
+    )
     def test_default_value(self, attr, expected):
         """RunOptions defaults are correct for each attribute."""
         options = RunOptions()
@@ -31,19 +34,22 @@ class TestRunOptionsDefaults:
 class TestRunOptionsCustomization:
     """Tests for customizing RunOptions."""
 
-    @pytest.mark.parametrize("attr,value", [
-        ("mode", "fixed_days"),
-        ("max_days", 30),
-        ("quiet_days", 5),
-        ("check_invariants", "end"),
-        ("default_handling", "continue"),
-        ("show_events", "summary"),
-        ("show_balances", ["Bank1", "Firm1"]),
-        ("t_account", True),
-        ("detailed_dealer_logging", True),
-        ("run_id", "custom_run_001"),
-        ("regime", "baseline"),
-    ])
+    @pytest.mark.parametrize(
+        "attr,value",
+        [
+            ("mode", "fixed_days"),
+            ("max_days", 30),
+            ("quiet_days", 5),
+            ("check_invariants", "end"),
+            ("default_handling", "continue"),
+            ("show_events", "summary"),
+            ("show_balances", ["Bank1", "Firm1"]),
+            ("t_account", True),
+            ("detailed_dealer_logging", True),
+            ("run_id", "custom_run_001"),
+            ("regime", "baseline"),
+        ],
+    )
     def test_single_option_can_be_customized(self, attr, value):
         """Each RunOptions attribute can be set to a custom value."""
         options = RunOptions(**{attr: value})
@@ -136,11 +142,14 @@ class TestExecutionResultCreation:
 class TestExecutionResultDefaults:
     """Tests for ExecutionResult default values."""
 
-    @pytest.mark.parametrize("attr,expected", [
-        ("artifacts", {}),
-        ("error", None),
-        ("execution_time_ms", None),
-    ])
+    @pytest.mark.parametrize(
+        "attr,expected",
+        [
+            ("artifacts", {}),
+            ("error", None),
+            ("execution_time_ms", None),
+        ],
+    )
     def test_default_value(self, attr, expected):
         """ExecutionResult defaults are correct for each optional attribute."""
         result = ExecutionResult(
@@ -193,11 +202,14 @@ class TestExecutionResultArtifacts:
 class TestExecutionResultStorageTypes:
     """Tests for ExecutionResult storage type variants."""
 
-    @pytest.mark.parametrize("storage_type,storage_base", [
-        ("local", "/Users/test/experiments/run_001"),
-        ("s3", "s3://my-bucket/experiments/run_001"),
-        ("gcs", "gs://my-bucket/experiments/run_001"),
-    ])
+    @pytest.mark.parametrize(
+        "storage_type,storage_base",
+        [
+            ("local", "/Users/test/experiments/run_001"),
+            ("s3", "s3://my-bucket/experiments/run_001"),
+            ("gcs", "gs://my-bucket/experiments/run_001"),
+        ],
+    )
     def test_storage_type_supported(self, storage_type, storage_base):
         """ExecutionResult supports various storage types."""
         result = ExecutionResult(

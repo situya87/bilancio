@@ -1,35 +1,39 @@
 """Phase-aware event visualization for bilancio."""
 
-from typing import Any, List, Dict, Union
+from typing import Any
 
 try:
     from rich.text import Text
+
     _RICH_TEXT_AVAILABLE = True
 except ImportError:
     _RICH_TEXT_AVAILABLE = False
 
 RenderableType = Any  # Type alias for renderables
 
-def build_events_detailed_with_phases(events: List[Dict[str, Any]], RICH_AVAILABLE: bool = True) -> List[RenderableType]:
+
+def build_events_detailed_with_phases(
+    events: list[dict[str, Any]], RICH_AVAILABLE: bool = True
+) -> list[RenderableType]:
     """Build renderables for events in detailed format, properly organized by phase markers."""
-    renderables: List[RenderableType] = []
-    
+    renderables: list[RenderableType] = []
+
     # Use the formatter registry to format events nicely
     from bilancio.ui.render.formatters import registry
-    
+
     # Group events by phase markers (PhaseA, PhaseB, PhaseC)
     # Events between PhaseA and PhaseB are in Phase A
-    # Events between PhaseB and PhaseC are in Phase B  
+    # Events between PhaseB and PhaseC are in Phase B
     # Events after PhaseC are in Phase C
     phase_a_events = []
     phase_b_events = []
     phase_c_events = []
     setup_events = []
-    
+
     current_phase = None
     for event in events:
         kind = event.get("kind", "Unknown")
-        
+
         # Check for phase markers to update current phase
         if kind == "PhaseA":
             current_phase = "A"
@@ -40,7 +44,7 @@ def build_events_detailed_with_phases(events: List[Dict[str, Any]], RICH_AVAILAB
         elif kind == "PhaseC":
             current_phase = "C"
             continue  # Skip the marker itself
-        
+
         # Sort events into phases based on current phase
         if event.get("phase") == "setup":
             setup_events.append(event)
@@ -55,7 +59,7 @@ def build_events_detailed_with_phases(events: List[Dict[str, Any]], RICH_AVAILAB
             # This shouldn't happen but default to phase A
             if event.get("phase") == "simulation":
                 phase_a_events.append(event)
-    
+
     # Display setup events if any
     if setup_events:
         if RICH_AVAILABLE:
@@ -63,10 +67,10 @@ def build_events_detailed_with_phases(events: List[Dict[str, Any]], RICH_AVAILAB
             renderables.append(phase_header)
         else:
             renderables.append("Setup")
-        
+
         for event in setup_events:
             renderables.extend(_format_single_event(event, registry, RICH_AVAILABLE))
-    
+
     # Display Phase A events (usually empty as it's just a marker)
     if phase_a_events:
         if RICH_AVAILABLE:
@@ -74,10 +78,10 @@ def build_events_detailed_with_phases(events: List[Dict[str, Any]], RICH_AVAILAB
             renderables.append(phase_header)
         else:
             renderables.append("\nPhase A")
-        
+
         for event in phase_a_events:
             renderables.extend(_format_single_event(event, registry, RICH_AVAILABLE))
-    
+
     # Display Phase B events - Settle obligations due
     if phase_b_events:
         if RICH_AVAILABLE:
@@ -85,10 +89,10 @@ def build_events_detailed_with_phases(events: List[Dict[str, Any]], RICH_AVAILAB
             renderables.append(phase_header)
         else:
             renderables.append("\nPhase B - Settle obligations due")
-            
+
         for event in phase_b_events:
             renderables.extend(_format_single_event(event, registry, RICH_AVAILABLE))
-    
+
     # Display Phase C events - Clear intraday nets
     if phase_c_events:
         if RICH_AVAILABLE:
@@ -96,25 +100,28 @@ def build_events_detailed_with_phases(events: List[Dict[str, Any]], RICH_AVAILAB
             renderables.append(phase_header)
         else:
             renderables.append("\nPhase C - Clear intraday nets")
-            
+
         for event in phase_c_events:
             renderables.extend(_format_single_event(event, registry, RICH_AVAILABLE))
-    
+
     return renderables
 
 
-def _format_single_event(event: Dict[str, Any], registry: Any, RICH_AVAILABLE: bool) -> List[RenderableType]:
+def _format_single_event(
+    event: dict[str, Any], registry: Any, RICH_AVAILABLE: bool
+) -> list[RenderableType]:
     """Format a single event and return renderables."""
-    renderables: List[RenderableType] = []
-    
+    renderables: list[RenderableType] = []
+
     # Format the event using the registry
     title, lines, icon = registry.format(event)
-    
+
     if RICH_AVAILABLE:
         from rich.text import Text
+
         # Create a nice formatted display with icon and details
         text = Text()
-        
+
         # Add icon and title with color based on event type
         if "Transfer" in title or "Payment" in title:
             text.append(title, style="bold cyan")
@@ -126,10 +133,10 @@ def _format_single_event(event: Dict[str, Any], registry: Any, RICH_AVAILABLE: b
             text.append(title, style="dim italic")
         else:
             text.append(title, style="bold")
-        
+
         # Add details with proper indentation and styling
         if lines:
-            for i, line in enumerate(lines[:3]):  # Show up to 3 lines
+            for _i, line in enumerate(lines[:3]):  # Show up to 3 lines
                 text.append("\n   ")
                 if "→" in line or "←" in line:
                     # Flow lines - make them prominent
@@ -148,7 +155,7 @@ def _format_single_event(event: Dict[str, Any], registry: Any, RICH_AVAILABLE: b
                     text.append(line, style="dim italic")
                 else:
                     text.append(line, style="white")
-        
+
         renderables.append(text)
     else:
         # Simple text format
@@ -156,5 +163,5 @@ def _format_single_event(event: Dict[str, Any], registry: Any, RICH_AVAILABLE: b
         if lines:
             simple_text += " - " + ", ".join(lines[:2])
         renderables.append(simple_text)
-    
+
     return [renderables[0]] if renderables else []

@@ -7,9 +7,9 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal, getcontext
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 from bilancio.config.models import (
     RingExplorerGeneratorConfig,
@@ -24,8 +24,8 @@ getcontext().prec = 28
 class LiquiditySpec:
     total: Decimal
     mode: str
-    agent: Optional[str]
-    vector: Optional[List[Decimal]]
+    agent: str | None
+    vector: list[Decimal] | None
 
 
 @dataclass
@@ -51,10 +51,10 @@ class RingExplorerParams:
     inequality: InequalitySpec
     maturity: MaturitySpec
     currency: str
-    policy_overrides: Optional[Dict[str, Any]]
+    policy_overrides: dict[str, Any] | None
 
     @classmethod
-    def from_model(cls, model: RingExplorerParamsModel) -> "RingExplorerParams":
+    def from_model(cls, model: RingExplorerParamsModel) -> RingExplorerParams:
         Q_total = model.Q_total
         liquidity_total = model.liquidity.total
 
@@ -62,9 +62,9 @@ class RingExplorerParams:
             raise ValueError("Either params.Q_total or params.liquidity.total must be provided")
 
         if liquidity_total is None and Q_total is not None:
-            liquidity_total = (Q_total * model.kappa)
+            liquidity_total = Q_total * model.kappa
         elif Q_total is None and liquidity_total is not None:
-            Q_total = (liquidity_total / model.kappa)
+            Q_total = liquidity_total / model.kappa
 
         if Q_total is None or liquidity_total is None:
             raise ValueError("Failed to resolve Q_total and liquidity total from parameters")
@@ -108,8 +108,8 @@ class RingExplorerParams:
 def compile_ring_explorer(
     config: RingExplorerGeneratorConfig,
     *,
-    source_path: Optional[Path] = None,
-) -> Dict[str, Any]:
+    source_path: Path | None = None,
+) -> dict[str, Any]:
     params = RingExplorerParams.from_model(config.params)
 
     payable_amounts = _draw_payables(
@@ -130,33 +130,37 @@ def compile_ring_explorer(
         if amount <= 0:
             continue
         agent_id = f"H{idx + 1}"
-        initial_actions.append({
-            "mint_cash": {
-                "to": agent_id,
-                "amount": amount,
-                "alias": f"LIQ_{agent_id}",
+        initial_actions.append(
+            {
+                "mint_cash": {
+                    "to": agent_id,
+                    "amount": amount,
+                    "alias": f"LIQ_{agent_id}",
+                }
             }
-        })
+        )
 
     # Create ring payables
     for idx, amount in enumerate(payable_amounts):
         from_agent = f"H{idx + 1}"
         to_agent = f"H{(idx + 1) % params.n_agents + 1}"
         due_day = due_days[idx]
-        initial_actions.append({
-            "create_payable": {
-                "from": from_agent,
-                "to": to_agent,
-                "amount": amount,
-                "due_day": due_day,
-                "alias": f"P_{from_agent}_{to_agent}",
+        initial_actions.append(
+            {
+                "create_payable": {
+                    "from": from_agent,
+                    "to": to_agent,
+                    "amount": amount,
+                    "due_day": due_day,
+                    "alias": f"P_{from_agent}_{to_agent}",
+                }
             }
-        })
+        )
 
     scenario_name = _render_scenario_name(config.name_prefix, params)
     description = _render_description(params)
 
-    scenario: Dict[str, Any] = {
+    scenario: dict[str, Any] = {
         "version": 1,
         "name": scenario_name,
         "description": description,
@@ -199,10 +203,10 @@ def compile_ring_explorer_balanced(
     mode: str = "active",
     rollover_enabled: bool = True,
     lender_share: Decimal = Decimal("0.10"),
-    kappa: Optional[Decimal] = None,
+    kappa: Decimal | None = None,
     *,
-    source_path: Optional[Path] = None,
-) -> Dict[str, Any]:
+    source_path: Path | None = None,
+) -> dict[str, Any]:
     """
     Generate a ring scenario with balanced VBT and Dealer entities per maturity bucket.
 
@@ -236,14 +240,14 @@ def compile_ring_explorer_balanced(
 
     # Define maturity buckets (matching dealer module defaults)
     BUCKET_BOUNDS = {
-        "short": (1, 3),    # days 1-3
-        "mid": (4, 8),      # days 4-8
-        "long": (9, 999),   # days 9+
+        "short": (1, 3),  # days 1-3
+        "mid": (4, 8),  # days 4-8
+        "long": (9, 999),  # days 9+
     }
     BUCKETS = ["short", "mid", "long"]
 
     # Total share going to big entities per bucket
-    big_share = vbt_share_per_bucket + dealer_share_per_bucket  # 0.375 total
+    vbt_share_per_bucket + dealer_share_per_bucket  # 0.375 total
 
     # Get base payable amounts
     base_payable_amounts = _draw_payables(
@@ -310,16 +314,20 @@ def compile_ring_explorer_balanced(
 
     # Add VBT and Dealer agents per bucket
     for bucket in BUCKETS:
-        agents.append({
-            "id": f"vbt_{bucket}",
-            "kind": "household",
-            "name": f"VBT ({bucket})",
-        })
-        agents.append({
-            "id": f"dealer_{bucket}",
-            "kind": "household",
-            "name": f"Dealer ({bucket})",
-        })
+        agents.append(
+            {
+                "id": f"vbt_{bucket}",
+                "kind": "household",
+                "name": f"VBT ({bucket})",
+            }
+        )
+        agents.append(
+            {
+                "id": f"dealer_{bucket}",
+                "kind": "household",
+                "name": f"Dealer ({bucket})",
+            }
+        )
 
     initial_actions = []
 
@@ -328,29 +336,33 @@ def compile_ring_explorer_balanced(
         agent_id = f"H{idx + 1}"
         total_amount = base_amount + additional_cash_per_trader
         if total_amount > 0:
-            initial_actions.append({
-                "mint_cash": {
-                    "to": agent_id,
-                    "amount": total_amount,
-                    "alias": f"LIQ_{agent_id}",
+            initial_actions.append(
+                {
+                    "mint_cash": {
+                        "to": agent_id,
+                        "amount": total_amount,
+                        "alias": f"LIQ_{agent_id}",
+                    }
                 }
-            })
+            )
 
     # Create ring payables (trader-to-trader, original structure)
     for idx, amount in enumerate(base_payable_amounts):
         from_agent = f"H{idx + 1}"
         to_agent = f"H{(idx + 1) % params.n_agents + 1}"
         due_day = due_days[idx]
-        initial_actions.append({
-            "create_payable": {
-                "from": from_agent,
-                "to": to_agent,
-                "amount": amount,
-                "due_day": due_day,
-                "alias": f"P_{from_agent}_{to_agent}",
-                "maturity_distance": due_day,  # Plan 024: for rollover
+        initial_actions.append(
+            {
+                "create_payable": {
+                    "from": from_agent,
+                    "to": to_agent,
+                    "amount": amount,
+                    "due_day": due_day,
+                    "alias": f"P_{from_agent}_{to_agent}",
+                    "maturity_distance": due_day,  # Plan 024: for rollover
+                }
             }
-        })
+        )
 
     # Track actual face after int truncation (apply.py uses int(amount))
     # to ensure cash = face × M exactly (balanced starting position)
@@ -365,16 +377,18 @@ def compile_ring_explorer_balanced(
             actual_vbt_face[bucket] += truncated
             from_agent = f"H{idx + 1}"
             to_agent = f"vbt_{bucket}"
-            initial_actions.append({
-                "create_payable": {
-                    "from": from_agent,
-                    "to": to_agent,
-                    "amount": vbt_amount,
-                    "due_day": due_day,
-                    "alias": f"P_{from_agent}_{to_agent}",
-                    "maturity_distance": due_day,  # Plan 024: for rollover
+            initial_actions.append(
+                {
+                    "create_payable": {
+                        "from": from_agent,
+                        "to": to_agent,
+                        "amount": vbt_amount,
+                        "due_day": due_day,
+                        "alias": f"P_{from_agent}_{to_agent}",
+                        "maturity_distance": due_day,  # Plan 024: for rollover
+                    }
                 }
-            })
+            )
 
     # Create payables from traders to Dealer (per bucket)
     for idx in range(params.n_agents):
@@ -384,21 +398,24 @@ def compile_ring_explorer_balanced(
             actual_dealer_face[bucket] += truncated
             from_agent = f"H{idx + 1}"
             to_agent = f"dealer_{bucket}"
-            initial_actions.append({
-                "create_payable": {
-                    "from": from_agent,
-                    "to": to_agent,
-                    "amount": dealer_amount,
-                    "due_day": due_day,
-                    "alias": f"P_{from_agent}_{to_agent}",
-                    "maturity_distance": due_day,  # Plan 024: for rollover
+            initial_actions.append(
+                {
+                    "create_payable": {
+                        "from": from_agent,
+                        "to": to_agent,
+                        "amount": dealer_amount,
+                        "due_day": due_day,
+                        "alias": f"P_{from_agent}_{to_agent}",
+                        "maturity_distance": due_day,  # Plan 024: for rollover
+                    }
                 }
-            })
+            )
 
     # Compute cash ratio for VBT/Dealer: use kappa-informed prior if available,
     # otherwise fall back to outside_mid_ratio for backward compatibility.
     if kappa is not None:
         from bilancio.dealer.priors import kappa_informed_prior
+
         cash_ratio = Decimal(1) - kappa_informed_prior(kappa)
     else:
         cash_ratio = outside_mid_ratio
@@ -424,32 +441,38 @@ def compile_ring_explorer_balanced(
         # VBT cash
         vbt_cash = actual_vbt_face[bucket] * cash_ratio * vbt_dealer_cash_scale
         if vbt_cash > 0:
-            initial_actions.append({
-                "mint_cash": {
-                    "to": f"vbt_{bucket}",
-                    "amount": vbt_cash,
-                    "alias": f"LIQ_vbt_{bucket}",
+            initial_actions.append(
+                {
+                    "mint_cash": {
+                        "to": f"vbt_{bucket}",
+                        "amount": vbt_cash,
+                        "alias": f"LIQ_vbt_{bucket}",
+                    }
                 }
-            })
+            )
 
         # Dealer cash
         dealer_cash = actual_dealer_face[bucket] * cash_ratio * vbt_dealer_cash_scale
         if dealer_cash > 0:
-            initial_actions.append({
-                "mint_cash": {
-                    "to": f"dealer_{bucket}",
-                    "amount": dealer_cash,
-                    "alias": f"LIQ_dealer_{bucket}",
+            initial_actions.append(
+                {
+                    "mint_cash": {
+                        "to": f"dealer_{bucket}",
+                        "amount": dealer_cash,
+                        "alias": f"LIQ_dealer_{bucket}",
+                    }
                 }
-            })
+            )
 
     # Add non-bank lender agent and cash (lender/nbfi/nbfi_dealer modes)
     if mode in ("lender", "nbfi", "nbfi_dealer"):
-        agents.append({
-            "id": "lender",
-            "kind": "non_bank_lender",
-            "name": "Non-Bank Lender",
-        })
+        agents.append(
+            {
+                "id": "lender",
+                "kind": "non_bank_lender",
+                "name": "Non-Bank Lender",
+            }
+        )
         if mode == "lender":
             lender_cash = base_liquidity * lender_share
         elif mode == "nbfi":
@@ -459,13 +482,15 @@ def compile_ring_explorer_balanced(
         else:
             lender_cash = Decimal(0)
         if lender_cash > 0:
-            initial_actions.append({
-                "mint_cash": {
-                    "to": "lender",
-                    "amount": lender_cash,
-                    "alias": "LIQ_lender",
+            initial_actions.append(
+                {
+                    "mint_cash": {
+                        "to": "lender",
+                        "amount": lender_cash,
+                        "alias": "LIQ_lender",
+                    }
                 }
-            })
+            )
 
     scenario_name = _render_scenario_name(config.name_prefix, params)
     scenario_name = f"{scenario_name} [Balanced {mode}]"
@@ -477,7 +502,7 @@ def compile_ring_explorer_balanced(
         f"ρ={_fmt_decimal(outside_mid_ratio)}"
     )
 
-    scenario: Dict[str, Any] = {
+    scenario: dict[str, Any] = {
         "version": 1,
         "name": scenario_name,
         "description": description,
@@ -527,7 +552,7 @@ def _draw_payables(
     monotonicity: Decimal,
     total: Decimal,
     seed: int,
-) -> List[Decimal]:
+) -> list[Decimal]:
     rng = random.Random(seed)
     alpha = float(concentration)
     if alpha <= 0:
@@ -541,7 +566,7 @@ def _draw_payables(
     decimals = [Decimal(str(w)) for w in weights]
     weight_total = sum(decimals)
 
-    amounts: List[Decimal] = []
+    amounts: list[Decimal] = []
     running = Decimal("0")
     for idx, weight in enumerate(decimals):
         if idx == n - 1:
@@ -555,10 +580,10 @@ def _draw_payables(
 
 
 def _apply_monotonicity(
-    amounts: List[Decimal],
+    amounts: list[Decimal],
     monotonicity: Decimal,
     rng: random.Random,
-) -> List[Decimal]:
+) -> list[Decimal]:
     if len(amounts) <= 1:
         return list(amounts)
 
@@ -594,7 +619,7 @@ def _apply_monotonicity(
     return ordered
 
 
-def _ensure_positive_amounts(amounts: List[Decimal], total: Decimal) -> List[Decimal]:
+def _ensure_positive_amounts(amounts: list[Decimal], total: Decimal) -> list[Decimal]:
     """Clamp payable amounts to be strictly positive while preserving the total."""
     min_amount = Decimal("0.01")
     adjusted = list(amounts)
@@ -633,7 +658,7 @@ def _ensure_positive_amounts(amounts: List[Decimal], total: Decimal) -> List[Dec
             adjusted[idx] -= take
             diff -= take
     elif diff < 0:
-        adjusted[-1] += (-diff)
+        adjusted[-1] += -diff
 
     # Final guard to ensure all entries stay above the minimum after adjustments
     for idx, amt in enumerate(adjusted):
@@ -641,14 +666,14 @@ def _ensure_positive_amounts(amounts: List[Decimal], total: Decimal) -> List[Dec
             adjusted[idx] = min_amount
     final_total = sum(adjusted)
     if final_total != total:
-        adjusted[-1] += (total - final_total)
+        adjusted[-1] += total - final_total
         if adjusted[-1] < min_amount:
             adjusted[-1] = min_amount
 
     return adjusted
 
 
-def _allocate_liquidity(params: RingExplorerParams) -> List[Decimal]:
+def _allocate_liquidity(params: RingExplorerParams) -> list[Decimal]:
     total = params.liquidity.total
     n = params.n_agents
     mode = params.liquidity.mode
@@ -672,7 +697,7 @@ def _allocate_liquidity(params: RingExplorerParams) -> List[Decimal]:
         weight_total = sum(vector)
         if weight_total <= 0:
             raise ValueError("liquidity.vector must sum to a positive value")
-        scaled: List[Decimal] = []
+        scaled: list[Decimal] = []
         running = Decimal("0")
         for idx, weight in enumerate(vector):
             if idx == n - 1:
@@ -686,7 +711,7 @@ def _allocate_liquidity(params: RingExplorerParams) -> List[Decimal]:
     raise ValueError(f"Unsupported liquidity allocation mode '{mode}'")
 
 
-def _build_due_days(n: int, days: int, mu: Decimal) -> List[int]:
+def _build_due_days(n: int, days: int, mu: Decimal) -> list[int]:
     if days <= 1:
         return [1] * n
     max_shift = days - 1
@@ -696,7 +721,7 @@ def _build_due_days(n: int, days: int, mu: Decimal) -> List[int]:
         return [1] * n
     cycle = max_shift + 1
     step = max(lead_steps, 1)
-    due_days: List[int] = []
+    due_days: list[int] = []
     for idx in range(n):
         phase = (idx * step) % cycle
         offset = (cycle + phase - lead_steps) % cycle
@@ -704,15 +729,18 @@ def _build_due_days(n: int, days: int, mu: Decimal) -> List[int]:
     return due_days
 
 
-def _build_agents(n: int) -> List[Dict[str, Any]]:
-    agents: List[Dict[str, Any]] = [
+def _build_agents(n: int) -> list[dict[str, Any]]:
+    agents: list[dict[str, Any]] = [
         {"id": "CB", "kind": "central_bank", "name": "Central Bank"},
     ]
-    agents.extend({
-        "id": f"H{idx}",
-        "kind": "household",
-        "name": f"Agent {idx}",
-    } for idx in range(1, n + 1))
+    agents.extend(
+        {
+            "id": f"H{idx}",
+            "kind": "household",
+            "name": f"Agent {idx}",
+        }
+        for idx in range(1, n + 1)
+    )
     return agents
 
 
@@ -740,7 +768,9 @@ def _fmt_decimal(value: Decimal) -> str:
     return format(normalized, "f").rstrip("0").rstrip(".")
 
 
-def _emit_yaml(scenario: Dict[str, Any], config: RingExplorerGeneratorConfig, source_path: Optional[Path]) -> None:
+def _emit_yaml(
+    scenario: dict[str, Any], config: RingExplorerGeneratorConfig, source_path: Path | None
+) -> None:
     base_dir = None
     if config.compile.out_dir:
         out_dir = Path(config.compile.out_dir)

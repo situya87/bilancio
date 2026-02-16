@@ -13,7 +13,6 @@ Key properties:
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Optional
 
 from .base import Instrument, InstrumentKind
 
@@ -26,6 +25,7 @@ class CBLoan(Instrument):
     This is the CB's asset (claim on the bank) and the bank's liability.
     The loan matures at issuance_day + 2 with repayment = principal × (1 + cb_rate).
     """
+
     # Interest rate on the loan (2-day rate, the CB ceiling rate)
     cb_rate: Decimal = field(default=Decimal("0.03"))
 

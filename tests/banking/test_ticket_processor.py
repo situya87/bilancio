@@ -12,18 +12,16 @@ References:
 - "Banks-as-Dealers with deposits on demand" specification Section 6.2
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.banking.types import Ticket, TicketType
-from bilancio.banking.state import BankDealerState, CentralBankParams
 from bilancio.banking.pricing_kernel import PricingParams
+from bilancio.banking.state import BankDealerState, CentralBankParams
 from bilancio.banking.ticket_processor import (
     TicketProcessor,
-    TicketResult,
     process_inter_bank_payment,
     process_intra_bank_payment,
 )
+from bilancio.banking.types import Ticket, TicketType
 
 
 def create_standard_params() -> tuple[CentralBankParams, PricingParams]:
@@ -171,8 +169,6 @@ class TestPaymentCreditTicket:
         """Processing ticket updates quotes."""
         processor = create_processor()
         processor.initialize_day(day=1)
-
-        old_quote = processor.state.current_quote
 
         ticket = Ticket(
             id="T001",
@@ -527,8 +523,6 @@ class TestQuoteEvolution:
         processor = create_processor(reserves=100000, deposits=50000)
         processor.initialize_day(day=1)
 
-        initial_quote = processor.state.current_quote
-
         # Process multiple tickets
         for i in range(3):
             ticket = Ticket(
@@ -540,8 +534,6 @@ class TestQuoteEvolution:
                 counterparty_bank_id="OtherBank",
             )
             processor.process_ticket(ticket)
-
-        final_quote = processor.state.current_quote
 
         # Quotes should have evolved
         assert len(processor.state.quote_history) > 1

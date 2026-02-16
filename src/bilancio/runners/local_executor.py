@@ -4,12 +4,23 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 import yaml
 
-from bilancio.runners.models import RunOptions, ExecutionResult
+from bilancio.runners.models import ExecutionResult, RunOptions
 from bilancio.storage.models import RunStatus
+
+EXECUTION_ERRORS = (
+    FileNotFoundError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+    AssertionError,
+)
 
 
 class LocalExecutor:
@@ -26,7 +37,7 @@ class LocalExecutor:
 
     def execute(
         self,
-        scenario_config: Dict[str, Any],
+        scenario_config: dict[str, Any],
         run_id: str,
         output_dir: Path,
         options: RunOptions,
@@ -87,7 +98,7 @@ class LocalExecutor:
             execution_time_ms = int((time.time() - start_time) * 1000)
 
             # Build artifact paths (relative to output_dir)
-            artifacts: Dict[str, str] = {
+            artifacts: dict[str, str] = {
                 "scenario_yaml": "scenario.yaml",
             }
             if events_path.exists():
@@ -106,11 +117,11 @@ class LocalExecutor:
                 execution_time_ms=execution_time_ms,
             )
 
-        except Exception as e:  # Intentionally broad: execution wrapper
+        except EXECUTION_ERRORS as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
 
             # Still record what artifacts exist
-            fail_artifacts: Dict[str, str] = {}
+            fail_artifacts: dict[str, str] = {}
             if scenario_path.exists():
                 fail_artifacts["scenario_yaml"] = "scenario.yaml"
 

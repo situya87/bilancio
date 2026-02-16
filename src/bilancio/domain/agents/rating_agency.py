@@ -5,6 +5,7 @@ A RatingAgency observes system participants, estimates default probabilities,
 and publishes ratings for other agents to consume. It holds no financial
 instruments and has no means of payment — it is a pure information utility.
 """
+
 from dataclasses import dataclass, field
 
 from bilancio.domain.agent import Agent, AgentKind

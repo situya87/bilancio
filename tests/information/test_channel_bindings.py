@@ -25,16 +25,15 @@ from bilancio.information import (
     SelfDerivedChannel,
 )
 
-
 # ── Helpers ────────────────────────────────────────────────────────
 
 
 def _build_system(with_rating_registry=False):
     """Build a minimal system for testing."""
+    from bilancio.domain.agents.bank import Bank
     from bilancio.domain.agents.central_bank import CentralBank
     from bilancio.domain.agents.firm import Firm
     from bilancio.domain.agents.non_bank_lender import NonBankLender
-    from bilancio.domain.agents.bank import Bank
     from bilancio.engines.system import System
 
     system = System()
@@ -68,7 +67,8 @@ def _build_system(with_rating_registry=False):
 class TestChannelBinding:
     def test_basic_construction(self):
         b = ChannelBinding(
-            "default_prob", "rating_registry",
+            "default_prob",
+            "rating_registry",
             InstitutionalChannel(staleness_days=1, coverage=Decimal("0.8")),
             priority=0,
         )
@@ -78,14 +78,16 @@ class TestChannelBinding:
 
     def test_default_priority(self):
         b = ChannelBinding(
-            "default_prob", "system_heuristic",
+            "default_prob",
+            "system_heuristic",
             SelfDerivedChannel(sample_size=10),
         )
         assert b.priority == 0
 
     def test_frozen(self):
         b = ChannelBinding(
-            "default_prob", "rating_registry",
+            "default_prob",
+            "rating_registry",
             InstitutionalChannel(),
         )
         with pytest.raises(AttributeError):
@@ -103,8 +105,10 @@ class TestProfileChannelBindings:
     def test_with_bindings(self):
         bindings = (
             ChannelBinding(
-                "default_prob", "rating_registry",
-                InstitutionalChannel(), priority=0,
+                "default_prob",
+                "rating_registry",
+                InstitutionalChannel(),
+                priority=0,
             ),
         )
         p = InformationProfile(channel_bindings=bindings)
@@ -114,8 +118,10 @@ class TestProfileChannelBindings:
     def test_from_hierarchy_passes_bindings(self):
         bindings = (
             ChannelBinding(
-                "default_prob", "system_heuristic",
-                SelfDerivedChannel(), priority=0,
+                "default_prob",
+                "system_heuristic",
+                SelfDerivedChannel(),
+                priority=0,
             ),
         )
         p = InformationProfile.from_hierarchy(channel_bindings=bindings)
@@ -137,8 +143,10 @@ class TestServiceBindings:
         profile = InformationProfile(
             channel_bindings=(
                 ChannelBinding(
-                    "default_prob", "rating_registry",
-                    InstitutionalChannel(), priority=0,
+                    "default_prob",
+                    "rating_registry",
+                    InstitutionalChannel(),
+                    priority=0,
                 ),
             ),
         )
@@ -154,12 +162,16 @@ class TestServiceBindings:
         profile = InformationProfile(
             channel_bindings=(
                 ChannelBinding(
-                    "default_prob", "dealer_risk_assessor",
-                    SelfDerivedChannel(), priority=0,
+                    "default_prob",
+                    "dealer_risk_assessor",
+                    SelfDerivedChannel(),
+                    priority=0,
                 ),
                 ChannelBinding(
-                    "default_prob", "rating_registry",
-                    InstitutionalChannel(), priority=1,
+                    "default_prob",
+                    "rating_registry",
+                    InstitutionalChannel(),
+                    priority=1,
                 ),
             ),
         )
@@ -175,12 +187,16 @@ class TestServiceBindings:
         profile = InformationProfile(
             channel_bindings=(
                 ChannelBinding(
-                    "default_prob", "dealer_risk_assessor",
-                    SelfDerivedChannel(), priority=0,
+                    "default_prob",
+                    "dealer_risk_assessor",
+                    SelfDerivedChannel(),
+                    priority=0,
                 ),
                 ChannelBinding(
-                    "default_prob", "rating_registry",
-                    InstitutionalChannel(), priority=1,
+                    "default_prob",
+                    "rating_registry",
+                    InstitutionalChannel(),
+                    priority=1,
                 ),
             ),
         )
@@ -195,8 +211,10 @@ class TestServiceBindings:
         profile = InformationProfile(
             channel_bindings=(
                 ChannelBinding(
-                    "default_prob", "system_heuristic",
-                    SelfDerivedChannel(), priority=0,
+                    "default_prob",
+                    "system_heuristic",
+                    SelfDerivedChannel(),
+                    priority=0,
                 ),
             ),
         )
@@ -212,12 +230,16 @@ class TestServiceBindings:
         profile = InformationProfile(
             channel_bindings=(
                 ChannelBinding(
-                    "default_prob", "rating_registry",
-                    InstitutionalChannel(), priority=1,
+                    "default_prob",
+                    "rating_registry",
+                    InstitutionalChannel(),
+                    priority=1,
                 ),
                 ChannelBinding(
-                    "default_prob", "system_heuristic",
-                    SelfDerivedChannel(), priority=0,
+                    "default_prob",
+                    "system_heuristic",
+                    SelfDerivedChannel(),
+                    priority=0,
                 ),
             ),
         )
@@ -232,12 +254,16 @@ class TestServiceBindings:
         profile = InformationProfile(
             channel_bindings=(
                 ChannelBinding(
-                    "default_prob", "nonexistent_source",
-                    SelfDerivedChannel(), priority=0,
+                    "default_prob",
+                    "nonexistent_source",
+                    SelfDerivedChannel(),
+                    priority=0,
                 ),
                 ChannelBinding(
-                    "default_prob", "rating_registry",
-                    InstitutionalChannel(), priority=1,
+                    "default_prob",
+                    "rating_registry",
+                    InstitutionalChannel(),
+                    priority=1,
                 ),
             ),
         )
@@ -277,8 +303,10 @@ class TestProvenanceFromBindings:
         profile = InformationProfile(
             channel_bindings=(
                 ChannelBinding(
-                    "default_prob", "rating_registry",
-                    InstitutionalChannel(), priority=0,
+                    "default_prob",
+                    "rating_registry",
+                    InstitutionalChannel(),
+                    priority=0,
                 ),
             ),
         )
@@ -314,8 +342,10 @@ class TestLendingBindings:
         system = _build_system(with_rating_registry=True)
         bindings = (
             ChannelBinding(
-                "default_prob", "rating_registry",
-                InstitutionalChannel(), priority=0,
+                "default_prob",
+                "rating_registry",
+                InstitutionalChannel(),
+                priority=0,
             ),
         )
         probs = _estimate_default_probs(system, 0, channel_bindings=bindings)
@@ -328,12 +358,16 @@ class TestLendingBindings:
         system = _build_system(with_rating_registry=True)
         bindings = (
             ChannelBinding(
-                "default_prob", "dealer_risk_assessor",
-                SelfDerivedChannel(), priority=0,
+                "default_prob",
+                "dealer_risk_assessor",
+                SelfDerivedChannel(),
+                priority=0,
             ),
             ChannelBinding(
-                "default_prob", "rating_registry",
-                InstitutionalChannel(), priority=1,
+                "default_prob",
+                "rating_registry",
+                InstitutionalChannel(),
+                priority=1,
             ),
         )
         probs = _estimate_default_probs(system, 0, channel_bindings=bindings)
@@ -382,7 +416,9 @@ class TestLenderRatingsBoundPreset:
         """Even if a dealer were present, this preset uses registry."""
         system = _build_system(with_rating_registry=True)
         info = InformationService(
-            system, LENDER_RATINGS_BOUND, observer_id="NBL01",
+            system,
+            LENDER_RATINGS_BOUND,
+            observer_id="NBL01",
         )
         p = info.get_default_probability("F01", 0)
         # Binding says: registry first → raw 0.10, then SampleNoise(0.8)
@@ -393,7 +429,9 @@ class TestLenderRatingsBoundPreset:
         """Without registry, falls to system_heuristic (second binding)."""
         system = _build_system(with_rating_registry=False)
         info = InformationService(
-            system, LENDER_RATINGS_BOUND, observer_id="NBL01",
+            system,
+            LENDER_RATINGS_BOUND,
+            observer_id="NBL01",
         )
         p = info.get_default_probability("F01", 0)
         # Heuristic → raw 0.05, then SampleNoise(0.8) → 0.05 * 0.8 = 0.04

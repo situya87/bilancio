@@ -1,10 +1,12 @@
 """Modal app for triggering sweeps from the web dashboard."""
+
 from __future__ import annotations
 
-import modal
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+
+import modal
 
 # Create Modal app
 app = modal.App("bilancio-sweep-trigger")
@@ -15,6 +17,7 @@ image = (
     .pip_install("bilancio==0.1.0")
     .env({"PYTHONUNBUFFERED": "1"})
 )
+
 
 @app.function(
     image=image,
@@ -28,9 +31,12 @@ def run_corrected_risk_sweep() -> dict[str, Any]:
     This function can be triggered from the Modal dashboard.
     Returns the job ID for tracking results.
     """
-    from bilancio.experiments.balanced_comparison import BalancedComparisonConfig, BalancedComparisonRunner
-    from bilancio.runners.cloud_executor import CloudExecutor
+    from bilancio.experiments.balanced_comparison import (
+        BalancedComparisonConfig,
+        BalancedComparisonRunner,
+    )
     from bilancio.jobs import generate_job_id
+    from bilancio.runners.cloud_executor import CloudExecutor
 
     # Generate job ID
     job_id = generate_job_id()
@@ -74,24 +80,24 @@ def run_corrected_risk_sweep() -> dict[str, Any]:
 
     # Show sweep parameters
     total_pairs = len(config.kappas) * len(config.concentrations) * len(config.mus)
-    print(f"\nSweep Configuration:")
+    print("\nSweep Configuration:")
     print(f"  kappa: {[str(k) for k in config.kappas]}")
     print(f"  concentration: {[str(c) for c in config.concentrations]}")
     print(f"  mu: {[str(m) for m in config.mus]}")
     print(f"  Total pairs: {total_pairs} (x2 modes = {total_pairs * 2} runs)")
-    print(f"\nRisk Assessment: ENABLED")
-    print(f"  - Base risk premium: 0.02")
-    print(f"  - Urgency sensitivity: 0.10")
-    print(f"\nExecuting on Modal cloud...")
+    print("\nRisk Assessment: ENABLED")
+    print("  - Base risk premium: 0.02")
+    print("  - Urgency sensitivity: 0.10")
+    print("\nExecuting on Modal cloud...")
     print("=" * 80)
 
     # Run sweep
     results = runner.run_all()
 
-    print(f"\nSweep Complete!")
+    print("\nSweep Complete!")
     print(f"Job ID: {job_id}")
     print(f"Total pairs: {len(results)}")
-    print(f"Results available in Supabase")
+    print("Results available in Supabase")
 
     return {
         "job_id": job_id,
@@ -100,7 +106,7 @@ def run_corrected_risk_sweep() -> dict[str, Any]:
             "kappas": [str(k) for k in config.kappas],
             "concentrations": [str(c) for c in config.concentrations],
             "mus": [str(m) for m in config.mus],
-        }
+        },
     }
 
 

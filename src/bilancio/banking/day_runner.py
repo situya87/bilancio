@@ -9,30 +9,30 @@ Implements the intraday structure from Section 6 of the specification:
 - Part E: Pre-close CB top-up
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from decimal import Decimal
-from typing import Any, List, Optional, Dict, Callable
+from typing import Any
 
-from bilancio.banking.types import Ticket, Quote
-from bilancio.banking.state import BankDealerState, CentralBankParams
-from bilancio.banking.pricing_kernel import PricingParams
 from bilancio.banking.ticket_processor import TicketProcessor, TicketResult
+from bilancio.banking.types import Quote, Ticket
 
 
 @dataclass
 class DayEvent:
     """Record of an event during the day."""
+
     day: int
     part: str  # "A", "B", "C", "D", "E"
     event_type: str
     description: str
     amount: int = 0
-    details: Optional[Dict[str, Any]] = None
+    details: dict[str, Any] | None = None
 
 
 @dataclass
 class DayResult:
     """Result of running a complete day."""
+
     day: int
     bank_id: str
 
@@ -53,7 +53,7 @@ class DayResult:
 
     # Part C: Tickets processed
     tickets_processed: int = 0
-    ticket_results: List[TicketResult] = field(default_factory=list)
+    ticket_results: list[TicketResult] = field(default_factory=list)
 
     # Part D: Interest
     deposit_interest_credited: int = 0
@@ -62,11 +62,11 @@ class DayResult:
     cb_topup_amount: int = 0
 
     # Quotes
-    opening_quote: Optional[Quote] = None
-    closing_quote: Optional[Quote] = None
+    opening_quote: Quote | None = None
+    closing_quote: Quote | None = None
 
     # Event log
-    events: List[DayEvent] = field(default_factory=list)
+    events: list[DayEvent] = field(default_factory=list)
 
 
 @dataclass
@@ -76,17 +76,18 @@ class DayRunner:
 
     Coordinates the Parts A-E sequence and maintains the event log.
     """
+
     processor: TicketProcessor
 
     # Optional callback for withdrawal forecast
     # Returns expected withdrawals for the day
-    withdrawal_forecast_fn: Optional[Callable[[int], int]] = None
+    withdrawal_forecast_fn: Callable[[int], int] | None = None
 
     def run_day(
         self,
         day: int,
-        tickets: List[Ticket],
-        withdrawal_forecast: Optional[int] = None,
+        tickets: list[Ticket],
+        withdrawal_forecast: int | None = None,
     ) -> DayResult:
         """
         Run a complete day sequence.
@@ -101,7 +102,6 @@ class DayRunner:
             DayResult with full day summary
         """
         state = self.processor.state
-        cb_params = self.processor.cb_params
 
         result = DayResult(day=day, bank_id=state.bank_id)
 
@@ -176,19 +176,21 @@ class DayRunner:
         result.opening_deposits = state.total_deposits
         result.opening_loans = state.total_loans
 
-        result.events.append(DayEvent(
-            day=day,
-            part="A",
-            event_type="open",
-            description=f"Day {day} opened. Withdrawal forecast: {withdrawal_forecast}",
-            details={
-                "reserves": state.reserves,
-                "deposits": state.total_deposits,
-                "loans": state.total_loans,
-                "deposit_rate": str(opening_quote.deposit_rate),
-                "loan_rate": str(opening_quote.loan_rate),
-            },
-        ))
+        result.events.append(
+            DayEvent(
+                day=day,
+                part="A",
+                event_type="open",
+                description=f"Day {day} opened. Withdrawal forecast: {withdrawal_forecast}",
+                details={
+                    "reserves": state.reserves,
+                    "deposits": state.total_deposits,
+                    "loans": state.total_loans,
+                    "deposit_rate": str(opening_quote.deposit_rate),
+                    "loan_rate": str(opening_quote.loan_rate),
+                },
+            )
+        )
 
     def _part_b_scheduled(self, day: int, result: DayResult) -> None:
         """
@@ -204,26 +206,30 @@ class DayRunner:
         if cb_repaid > 0:
             state.reserves -= cb_repaid
             result.cb_repayment = cb_repaid
-            result.events.append(DayEvent(
-                day=day,
-                part="B",
-                event_type="cb_repay",
-                description=f"CB borrowing repayment: {cb_repaid}",
-                amount=-cb_repaid,
-            ))
+            result.events.append(
+                DayEvent(
+                    day=day,
+                    part="B",
+                    event_type="cb_repay",
+                    description=f"CB borrowing repayment: {cb_repaid}",
+                    amount=-cb_repaid,
+                )
+            )
 
         # Loan repayments (inflow)
         loan_received = state.process_loan_repayment(day)
         if loan_received > 0:
             state.reserves += loan_received
             result.loan_repayments = loan_received
-            result.events.append(DayEvent(
-                day=day,
-                part="B",
-                event_type="loan_repay",
-                description=f"Loan repayments received: {loan_received}",
-                amount=loan_received,
-            ))
+            result.events.append(
+                DayEvent(
+                    day=day,
+                    part="B",
+                    event_type="loan_repay",
+                    description=f"Loan repayments received: {loan_received}",
+                    amount=loan_received,
+                )
+            )
 
         # Refresh projection after scheduled settlements
         if cb_repaid > 0 or loan_received > 0:
@@ -232,7 +238,7 @@ class DayRunner:
 
     def _part_c_tickets(
         self,
-        tickets: List[Ticket],
+        tickets: list[Ticket],
         result: DayResult,
     ) -> None:
         """
@@ -248,20 +254,22 @@ class DayRunner:
             result.tickets_processed += 1
 
             status = "SUCCESS" if ticket_result.success else "FAILED"
-            result.events.append(DayEvent(
-                day=result.day,
-                part="C",
-                event_type=f"ticket_{ticket.ticket_type.value}",
-                description=f"[{status}] {ticket_result.message}",
-                amount=ticket.amount,
-                details={
-                    "ticket_id": ticket.id,
-                    "client_id": ticket.client_id,
-                    "success": ticket_result.success,
-                    "reserve_delta": ticket_result.reserve_delta,
-                    "deposit_delta": ticket_result.deposit_delta,
-                },
-            ))
+            result.events.append(
+                DayEvent(
+                    day=result.day,
+                    part="C",
+                    event_type=f"ticket_{ticket.ticket_type.value}",
+                    description=f"[{status}] {ticket_result.message}",
+                    amount=ticket.amount,
+                    details={
+                        "ticket_id": ticket.id,
+                        "client_id": ticket.client_id,
+                        "success": ticket_result.success,
+                        "reserve_delta": ticket_result.reserve_delta,
+                        "deposit_delta": ticket_result.deposit_delta,
+                    },
+                )
+            )
 
     def _part_d_calendar(self, day: int, result: DayResult) -> None:
         """
@@ -274,13 +282,15 @@ class DayRunner:
         interest_credited = state.credit_deposit_interest(day)
         if interest_credited > 0:
             result.deposit_interest_credited = interest_credited
-            result.events.append(DayEvent(
-                day=day,
-                part="D",
-                event_type="deposit_interest",
-                description=f"Deposit interest credited: {interest_credited}",
-                amount=interest_credited,
-            ))
+            result.events.append(
+                DayEvent(
+                    day=day,
+                    part="D",
+                    event_type="deposit_interest",
+                    description=f"Deposit interest credited: {interest_credited}",
+                    amount=interest_credited,
+                )
+            )
 
     def _part_e_topup(self, day: int, result: DayResult) -> None:
         """
@@ -306,17 +316,19 @@ class DayRunner:
             state.reserves = 0
 
             result.cb_topup_amount = shortfall
-            result.events.append(DayEvent(
-                day=day,
-                part="E",
-                event_type="cb_topup",
-                description=f"CB top-up (overdraft conversion): {shortfall}",
-                amount=shortfall,
-                details={
-                    "cb_rate": str(cb_params.cb_borrowing_rate),
-                    "maturity_day": day + 2,
-                },
-            ))
+            result.events.append(
+                DayEvent(
+                    day=day,
+                    part="E",
+                    event_type="cb_topup",
+                    description=f"CB top-up (overdraft conversion): {shortfall}",
+                    amount=shortfall,
+                    details={
+                        "cb_rate": str(cb_params.cb_borrowing_rate),
+                        "maturity_day": day + 2,
+                    },
+                )
+            )
 
             # Refresh projection after CB borrowing
             self.processor.refresh_projection()
@@ -338,14 +350,15 @@ class MultiBankDayRunner:
     - Inter-bank payment routing
     - End-of-day settlement
     """
-    runners: Dict[str, DayRunner]  # bank_id -> DayRunner
+
+    runners: dict[str, DayRunner]  # bank_id -> DayRunner
 
     def run_day(
         self,
         day: int,
-        tickets_by_bank: Dict[str, List[Ticket]],
-        withdrawal_forecasts: Optional[Dict[str, int]] = None,
-    ) -> Dict[str, DayResult]:
+        tickets_by_bank: dict[str, list[Ticket]],
+        withdrawal_forecasts: dict[str, int] | None = None,
+    ) -> dict[str, DayResult]:
         """
         Run a complete day for all banks.
 
@@ -365,10 +378,7 @@ class MultiBankDayRunner:
 
         for bank_id, runner in self.runners.items():
             tickets = tickets_by_bank.get(bank_id, [])
-            forecast = (
-                withdrawal_forecasts.get(bank_id, 0)
-                if withdrawal_forecasts else 0
-            )
+            forecast = withdrawal_forecasts.get(bank_id, 0) if withdrawal_forecasts else 0
 
             results[bank_id] = runner.run_day(
                 day=day,
@@ -378,7 +388,7 @@ class MultiBankDayRunner:
 
         return results
 
-    def get_system_state(self) -> Dict[str, Any]:
+    def get_system_state(self) -> dict[str, Any]:
         """Get aggregate state across all banks."""
         total_reserves = 0
         total_deposits = 0

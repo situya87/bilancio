@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Union
 
 
 @dataclass(frozen=True)
@@ -77,10 +76,10 @@ class BilateralOnlyNoise:
 
 
 # Union of all noise types for type annotations
-NoiseConfig = Union[
-    LagNoise,
-    SampleNoise,
-    EstimationNoise,
-    AggregateOnlyNoise,
-    BilateralOnlyNoise,
-]
+NoiseConfig = (
+    LagNoise
+    | SampleNoise
+    | EstimationNoise
+    | AggregateOnlyNoise
+    | BilateralOnlyNoise
+)

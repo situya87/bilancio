@@ -11,18 +11,17 @@ References:
 - "Banks-as-Dealers with deposits on demand" specification Section 6.1.3
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.banking.state import BankDealerState, CentralBankParams
 from bilancio.banking.reserve_projection import (
-    project_reserves,
+    ReserveProjection,
     compute_cash_tightness,
     compute_long_side_headroom,
     effective_reserves_after_withdrawals,
+    project_reserves,
     update_projection_after_ticket,
-    ReserveProjection,
 )
+from bilancio.banking.state import BankDealerState, CentralBankParams
 
 
 def create_test_state(
@@ -382,7 +381,9 @@ class TestIntegrationWithState:
 
         # Add various cohorts
         state.add_loan_cohort(day=0, amount=50000, rate=Decimal("0.03"))  # Matures day 10
-        state.add_loan_cohort(day=3, amount=30000, rate=Decimal("0.025"))  # Matures day 13 (beyond horizon)
+        state.add_loan_cohort(
+            day=3, amount=30000, rate=Decimal("0.025")
+        )  # Matures day 13 (beyond horizon)
         state.add_cb_borrowing(day=0, amount=20000, cb_rate=Decimal("0.03"))  # Matures day 2
 
         projection = project_reserves(state, cb_params)

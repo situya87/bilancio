@@ -23,25 +23,26 @@ References:
 
 import logging
 import random
-from decimal import Decimal
 from copy import deepcopy
-
-logger = logging.getLogger(__name__)
+from decimal import Decimal
 
 from bilancio.core.ids import AgentId
-from .models import DealerState, VBTState, Ticket
-from .kernel import (
-    recompute_dealer_state,
-    can_interior_buy,
-    can_interior_sell,
-    KernelParams,
-    ExecutionResult,
-)
+
 from .assertions import (
     assert_c1_double_entry,
     assert_c3_feasibility,
     assert_c4_passthrough_invariant,
 )
+from .kernel import (
+    ExecutionResult,
+    KernelParams,
+    can_interior_buy,
+    can_interior_sell,
+    recompute_dealer_state,
+)
+from .models import DealerState, Ticket, VBTState
+
+logger = logging.getLogger(__name__)
 
 
 class TradeExecutor:
@@ -68,7 +69,12 @@ class TradeExecutor:
         - Specification Section 8.6: Feasibility checks
     """
 
-    def __init__(self, params: KernelParams, rng: random.Random | None = None, layoff_threshold: Decimal = Decimal("0")):
+    def __init__(
+        self,
+        params: KernelParams,
+        rng: random.Random | None = None,
+        layoff_threshold: Decimal = Decimal("0"),
+    ):
         """
         Initialize trade executor.
 
@@ -124,14 +130,17 @@ class TradeExecutor:
 
         # Determine if interior execution is feasible
         is_interior = can_interior_buy(dealer, self.params)
-        logger.debug("customer_sell: ticket=%s customer=%s interior=%s",
-                      ticket.id, customer_id, is_interior)
+        logger.debug(
+            "customer_sell: ticket=%s customer=%s interior=%s", ticket.id, customer_id, is_interior
+        )
 
         # VBT credit facility: when dealer can't buy interior and inventory
         # is below layoff threshold, VBT injects cash to expand dealer capacity.
         # Economically: repo/credit facility from VBT to market maker.
         if not is_interior and self.layoff_threshold > 0:
-            inventory_ratio = Decimal(dealer.a) / Decimal(dealer.K_star) if dealer.K_star > 0 else Decimal(0)
+            inventory_ratio = (
+                Decimal(dealer.a) / Decimal(dealer.K_star) if dealer.K_star > 0 else Decimal(0)
+            )
             if inventory_ratio < self.layoff_threshold:
                 needed_cash = dealer.bid * self.params.S
                 if vbt.cash >= needed_cash:
@@ -162,13 +171,13 @@ class TradeExecutor:
             if check_assertions:
                 assert_c1_double_entry(
                     cash_changes={
-                        customer_id: execution_price,    # Customer receives cash
+                        customer_id: execution_price,  # Customer receives cash
                         dealer.agent_id: -execution_price,  # Dealer pays cash
                     },
                     qty_changes={
                         customer_id: -1,  # Customer gives ticket
                         dealer.agent_id: 1,  # Dealer receives ticket
-                    }
+                    },
                 )
 
             return ExecutionResult(
@@ -211,7 +220,7 @@ class TradeExecutor:
                     qty_changes={
                         customer_id: -1,  # Customer gives ticket
                         vbt.agent_id: 1,  # VBT receives ticket
-                    }
+                    },
                 )
 
             return ExecutionResult(
@@ -303,7 +312,7 @@ class TradeExecutor:
                     qty_changes={
                         buyer_id: 1,  # Buyer receives ticket
                         dealer.agent_id: -1,  # Dealer gives ticket
-                    }
+                    },
                 )
 
             return ExecutionResult(
@@ -352,7 +361,7 @@ class TradeExecutor:
                     qty_changes={
                         buyer_id: 1,  # Buyer receives ticket
                         vbt.agent_id: -1,  # VBT gives ticket
-                    }
+                    },
                 )
 
             return ExecutionResult(
@@ -401,7 +410,7 @@ class TradeExecutor:
             if not candidates:
                 raise ValueError(
                     f"No tickets from preferred issuer {issuer_preference} in inventory. "
-                    f"Available issuers: {set(t.issuer_id for t in inventory)}"
+                    f"Available issuers: { {t.issuer_id for t in inventory} }"
                 )
         else:
             candidates = inventory

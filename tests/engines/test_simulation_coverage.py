@@ -10,28 +10,27 @@ Coverage gaps addressed:
 - run_until_stable: stability detection, max_days cap, rollover mode
 """
 
-import pytest
 from decimal import Decimal
 
+import pytest
+
+from bilancio.domain.agents.bank import Bank
+from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.domain.agents.firm import Firm
+from bilancio.domain.agents.household import Household
+from bilancio.domain.instruments.base import InstrumentKind
+from bilancio.domain.instruments.credit import Payable
+from bilancio.domain.instruments.delivery import DeliveryObligation
 from bilancio.engines.simulation import (
     DEFAULT_EVENTS,
     DayReport,
     MonteCarloEngine,
-    _defaults_today,
     _has_open_obligations,
     _impacted_today,
     run_day,
     run_until_stable,
 )
 from bilancio.engines.system import System
-from bilancio.domain.agents.central_bank import CentralBank
-from bilancio.domain.agents.bank import Bank
-from bilancio.domain.agents.household import Household
-from bilancio.domain.agents.firm import Firm
-from bilancio.domain.instruments.base import InstrumentKind
-from bilancio.domain.instruments.credit import Payable
-from bilancio.domain.instruments.delivery import DeliveryObligation
-
 
 # =============================================================================
 # MonteCarloEngine Tests
@@ -359,7 +358,8 @@ class TestRunDayPhaseD:
         sys.mint_reserves_with_interest("B1", 10000, day=0)
 
         initial_reserves = sum(
-            c.amount for c in sys.state.contracts.values()
+            c.amount
+            for c in sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         assert initial_reserves == 10000
@@ -372,7 +372,8 @@ class TestRunDayPhaseD:
         run_day(sys)  # day 2 -> 3
 
         final_reserves = sum(
-            c.amount for c in sys.state.contracts.values()
+            c.amount
+            for c in sys.state.contracts.values()
             if c.kind == InstrumentKind.RESERVE_DEPOSIT and c.asset_holder_id == "B1"
         )
         # Should have earned interest: 10000 * 0.01 = 100
@@ -426,7 +427,8 @@ class TestRunDayScheduledActions:
 
         # Verify H1 has no cash before
         h1_cash_before = sum(
-            c.amount for c in sys.state.contracts.values()
+            c.amount
+            for c in sys.state.contracts.values()
             if c.kind == InstrumentKind.CASH and c.asset_holder_id == "H1"
         )
         assert h1_cash_before == 0
@@ -435,7 +437,8 @@ class TestRunDayScheduledActions:
 
         # H1 should have 200 cash
         h1_cash_after = sum(
-            c.amount for c in sys.state.contracts.values()
+            c.amount
+            for c in sys.state.contracts.values()
             if c.kind == InstrumentKind.CASH and c.asset_holder_id == "H1"
         )
         assert h1_cash_after == 200
@@ -963,8 +966,11 @@ class TestRunDayPhaseOrder:
 
         run_day(sys)
 
-        phase_kinds = [e["kind"] for e in sys.state.events
-                       if e["kind"] in ("PhaseA", "PhaseB", "SubphaseB1", "SubphaseB2", "PhaseC")]
+        phase_kinds = [
+            e["kind"]
+            for e in sys.state.events
+            if e["kind"] in ("PhaseA", "PhaseB", "SubphaseB1", "SubphaseB2", "PhaseC")
+        ]
         assert phase_kinds == ["PhaseA", "PhaseB", "SubphaseB1", "SubphaseB2", "PhaseC"]
 
     def test_day_incremented(self):

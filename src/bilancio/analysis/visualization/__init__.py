@@ -9,37 +9,36 @@ This module has been split into submodules for better organization:
 
 from __future__ import annotations
 
-# Re-export public API from submodules to maintain backward compatibility
+# Balance sheet functions
+from bilancio.analysis.visualization.balances import (
+    build_t_account_rows,
+    display_agent_balance_from_balance,
+    display_agent_balance_table,
+    display_agent_balance_table_renderable,
+    display_agent_t_account,
+    display_agent_t_account_renderable,
+    display_multiple_agent_balances,
+    display_multiple_agent_balances_renderable,
+)
 
+# Re-export public API from submodules to maintain backward compatibility
 # Common utilities and types
 from bilancio.analysis.visualization.common import (
     RICH_AVAILABLE,
-    RenderableType,
     BalanceRow,
+    RenderableType,
     TAccount,
     parse_day_from_maturity,
-)
-
-# Balance sheet functions
-from bilancio.analysis.visualization.balances import (
-    display_agent_balance_table,
-    display_agent_balance_from_balance,
-    display_multiple_agent_balances,
-    build_t_account_rows,
-    display_agent_t_account,
-    display_agent_t_account_renderable,
-    display_agent_balance_table_renderable,
-    display_multiple_agent_balances_renderable,
 )
 
 # Event display functions
 from bilancio.analysis.visualization.events import (
     display_events,
+    display_events_for_day,
+    display_events_for_day_renderable,
+    display_events_renderable,
     display_events_table,
     display_events_table_renderable,
-    display_events_for_day,
-    display_events_renderable,
-    display_events_for_day_renderable,
 )
 
 # Phase summary functions
@@ -50,41 +49,41 @@ from bilancio.analysis.visualization.phases import (
 # Run comparison visualizations
 from bilancio.analysis.visualization.run_comparison import (
     RunComparison,
-    load_job_comparison_data,
     comparisons_to_dataframe,
     generate_comparison_html,
+    load_job_comparison_data,
     quick_visualize,
 )
 
 __all__ = [
     # Common
-    'RICH_AVAILABLE',
-    'RenderableType',
-    'BalanceRow',
-    'TAccount',
-    'parse_day_from_maturity',
+    "RICH_AVAILABLE",
+    "RenderableType",
+    "BalanceRow",
+    "TAccount",
+    "parse_day_from_maturity",
     # Balance sheets
-    'display_agent_balance_table',
-    'display_agent_balance_from_balance',
-    'display_multiple_agent_balances',
-    'build_t_account_rows',
-    'display_agent_t_account',
-    'display_agent_t_account_renderable',
-    'display_agent_balance_table_renderable',
-    'display_multiple_agent_balances_renderable',
+    "display_agent_balance_table",
+    "display_agent_balance_from_balance",
+    "display_multiple_agent_balances",
+    "build_t_account_rows",
+    "display_agent_t_account",
+    "display_agent_t_account_renderable",
+    "display_agent_balance_table_renderable",
+    "display_multiple_agent_balances_renderable",
     # Events
-    'display_events',
-    'display_events_table',
-    'display_events_table_renderable',
-    'display_events_for_day',
-    'display_events_renderable',
-    'display_events_for_day_renderable',
+    "display_events",
+    "display_events_table",
+    "display_events_table_renderable",
+    "display_events_for_day",
+    "display_events_renderable",
+    "display_events_for_day_renderable",
     # Phases
-    'display_events_tables_by_phase_renderables',
+    "display_events_tables_by_phase_renderables",
     # Run comparison
-    'RunComparison',
-    'load_job_comparison_data',
-    'comparisons_to_dataframe',
-    'generate_comparison_html',
-    'quick_visualize',
+    "RunComparison",
+    "load_job_comparison_data",
+    "comparisons_to_dataframe",
+    "generate_comparison_html",
+    "quick_visualize",
 ]

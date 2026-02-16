@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional, List, Dict, Any, Set, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .models import RegistryEntry, RunStatus
 
@@ -13,6 +13,16 @@ if TYPE_CHECKING:
     from supabase import Client
 
 logger = logging.getLogger(__name__)
+SUPABASE_OPERATION_ERRORS = (
+    FileNotFoundError,
+    ImportError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+)
 
 
 class SupabaseRegistryStore:
@@ -28,17 +38,21 @@ class SupabaseRegistryStore:
     """
 
     # Parameter fields that map directly to runs table columns
-    RUNS_PARAM_COLUMNS = {
-        "kappa", "concentration", "mu", "outside_mid_ratio", "seed", "regime"
-    }
+    RUNS_PARAM_COLUMNS = {"kappa", "concentration", "mu", "outside_mid_ratio", "seed", "regime"}
 
     # Metric fields that map directly to metrics table columns
     METRICS_COLUMNS = {
-        "delta_total", "phi_total", "n_defaults", "n_clears",
-        "time_to_stability", "trading_effect", "total_trades", "total_trade_volume"
+        "delta_total",
+        "phi_total",
+        "n_defaults",
+        "n_clears",
+        "time_to_stability",
+        "trading_effect",
+        "total_trades",
+        "total_trade_volume",
     }
 
-    def __init__(self, client: Optional["Client"] = None):
+    def __init__(self, client: Client | None = None):
         """Initialize Supabase registry store.
 
         Args:
@@ -49,7 +63,7 @@ class SupabaseRegistryStore:
         self._initialized = client is not None
 
     @property
-    def client(self) -> "Client":
+    def client(self) -> Client:
         """Get or create the Supabase client.
 
         Returns:
@@ -89,19 +103,16 @@ class SupabaseRegistryStore:
             runs_row = self._build_runs_row(entry)
 
             # Upsert into runs table
-            self.client.table("runs").upsert(
-                runs_row,
-                on_conflict="run_id"
-            ).execute()
+            self.client.table("runs").upsert(runs_row, on_conflict="run_id").execute()
 
             # Build and upsert metrics if we have any
             if entry.metrics:
                 metrics_row = self._build_metrics_row(entry)
 
                 # Check if metrics row already exists for this run
-                existing = self.client.table("metrics").select("id").eq(
-                    "run_id", entry.run_id
-                ).execute()
+                existing = (
+                    self.client.table("metrics").select("id").eq("run_id", entry.run_id).execute()
+                )
 
                 if existing.data:
                     # Update existing metrics row
@@ -114,10 +125,10 @@ class SupabaseRegistryStore:
 
             logger.debug(f"Upserted registry entry for run {entry.run_id}")
 
-        except Exception as e:  # Intentionally broad: external service call
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to upsert registry entry {entry.run_id}: {e}")
 
-    def get(self, experiment_id: str, run_id: str) -> Optional[RegistryEntry]:
+    def get(self, experiment_id: str, run_id: str) -> RegistryEntry | None:
         """Get a specific registry entry.
 
         Args:
@@ -129,21 +140,25 @@ class SupabaseRegistryStore:
         """
         try:
             # Query runs table with metrics join
-            result = self.client.table("runs").select(
-                "*, metrics(*)"
-            ).eq("run_id", run_id).eq("job_id", experiment_id).execute()
+            result = (
+                self.client.table("runs")
+                .select("*, metrics(*)")
+                .eq("run_id", run_id)
+                .eq("job_id", experiment_id)
+                .execute()
+            )
 
             if not result.data:
                 return None
 
-            row = cast(Dict[str, Any], result.data[0])
+            row = cast(dict[str, Any], result.data[0])
             return self._row_to_entry(row)
 
-        except Exception as e:  # Intentionally broad: external service call
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to get registry entry {run_id}: {e}")
             return None
 
-    def list_runs(self, experiment_id: str) -> List[str]:
+    def list_runs(self, experiment_id: str) -> list[str]:
         """List all run IDs for an experiment.
 
         Args:
@@ -153,21 +168,19 @@ class SupabaseRegistryStore:
             List of run IDs.
         """
         try:
-            result = self.client.table("runs").select("run_id").eq(
-                "job_id", experiment_id
-            ).execute()
+            result = (
+                self.client.table("runs").select("run_id").eq("job_id", experiment_id).execute()
+            )
 
-            return [cast(Dict[str, Any], row)["run_id"] for row in result.data]
+            return [cast(dict[str, Any], row)["run_id"] for row in result.data]
 
-        except Exception as e:  # Intentionally broad: external service call
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to list runs for {experiment_id}: {e}")
             return []
 
     def get_completed_keys(
-        self,
-        experiment_id: str,
-        key_fields: Optional[List[str]] = None
-    ) -> Set[Any]:
+        self, experiment_id: str, key_fields: list[str] | None = None
+    ) -> set[Any]:
         """Get set of completed parameter combinations.
 
         Used for sweep resumption to identify which parameter combinations
@@ -188,19 +201,23 @@ class SupabaseRegistryStore:
             # Build select clause for requested fields
             select_fields = ",".join(key_fields)
 
-            result = self.client.table("runs").select(select_fields).eq(
-                "job_id", experiment_id
-            ).eq("status", "completed").execute()
+            result = (
+                self.client.table("runs")
+                .select(select_fields)
+                .eq("job_id", experiment_id)
+                .eq("status", "completed")
+                .execute()
+            )
 
-            completed: Set[Any] = set()
+            completed: set[Any] = set()
             for raw_row in result.data:
-                row_dict = cast(Dict[str, Any], raw_row)
-                key_values: List[Any] = []
+                row_dict = cast(dict[str, Any], raw_row)
+                key_values: list[Any] = []
                 for field in key_fields:
                     val = row_dict.get(field)
                     if val is not None:
                         # Convert Decimal to float for consistent hashing
-                        if isinstance(val, (Decimal, str)):
+                        if isinstance(val, Decimal | str):
                             try:
                                 val = float(val)
                             except (ValueError, TypeError):
@@ -212,17 +229,13 @@ class SupabaseRegistryStore:
 
             return completed
 
-        except Exception as e:  # Intentionally broad: external service call
-            logger.warning(
-                f"Failed to get completed keys for {experiment_id}: {e}"
-            )
+        except SUPABASE_OPERATION_ERRORS as e:
+            logger.warning(f"Failed to get completed keys for {experiment_id}: {e}")
             return set()
 
     def query(
-        self,
-        experiment_id: str,
-        filters: Optional[Dict[str, Any]] = None
-    ) -> List[RegistryEntry]:
+        self, experiment_id: str, filters: dict[str, Any] | None = None
+    ) -> list[RegistryEntry]:
         """Query registry entries with optional filters.
 
         Args:
@@ -234,9 +247,7 @@ class SupabaseRegistryStore:
         """
         try:
             # Start with base query including metrics
-            query = self.client.table("runs").select("*, metrics(*)").eq(
-                "job_id", experiment_id
-            )
+            query = self.client.table("runs").select("*, metrics(*)").eq("job_id", experiment_id)
 
             # Apply filters
             if filters:
@@ -245,15 +256,13 @@ class SupabaseRegistryStore:
 
             result = query.execute()
 
-            return [self._row_to_entry(cast(Dict[str, Any], row)) for row in result.data]
+            return [self._row_to_entry(cast(dict[str, Any], row)) for row in result.data]
 
-        except Exception as e:  # Intentionally broad: external service call
-            logger.warning(
-                f"Failed to query registry for {experiment_id}: {e}"
-            )
+        except SUPABASE_OPERATION_ERRORS as e:
+            logger.warning(f"Failed to query registry for {experiment_id}: {e}")
             return []
 
-    def _build_runs_row(self, entry: RegistryEntry) -> Dict[str, Any]:
+    def _build_runs_row(self, entry: RegistryEntry) -> dict[str, Any]:
         """Build a row dict for the runs table.
 
         Args:
@@ -262,7 +271,7 @@ class SupabaseRegistryStore:
         Returns:
             Dict suitable for inserting into runs table.
         """
-        row: Dict[str, Any] = {
+        row: dict[str, Any] = {
             "run_id": entry.run_id,
             "job_id": entry.experiment_id,
             "status": entry.status.value,
@@ -273,7 +282,7 @@ class SupabaseRegistryStore:
             row["error"] = entry.error
 
         # Add timestamps based on status
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         if entry.status == RunStatus.COMPLETED:
             row["completed_at"] = now
         elif entry.status == RunStatus.FAILED:
@@ -294,12 +303,12 @@ class SupabaseRegistryStore:
                     if "runs" in parts:
                         idx = parts.index("runs")
                         if idx + 2 <= len(parts):
-                            row["modal_volume_path"] = "/".join(parts[:idx + 2])
+                            row["modal_volume_path"] = "/".join(parts[: idx + 2])
                             break
 
         return row
 
-    def _build_metrics_row(self, entry: RegistryEntry) -> Dict[str, Any]:
+    def _build_metrics_row(self, entry: RegistryEntry) -> dict[str, Any]:
         """Build a row dict for the metrics table.
 
         Args:
@@ -308,7 +317,7 @@ class SupabaseRegistryStore:
         Returns:
             Dict suitable for inserting into metrics table.
         """
-        row: Dict[str, Any] = {
+        row: dict[str, Any] = {
             "run_id": entry.run_id,
             "job_id": entry.experiment_id,
             "raw_metrics": entry.metrics,  # Store full metrics as JSONB
@@ -321,7 +330,7 @@ class SupabaseRegistryStore:
 
         return row
 
-    def _row_to_entry(self, row: Dict[str, Any]) -> RegistryEntry:
+    def _row_to_entry(self, row: dict[str, Any]) -> RegistryEntry:
         """Convert a database row to RegistryEntry.
 
         Args:
@@ -331,13 +340,13 @@ class SupabaseRegistryStore:
             RegistryEntry object.
         """
         # Extract parameters from runs table columns
-        parameters: Dict[str, Any] = {}
+        parameters: dict[str, Any] = {}
         for param in self.RUNS_PARAM_COLUMNS:
             if param in row and row[param] is not None:
                 parameters[param] = self._parse_value(row[param])
 
         # Extract metrics from nested metrics relation or raw_metrics
-        metrics: Dict[str, Any] = {}
+        metrics: dict[str, Any] = {}
         metrics_data = row.get("metrics")
 
         if metrics_data:
@@ -358,7 +367,7 @@ class SupabaseRegistryStore:
                         metrics[metric] = self._parse_value(metrics_row[metric])
 
         # Build artifact paths from modal_volume_path
-        artifact_paths: Dict[str, str] = {}
+        artifact_paths: dict[str, str] = {}
         volume_path = row.get("modal_volume_path")
         if volume_path:
             # Reconstruct standard artifact paths

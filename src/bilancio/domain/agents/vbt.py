@@ -6,6 +6,7 @@ trades based on a fundamental value model (M, O anchors). VBTs provide
 liquidity when dealer inventory is exhausted, allowing the market to
 continue functioning even under stress.
 """
+
 from dataclasses import dataclass, field
 
 from bilancio.domain.agent import Agent, AgentKind

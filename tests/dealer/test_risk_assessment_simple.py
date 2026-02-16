@@ -2,10 +2,8 @@
 
 from decimal import Decimal
 
-import pytest
-
-from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
 from bilancio.dealer.models import Ticket
+from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
 
 
 def test_no_history_uses_prior():
@@ -118,24 +116,30 @@ def test_should_sell_accepts_premium_above_threshold():
     # Need: dealer_bid * 10 >= EV + 1.0
 
     # Test 1: Bid of 1.15 (total = 11.5) should be accepted (well above EV + 1.0)
-    assert assessor.should_sell(
-        ticket=ticket,
-        dealer_bid=Decimal("1.15"),
-        current_day=10,
-        trader_cash=Decimal(100),
-        trader_shortfall=Decimal(0),
-        trader_asset_value=Decimal(50),
-    ) is True
+    assert (
+        assessor.should_sell(
+            ticket=ticket,
+            dealer_bid=Decimal("1.15"),
+            current_day=10,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(0),
+            trader_asset_value=Decimal(50),
+        )
+        is True
+    )
 
     # Test 2: Bid of 0.95 (total = 9.5) should be rejected (below EV)
-    assert assessor.should_sell(
-        ticket=ticket,
-        dealer_bid=Decimal("0.95"),
-        current_day=10,
-        trader_cash=Decimal(100),
-        trader_shortfall=Decimal(0),
-        trader_asset_value=Decimal(50),
-    ) is False
+    assert (
+        assessor.should_sell(
+            ticket=ticket,
+            dealer_bid=Decimal("0.95"),
+            current_day=10,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(0),
+            trader_asset_value=Decimal(50),
+        )
+        is False
+    )
 
 
 def test_urgency_reduces_threshold():
@@ -164,7 +168,7 @@ def test_urgency_reduces_threshold():
     # Scenario 1: No urgency - normal threshold
     # Wealth = 100 + 50 = 150, shortfall = 0, urgency = 0
     # Threshold = 0.10 - 0.20*0 = 0.10 (10%)
-    accept_normal = assessor.should_sell(
+    assessor.should_sell(
         ticket=ticket,
         dealer_bid=Decimal("1.05"),  # Total = 10.5
         current_day=10,
@@ -249,7 +253,7 @@ def test_diagnostics_provides_useful_info():
     # Add history
     for day in range(10):
         defaulted = day % 3 == 0  # Every 3rd defaults
-        assessor.update_history(day=day, issuer_id=f"issuer_{day%2}", defaulted=defaulted)
+        assessor.update_history(day=day, issuer_id=f"issuer_{day % 2}", defaulted=defaulted)
 
     diag = assessor.get_diagnostics(current_day=10)
 

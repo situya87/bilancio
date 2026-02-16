@@ -1,21 +1,21 @@
 """Tests for network graph data extraction."""
 
 import pytest
+
 from bilancio.analysis.network import (
-    NetworkNode,
     NetworkEdge,
-    NetworkSnapshot,
+    NetworkNode,
+    _snapshot_to_dict,
     build_network_data,
     build_network_time_series,
-    _snapshot_to_dict,
 )
-from bilancio.engines.system import System
-from bilancio.domain.instruments.base import InstrumentKind
-from bilancio.domain.instruments.means_of_payment import Cash, BankDeposit, ReserveDeposit
-from bilancio.domain.instruments.credit import Payable
+from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.household import Household
-from bilancio.domain.agents.bank import Bank
+from bilancio.domain.instruments.base import InstrumentKind
+from bilancio.domain.instruments.credit import Payable
+from bilancio.domain.instruments.means_of_payment import BankDeposit, Cash, ReserveDeposit
+from bilancio.engines.system import System
 
 
 def test_network_node_creation():
@@ -29,11 +29,7 @@ def test_network_node_creation():
 def test_network_edge_creation():
     """Test NetworkEdge dataclass creation."""
     edge = NetworkEdge(
-        source="A1",
-        target="A2",
-        amount=1000,
-        instrument_type="payable",
-        contract_id="C1"
+        source="A1", target="A2", amount=1000, instrument_type="payable", contract_id="C1"
     )
     assert edge.source == "A1"
     assert edge.target == "A2"
@@ -89,11 +85,7 @@ def test_build_network_data_filter_instruments(system_with_multiple_instruments)
     assert all(edge.instrument_type == "cash" for edge in snapshot.edges)
 
     # Filter for multiple types
-    snapshot = build_network_data(
-        system,
-        day=0,
-        instrument_types=["cash", "bank_deposit"]
-    )
+    snapshot = build_network_data(system, day=0, instrument_types=["cash", "bank_deposit"])
 
     edge_types = {edge.instrument_type for edge in snapshot.edges}
     assert edge_types.issubset({"cash", "bank_deposit"})
@@ -168,7 +160,7 @@ def test_edge_source_target_mapping(system_with_simple_contracts):
         denom="X",
         asset_holder_id="H1",
         liability_issuer_id="H2",
-        due_day=5
+        due_day=5,
     )
     system.add_contract(payable)
 
@@ -184,6 +176,7 @@ def test_edge_source_target_mapping(system_with_simple_contracts):
 
 
 # Fixtures
+
 
 @pytest.fixture
 def empty_system():
@@ -215,7 +208,7 @@ def system_with_simple_contracts():
         amount=100,
         denom="X",
         asset_holder_id="H1",
-        liability_issuer_id="CB"
+        liability_issuer_id="CB",
     )
     system.add_contract(cash1)
 
@@ -226,7 +219,7 @@ def system_with_simple_contracts():
         amount=200,
         denom="X",
         asset_holder_id="H2",
-        liability_issuer_id="CB"
+        liability_issuer_id="CB",
     )
     system.add_contract(cash2)
 
@@ -254,7 +247,7 @@ def system_with_multiple_instruments():
         amount=100,
         denom="X",
         asset_holder_id="H1",
-        liability_issuer_id="CB"
+        liability_issuer_id="CB",
     )
     system.add_contract(cash)
 
@@ -266,7 +259,7 @@ def system_with_multiple_instruments():
         amount=500,
         denom="X",
         asset_holder_id="H1",
-        liability_issuer_id="B1"
+        liability_issuer_id="B1",
     )
     system.add_contract(deposit)
 
@@ -278,7 +271,7 @@ def system_with_multiple_instruments():
         amount=1000,
         denom="X",
         asset_holder_id="B1",
-        liability_issuer_id="CB"
+        liability_issuer_id="CB",
     )
     system.add_contract(reserve)
 
@@ -291,7 +284,7 @@ def system_with_multiple_instruments():
         denom="X",
         asset_holder_id="H2",
         liability_issuer_id="H1",
-        due_day=5
+        due_day=5,
     )
     system.add_contract(payable)
 

@@ -17,11 +17,17 @@ def fungible_key(instr: Instrument) -> tuple[str, str, str, str]:
     # Same type, denomination, issuer, holder -> can merge
     return (instr.kind, instr.denom, instr.liability_issuer_id, instr.asset_holder_id)
 
+
 def is_divisible(instr: Instrument) -> bool:
     # Cash and bank deposits are divisible
-    if instr.kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT, InstrumentKind.RESERVE_DEPOSIT):
+    if instr.kind in (
+        InstrumentKind.CASH,
+        InstrumentKind.BANK_DEPOSIT,
+        InstrumentKind.RESERVE_DEPOSIT,
+    ):
         return True
     return False
+
 
 def split(system: System, instr_id: str, amount: int) -> str:
     instr = system.state.contracts[instr_id]
@@ -50,11 +56,12 @@ def split(system: System, instr_id: str, amount: int) -> str:
         denom=instr.denom,
         asset_holder_id=instr.asset_holder_id,
         liability_issuer_id=instr.liability_issuer_id,
-        **extra_fields
+        **extra_fields,
     )
     system.add_contract(twin)  # attaches to holder/issuer lists too
     logger.debug("split %s: %d off -> %s (remaining=%d)", instr_id, amount, twin_id, instr.amount)
     return twin_id
+
 
 def merge(system: System, a_id: str, b_id: str) -> str:
     if a_id == b_id:
@@ -74,6 +81,7 @@ def merge(system: System, a_id: str, b_id: str) -> str:
     system.log("InstrumentMerged", keep=a_id, removed=b_id)
     return a_id
 
+
 def consume(system: System, instr_id: str, amount: int) -> None:
     instr = system.state.contracts[instr_id]
     if amount <= 0 or amount > instr.amount:
@@ -87,16 +95,22 @@ def consume(system: System, instr_id: str, amount: int) -> None:
         issuer.liability_ids.remove(instr_id)
         del system.state.contracts[instr_id]
 
+
 def coalesce_deposits(system: System, customer_id: str, bank_id: str) -> str:
     """Coalesce all deposits for a customer at a bank into a single instrument"""
     ids = system.deposit_ids(customer_id, bank_id)
     if not ids:
         # create a zero-balance deposit instrument
         from bilancio.domain.instruments.means_of_payment import BankDeposit
+
         dep_id = system.new_contract_id("D")
         dep = BankDeposit(
-            id=dep_id, kind=InstrumentKind.BANK_DEPOSIT, amount=0, denom="X",
-            asset_holder_id=customer_id, liability_issuer_id=bank_id
+            id=dep_id,
+            kind=InstrumentKind.BANK_DEPOSIT,
+            amount=0,
+            denom="X",
+            asset_holder_id=customer_id,
+            liability_issuer_id=bank_id,
         )
         system.add_contract(dep)
         return dep_id

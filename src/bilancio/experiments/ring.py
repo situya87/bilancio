@@ -3,23 +3,24 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from bilancio.analysis.metrics_computer import MetricsComputer
 from bilancio.config.models import RingExplorerGeneratorConfig
-from bilancio.runners import LocalExecutor, RunOptions, ExecutionResult
-from bilancio.runners.protocols import SimulationExecutor
 from bilancio.experiments.sampling import (
     generate_frontier_params,
     generate_grid_params,
     generate_lhs_params,
 )
+from bilancio.runners import ExecutionResult, LocalExecutor, RunOptions
+from bilancio.runners.protocols import SimulationExecutor
 from bilancio.scenarios import compile_ring_explorer
 from bilancio.storage import (
     FileRegistryStore,
@@ -30,6 +31,17 @@ from bilancio.storage import (
 from bilancio.storage.models import RunStatus
 from bilancio.storage.protocols import RegistryStore
 
+EXTERNAL_SERVICE_ERRORS = (
+    FileNotFoundError,
+    ImportError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+)
+
 
 @dataclass
 class RingRunSummary:
@@ -39,16 +51,16 @@ class RingRunSummary:
     concentration: Decimal
     mu: Decimal
     monotonicity: Decimal
-    delta_total: Optional[Decimal]
-    phi_total: Optional[Decimal]
+    delta_total: Decimal | None
+    phi_total: Decimal | None
     time_to_stability: int
     # Cascade/contagion metrics
     n_defaults: int = 0
-    cascade_fraction: Optional[Decimal] = None
+    cascade_fraction: Decimal | None = None
     # Dealer metrics (only populated for treatment runs with dealer enabled)
-    dealer_metrics: Optional[Dict[str, Any]] = None
+    dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
-    modal_call_id: Optional[str] = None
+    modal_call_id: str | None = None
 
 
 @dataclass
@@ -57,6 +69,7 @@ class PreparedRun:
 
     Created by RingSweepRunner._prepare_run(), consumed by _finalize_run().
     """
+
     run_id: str
     phase: str
     kappa: Decimal
@@ -64,19 +77,19 @@ class PreparedRun:
     mu: Decimal
     monotonicity: Decimal
     seed: int
-    scenario_config: Dict[str, Any]
+    scenario_config: dict[str, Any]
     options: RunOptions
     run_dir: Path
     out_dir: Path
     scenario_path: Path
-    base_params: Dict[str, Any]
+    base_params: dict[str, Any]
     S1: Decimal
     L0: Decimal
 
 
-def _decimal_list(spec: str) -> List[Decimal]:
-    out: List[Decimal] = []
-    for part in spec.split(','):
+def _decimal_list(spec: str) -> list[Decimal]:
+    out: list[Decimal] = []
+    for part in spec.split(","):
         part = part.strip()
         if not part:
             continue
@@ -101,13 +114,13 @@ def _to_yaml_ready(obj: Any) -> Any:
 
 class _RingSweepGridConfig(BaseModel):
     enabled: bool = True
-    kappas: List[Decimal] = Field(default_factory=list)
-    concentrations: List[Decimal] = Field(default_factory=list)
-    mus: List[Decimal] = Field(default_factory=list)
-    monotonicities: List[Decimal] = Field(default_factory=list)
+    kappas: list[Decimal] = Field(default_factory=list)
+    concentrations: list[Decimal] = Field(default_factory=list)
+    mus: list[Decimal] = Field(default_factory=list)
+    monotonicities: list[Decimal] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_lists(self) -> "_RingSweepGridConfig":
+    def validate_lists(self) -> _RingSweepGridConfig:
         if self.enabled:
             if not self.kappas:
                 raise ValueError("grid.kappas must be provided when grid.enabled is true")
@@ -122,13 +135,13 @@ class _RingSweepGridConfig(BaseModel):
 
 class _RingSweepLHSConfig(BaseModel):
     count: int = 0
-    kappa_range: Optional[Tuple[Decimal, Decimal]] = None
-    concentration_range: Optional[Tuple[Decimal, Decimal]] = None
-    mu_range: Optional[Tuple[Decimal, Decimal]] = None
-    monotonicity_range: Optional[Tuple[Decimal, Decimal]] = None
+    kappa_range: tuple[Decimal, Decimal] | None = None
+    concentration_range: tuple[Decimal, Decimal] | None = None
+    mu_range: tuple[Decimal, Decimal] | None = None
+    monotonicity_range: tuple[Decimal, Decimal] | None = None
 
     @model_validator(mode="after")
-    def validate_ranges(self) -> "_RingSweepLHSConfig":
+    def validate_ranges(self) -> _RingSweepLHSConfig:
         if self.count <= 0:
             return self
         if self.monotonicity_range is None:
@@ -146,13 +159,13 @@ class _RingSweepLHSConfig(BaseModel):
 
 class _RingSweepFrontierConfig(BaseModel):
     enabled: bool = False
-    kappa_low: Optional[Decimal] = None
-    kappa_high: Optional[Decimal] = None
-    tolerance: Optional[Decimal] = None
-    max_iterations: Optional[int] = None
+    kappa_low: Decimal | None = None
+    kappa_high: Decimal | None = None
+    tolerance: Decimal | None = None
+    max_iterations: int | None = None
 
     @model_validator(mode="after")
-    def validate_frontier(self) -> "_RingSweepFrontierConfig":
+    def validate_frontier(self) -> _RingSweepFrontierConfig:
         if not self.enabled:
             return self
         missing = [
@@ -162,35 +175,37 @@ class _RingSweepFrontierConfig(BaseModel):
         ]
         if missing:
             missing_list = ", ".join(missing)
-            raise ValueError(f"frontier fields missing when frontier.enabled is true: {missing_list}")
+            raise ValueError(
+                f"frontier fields missing when frontier.enabled is true: {missing_list}"
+            )
         return self
 
 
 class _RingSweepRunnerConfig(BaseModel):
-    n_agents: Optional[int] = None
-    maturity_days: Optional[int] = None
-    q_total: Optional[Decimal] = None
-    liquidity_mode: Optional[str] = None
-    liquidity_agent: Optional[str] = None
-    base_seed: Optional[int] = None
-    name_prefix: Optional[str] = None
-    default_handling: Optional[str] = None
+    n_agents: int | None = None
+    maturity_days: int | None = None
+    q_total: Decimal | None = None
+    liquidity_mode: str | None = None
+    liquidity_agent: str | None = None
+    base_seed: int | None = None
+    name_prefix: str | None = None
+    default_handling: str | None = None
     dealer_enabled: bool = False
-    dealer_config: Optional[Dict[str, Any]] = None
+    dealer_config: dict[str, Any] | None = None
     risk_assessment_enabled: bool = True
-    risk_assessment_config: Optional[Dict[str, Any]] = None
+    risk_assessment_config: dict[str, Any] | None = None
 
 
 class RingSweepConfig(BaseModel):
     version: int = Field(1, description="Configuration version")
-    out_dir: Optional[str] = None
-    grid: Optional[_RingSweepGridConfig] = None
-    lhs: Optional[_RingSweepLHSConfig] = None
-    frontier: Optional[_RingSweepFrontierConfig] = None
-    runner: Optional[_RingSweepRunnerConfig] = None
+    out_dir: str | None = None
+    grid: _RingSweepGridConfig | None = None
+    lhs: _RingSweepLHSConfig | None = None
+    frontier: _RingSweepFrontierConfig | None = None
+    runner: _RingSweepRunnerConfig | None = None
 
     @model_validator(mode="after")
-    def ensure_version(self) -> "RingSweepConfig":
+    def ensure_version(self) -> RingSweepConfig:
         if self.version != 1:
             raise ValueError(f"Unsupported sweep config version: {self.version}")
         return self
@@ -206,7 +221,7 @@ def load_ring_sweep_config(path: Path | str) -> RingSweepConfig:
         with config_path.open("r", encoding="utf-8") as fh:
             raw = yaml.safe_load(fh)
     except yaml.YAMLError as exc:
-        raise yaml.YAMLError(f"Failed to parse YAML from {config_path}: {exc}")
+        raise yaml.YAMLError(f"Failed to parse YAML from {config_path}: {exc}") from exc
 
     if not isinstance(raw, dict):
         raise ValueError("Sweep configuration must be a YAML mapping")
@@ -234,23 +249,23 @@ class RingSweepRunner:
         maturity_days: int,
         Q_total: Decimal,
         liquidity_mode: str,
-        liquidity_agent: Optional[str],
+        liquidity_agent: str | None,
         base_seed: int,
         default_handling: str = "fail-fast",
         dealer_enabled: bool = False,
-        dealer_config: Optional[Dict[str, Any]] = None,
+        dealer_config: dict[str, Any] | None = None,
         risk_assessment_enabled: bool = True,
-        risk_assessment_config: Optional[Dict[str, Any]] = None,
+        risk_assessment_config: dict[str, Any] | None = None,
         balanced_mode: bool = False,
-        face_value: Optional[Decimal] = None,
-        outside_mid_ratio: Optional[Decimal] = None,
-        big_entity_share: Optional[Decimal] = None,  # DEPRECATED
-        vbt_share_per_bucket: Optional[Decimal] = None,
-        dealer_share_per_bucket: Optional[Decimal] = None,
+        face_value: Decimal | None = None,
+        outside_mid_ratio: Decimal | None = None,
+        big_entity_share: Decimal | None = None,  # DEPRECATED
+        vbt_share_per_bucket: Decimal | None = None,
+        dealer_share_per_bucket: Decimal | None = None,
         rollover_enabled: bool = True,
         detailed_dealer_logging: bool = False,  # Plan 022
-        registry_store: Optional[RegistryStore] = None,  # Plan 026
-        executor: Optional[SimulationExecutor] = None,  # Plan 027
+        registry_store: RegistryStore | None = None,  # Plan 026
+        executor: SimulationExecutor | None = None,  # Plan 027
         quiet: bool = True,  # Plan 030: suppress verbose output for sweeps
         alpha_vbt: Decimal = Decimal("0"),
         alpha_trader: Decimal = Decimal("0"),
@@ -263,7 +278,7 @@ class RingSweepRunner:
         trading_motive: str = "liquidity_then_earning",
         lender_mode: bool = False,
         lender_share: Decimal = Decimal("0.10"),
-        balanced_mode_override: Optional[str] = None,
+        balanced_mode_override: str | None = None,
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -312,6 +327,7 @@ class RingSweepRunner:
         # Cloud-only mode: skip local processing when using cloud executor
         # This avoids downloading artifacts just to recompute metrics locally
         from bilancio.runners.cloud_executor import CloudExecutor
+
         self.skip_local_processing = isinstance(executor, CloudExecutor)
 
         # Only create local directories if we're doing local processing
@@ -328,13 +344,34 @@ class RingSweepRunner:
     def _init_empty_registry(self, registry_path: Path) -> None:
         """Create an empty registry file with headers."""
         import csv
+
         default_fields = [
-            "run_id", "experiment_id", "phase", "status", "error",
-            "seed", "n_agents", "kappa", "concentration", "mu", "monotonicity",
-            "maturity_days", "Q_total", "S1", "L0", "default_handling", "dealer_enabled",
-            "phi_total", "delta_total", "time_to_stability",
-            "scenario_yaml", "events_jsonl", "balances_csv", "metrics_csv",
-            "metrics_html", "run_html",
+            "run_id",
+            "experiment_id",
+            "phase",
+            "status",
+            "error",
+            "seed",
+            "n_agents",
+            "kappa",
+            "concentration",
+            "mu",
+            "monotonicity",
+            "maturity_days",
+            "Q_total",
+            "S1",
+            "L0",
+            "default_handling",
+            "dealer_enabled",
+            "phi_total",
+            "delta_total",
+            "time_to_stability",
+            "scenario_yaml",
+            "events_jsonl",
+            "balances_csv",
+            "metrics_csv",
+            "metrics_html",
+            "run_html",
         ]
         with registry_path.open("w", newline="") as fh:
             writer = csv.DictWriter(fh, fieldnames=default_fields)
@@ -350,10 +387,10 @@ class RingSweepRunner:
         run_id: str,
         phase: str,
         status: RunStatus,
-        parameters: Dict[str, Any],
-        metrics: Optional[Dict[str, Any]] = None,
-        artifact_paths: Optional[Dict[str, str]] = None,
-        error: Optional[str] = None,
+        parameters: dict[str, Any],
+        metrics: dict[str, Any] | None = None,
+        artifact_paths: dict[str, str] | None = None,
+        error: str | None = None,
     ) -> None:
         """Upsert a registry entry using the configured store."""
         entry = RegistryEntry(
@@ -373,8 +410,8 @@ class RingSweepRunner:
         concentrations: Sequence[Decimal],
         mus: Sequence[Decimal],
         monotonicities: Sequence[Decimal],
-    ) -> List[RingRunSummary]:
-        summaries: List[RingRunSummary] = []
+    ) -> list[RingRunSummary]:
+        summaries: list[RingRunSummary] = []
         for kappa, concentration, mu, monotonicity in generate_grid_params(
             kappas, concentrations, mus, monotonicities
         ):
@@ -395,14 +432,14 @@ class RingSweepRunner:
         self,
         count: int,
         *,
-        kappa_range: Tuple[Decimal, Decimal],
-        concentration_range: Tuple[Decimal, Decimal],
-        mu_range: Tuple[Decimal, Decimal],
-        monotonicity_range: Tuple[Decimal, Decimal],
-    ) -> List[RingRunSummary]:
+        kappa_range: tuple[Decimal, Decimal],
+        concentration_range: tuple[Decimal, Decimal],
+        mu_range: tuple[Decimal, Decimal],
+        monotonicity_range: tuple[Decimal, Decimal],
+    ) -> list[RingRunSummary]:
         if count <= 0:
             return []
-        summaries: List[RingRunSummary] = []
+        summaries: list[RingRunSummary] = []
         for kappa, concentration, mu, monotonicity in generate_lhs_params(
             count,
             kappa_range=kappa_range,
@@ -434,8 +471,8 @@ class RingSweepRunner:
         kappa_high: Decimal,
         tolerance: Decimal,
         max_iterations: int,
-    ) -> List[RingRunSummary]:
-        summaries: List[RingRunSummary] = []
+    ) -> list[RingRunSummary]:
+        summaries: list[RingRunSummary] = []
 
         # Create execution function that captures self and returns delta_total
         def execute_fn(
@@ -444,7 +481,7 @@ class RingSweepRunner:
             concentration: Decimal,
             mu: Decimal,
             monotonicity: Decimal,
-        ) -> Optional[Decimal]:
+        ) -> Decimal | None:
             # Execute run with label
             summary = self._execute_run(
                 "frontier",
@@ -482,15 +519,17 @@ class RingSweepRunner:
         monotonicity: Decimal,
         seed: int,
         *,
-        label: Optional[str] = None,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        label: str | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> RingRunSummary:
         # Pre-simulation trade viability check for active runs
         if phase in ("active", "treatment") and self.balanced_mode:
             import logging
+
             _viability_logger = logging.getLogger(__name__)
             try:
                 from bilancio.specification.trade_viability import check_trade_viability
+
                 report = check_trade_viability(
                     kappa=kappa,
                     face_value=self.face_value,
@@ -505,9 +544,10 @@ class RingSweepRunner:
                 if not report.all_viable:
                     _viability_logger.warning(
                         "Trade viability check failed for kappa=%s: %s",
-                        kappa, report.diagnostics,
+                        kappa,
+                        report.diagnostics,
                     )
-            except Exception as exc:
+            except EXTERNAL_SERVICE_ERRORS as exc:
                 _viability_logger.debug("Viability check skipped: %s", exc)
 
         run_uuid = uuid.uuid4().hex[:12]
@@ -576,6 +616,7 @@ class RingSweepRunner:
         if self.balanced_mode:
             # Use balanced generator for C vs D comparison scenarios (Plan 024)
             from bilancio.scenarios import compile_ring_explorer_balanced
+
             scenario = compile_ring_explorer_balanced(
                 generator_config,
                 face_value=self.face_value,
@@ -583,7 +624,12 @@ class RingSweepRunner:
                 big_entity_share=self.big_entity_share,  # DEPRECATED
                 vbt_share_per_bucket=self.vbt_share_per_bucket,
                 dealer_share_per_bucket=self.dealer_share_per_bucket,
-                mode=self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
+                mode=self.balanced_mode_override
+                or (
+                    "lender"
+                    if self.lender_mode
+                    else ("active" if self.dealer_enabled else "passive")
+                ),
                 lender_share=self.lender_share,
                 rollover_enabled=self.rollover_enabled,
                 kappa=kappa,
@@ -595,18 +641,20 @@ class RingSweepRunner:
         # Add dealer config: always for active mode, also for balanced passive
         # (passive balanced runs need the subsystem initialized for PnL tracking)
         if self.dealer_enabled or self.balanced_mode:
-            dealer_section: Dict[str, Any] = {"enabled": True}
+            dealer_section: dict[str, Any] = {"enabled": True}
             if self.dealer_config:
                 dealer_section.update(self.dealer_config)
             else:
-                dealer_section.update({
-                    "ticket_size": 1,
-                    "dealer_share": Decimal("0.25"),
-                    "vbt_share": Decimal("0.50"),
-                })
+                dealer_section.update(
+                    {
+                        "ticket_size": 1,
+                        "dealer_share": Decimal("0.25"),
+                        "vbt_share": Decimal("0.50"),
+                    }
+                )
             # Add risk assessment config if enabled
             if self.risk_assessment_enabled:
-                risk_section: Dict[str, Any] = {"enabled": True}
+                risk_section: dict[str, Any] = {"enabled": True}
                 if self.risk_assessment_config:
                     risk_section.update(self.risk_assessment_config)
                 dealer_section["risk_assessment"] = risk_section
@@ -619,7 +667,12 @@ class RingSweepRunner:
                     "outside_mid_ratio": str(self.outside_mid_ratio),
                     "vbt_share_per_bucket": str(self.vbt_share_per_bucket),
                     "dealer_share_per_bucket": str(self.dealer_share_per_bucket),
-                    "mode": self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
+                    "mode": self.balanced_mode_override
+                    or (
+                        "lender"
+                        if self.lender_mode
+                        else ("active" if self.dealer_enabled else "passive")
+                    ),
                     "rollover_enabled": self.rollover_enabled,
                     "alpha_vbt": str(self.alpha_vbt),
                     "alpha_trader": str(self.alpha_trader),
@@ -665,7 +718,9 @@ class RingSweepRunner:
                 L0 += action["mint_cash"]["amount"]
 
         # Determine regime for logging (Plan 022)
-        regime = self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive"))
+        regime = self.balanced_mode_override or (
+            "lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")
+        )
 
         # Build RunOptions from scenario configuration (Plan 027)
         options = RunOptions(
@@ -675,7 +730,9 @@ class RingSweepRunner:
             check_invariants="daily",
             default_handling=self.default_handling,
             # Plan 030: Use "none" for quiet mode to suppress verbose console output
-            show_events="none" if self.quiet else scenario.get("run", {}).get("show", {}).get("events", "detailed"),
+            show_events="none"
+            if self.quiet
+            else scenario.get("run", {}).get("show", {}).get("events", "detailed"),
             show_balances=scenario.get("run", {}).get("show", {}).get("balances"),
             t_account=False,
             detailed_dealer_logging=self.detailed_dealer_logging,
@@ -712,15 +769,21 @@ class RingSweepRunner:
                 error=result.error,
             )
             return RingRunSummary(
-                run_id=run_id, phase=phase, kappa=kappa, concentration=concentration,
-                mu=mu, monotonicity=monotonicity, delta_total=None, phi_total=None,
+                run_id=run_id,
+                phase=phase,
+                kappa=kappa,
+                concentration=concentration,
+                mu=mu,
+                monotonicity=monotonicity,
+                delta_total=None,
+                phi_total=None,
                 time_to_stability=0,
                 modal_call_id=result.modal_call_id,
             )
 
         # Use MetricsComputer for analytics (Plan 027)
         # result.artifacts contains relative paths (e.g., "out/events.jsonl")
-        artifacts: Dict[str, str] = {}
+        artifacts: dict[str, str] = {}
         if "events_jsonl" in result.artifacts:
             artifacts["events_jsonl"] = result.artifacts["events_jsonl"]
         if "balances_csv" in result.artifacts:
@@ -741,10 +804,11 @@ class RingSweepRunner:
         cascade_fraction_val = bundle.summary.get("cascade_fraction")
 
         # Read dealer metrics if available (treatment runs with dealer enabled)
-        dealer_metrics: Optional[Dict[str, Any]] = None
+        dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = out_dir / "dealer_metrics.json"
         if dealer_metrics_path.exists():
             import json
+
             with dealer_metrics_path.open() as f:
                 dealer_metrics = json.load(f)
 
@@ -755,7 +819,9 @@ class RingSweepRunner:
             "phi_total": str(phi_total) if phi_total is not None else "",
             "delta_total": str(delta_total) if delta_total is not None else "",
             "n_defaults": str(n_defaults),
-            "cascade_fraction": str(cascade_fraction_val) if cascade_fraction_val is not None else "",
+            "cascade_fraction": str(cascade_fraction_val)
+            if cascade_fraction_val is not None
+            else "",
         }
         self._upsert_registry(
             run_id=run_id,
@@ -774,11 +840,17 @@ class RingSweepRunner:
         )
 
         return RingRunSummary(
-            run_id=run_id, phase=phase, kappa=kappa, concentration=concentration,
-            mu=mu, monotonicity=monotonicity,
-            delta_total=delta_total, phi_total=phi_total,
+            run_id=run_id,
+            phase=phase,
+            kappa=kappa,
+            concentration=concentration,
+            mu=mu,
+            monotonicity=monotonicity,
+            delta_total=delta_total,
+            phi_total=phi_total,
             time_to_stability=time_to_stability,
-            n_defaults=n_defaults, cascade_fraction=cascade_fraction_val,
+            n_defaults=n_defaults,
+            cascade_fraction=cascade_fraction_val,
             dealer_metrics=dealer_metrics,
             modal_call_id=result.modal_call_id,
         )
@@ -868,6 +940,7 @@ class RingSweepRunner:
 
         if self.balanced_mode:
             from bilancio.scenarios import compile_ring_explorer_balanced
+
             scenario = compile_ring_explorer_balanced(
                 generator_config,
                 face_value=self.face_value,
@@ -875,7 +948,12 @@ class RingSweepRunner:
                 big_entity_share=self.big_entity_share,
                 vbt_share_per_bucket=self.vbt_share_per_bucket,
                 dealer_share_per_bucket=self.dealer_share_per_bucket,
-                mode=self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
+                mode=self.balanced_mode_override
+                or (
+                    "lender"
+                    if self.lender_mode
+                    else ("active" if self.dealer_enabled else "passive")
+                ),
                 lender_share=self.lender_share,
                 rollover_enabled=self.rollover_enabled,
                 kappa=kappa,
@@ -887,18 +965,20 @@ class RingSweepRunner:
         # Add dealer config: always for active mode, also for balanced passive
         # (passive balanced runs need the subsystem initialized for PnL tracking)
         if self.dealer_enabled or self.balanced_mode:
-            dealer_section: Dict[str, Any] = {"enabled": True}
+            dealer_section: dict[str, Any] = {"enabled": True}
             if self.dealer_config:
                 dealer_section.update(self.dealer_config)
             else:
-                dealer_section.update({
-                    "ticket_size": 1,
-                    "dealer_share": Decimal("0.25"),
-                    "vbt_share": Decimal("0.50"),
-                })
+                dealer_section.update(
+                    {
+                        "ticket_size": 1,
+                        "dealer_share": Decimal("0.25"),
+                        "vbt_share": Decimal("0.50"),
+                    }
+                )
             # Add risk assessment config if enabled
             if self.risk_assessment_enabled:
-                risk_section: Dict[str, Any] = {"enabled": True}
+                risk_section: dict[str, Any] = {"enabled": True}
                 if self.risk_assessment_config:
                     risk_section.update(self.risk_assessment_config)
                 dealer_section["risk_assessment"] = risk_section
@@ -911,7 +991,12 @@ class RingSweepRunner:
                     "outside_mid_ratio": str(self.outside_mid_ratio),
                     "vbt_share_per_bucket": str(self.vbt_share_per_bucket),
                     "dealer_share_per_bucket": str(self.dealer_share_per_bucket),
-                    "mode": self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")),
+                    "mode": self.balanced_mode_override
+                    or (
+                        "lender"
+                        if self.lender_mode
+                        else ("active" if self.dealer_enabled else "passive")
+                    ),
                     "rollover_enabled": self.rollover_enabled,
                     "alpha_vbt": str(self.alpha_vbt),
                     "alpha_trader": str(self.alpha_trader),
@@ -957,7 +1042,9 @@ class RingSweepRunner:
             if "mint_cash" in action:
                 L0 += action["mint_cash"]["amount"]
 
-        regime = self.balanced_mode_override or ("lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive"))
+        regime = self.balanced_mode_override or (
+            "lender" if self.lender_mode else ("active" if self.dealer_enabled else "passive")
+        )
 
         options = RunOptions(
             mode="until_stable",
@@ -965,7 +1052,9 @@ class RingSweepRunner:
             quiet_days=scenario.get("run", {}).get("quiet_days", 2),
             check_invariants="daily",
             default_handling=self.default_handling,
-            show_events="none" if self.quiet else scenario.get("run", {}).get("show", {}).get("events", "detailed"),
+            show_events="none"
+            if self.quiet
+            else scenario.get("run", {}).get("show", {}).get("events", "detailed"),
             show_balances=scenario.get("run", {}).get("show", {}).get("balances"),
             t_account=False,
             detailed_dealer_logging=self.detailed_dealer_logging,
@@ -1012,7 +1101,11 @@ class RingSweepRunner:
         if result.status == RunStatus.FAILED:
             if not self.skip_local_processing:
                 run_html_path = prepared.run_dir / "run.html"
-                fail_params = {**prepared.base_params, "S1": str(prepared.S1), "L0": str(prepared.L0)}
+                fail_params = {
+                    **prepared.base_params,
+                    "S1": str(prepared.S1),
+                    "L0": str(prepared.L0),
+                }
                 self._upsert_registry(
                     run_id=prepared.run_id,
                     phase=prepared.phase,
@@ -1025,9 +1118,14 @@ class RingSweepRunner:
                     error=result.error,
                 )
             return RingRunSummary(
-                run_id=prepared.run_id, phase=prepared.phase, kappa=prepared.kappa,
-                concentration=prepared.concentration, mu=prepared.mu,
-                monotonicity=prepared.monotonicity, delta_total=None, phi_total=None,
+                run_id=prepared.run_id,
+                phase=prepared.phase,
+                kappa=prepared.kappa,
+                concentration=prepared.concentration,
+                mu=prepared.mu,
+                monotonicity=prepared.monotonicity,
+                delta_total=None,
+                phi_total=None,
                 time_to_stability=0,
                 modal_call_id=result.modal_call_id,
             )
@@ -1049,12 +1147,17 @@ class RingSweepRunner:
                 cascade_fraction_val = Decimal(str(cascade_fraction_val))
 
             return RingRunSummary(
-                run_id=prepared.run_id, phase=prepared.phase, kappa=prepared.kappa,
-                concentration=prepared.concentration, mu=prepared.mu,
+                run_id=prepared.run_id,
+                phase=prepared.phase,
+                kappa=prepared.kappa,
+                concentration=prepared.concentration,
+                mu=prepared.mu,
                 monotonicity=prepared.monotonicity,
-                delta_total=delta_total, phi_total=phi_total,
+                delta_total=delta_total,
+                phi_total=phi_total,
                 time_to_stability=time_to_stability,
-                n_defaults=n_defaults, cascade_fraction=cascade_fraction_val,
+                n_defaults=n_defaults,
+                cascade_fraction=cascade_fraction_val,
                 dealer_metrics=None,  # Dealer metrics not available in cloud path
                 modal_call_id=result.modal_call_id,
             )
@@ -1064,7 +1167,7 @@ class RingSweepRunner:
         balances_path = prepared.out_dir / "balances.csv"
         events_path = prepared.out_dir / "events.jsonl"
 
-        artifacts: Dict[str, str] = {}
+        artifacts: dict[str, str] = {}
         if "events_jsonl" in result.artifacts:
             artifacts["events_jsonl"] = result.artifacts["events_jsonl"]
         if "balances_csv" in result.artifacts:
@@ -1082,10 +1185,11 @@ class RingSweepRunner:
         n_defaults = int(bundle.summary.get("n_defaults", 0))
         cascade_fraction_val = bundle.summary.get("cascade_fraction")
 
-        dealer_metrics: Optional[Dict[str, Any]] = None
+        dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = prepared.out_dir / "dealer_metrics.json"
         if dealer_metrics_path.exists():
             import json
+
             with dealer_metrics_path.open() as f:
                 dealer_metrics = json.load(f)
 
@@ -1095,7 +1199,9 @@ class RingSweepRunner:
             "phi_total": str(phi_total) if phi_total is not None else "",
             "delta_total": str(delta_total) if delta_total is not None else "",
             "n_defaults": str(n_defaults),
-            "cascade_fraction": str(cascade_fraction_val) if cascade_fraction_val is not None else "",
+            "cascade_fraction": str(cascade_fraction_val)
+            if cascade_fraction_val is not None
+            else "",
         }
         self._upsert_registry(
             run_id=prepared.run_id,
@@ -1114,12 +1220,17 @@ class RingSweepRunner:
         )
 
         return RingRunSummary(
-            run_id=prepared.run_id, phase=prepared.phase, kappa=prepared.kappa,
-            concentration=prepared.concentration, mu=prepared.mu,
+            run_id=prepared.run_id,
+            phase=prepared.phase,
+            kappa=prepared.kappa,
+            concentration=prepared.concentration,
+            mu=prepared.mu,
             monotonicity=prepared.monotonicity,
-            delta_total=delta_total, phi_total=phi_total,
+            delta_total=delta_total,
+            phi_total=phi_total,
             time_to_stability=time_to_stability,
-            n_defaults=n_defaults, cascade_fraction=cascade_fraction_val,
+            n_defaults=n_defaults,
+            cascade_fraction=cascade_fraction_val,
             dealer_metrics=dealer_metrics,
             modal_call_id=result.modal_call_id,
         )
@@ -1135,8 +1246,8 @@ class RingSweepRunner:
             return ModalVolumeArtifactLoader(base_path=result.storage_base)
         return LocalArtifactLoader(base_path=Path(result.storage_base))
 
-    def _liquidity_allocation_dict(self) -> Dict[str, Any]:
-        allocation: Dict[str, Any] = {"mode": self.liquidity_mode}
+    def _liquidity_allocation_dict(self) -> dict[str, Any]:
+        allocation: dict[str, Any] = {"mode": self.liquidity_mode}
         if self.liquidity_mode == "single_at" and self.liquidity_agent:
             allocation["agent"] = self.liquidity_agent
         return allocation

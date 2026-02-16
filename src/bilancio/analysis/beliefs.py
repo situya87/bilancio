@@ -9,9 +9,10 @@ Analyses the estimate log produced during simulation to answer:
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any, Sequence
+from typing import Any
 
 from bilancio.information.estimates import Estimate
 
@@ -19,6 +20,7 @@ from bilancio.information.estimates import Estimate
 @dataclass(frozen=True)
 class BeliefPoint:
     """A single point in a belief trajectory."""
+
     day: int
     value: Decimal
     method: str
@@ -53,12 +55,14 @@ def belief_trajectory(
             continue
         if method is not None and est.method != method:
             continue
-        points.append(BeliefPoint(
-            day=est.estimation_day,
-            value=est.value,
-            method=est.method,
-            estimator_id=est.estimator_id,
-        ))
+        points.append(
+            BeliefPoint(
+                day=est.estimation_day,
+                value=est.value,
+                method=est.method,
+                estimator_id=est.estimator_id,
+            )
+        )
     points.sort(key=lambda p: p.day)
     return points
 
@@ -70,6 +74,7 @@ class CalibrationBucket:
     Groups estimates by predicted probability range and compares
     to actual default outcomes.
     """
+
     predicted_low: Decimal
     predicted_high: Decimal
     count: int = 0
@@ -142,6 +147,7 @@ def belief_vs_reality(
 @dataclass
 class EstimateSummary:
     """Summary statistics for a group of estimates."""
+
     count: int = 0
     methods: dict[str, int] = field(default_factory=dict)
     estimators: dict[str, int] = field(default_factory=dict)

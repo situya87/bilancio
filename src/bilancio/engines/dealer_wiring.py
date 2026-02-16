@@ -6,33 +6,26 @@ converting payables to tickets, and setting up market makers and traders.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, List, Optional, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bilancio.engines.system import System
     from bilancio.engines.dealer_integration import DealerSubsystem
-    from bilancio.decision.profiles import VBTProfile
+    from bilancio.engines.system import System
 
-from bilancio.core.ids import AgentId, InstrId
-from bilancio.domain.agent import AgentKind
-from bilancio.domain.instruments.base import InstrumentKind
+from bilancio.dealer.kernel import recompute_dealer_state
 from bilancio.dealer.models import (
-    DealerState,
-    VBTState,
-    TraderState,
-    Ticket,
     BucketConfig,
-    DEFAULT_BUCKETS,
-    TicketId,
+    DealerState,
+    Ticket,
+    TraderState,
+    VBTState,
 )
-from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
 from bilancio.dealer.simulation import DealerRingConfig
-from bilancio.dealer.metrics import RunMetrics
+from bilancio.domain.agent import AgentKind
 
 
-def _ensure_dealer_vbt_agents(system: System, bucket_configs: List[BucketConfig]) -> None:
+def _ensure_dealer_vbt_agents(system: System, bucket_configs: list[BucketConfig]) -> None:
     """Create dealer and VBT agents in the main system if they don't exist.
 
     These agents allow proper ownership tracking when claims transfer to
@@ -43,7 +36,7 @@ def _ensure_dealer_vbt_agents(system: System, bucket_configs: List[BucketConfig]
         bucket_configs: List of bucket configurations defining which
             dealer/VBT agents to create
     """
-    from bilancio.domain.agents import Dealer, VBT
+    from bilancio.domain.agents import VBT, Dealer
 
     for bucket_config in bucket_configs:
         bucket_id = bucket_config.name
@@ -66,7 +59,7 @@ def _ensure_dealer_vbt_agents(system: System, bucket_configs: List[BucketConfig]
 
 
 def _convert_payables_to_tickets(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     system: System,
     current_day: int,
 ) -> int:
@@ -101,7 +94,7 @@ def _convert_payables_to_tickets(
         ticket = Ticket(
             id=ticket_id,
             issuer_id=contract.liability_issuer_id,  # Debtor
-            owner_id=contract.effective_creditor,    # Current creditor
+            owner_id=contract.effective_creditor,  # Current creditor
             face=Decimal(contract.amount),
             maturity_day=contract.due_day,
             remaining_tau=remaining_tau,
@@ -122,7 +115,7 @@ def _convert_payables_to_tickets(
 
 
 def _initialize_market_makers(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     dealer_config: DealerRingConfig,
     dealer_capital_per_bucket: Decimal,
     vbt_capital_per_bucket: Decimal,
@@ -142,9 +135,8 @@ def _initialize_market_makers(
         bucket_id = bucket_config.name
 
         # Get anchor prices from config
-        M, O = dealer_config.vbt_anchors.get(
-            bucket_id,
-            (Decimal(1), Decimal("0.30"))
+        mid_anchor, spread_anchor = dealer_config.vbt_anchors.get(
+            bucket_id, (Decimal(1), Decimal("0.30"))
         )
 
         # Create dealer state with NEW capital (no inventory yet)
@@ -160,8 +152,8 @@ def _initialize_market_makers(
         vbt = VBTState(
             bucket_id=bucket_id,
             agent_id=f"vbt_{bucket_id}",
-            M=M,
-            O=O,
+            M=mid_anchor,
+            O=spread_anchor,
             phi_M=dealer_config.phi_M,
             phi_O=dealer_config.phi_O,
             clip_nonneg_B=dealer_config.clip_nonneg_B,
@@ -172,7 +164,7 @@ def _initialize_market_makers(
         subsystem.vbts[bucket_id] = vbt
 
         # Store initial spread for spread_sensitivity computation
-        subsystem.initial_spread_by_bucket[bucket_id] = O
+        subsystem.initial_spread_by_bucket[bucket_id] = spread_anchor
 
         # NOTE: Traders keep 100% of their tickets (no allocation to dealer/VBT)
         # Dealer/VBT will acquire inventory by buying from traders during trading
@@ -187,7 +179,7 @@ def _initialize_market_makers(
 
 
 def _initialize_traders(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     system: System,
     skip_prefixes: tuple[str, ...] = (),
 ) -> None:
@@ -234,7 +226,7 @@ def _initialize_traders(
 
 
 def _capture_initial_debt_to_money(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     system: System,
     exclude_kinds: tuple[str, ...] = ("dealer", "vbt"),
     exclude_prefixes: tuple[str, ...] = (),
@@ -272,9 +264,9 @@ def _capture_initial_debt_to_money(
 
 
 def _categorize_tickets_by_holder(
-    subsystem: "DealerSubsystem",
-    bucket_names: List[str],
-) -> tuple[Dict[str, List["Ticket"]], Dict[str, List["Ticket"]], Dict[str, List["Ticket"]]]:
+    subsystem: DealerSubsystem,
+    bucket_names: list[str],
+) -> tuple[dict[str, list[Ticket]], dict[str, list[Ticket]], dict[str, list[Ticket]]]:
     """Categorize tickets by holder type: VBT, dealer, or regular trader.
 
     Examines each ticket's owner_id prefix to determine which entity holds it.
@@ -288,9 +280,9 @@ def _categorize_tickets_by_holder(
         vbt_tickets and dealer_tickets are keyed by bucket name,
         trader_tickets is keyed by agent_id.
     """
-    vbt_tickets: Dict[str, List[Ticket]] = {name: [] for name in bucket_names}
-    dealer_tickets: Dict[str, List[Ticket]] = {name: [] for name in bucket_names}
-    trader_tickets: Dict[str, List[Ticket]] = {}
+    vbt_tickets: dict[str, list[Ticket]] = {name: [] for name in bucket_names}
+    dealer_tickets: dict[str, list[Ticket]] = {name: [] for name in bucket_names}
+    trader_tickets: dict[str, list[Ticket]] = {}
 
     for ticket in subsystem.tickets.values():
         owner = ticket.owner_id
@@ -319,11 +311,11 @@ def _categorize_tickets_by_holder(
 
 
 def _initialize_balanced_market_makers(
-    subsystem: "DealerSubsystem",
+    subsystem: DealerSubsystem,
     system: System,
     dealer_config: DealerRingConfig,
-    vbt_tickets: Dict[str, List["Ticket"]],
-    dealer_tickets: Dict[str, List["Ticket"]],
+    vbt_tickets: dict[str, list[Ticket]],
+    dealer_tickets: dict[str, list[Ticket]],
     shared_prior: Decimal = Decimal("0.15"),
 ) -> None:
     """Initialize VBT and Dealer states per bucket for balanced scenarios.
@@ -375,9 +367,9 @@ def _initialize_balanced_market_makers(
         base_O = BASE_SPREAD_BY_BUCKET.get(bucket_id, Decimal("0.08"))
         pricing_model = subsystem.vbt_pricing_model
         if pricing_model is not None:
-            O = pricing_model.compute_spread(base_O, shared_prior)
+            spread_anchor = pricing_model.compute_spread(base_O, shared_prior)
         else:
-            O = base_O + Decimal("0.6") * shared_prior
+            spread_anchor = base_O + Decimal("0.6") * shared_prior
 
         # Store base spread for daily per-bucket VBT updates
         subsystem.base_spread_by_bucket[bucket_id] = base_O
@@ -386,7 +378,7 @@ def _initialize_balanced_market_makers(
             bucket_id=bucket_id,
             agent_id=f"vbt_{bucket_id}",
             M=M,
-            O=O,
+            O=spread_anchor,
             phi_M=dealer_config.phi_M,
             phi_O=dealer_config.phi_O,
             clip_nonneg_B=dealer_config.clip_nonneg_B,
@@ -397,7 +389,7 @@ def _initialize_balanced_market_makers(
         subsystem.vbts[bucket_id] = vbt
 
         # Store initial spread for spread_sensitivity computation
-        subsystem.initial_spread_by_bucket[bucket_id] = O
+        subsystem.initial_spread_by_bucket[bucket_id] = spread_anchor
 
         # Create Dealer state WITH inventory
         dealer = DealerState(

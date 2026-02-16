@@ -1,7 +1,8 @@
 """Tests for the Estimate dataclass."""
 
-import pytest
 from decimal import Decimal
+
+import pytest
 
 from bilancio.information.estimates import Estimate
 

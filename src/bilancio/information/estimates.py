@@ -30,6 +30,5 @@ class Estimate:
     def __post_init__(self) -> None:
         if self.target_type not in _VALID_TARGET_TYPES:
             raise ValueError(
-                f"target_type must be one of {_VALID_TARGET_TYPES}, "
-                f"got {self.target_type!r}"
+                f"target_type must be one of {_VALID_TARGET_TYPES}, got {self.target_type!r}"
             )

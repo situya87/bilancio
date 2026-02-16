@@ -12,6 +12,7 @@ class InstrumentKind(str, Enum):
     Using str mixin ensures InstrumentKind values work as dict keys,
     compare equal to their string values, and are JSON-serializable.
     """
+
     CASH = "cash"
     BANK_DEPOSIT = "bank_deposit"
     RESERVE_DEPOSIT = "reserve_deposit"
@@ -28,7 +29,7 @@ class InstrumentKind(str, Enum):
 class Instrument:
     id: InstrId
     kind: InstrumentKind
-    amount: int                    # minor units
+    amount: int  # minor units
     denom: str
     asset_holder_id: AgentId
     liability_issuer_id: AgentId

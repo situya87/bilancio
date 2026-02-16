@@ -4,19 +4,30 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import click
 
+CLI_HANDLED_ERRORS = (
+    click.ClickException,
+    FileNotFoundError,
+    ImportError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+)
 
-def format_datetime(dt: Optional[datetime]) -> str:
+
+def format_datetime(dt: datetime | None) -> str:
     """Format datetime for display."""
     if dt is None:
         return "-"
     return dt.strftime("%Y-%m-%d %H:%M")
 
 
-def format_duration(start: datetime, end: Optional[datetime]) -> str:
+def format_duration(start: datetime, end: datetime | None) -> str:
     """Format duration between two datetimes."""
     if end is None:
         return "running"
@@ -26,7 +37,7 @@ def format_duration(start: datetime, end: Optional[datetime]) -> str:
         return f"{delta.total_seconds():.0f}s"
     if minutes < 60:
         return f"{minutes:.1f}m"
-    return f"{minutes/60:.1f}h"
+    return f"{minutes / 60:.1f}h"
 
 
 @click.group()
@@ -36,9 +47,7 @@ def jobs() -> None:
 
 
 @jobs.command("ls")
-@click.option(
-    "--cloud", is_flag=True, help="Query from Supabase cloud storage"
-)
+@click.option("--cloud", is_flag=True, help="Query from Supabase cloud storage")
 @click.option(
     "--local",
     type=click.Path(exists=True, path_type=Path),
@@ -50,9 +59,7 @@ def jobs() -> None:
     help="Filter by job status",
 )
 @click.option("--limit", default=20, help="Maximum number of jobs to show")
-def list_jobs(
-    cloud: bool, local: Optional[Path], status: Optional[str], limit: int
-) -> None:
+def list_jobs(cloud: bool, local: Path | None, status: str | None, limit: int) -> None:
     """List simulation jobs.
 
     By default, lists from Supabase if configured.
@@ -77,7 +84,7 @@ def list_jobs(
                 )
             jobs_list = store.list_jobs(status=status, limit=limit)
         except ImportError as e:
-            raise click.ClickException(f"Failed to import Supabase: {e}")
+            raise click.ClickException(f"Failed to import Supabase: {e}") from e
 
     elif local:
         # Query from local filesystem
@@ -91,9 +98,7 @@ def list_jobs(
             jobs_list = [j for j in jobs_list if j.status.value == status]
 
         # Sort by creation time (newest first) and limit
-        jobs_list = sorted(jobs_list, key=lambda j: j.created_at, reverse=True)[
-            :limit
-        ]
+        jobs_list = sorted(jobs_list, key=lambda j: j.created_at, reverse=True)[:limit]
 
     else:
         # Try Supabase first, fall back to error
@@ -111,8 +116,8 @@ def list_jobs(
                     "Tip: Set BILANCIO_SUPABASE_* env vars to use --cloud."
                 )
                 return
-        except Exception as e:  # Intentionally broad: top-level CLI handler
-            raise click.ClickException(f"Failed to query jobs: {e}")
+        except CLI_HANDLED_ERRORS as e:
+            raise click.ClickException(f"Failed to query jobs: {e}") from e
 
     if not jobs_list:
         click.echo("No jobs found.")
@@ -127,7 +132,7 @@ def list_jobs(
             store = SupabaseJobStore()
             job_ids = [j.job_id for j in jobs_list]
             run_counts = store.get_run_counts(job_ids)
-        except Exception:  # Intentionally broad: external service call
+        except CLI_HANDLED_ERRORS:
             pass  # Fall back to job.run_ids
 
     # Display jobs
@@ -155,7 +160,7 @@ def list_jobs(
     type=click.Path(exists=True, path_type=Path),
     help="Local directory containing job manifests",
 )
-def get_job(job_id: str, cloud: bool, local: Optional[Path]) -> None:
+def get_job(job_id: str, cloud: bool, local: Path | None) -> None:
     """Get detailed information about a job.
 
     Examples:
@@ -173,7 +178,7 @@ def get_job(job_id: str, cloud: bool, local: Optional[Path]) -> None:
                 raise click.ClickException("Supabase not configured.")
             job = store.get_job(job_id)
         except ImportError as e:
-            raise click.ClickException(f"Failed to import Supabase: {e}")
+            raise click.ClickException(f"Failed to import Supabase: {e}") from e
 
     elif local:
         from bilancio.jobs import JobManager
@@ -191,7 +196,7 @@ def get_job(job_id: str, cloud: bool, local: Optional[Path]) -> None:
 
                 store = SupabaseJobStore()
                 job = store.get_job(job_id)
-        except Exception:  # Intentionally broad: external service call
+        except CLI_HANDLED_ERRORS:
             pass
 
         if job is None:
@@ -247,7 +252,7 @@ def get_job(job_id: str, cloud: bool, local: Optional[Path]) -> None:
     type=click.Choice(["pending", "running", "completed", "failed"]),
     help="Filter by run status",
 )
-def list_runs(job_id: str, cloud: bool, status: Optional[str]) -> None:
+def list_runs(job_id: str, cloud: bool, status: str | None) -> None:
     """List runs for a specific job.
 
     Examples:
@@ -279,15 +284,14 @@ def list_runs(job_id: str, cloud: bool, status: Optional[str]) -> None:
             if isinstance(delta, float):
                 delta = f"{delta:.4f}"
             click.echo(
-                f"{entry.run_id:<40} {entry.status.value:<10} "
-                f"{kappa:<8} {conc:<8} {delta:<10}"
+                f"{entry.run_id:<40} {entry.status.value:<10} {kappa:<8} {conc:<8} {delta:<10}"
             )
 
         click.echo("-" * 80)
         click.echo(f"Total: {len(entries)} runs")
 
-    except Exception as e:  # Intentionally broad: top-level CLI handler
-        raise click.ClickException(f"Failed to query runs: {e}")
+    except CLI_HANDLED_ERRORS as e:
+        raise click.ClickException(f"Failed to query runs: {e}") from e
 
 
 @jobs.command("metrics")
@@ -321,12 +325,8 @@ def show_metrics(job_id: str, cloud: bool) -> None:
             return
 
         # Collect delta values
-        deltas = [
-            e.metrics.get("delta_total", 0) for e in completed if "delta_total" in e.metrics
-        ]
-        phis = [
-            e.metrics.get("phi_total", 0) for e in completed if "phi_total" in e.metrics
-        ]
+        deltas = [e.metrics.get("delta_total", 0) for e in completed if "delta_total" in e.metrics]
+        phis = [e.metrics.get("phi_total", 0) for e in completed if "phi_total" in e.metrics]
 
         click.echo(f"Job: {job_id}")
         click.echo(f"Completed runs: {len(completed)} / {len(entries)}")
@@ -334,18 +334,18 @@ def show_metrics(job_id: str, cloud: bool) -> None:
 
         if deltas:
             click.echo("Delta (default rate):")
-            click.echo(f"  Mean:   {sum(deltas)/len(deltas):.4f}")
+            click.echo(f"  Mean:   {sum(deltas) / len(deltas):.4f}")
             click.echo(f"  Min:    {min(deltas):.4f}")
             click.echo(f"  Max:    {max(deltas):.4f}")
 
         if phis:
             click.echo("Phi (clearing rate):")
-            click.echo(f"  Mean:   {sum(phis)/len(phis):.4f}")
+            click.echo(f"  Mean:   {sum(phis) / len(phis):.4f}")
             click.echo(f"  Min:    {min(phis):.4f}")
             click.echo(f"  Max:    {max(phis):.4f}")
 
-    except Exception as e:  # Intentionally broad: top-level CLI handler
-        raise click.ClickException(f"Failed to query metrics: {e}")
+    except CLI_HANDLED_ERRORS as e:
+        raise click.ClickException(f"Failed to query metrics: {e}") from e
 
 
 @jobs.command("visualize")
@@ -368,8 +368,8 @@ def show_metrics(job_id: str, cloud: bool) -> None:
 )
 def visualize_job(
     job_id: str,
-    output: Optional[Path],
-    title: Optional[str],
+    output: Path | None,
+    title: str | None,
     open_browser: bool,
 ) -> None:
     """Generate interactive visualization comparing passive vs active runs.
@@ -406,12 +406,13 @@ def visualize_job(
 
         if open_browser:
             import webbrowser
+
             webbrowser.open(f"file://{html_path.absolute()}")
             click.echo("Opened in browser.")
         else:
             click.echo(f"Open with: open {html_path}")
 
     except ValueError as e:
-        raise click.ClickException(str(e))
-    except Exception as e:  # Intentionally broad: top-level CLI handler
-        raise click.ClickException(f"Failed to generate visualization: {e}")
+        raise click.ClickException(str(e)) from e
+    except CLI_HANDLED_ERRORS as e:
+        raise click.ClickException(f"Failed to generate visualization: {e}") from e

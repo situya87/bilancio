@@ -16,9 +16,8 @@ import pytest
 
 from bilancio.decision.protocols import VBTPricingModel
 from bilancio.decision.valuers import CreditAdjustedVBTPricing
-from bilancio.information.presets import DEALER_MARKET_OBSERVER
 from bilancio.information.levels import AccessLevel
-
+from bilancio.information.presets import DEALER_MARKET_OBSERVER
 
 # ── 1. Protocol conformance ──────────────────────────────────────
 
@@ -98,21 +97,21 @@ class TestComputeSpread:
     def test_zero_sensitivity_returns_base(self):
         """With spread_sensitivity=0, spread is unchanged."""
         pricing = CreditAdjustedVBTPricing(spread_sensitivity=Decimal("0"))
-        O = pricing.compute_spread(Decimal("0.30"), Decimal("0.20"))
-        assert O == Decimal("0.30")
+        spread = pricing.compute_spread(Decimal("0.30"), Decimal("0.20"))
+        assert spread == Decimal("0.30")
 
     def test_positive_sensitivity_widens(self):
         """With spread_sensitivity > 0, spread widens with defaults."""
         pricing = CreditAdjustedVBTPricing(spread_sensitivity=Decimal("1.0"))
-        O = pricing.compute_spread(Decimal("0.30"), Decimal("0.20"))
+        spread = pricing.compute_spread(Decimal("0.30"), Decimal("0.20"))
         # 0.30 + 1.0 × 0.20 = 0.50
-        assert O == Decimal("0.50")
+        assert spread == Decimal("0.50")
 
     def test_no_defaults_no_widening(self):
         """With p_default=0, spread stays at base even with sensitivity."""
         pricing = CreditAdjustedVBTPricing(spread_sensitivity=Decimal("1.0"))
-        O = pricing.compute_spread(Decimal("0.30"), Decimal("0"))
-        assert O == Decimal("0.30")
+        spread = pricing.compute_spread(Decimal("0.30"), Decimal("0"))
+        assert spread == Decimal("0.30")
 
 
 # ── 4. Default parameter values ──────────────────────────────────
@@ -137,15 +136,17 @@ class TestUpdateVBTCreditMidsDelegation:
 
     def _build_subsystem(self, with_pricing_model: bool):
         """Build a minimal DealerSubsystem for testing."""
-        from bilancio.engines.dealer_integration import DealerSubsystem
-        from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
         from bilancio.dealer.models import VBTState
+        from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
         from bilancio.decision.profiles import VBTProfile
+        from bilancio.engines.dealer_integration import DealerSubsystem
 
         subsystem = DealerSubsystem()
-        subsystem.risk_assessor = RiskAssessor(RiskAssessmentParams(
-            initial_prior=Decimal("0.15"),
-        ))
+        subsystem.risk_assessor = RiskAssessor(
+            RiskAssessmentParams(
+                initial_prior=Decimal("0.15"),
+            )
+        )
         subsystem.outside_mid_ratio = Decimal("0.75")
         subsystem.vbt_profile = VBTProfile(
             mid_sensitivity=Decimal("1.0"),
@@ -225,7 +226,6 @@ class TestInitializationWiring:
     def _build_system(self):
         """Build a minimal system for balanced initialization."""
         from bilancio.domain.agents.central_bank import CentralBank
-        from bilancio.domain.agents.firm import Firm
         from bilancio.domain.agents.household import Household
         from bilancio.engines.system import System
 
@@ -242,14 +242,15 @@ class TestInitializationWiring:
         return system
 
     def test_pricing_model_attached(self):
-        from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
-        from bilancio.dealer.simulation import DealerRingConfig
         from bilancio.dealer.risk_assessment import RiskAssessmentParams
+        from bilancio.dealer.simulation import DealerRingConfig
+        from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
 
         system = self._build_system()
         config = DealerRingConfig(ticket_size=Decimal(1))
         sub = initialize_balanced_dealer_subsystem(
-            system, config,
+            system,
+            config,
             outside_mid_ratio=Decimal("0.80"),
             risk_params=RiskAssessmentParams(),
         )
@@ -257,10 +258,10 @@ class TestInitializationWiring:
         assert isinstance(sub.vbt_pricing_model, CreditAdjustedVBTPricing)
 
     def test_pricing_model_uses_vbt_profile(self):
-        from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
-        from bilancio.dealer.simulation import DealerRingConfig
         from bilancio.dealer.risk_assessment import RiskAssessmentParams
+        from bilancio.dealer.simulation import DealerRingConfig
         from bilancio.decision.profiles import VBTProfile
+        from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
 
         system = self._build_system()
         config = DealerRingConfig(ticket_size=Decimal(1))
@@ -269,7 +270,8 @@ class TestInitializationWiring:
             spread_sensitivity=Decimal("0.3"),
         )
         sub = initialize_balanced_dealer_subsystem(
-            system, config,
+            system,
+            config,
             outside_mid_ratio=Decimal("0.75"),
             vbt_profile=profile,
             risk_params=RiskAssessmentParams(),

@@ -12,17 +12,16 @@ References:
 - "Banks-as-Dealers with deposits on demand" specification
 """
 
-import pytest
 from decimal import Decimal
 
 from bilancio.banking.types import (
-    TicketType,
-    Ticket,
+    CBBorrowingCohort,
     DepositCohort,
     LoanCohort,
-    CBBorrowingCohort,
-    ScheduledLeg,
     Quote,
+    ScheduledLeg,
+    Ticket,
+    TicketType,
 )
 
 

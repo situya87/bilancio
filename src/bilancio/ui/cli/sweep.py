@@ -5,21 +5,32 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
 
 import click
 from click.core import ParameterSource
 
 from bilancio.analysis.report import aggregate_runs, render_dashboard
 from bilancio.experiments.ring import (
-    RingSweepRunner,
     RingSweepConfig,
-    load_ring_sweep_config,
+    RingSweepRunner,
     _decimal_list,
+    load_ring_sweep_config,
 )
-from bilancio.jobs import JobManager, JobConfig, generate_job_id, create_job_manager
+from bilancio.jobs import JobConfig, JobManager, create_job_manager, generate_job_id
 
-from .utils import console, _as_decimal_list
+from .utils import _as_decimal_list, console
+
+CLI_HANDLED_ERRORS = (
+    click.ClickException,
+    FileNotFoundError,
+    ImportError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+)
 
 
 @click.group()
@@ -29,42 +40,73 @@ def sweep() -> None:
 
 
 @sweep.command("ring")
-@click.option('--config', type=click.Path(path_type=Path), default=None, help='Path to sweep config YAML')
-@click.option('--out-dir', type=click.Path(path_type=Path), default=None, help='Base output directory')
-@click.option('--cloud', is_flag=True, help='Run simulations on Modal cloud')
-@click.option('--grid/--no-grid', default=True, help='Run coarse grid sweep')
-@click.option('--kappas', type=str, default="0.25,0.5,1,2,4", help='Comma list for grid kappa values')
-@click.option('--concentrations', type=str, default="0.2,0.5,1,2,5", help='Comma list for grid Dirichlet concentrations')
-@click.option('--mus', type=str, default="0,0.25,0.5,0.75,1", help='Comma list for grid mu values')
-@click.option('--monotonicities', type=str, default="0", help='Comma list for grid monotonicity values')
-@click.option('--lhs', 'lhs_count', type=int, default=0, help='Latin Hypercube samples to draw')
-@click.option('--kappa-min', type=float, default=0.2, help='LHS min kappa')
-@click.option('--kappa-max', type=float, default=5.0, help='LHS max kappa')
-@click.option('--c-min', type=float, default=0.2, help='LHS min concentration')
-@click.option('--c-max', type=float, default=5.0, help='LHS max concentration')
-@click.option('--mu-min', type=float, default=0.0, help='LHS min mu')
-@click.option('--mu-max', type=float, default=1.0, help='LHS max mu')
-@click.option('--monotonicity-min', type=float, default=0.0, help='LHS min monotonicity')
-@click.option('--monotonicity-max', type=float, default=0.0, help='LHS max monotonicity')
-@click.option('--frontier/--no-frontier', default=False, help='Run frontier search')
-@click.option('--frontier-low', type=float, default=0.1, help='Frontier lower bound for kappa')
-@click.option('--frontier-high', type=float, default=4.0, help='Initial frontier upper bound for kappa')
-@click.option('--frontier-tolerance', type=float, default=0.02, help='Frontier tolerance on delta_total')
-@click.option('--frontier-iterations', type=int, default=6, help='Max bisection iterations per cell')
-@click.option('--n-agents', type=int, default=5, help='Ring size')
-@click.option('--maturity-days', type=int, default=3, help='Due day horizon for generator')
-@click.option('--q-total', type=float, default=500.0, help='Total dues S1 for generation')
-@click.option('--liquidity-mode', type=click.Choice(['single_at', 'uniform']), default='single_at', help='Liquidity allocation mode')
-@click.option('--liquidity-agent', type=str, default='H1', help='Target for single_at liquidity allocation')
-@click.option('--base-seed', type=int, default=42, help='Base PRNG seed')
-@click.option('--name-prefix', type=str, default='Kalecki Ring Sweep', help='Scenario name prefix')
-@click.option('--default-handling', type=click.Choice(['fail-fast', 'expel-agent']), default='fail-fast', help='Default handling mode for runs')
-@click.option('--job-id', type=str, default=None, help='Job ID (auto-generated if not provided)')
+@click.option(
+    "--config", type=click.Path(path_type=Path), default=None, help="Path to sweep config YAML"
+)
+@click.option(
+    "--out-dir", type=click.Path(path_type=Path), default=None, help="Base output directory"
+)
+@click.option("--cloud", is_flag=True, help="Run simulations on Modal cloud")
+@click.option("--grid/--no-grid", default=True, help="Run coarse grid sweep")
+@click.option(
+    "--kappas", type=str, default="0.25,0.5,1,2,4", help="Comma list for grid kappa values"
+)
+@click.option(
+    "--concentrations",
+    type=str,
+    default="0.2,0.5,1,2,5",
+    help="Comma list for grid Dirichlet concentrations",
+)
+@click.option("--mus", type=str, default="0,0.25,0.5,0.75,1", help="Comma list for grid mu values")
+@click.option(
+    "--monotonicities", type=str, default="0", help="Comma list for grid monotonicity values"
+)
+@click.option("--lhs", "lhs_count", type=int, default=0, help="Latin Hypercube samples to draw")
+@click.option("--kappa-min", type=float, default=0.2, help="LHS min kappa")
+@click.option("--kappa-max", type=float, default=5.0, help="LHS max kappa")
+@click.option("--c-min", type=float, default=0.2, help="LHS min concentration")
+@click.option("--c-max", type=float, default=5.0, help="LHS max concentration")
+@click.option("--mu-min", type=float, default=0.0, help="LHS min mu")
+@click.option("--mu-max", type=float, default=1.0, help="LHS max mu")
+@click.option("--monotonicity-min", type=float, default=0.0, help="LHS min monotonicity")
+@click.option("--monotonicity-max", type=float, default=0.0, help="LHS max monotonicity")
+@click.option("--frontier/--no-frontier", default=False, help="Run frontier search")
+@click.option("--frontier-low", type=float, default=0.1, help="Frontier lower bound for kappa")
+@click.option(
+    "--frontier-high", type=float, default=4.0, help="Initial frontier upper bound for kappa"
+)
+@click.option(
+    "--frontier-tolerance", type=float, default=0.02, help="Frontier tolerance on delta_total"
+)
+@click.option(
+    "--frontier-iterations", type=int, default=6, help="Max bisection iterations per cell"
+)
+@click.option("--n-agents", type=int, default=5, help="Ring size")
+@click.option("--maturity-days", type=int, default=3, help="Due day horizon for generator")
+@click.option("--q-total", type=float, default=500.0, help="Total dues S1 for generation")
+@click.option(
+    "--liquidity-mode",
+    type=click.Choice(["single_at", "uniform"]),
+    default="single_at",
+    help="Liquidity allocation mode",
+)
+@click.option(
+    "--liquidity-agent", type=str, default="H1", help="Target for single_at liquidity allocation"
+)
+@click.option("--base-seed", type=int, default=42, help="Base PRNG seed")
+@click.option("--name-prefix", type=str, default="Kalecki Ring Sweep", help="Scenario name prefix")
+@click.option(
+    "--default-handling",
+    type=click.Choice(["fail-fast", "expel-agent"]),
+    default="fail-fast",
+    help="Default handling mode for runs",
+)
+@click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
 @click.pass_context
 def sweep_ring(
     ctx: click.Context,
-    config: Optional[Path],
-    out_dir: Optional[Path],
+    config: Path | None,
+    out_dir: Path | None,
     cloud: bool,
     grid: bool,
     kappas: str,
@@ -93,10 +135,10 @@ def sweep_ring(
     base_seed: int,
     name_prefix: str,
     default_handling: str,
-    job_id: Optional[str],
+    job_id: str | None,
 ) -> None:
     """Run the Kalecki ring experiment sweep."""
-    sweep_config: Optional[RingSweepConfig] = None
+    sweep_config: RingSweepConfig | None = None
     if config is not None:
         sweep_config = load_ring_sweep_config(config)
 
@@ -193,7 +235,7 @@ def sweep_ring(
         job_id = generate_job_id()
 
     # Create job manager and job config
-    manager: Optional[JobManager] = None
+    manager: JobManager | None = None
     try:
         manager = create_job_manager(jobs_dir=out_dir, cloud=cloud, local=True)
 
@@ -220,7 +262,7 @@ def sweep_ring(
 
         console.print(f"[cyan]Job ID: {job.job_id}[/cyan]")
         manager.start_job(job.job_id)
-    except Exception as e:  # Intentionally broad: top-level CLI handler
+    except CLI_HANDLED_ERRORS as e:
         console.print(f"[yellow]Warning: Job tracking initialization failed: {e}[/yellow]")
         manager = None
 
@@ -235,7 +277,7 @@ def sweep_ring(
             local_output_dir=out_dir,
             job_id=job_id,
         )
-        console.print(f"[cyan]Cloud execution enabled[/cyan]")
+        console.print("[cyan]Cloud execution enabled[/cyan]")
 
     q_total_dec = Decimal(str(q_total))
     runner = RingSweepRunner(
@@ -262,7 +304,12 @@ def sweep_ring(
 
     try:
         if grid:
-            total_runs = len(grid_kappas) * len(grid_concentrations) * len(grid_mus) * len(grid_monotonicities)
+            total_runs = (
+                len(grid_kappas)
+                * len(grid_concentrations)
+                * len(grid_mus)
+                * len(grid_monotonicities)
+            )
             console.print(f"[dim]Running grid sweep: {total_runs} runs[/dim]")
             runner.run_grid(grid_kappas, grid_concentrations, grid_mus, grid_monotonicities)
 
@@ -277,7 +324,9 @@ def sweep_ring(
             )
 
         if frontier:
-            console.print(f"[dim]Running frontier search across {len(grid_concentrations) * len(grid_mus) * len(grid_monotonicities)} cells[/dim]")
+            console.print(
+                f"[dim]Running frontier search across {len(grid_concentrations) * len(grid_mus) * len(grid_monotonicities)} cells[/dim]"
+            )
             runner.run_frontier(
                 grid_concentrations,
                 grid_mus,
@@ -298,45 +347,77 @@ def sweep_ring(
         # Complete job
         if manager is not None:
             try:
-                manager.complete_job(job_id, {
-                    "grid_runs": total_runs if grid else 0,
-                    "lhs_runs": lhs_count,
-                    "frontier": frontier,
-                })
-            except Exception as e:  # Intentionally broad: top-level CLI handler
+                manager.complete_job(
+                    job_id,
+                    {
+                        "grid_runs": total_runs if grid else 0,
+                        "lhs_runs": lhs_count,
+                        "frontier": frontier,
+                    },
+                )
+            except CLI_HANDLED_ERRORS as e:
                 console.print(f"[yellow]Warning: Failed to complete job tracking: {e}[/yellow]")
 
         console.print(f"[green]Sweep complete.[/green] Registry: {registry_csv}")
         console.print(f"[green]Aggregated results: {results_csv}")
         console.print(f"[green]Dashboard: {dashboard_html}")
 
-    except Exception as e:  # Intentionally broad: top-level CLI handler
+    except CLI_HANDLED_ERRORS as e:
         # Fail job on error
         if manager is not None:
             try:
                 manager.fail_job(job_id, str(e))
-            except Exception:  # Intentionally broad: must not mask original error
+            except CLI_HANDLED_ERRORS:
                 pass  # Don't let job tracking failure mask the original error
         raise
 
 
 @sweep.command("comparison")
-@click.option('--out-dir', type=click.Path(path_type=Path), required=True, help='Output directory for results')
-@click.option('--n-agents', type=int, default=100, help='Ring size (default: 100)')
-@click.option('--maturity-days', type=int, default=10, help='Maturity horizon in days (default: 10)')
-@click.option('--q-total', type=float, default=10000.0, help='Total debt amount (default: 10000)')
-@click.option('--kappas', type=str, default="0.25,0.5,1,2,4", help='Comma list for kappa values')
-@click.option('--concentrations', type=str, default="0.2,0.5,1,2,5", help='Comma list for Dirichlet concentrations')
-@click.option('--mus', type=str, default="0,0.25,0.5,0.75,1", help='Comma list for mu values')
-@click.option('--monotonicities', type=str, default="0", help='Comma list for monotonicity values')
-@click.option('--base-seed', type=int, default=42, help='Base PRNG seed')
-@click.option('--default-handling', type=click.Choice(['fail-fast', 'expel-agent']), default='fail-fast', help='Default handling mode')
-@click.option('--dealer-ticket-size', type=float, default=1.0, help='Ticket size for dealer')
-@click.option('--dealer-share', type=float, default=0.25, help='Dealer capital as fraction of system cash (NEW outside money)')
-@click.option('--vbt-share', type=float, default=0.50, help='VBT capital as fraction of system cash (NEW outside money)')
-@click.option('--liquidity-mode', type=click.Choice(['single_at', 'uniform']), default='uniform', help='Liquidity allocation mode')
-@click.option('--liquidity-agent', type=str, default=None, help='Target agent for single_at mode')
-@click.option('--name-prefix', type=str, default='Dealer Comparison', help='Scenario name prefix')
+@click.option(
+    "--out-dir", type=click.Path(path_type=Path), required=True, help="Output directory for results"
+)
+@click.option("--n-agents", type=int, default=100, help="Ring size (default: 100)")
+@click.option(
+    "--maturity-days", type=int, default=10, help="Maturity horizon in days (default: 10)"
+)
+@click.option("--q-total", type=float, default=10000.0, help="Total debt amount (default: 10000)")
+@click.option("--kappas", type=str, default="0.25,0.5,1,2,4", help="Comma list for kappa values")
+@click.option(
+    "--concentrations",
+    type=str,
+    default="0.2,0.5,1,2,5",
+    help="Comma list for Dirichlet concentrations",
+)
+@click.option("--mus", type=str, default="0,0.25,0.5,0.75,1", help="Comma list for mu values")
+@click.option("--monotonicities", type=str, default="0", help="Comma list for monotonicity values")
+@click.option("--base-seed", type=int, default=42, help="Base PRNG seed")
+@click.option(
+    "--default-handling",
+    type=click.Choice(["fail-fast", "expel-agent"]),
+    default="fail-fast",
+    help="Default handling mode",
+)
+@click.option("--dealer-ticket-size", type=float, default=1.0, help="Ticket size for dealer")
+@click.option(
+    "--dealer-share",
+    type=float,
+    default=0.25,
+    help="Dealer capital as fraction of system cash (NEW outside money)",
+)
+@click.option(
+    "--vbt-share",
+    type=float,
+    default=0.50,
+    help="VBT capital as fraction of system cash (NEW outside money)",
+)
+@click.option(
+    "--liquidity-mode",
+    type=click.Choice(["single_at", "uniform"]),
+    default="uniform",
+    help="Liquidity allocation mode",
+)
+@click.option("--liquidity-agent", type=str, default=None, help="Target agent for single_at mode")
+@click.option("--name-prefix", type=str, default="Dealer Comparison", help="Scenario name prefix")
 def sweep_comparison(
     out_dir: Path,
     n_agents: int,
@@ -352,7 +433,7 @@ def sweep_comparison(
     dealer_share: float,
     vbt_share: float,
     liquidity_mode: str,
-    liquidity_agent: Optional[str],
+    liquidity_agent: str | None,
     name_prefix: str,
 ) -> None:
     """
@@ -365,10 +446,11 @@ def sweep_comparison(
     Outputs comparison metrics showing the delta in defaults between conditions.
     """
     import logging
-    logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     # Deferred import to avoid circular import
-    from bilancio.experiments.comparison import ComparisonSweepRunner, ComparisonSweepConfig
+    from bilancio.experiments.comparison import ComparisonSweepConfig, ComparisonSweepRunner
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -378,9 +460,13 @@ def sweep_comparison(
     grid_mus = _as_decimal_list(mus)
     grid_monotonicities = _as_decimal_list(monotonicities)
 
-    total_pairs = len(grid_kappas) * len(grid_concentrations) * len(grid_mus) * len(grid_monotonicities)
+    total_pairs = (
+        len(grid_kappas) * len(grid_concentrations) * len(grid_mus) * len(grid_monotonicities)
+    )
     console.print(f"[dim]Output directory: {out_dir}[/dim]")
-    console.print(f"[dim]Running comparison sweep: {total_pairs} parameter combinations × 2 conditions = {total_pairs * 2} runs[/dim]")
+    console.print(
+        f"[dim]Running comparison sweep: {total_pairs} parameter combinations × 2 conditions = {total_pairs * 2} runs[/dim]"
+    )
 
     config = ComparisonSweepConfig(
         n_agents=n_agents,
@@ -408,14 +494,16 @@ def sweep_comparison(
     if completed:
         mean_relief = sum(float(r.relief_ratio or 0) for r in completed) / len(completed)
         improved = sum(1 for r in completed if r.delta_reduction and r.delta_reduction > 0)
-        console.print(f"\n[green]Comparison sweep complete.[/green]")
+        console.print("\n[green]Comparison sweep complete.[/green]")
         console.print(f"  Pairs completed: {len(completed)}/{len(results)}")
         console.print(f"  Mean relief ratio: {mean_relief:.1%}")
         console.print(f"  Pairs with improvement: {improved}")
     else:
-        console.print(f"\n[yellow]Comparison sweep complete but no pairs completed successfully.[/yellow]")
+        console.print(
+            "\n[yellow]Comparison sweep complete but no pairs completed successfully.[/yellow]"
+        )
 
-    console.print(f"\n[green]Results:[/green]")
+    console.print("\n[green]Results:[/green]")
     console.print(f"  Comparison CSV: {runner.comparison_path}")
     console.print(f"  Summary JSON: {runner.summary_path}")
     console.print(f"  Control registry: {runner.control_dir / 'registry' / 'experiments.csv'}")
@@ -480,104 +568,104 @@ def sweep_comparison(
     default=True,
     help="Enable detailed CSV logging (trades.csv, repayment_events.csv, etc.)",
 )
-@click.option('--cloud', is_flag=True, help='Run simulations on Modal cloud')
-@click.option('--job-id', type=str, default=None, help='Job ID (auto-generated if not provided)')
+@click.option("--cloud", is_flag=True, help="Run simulations on Modal cloud")
+@click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
 @click.option(
-    '--quiet/--verbose',
+    "--quiet/--verbose",
     default=True,
-    help='Suppress verbose console output during sweeps (default: quiet)',
+    help="Suppress verbose console output during sweeps (default: quiet)",
 )
 @click.option(
-    '--rollover/--no-rollover',
+    "--rollover/--no-rollover",
     default=True,
-    help='Enable continuous rollover of matured claims (default: enabled)',
+    help="Enable continuous rollover of matured claims (default: enabled)",
 )
 @click.option(
-    '--risk-assessment/--no-risk-assessment',
+    "--risk-assessment/--no-risk-assessment",
     default=True,
-    help='Enable risk-based trader decision making (default: enabled)',
+    help="Enable risk-based trader decision making (default: enabled)",
 )
 @click.option(
-    '--risk-premium',
+    "--risk-premium",
     type=Decimal,
     default=Decimal("0.02"),
-    help='Base risk premium for trading decisions (default: 0.02)',
+    help="Base risk premium for trading decisions (default: 0.02)",
 )
 @click.option(
-    '--risk-urgency',
+    "--risk-urgency",
     type=Decimal,
     default=Decimal("0.10"),
-    help='Urgency sensitivity (default: 0.10)',
+    help="Urgency sensitivity (default: 0.10)",
 )
 @click.option(
-    '--alpha-vbt',
+    "--alpha-vbt",
     type=Decimal,
     default=Decimal("0"),
-    help='VBT informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0)',
+    help="VBT informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0)",
 )
 @click.option(
-    '--alpha-trader',
+    "--alpha-trader",
     type=Decimal,
     default=Decimal("0"),
-    help='Trader informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0)',
+    help="Trader informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0)",
 )
 @click.option(
-    '--risk-aversion',
+    "--risk-aversion",
     type=Decimal,
     default=Decimal("0"),
-    help='Trader risk aversion (0=risk-neutral, 1=max risk-averse, default: 0)',
+    help="Trader risk aversion (0=risk-neutral, 1=max risk-averse, default: 0)",
 )
 @click.option(
-    '--planning-horizon',
+    "--planning-horizon",
     type=int,
     default=10,
-    help='Trader planning horizon in days (1-20, default: 10)',
+    help="Trader planning horizon in days (1-20, default: 10)",
 )
 @click.option(
-    '--aggressiveness',
+    "--aggressiveness",
     type=Decimal,
     default=Decimal("1.0"),
-    help='Buyer aggressiveness (0=conservative, 1=eager, default: 1.0)',
+    help="Buyer aggressiveness (0=conservative, 1=eager, default: 1.0)",
 )
 @click.option(
-    '--default-observability',
+    "--default-observability",
     type=Decimal,
     default=Decimal("1.0"),
-    help='Trader default observability (0=ignore, 1=full tracking, default: 1.0)',
+    help="Trader default observability (0=ignore, 1=full tracking, default: 1.0)",
 )
 @click.option(
-    '--vbt-mid-sensitivity',
+    "--vbt-mid-sensitivity",
     type=Decimal,
     default=Decimal("1.0"),
-    help='VBT mid price sensitivity to defaults (0=ignore, 1=full tracking, default: 1.0)',
+    help="VBT mid price sensitivity to defaults (0=ignore, 1=full tracking, default: 1.0)",
 )
 @click.option(
-    '--vbt-spread-sensitivity',
+    "--vbt-spread-sensitivity",
     type=Decimal,
     default=Decimal("0.0"),
-    help='VBT spread sensitivity to defaults (0=fixed, 1=widen with defaults, default: 0.0)',
+    help="VBT spread sensitivity to defaults (0=fixed, 1=widen with defaults, default: 0.0)",
 )
 @click.option(
-    '--trading-motive',
+    "--trading-motive",
     type=click.Choice(["liquidity_only", "liquidity_then_earning", "unrestricted"]),
     default="liquidity_then_earning",
-    help='Trading motivation (default: liquidity_then_earning)',
+    help="Trading motivation (default: liquidity_then_earning)",
 )
 @click.option(
-    '--enable-lender/--no-lender',
+    "--enable-lender/--no-lender",
     default=False,
-    help='Enable third comparison arm with non-bank lender (default: disabled)',
+    help="Enable third comparison arm with non-bank lender (default: disabled)",
 )
 @click.option(
-    '--lender-share',
+    "--lender-share",
     type=Decimal,
     default=Decimal("0.10"),
-    help='Lender capital as fraction of system cash (default: 0.10)',
+    help="Lender capital as fraction of system cash (default: 0.10)",
 )
 @click.option(
-    '--enable-dealer-lender/--no-dealer-lender',
+    "--enable-dealer-lender/--no-dealer-lender",
     default=False,
-    help='Enable fourth arm: dealer trading + non-bank lending combined (default: disabled)',
+    help="Enable fourth arm: dealer trading + non-bank lending combined (default: disabled)",
 )
 def sweep_balanced(
     out_dir: Path,
@@ -594,7 +682,7 @@ def sweep_balanced(
     default_handling: str,
     detailed_logging: bool,
     cloud: bool,
-    job_id: Optional[str],
+    job_id: str | None,
     quiet: bool,
     rollover: bool,
     risk_assessment: bool,
@@ -627,7 +715,6 @@ def sweep_balanced(
       - aggregate/comparison.csv: C vs D metrics
       - aggregate/summary.json: Aggregate statistics
     """
-    from bilancio.experiments.ring import _decimal_list
     from bilancio.experiments.balanced_comparison import (
         BalancedComparisonConfig,
         BalancedComparisonRunner,
@@ -640,7 +727,7 @@ def sweep_balanced(
         job_id = generate_job_id()
 
     # Create job manager with Supabase cloud storage
-    manager: Optional[JobManager] = None
+    manager: JobManager | None = None
     try:
         manager = create_job_manager(jobs_dir=out_dir, cloud=cloud, local=True)
 
@@ -666,7 +753,7 @@ def sweep_balanced(
 
         click.echo(f"Job ID: {job.job_id}")
         manager.start_job(job.job_id)
-    except Exception as e:  # Intentionally broad: top-level CLI handler
+    except CLI_HANDLED_ERRORS as e:
         click.echo(f"Warning: Job tracking initialization failed: {e}")
         manager = None
 
@@ -674,13 +761,14 @@ def sweep_balanced(
     executor = None
     if cloud:
         from bilancio.runners import CloudExecutor
+
         executor = CloudExecutor(
             experiment_id=job_id,  # Use job_id as experiment_id for simplicity
             download_artifacts=False,
             local_output_dir=out_dir,
             job_id=job_id,
         )
-        click.echo(f"Cloud execution enabled")
+        click.echo("Cloud execution enabled")
 
     if risk_assessment:
         click.echo(f"Risk assessment enabled (premium={risk_premium}, urgency={risk_urgency})")
@@ -738,15 +826,13 @@ def sweep_balanced(
                 for r in results:
                     if r.passive_run_id:
                         manager.record_progress(
-                            job_id, r.passive_run_id,
-                            modal_call_id=r.passive_modal_call_id
+                            job_id, r.passive_run_id, modal_call_id=r.passive_modal_call_id
                         )
                     if r.active_run_id:
                         manager.record_progress(
-                            job_id, r.active_run_id,
-                            modal_call_id=r.active_modal_call_id
+                            job_id, r.active_run_id, modal_call_id=r.active_modal_call_id
                         )
-            except Exception as e:  # Intentionally broad: top-level CLI handler
+            except CLI_HANDLED_ERRORS as e:
                 click.echo(f"Warning: Failed to record run progress: {e}")
 
         # Print summary
@@ -756,34 +842,41 @@ def sweep_balanced(
         # Complete job with summary
         if manager is not None:
             try:
-                manager.complete_job(job_id, {
-                    "total_pairs": len(results),
-                    "completed": completed,
-                    "improved_with_trading": improved,
-                })
-            except Exception as e:  # Intentionally broad: top-level CLI handler
+                manager.complete_job(
+                    job_id,
+                    {
+                        "total_pairs": len(results),
+                        "completed": completed,
+                        "improved_with_trading": improved,
+                    },
+                )
+            except CLI_HANDLED_ERRORS as e:
                 click.echo(f"Warning: Failed to complete job tracking: {e}")
 
-        click.echo(f"\nBalanced comparison complete!")
+        click.echo("\nBalanced comparison complete!")
         click.echo(f"  Total pairs: {len(results)}")
         click.echo(f"  Completed: {completed}")
         click.echo(f"  Improved with trading: {improved}")
         click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
 
-    except Exception as e:  # Intentionally broad: top-level CLI handler
+    except CLI_HANDLED_ERRORS as e:
         # Fail job on error
         if manager is not None:
             try:
                 manager.fail_job(job_id, str(e))
-            except Exception:  # Intentionally broad: must not mask original error
+            except CLI_HANDLED_ERRORS:
                 pass  # Don't let job tracking failure mask the original error
         raise
 
 
 @sweep.command("strategy-outcomes")
-@click.option('--experiment', type=click.Path(exists=True, path_type=Path), required=True,
-              help='Path to experiment directory (containing aggregate/comparison.csv)')
-@click.option('-v', '--verbose', is_flag=True, help='Enable verbose logging')
+@click.option(
+    "--experiment",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to experiment directory (containing aggregate/comparison.csv)",
+)
+@click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging")
 def sweep_strategy_outcomes(experiment: Path, verbose: bool) -> None:
     """Analyze trading strategy outcomes across experiment runs.
 
@@ -797,6 +890,7 @@ def sweep_strategy_outcomes(experiment: Path, verbose: bool) -> None:
     - aggregate/strategy_outcomes_overall.csv
     """
     import logging
+
     from bilancio.analysis.strategy_outcomes import run_strategy_analysis
 
     logging.basicConfig(
@@ -810,13 +904,19 @@ def sweep_strategy_outcomes(experiment: Path, verbose: bool) -> None:
         console.print(f"[green]OK[/green] Strategy outcomes by run: {by_run_path}")
         console.print(f"[green]OK[/green] Strategy outcomes overall: {overall_path}")
     else:
-        console.print("[yellow]No output generated - check that repayment_events.csv files exist[/yellow]")
+        console.print(
+            "[yellow]No output generated - check that repayment_events.csv files exist[/yellow]"
+        )
 
 
 @sweep.command("dealer-usage")
-@click.option('--experiment', type=click.Path(exists=True, path_type=Path), required=True,
-              help='Path to experiment directory (containing aggregate/comparison.csv)')
-@click.option('-v', '--verbose', is_flag=True, help='Enable verbose logging')
+@click.option(
+    "--experiment",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to experiment directory (containing aggregate/comparison.csv)",
+)
+@click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging")
 def sweep_dealer_usage(experiment: Path, verbose: bool) -> None:
     """Analyze dealer usage patterns across experiment runs.
 
@@ -827,6 +927,7 @@ def sweep_dealer_usage(experiment: Path, verbose: bool) -> None:
     - aggregate/dealer_usage_by_run.csv
     """
     import logging
+
     from bilancio.analysis.dealer_usage_summary import run_dealer_usage_analysis
 
     logging.basicConfig(

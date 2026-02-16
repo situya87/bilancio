@@ -2,9 +2,6 @@
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-import subprocess
-
-import pytest
 
 from bilancio.storage.modal_artifact_loader import ModalVolumeArtifactLoader
 

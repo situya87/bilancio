@@ -592,7 +592,7 @@ class TestJobManagerPersistence:
             config = self._create_sample_config()
 
             manager = JobManager(jobs_dir=jobs_dir)
-            job = manager.create_job(
+            manager.create_job(
                 description="Test job",
                 config=config,
                 job_id="test-structure-job",

@@ -2,9 +2,9 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 from .job_id import generate_job_id
 from .models import Job, JobConfig, JobEvent, JobStatus
@@ -13,10 +13,24 @@ if TYPE_CHECKING:
     from .supabase_store import SupabaseJobStore
 
 logger = logging.getLogger(__name__)
+EXTERNAL_STORE_ERRORS = (
+    FileNotFoundError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+)
+
+
+def _utc_now() -> datetime:
+    """Return timezone-aware UTC timestamp for job lifecycle events."""
+    return datetime.now(UTC)
 
 
 def create_job_manager(
-    jobs_dir: Optional[Path] = None,
+    jobs_dir: Path | None = None,
     cloud: bool = False,
     local: bool = True,
 ) -> "JobManager":
@@ -74,7 +88,7 @@ class JobManager:
 
     def __init__(
         self,
-        jobs_dir: Optional[Path] = None,
+        jobs_dir: Path | None = None,
         cloud_store: Optional["SupabaseJobStore"] = None,
     ):
         """Initialize the job manager.
@@ -95,8 +109,8 @@ class JobManager:
         self,
         description: str,
         config: JobConfig,
-        job_id: Optional[str] = None,
-        notes: Optional[str] = None,
+        job_id: str | None = None,
+        notes: str | None = None,
     ) -> Job:
         """Create a new job.
 
@@ -112,7 +126,7 @@ class JobManager:
         if job_id is None:
             job_id = generate_job_id()
 
-        now = datetime.utcnow()
+        now = _utc_now()
         job = Job(
             job_id=job_id,
             created_at=now,
@@ -154,7 +168,7 @@ class JobManager:
         event = JobEvent(
             job_id=job_id,
             event_type="started",
-            timestamp=datetime.utcnow(),
+            timestamp=_utc_now(),
         )
         job.events.append(event)
         self._save_job(job)
@@ -164,8 +178,8 @@ class JobManager:
         self,
         job_id: str,
         run_id: str,
-        metrics: Optional[Dict[str, Any]] = None,
-        modal_call_id: Optional[str] = None,
+        metrics: dict[str, Any] | None = None,
+        modal_call_id: str | None = None,
     ) -> None:
         """Record progress on a job (a run completed).
 
@@ -188,14 +202,14 @@ class JobManager:
         event = JobEvent(
             job_id=job_id,
             event_type="progress",
-            timestamp=datetime.utcnow(),
+            timestamp=_utc_now(),
             details={"run_id": run_id, "metrics": metrics or {}, "modal_call_id": modal_call_id},
         )
         job.events.append(event)
         self._save_job(job)
         self._save_event(event)
 
-    def complete_job(self, job_id: str, summary: Optional[Dict[str, Any]] = None) -> None:
+    def complete_job(self, job_id: str, summary: dict[str, Any] | None = None) -> None:
         """Mark a job as completed.
 
         Args:
@@ -209,7 +223,7 @@ class JobManager:
         if job is None:
             raise KeyError(f"Job not found: {job_id}")
 
-        now = datetime.utcnow()
+        now = _utc_now()
         job.status = JobStatus.COMPLETED
         job.completed_at = now
 
@@ -237,7 +251,7 @@ class JobManager:
         if job is None:
             raise KeyError(f"Job not found: {job_id}")
 
-        now = datetime.utcnow()
+        now = _utc_now()
         job.status = JobStatus.FAILED
         job.completed_at = now
         job.error = error
@@ -252,7 +266,7 @@ class JobManager:
         self._save_job(job)
         self._save_event(event)
 
-    def get_job(self, job_id: str) -> Optional[Job]:
+    def get_job(self, job_id: str) -> Job | None:
         """Get a job by ID.
 
         Args:
@@ -313,7 +327,7 @@ class JobManager:
         if self.cloud_store is not None:
             try:
                 self.cloud_store.save_job(job)
-            except Exception as e:  # Intentionally broad: external service call
+            except EXTERNAL_STORE_ERRORS as e:
                 logger.warning(f"Failed to save job to cloud: {e}")
 
     def _save_event(self, event: JobEvent) -> None:
@@ -328,7 +342,7 @@ class JobManager:
         if self.cloud_store is not None:
             try:
                 self.cloud_store.save_event(event)
-            except Exception as e:  # Intentionally broad: external service call
+            except EXTERNAL_STORE_ERRORS as e:
                 logger.warning(f"Failed to save event to cloud: {e}")
 
     def _load_job(self, manifest_path: Path) -> Job:

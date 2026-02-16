@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Optional
 import math
+from dataclasses import dataclass
+from typing import Any
 
 try:
     from rich.console import Console, RenderableType
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
@@ -22,7 +23,7 @@ def _format_currency(amount: int, show_sign: bool = False) -> str:
     return formatted
 
 
-def _print(text: str, console: Optional['Console'] = None) -> None:
+def _print(text: str, console: Console | None = None) -> None:
     """Print using Rich console if available, otherwise regular print."""
     if console:
         console.print(text)
@@ -45,7 +46,7 @@ def _format_agent(agent_id: str, system: Any) -> str:
     return agent_id
 
 
-def parse_day_from_maturity(maturity_str: Optional[str]) -> int:
+def parse_day_from_maturity(maturity_str: str | None) -> int:
     """Parse a day number from maturity strings like 'Day 42'.
 
     Returns an integer day. If the input cannot be parsed, returns a large
@@ -65,11 +66,11 @@ def parse_day_from_maturity(maturity_str: Optional[str]) -> int:
 @dataclass
 class BalanceRow:
     name: str
-    quantity: Optional[int]
-    value_minor: Optional[int]
-    counterparty_name: Optional[str]
-    maturity: Optional[str]
-    id_or_alias: Optional[str] = None
+    quantity: int | None
+    value_minor: int | None
+    counterparty_name: str | None
+    maturity: str | None
+    id_or_alias: str | None = None
 
 
 @dataclass

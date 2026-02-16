@@ -26,6 +26,7 @@ class NonBankLoan(Instrument):
     The borrower holds this as a liability.
     Repayment = principal × (1 + rate) at maturity.
     """
+
     rate: Decimal = field(default=Decimal("0.05"))
     issuance_day: int = 0
     maturity_days: int = 2

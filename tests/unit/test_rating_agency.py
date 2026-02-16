@@ -4,17 +4,15 @@ from decimal import Decimal
 
 import pytest
 
+from bilancio.decision.profiles import RatingProfile
 from bilancio.domain.agent import AgentKind
 from bilancio.domain.agents import RatingAgency
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.firm import Firm
-from bilancio.domain.agents.household import Household
 from bilancio.domain.policy import PolicyEngine
-from bilancio.decision.profiles import RatingProfile
-from bilancio.engines.rating import RatingConfig, run_rating_phase, _compute_rating
+from bilancio.engines.rating import RatingConfig, _compute_rating, run_rating_phase
 from bilancio.engines.system import System
-from bilancio.information.presets import RATING_AGENCY_REALISTIC, LENDER_WITH_RATINGS
-
+from bilancio.information.presets import LENDER_WITH_RATINGS, RATING_AGENCY_REALISTIC
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -146,8 +144,9 @@ class TestRatingMethodology:
         """Agent with negative net worth gets high p_default."""
         system = _build_system_with_rating_agency()
         # Create a large liability for f0
-        from bilancio.domain.instruments.credit import Payable
         from bilancio.domain.instruments.base import InstrumentKind
+        from bilancio.domain.instruments.credit import Payable
+
         payable = Payable(
             id="PAY_test",
             kind=InstrumentKind.PAYABLE,
@@ -170,12 +169,16 @@ class TestRatingMethodology:
         """Conservatism bias adds to the rating."""
         system = _build_system_with_rating_agency()
         p_no_bias = _compute_rating(
-            None, "f0", 0,
+            None,
+            "f0",
+            0,
             RatingProfile(conservatism_bias=Decimal("0")),
             system,
         )
         p_with_bias = _compute_rating(
-            None, "f0", 0,
+            None,
+            "f0",
+            0,
             RatingProfile(conservatism_bias=Decimal("0.10")),
             system,
         )
@@ -199,9 +202,7 @@ class TestRunRatingPhase:
     def test_publishes_to_registry(self):
         """run_rating_phase populates the rating_registry."""
         system = _build_system_with_rating_agency()
-        config = RatingConfig(
-            rating_profile=RatingProfile(coverage_fraction=Decimal("1.0"))
-        )
+        config = RatingConfig(rating_profile=RatingProfile(coverage_fraction=Decimal("1.0")))
         events = run_rating_phase(system, 0, config)
         assert len(events) == 1
         assert events[0]["kind"] == "RatingsPublished"
@@ -221,9 +222,7 @@ class TestRunRatingPhase:
                 system.add_agent(Firm(id=f"f{i}", name=f"Firm {i}", kind="firm"))
                 system.mint_cash(f"f{i}", 100)
 
-        config = RatingConfig(
-            rating_profile=RatingProfile(coverage_fraction=Decimal("0.3"))
-        )
+        config = RatingConfig(rating_profile=RatingProfile(coverage_fraction=Decimal("0.3")))
         events = run_rating_phase(system, 0, config)
         assert events[0]["n_rated"] < events[0]["n_eligible"]
 
@@ -233,10 +232,8 @@ class TestRunRatingPhase:
         system.state.agents["f0"].defaulted = True
         system.state.defaulted_agent_ids.add("f0")
 
-        config = RatingConfig(
-            rating_profile=RatingProfile(coverage_fraction=Decimal("1.0"))
-        )
-        events = run_rating_phase(system, 0, config)
+        config = RatingConfig(rating_profile=RatingProfile(coverage_fraction=Decimal("1.0")))
+        run_rating_phase(system, 0, config)
         assert system.state.rating_registry.get("f0") == Decimal("1.0")
 
     def test_no_agency_returns_empty(self):
@@ -262,9 +259,7 @@ class TestRunRatingPhase:
         """Unrated agents keep their previous rating in the registry."""
         system = _build_system_with_rating_agency()
         # Day 0: rate all with coverage=1.0
-        config_full = RatingConfig(
-            rating_profile=RatingProfile(coverage_fraction=Decimal("1.0"))
-        )
+        config_full = RatingConfig(rating_profile=RatingProfile(coverage_fraction=Decimal("1.0")))
         run_rating_phase(system, 0, config_full)
         old_rating = system.state.rating_registry.get("f0")
         assert old_rating is not None
@@ -292,8 +287,9 @@ class TestInformationServiceIntegration:
             "f2": Decimal("0.30"),
         }
 
-        from bilancio.information.service import InformationService
         from bilancio.information.profile import InformationProfile
+        from bilancio.information.service import InformationService
+
         info = InformationService(system, InformationProfile(), observer_id="ra")
         probs = info._raw_default_probs(0)
         assert probs["f0"] == Decimal("0.10")
@@ -306,8 +302,9 @@ class TestInformationServiceIntegration:
         # Empty registry → fallback
         system.state.rating_registry = {}
 
-        from bilancio.information.service import InformationService
         from bilancio.information.profile import InformationProfile
+        from bilancio.information.service import InformationService
+
         info = InformationService(system, InformationProfile(), observer_id="ra")
         probs = info._raw_default_probs(0)
         # Should still have values (from fallback heuristic)
@@ -323,8 +320,9 @@ class TestInformationServiceIntegration:
             "f1": Decimal("0.10"),
         }
 
-        from bilancio.information.service import InformationService
         from bilancio.information.profile import InformationProfile
+        from bilancio.information.service import InformationService
+
         info = InformationService(system, InformationProfile(), observer_id="ra")
         probs = info._raw_default_probs(0)
         assert probs["f0"] == Decimal("1.0")  # defaulted overrides
@@ -343,6 +341,7 @@ class TestLendingIntegration:
         }
 
         from bilancio.engines.lending import _estimate_default_probs
+
         probs = _estimate_default_probs(system, 0)
         assert probs["f0"] == Decimal("0.12")
         assert probs["f1"] == Decimal("0.22")
@@ -355,6 +354,7 @@ class TestLendingIntegration:
         system.state.rating_registry = {}
 
         from bilancio.engines.lending import _estimate_default_probs
+
         probs = _estimate_default_probs(system, 0)
         assert "f0" in probs
 
@@ -371,6 +371,7 @@ class TestSimulationIntegration:
         )
 
         from bilancio.engines.simulation import run_day
+
         run_day(system, enable_rating=True)
 
         event_kinds = [e["kind"] for e in system.state.events]
@@ -383,6 +384,7 @@ class TestSimulationIntegration:
         system.state.rating_config = RatingConfig()
 
         from bilancio.engines.simulation import run_day
+
         run_day(system, enable_rating=True)
 
         event_kinds = [e["kind"] for e in system.state.events]
@@ -397,6 +399,7 @@ class TestSimulationIntegration:
         # rating_config is None by default
 
         from bilancio.engines.simulation import run_day
+
         run_day(system, enable_rating=True)
 
         event_kinds = [e["kind"] for e in system.state.events]
@@ -409,6 +412,7 @@ class TestSimulationIntegration:
 class TestConfig:
     def test_rating_agency_scenario_config_defaults(self):
         from bilancio.config.models import RatingAgencyScenarioConfig
+
         cfg = RatingAgencyScenarioConfig()
         assert cfg.enabled is False
         assert cfg.lookback_window == 5
@@ -416,7 +420,8 @@ class TestConfig:
         assert cfg.info_profile == "realistic"
 
     def test_scenario_config_accepts_rating_agency(self):
-        from bilancio.config.models import ScenarioConfig, RatingAgencyScenarioConfig
+        from bilancio.config.models import RatingAgencyScenarioConfig, ScenarioConfig
+
         cfg = ScenarioConfig(
             name="test",
             agents=[{"id": "cb", "kind": "central_bank", "name": "CB"}],
@@ -427,12 +432,14 @@ class TestConfig:
 
     def test_agent_spec_accepts_rating_agency_kind(self):
         from bilancio.config.models import AgentSpec
+
         spec = AgentSpec(id="ra", kind="rating_agency", name="Rating Agency")
         assert spec.kind == "rating_agency"
 
     def test_create_agent_rating_agency(self):
-        from bilancio.config.models import AgentSpec
         from bilancio.config.apply import create_agent
+        from bilancio.config.models import AgentSpec
+
         spec = AgentSpec(id="ra", kind="rating_agency", name="Rating Agency")
         agent = create_agent(spec)
         assert isinstance(agent, RatingAgency)
@@ -446,12 +453,14 @@ class TestPresets:
     def test_rating_agency_realistic_no_market(self):
         """RATING_AGENCY_REALISTIC has no market price access."""
         from bilancio.information.levels import AccessLevel
+
         assert RATING_AGENCY_REALISTIC.dealer_quotes.level == AccessLevel.NONE
         assert RATING_AGENCY_REALISTIC.vbt_anchors.level == AccessLevel.NONE
 
     def test_rating_agency_realistic_has_balance_sheet(self):
         """RATING_AGENCY_REALISTIC has noisy balance sheet access."""
         from bilancio.information.levels import AccessLevel
+
         assert RATING_AGENCY_REALISTIC.counterparty_cash.level == AccessLevel.NOISY
         assert RATING_AGENCY_REALISTIC.counterparty_net_worth.level == AccessLevel.NOISY
 
@@ -459,6 +468,7 @@ class TestPresets:
         """LENDER_WITH_RATINGS uses institutional channel for default history."""
         from bilancio.information.levels import AccessLevel
         from bilancio.information.noise import SampleNoise
+
         access = LENDER_WITH_RATINGS.counterparty_default_history
         assert access.level == AccessLevel.NOISY
         # InstitutionalChannel(staleness_days=1, coverage=0.8) → SampleNoise(0.8)

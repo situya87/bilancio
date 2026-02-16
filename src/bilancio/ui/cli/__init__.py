@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import click
 
-from .run import run, validate, new, analyze
+from .jobs import jobs
+from .run import analyze, new, run, validate
 from .sweep import sweep
 from .volume import volume
-from .jobs import jobs
 
 
 @click.group()
@@ -32,4 +32,4 @@ def main() -> None:
 
 
 # Re-export for backwards compatibility
-__all__ = ['cli', 'main']
+__all__ = ["cli", "main"]

@@ -2,8 +2,6 @@
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.specification.trade_viability import (
     ViabilityReport,
     check_trade_viability,

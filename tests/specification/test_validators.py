@@ -8,19 +8,17 @@ missing or incomplete specifications.
 import pytest
 
 from bilancio.specification import (
-    AgentSpec,
-    InstrumentSpec,
-    InstrumentRelation,
     AgentRelation,
-    DecisionSpec,
-    LifecycleSpec,
+    AgentSpec,
     BalanceSheetPosition,
+    InstrumentRelation,
+    InstrumentSpec,
+    LifecycleSpec,
     SpecificationRegistry,
     validate_agent_completeness,
-    validate_instrument_completeness,
     validate_all_relationships,
+    validate_instrument_completeness,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -208,8 +206,7 @@ class TestAgentValidation:
 
         assert not result.is_valid
         assert any(
-            e.category == "missing_relation" and "Payable" in e.message
-            for e in result.errors
+            e.category == "missing_relation" and "Payable" in e.message for e in result.errors
         )
 
     def test_complete_agent_is_valid(self, empty_registry):
@@ -276,8 +273,7 @@ class TestInstrumentValidation:
 
         assert not result.is_valid
         assert any(
-            e.category == "missing_relation" and "Trader" in e.message
-            for e in result.errors
+            e.category == "missing_relation" and "Trader" in e.message for e in result.errors
         )
 
 
@@ -328,10 +324,7 @@ class TestSystemValidation:
 
         result = validate_all_relationships(empty_registry)
         assert not result.is_valid
-        assert any(
-            e.category == "inconsistency" and "can_hold" in e.field
-            for e in result.errors
-        )
+        assert any(e.category == "inconsistency" and "can_hold" in e.field for e in result.errors)
 
     def test_consistent_system_is_valid(self, empty_registry):
         """Fully consistent system passes validation."""
@@ -423,9 +416,7 @@ class TestCurrentSystemValidation:
         registry = get_current_registry()
         summary = registry.get_completeness_summary()
 
-        assert len(summary["missing_pairs"]) == 0, (
-            f"Missing pairs: {summary['missing_pairs']}"
-        )
+        assert len(summary["missing_pairs"]) == 0, f"Missing pairs: {summary['missing_pairs']}"
         assert summary["completeness_ratio"] == 1.0
 
     def test_trader_has_correct_instrument_relations(self):
@@ -473,7 +464,9 @@ class TestCurrentSystemValidation:
 
     def test_relationship_symmetry(self):
         """Agent-instrument relations are symmetric (agent.can_hold == instrument.can_hold)."""
-        from bilancio.specification.current_system import get_current_registry, validate_current_system
+        from bilancio.specification.current_system import (
+            validate_current_system,
+        )
 
         result = validate_current_system()
 

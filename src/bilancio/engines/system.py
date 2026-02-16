@@ -5,6 +5,7 @@ stocks, and events.  State encapsulates the full simulation state and
 provides indexed lookups (contracts_by_due_day, events_by_day,
 scheduled_actions_by_day) for efficient daily processing.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,15 +20,15 @@ from bilancio.core.errors import ValidationError
 from bilancio.core.ids import AgentId, InstrId, new_id
 from bilancio.domain.agent import Agent, AgentKind
 from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.domain.goods import StockLot
 from bilancio.domain.instruments.base import Instrument, InstrumentKind
 from bilancio.domain.instruments.cb_loan import CBLoan
-from bilancio.domain.instruments.non_bank_loan import NonBankLoan
-from bilancio.domain.instruments.means_of_payment import Cash, ReserveDeposit
 from bilancio.domain.instruments.delivery import DeliveryObligation
-from bilancio.domain.goods import StockLot
+from bilancio.domain.instruments.means_of_payment import Cash, ReserveDeposit
+from bilancio.domain.instruments.non_bank_loan import NonBankLoan
 from bilancio.domain.policy import PolicyEngine
 from bilancio.ops.primitives import consume, merge, split
-from bilancio.ops.primitives_stock import split_stock, merge_stock
+from bilancio.ops.primitives_stock import merge_stock, split_stock
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ class State:
     estimate_log: list[Any] = field(default_factory=list)
     estimate_logging_enabled: bool = False
 
+
 class System:
     def __init__(self, policy: PolicyEngine | None = None, default_mode: str = "fail-fast"):
         self.policy = policy or PolicyEngine.default()
@@ -71,8 +73,11 @@ class System:
         logger.info("System initialized (default_mode=%s)", default_mode)
 
     # ---- ID helpers
-    def new_agent_id(self, prefix: str = "A") -> AgentId: return new_id(prefix)
-    def new_contract_id(self, prefix: str = "C") -> InstrId: return new_id(prefix)
+    def new_agent_id(self, prefix: str = "A") -> AgentId:
+        return new_id(prefix)
+
+    def new_contract_id(self, prefix: str = "C") -> InstrId:
+        return new_id(prefix)
 
     # ---- phase management
     @contextmanager
@@ -127,21 +132,26 @@ class System:
     # ---- invariants (MVP)
     def assert_invariants(self) -> None:
         from bilancio.core.invariants import (
+            assert_all_stock_ids_owned,
             assert_cb_cash_matches_outstanding,
             assert_cb_reserves_match,
             assert_double_entry_numeric,
-            assert_no_negative_balances,
             assert_no_duplicate_refs,
-            assert_all_stock_ids_owned,
-            assert_no_negative_stocks,
             assert_no_duplicate_stock_refs,
+            assert_no_negative_balances,
+            assert_no_negative_stocks,
         )
+
         for cid, c in self.state.contracts.items():
             # For secondary market transfers (e.g., payables sold to dealers),
             # check the effective holder, not the original asset_holder_id
             effective_holder_id = c.effective_creditor
-            assert cid in self.state.agents[effective_holder_id].asset_ids, f"{cid} missing on asset holder {effective_holder_id}"
-            assert cid in self.state.agents[c.liability_issuer_id].liability_ids, f"{cid} missing on issuer"
+            assert cid in self.state.agents[effective_holder_id].asset_ids, (
+                f"{cid} missing on asset holder {effective_holder_id}"
+            )
+            assert cid in self.state.agents[c.liability_issuer_id].liability_ids, (
+                f"{cid} missing on issuer"
+            )
         assert_no_duplicate_refs(self)
         assert_cb_cash_matches_outstanding(self)
         assert_cb_reserves_match(self)
@@ -151,34 +161,48 @@ class System:
         assert_all_stock_ids_owned(self)
         assert_no_negative_stocks(self)
         assert_no_duplicate_stock_refs(self)
-        logger.debug("invariants OK (agents=%d, contracts=%d)", len(self.state.agents), len(self.state.contracts))
+        logger.debug(
+            "invariants OK (agents=%d, contracts=%d)",
+            len(self.state.agents),
+            len(self.state.contracts),
+        )
 
     # ---- bootstrap helper
     def bootstrap_cb(self, cb: Agent) -> None:
         self.add_agent(cb)
         logger.info("bootstrapped central bank: %s", cb.id)
         self.log("BootstrapCB", cb_id=cb.id)
-    
+
     def add_agents(self, agents: list[Agent]) -> None:
         """Add multiple agents to the system at once."""
         for agent in agents:
             self.add_agent(agent)
 
     # ---- cash operations
-    def mint_cash(self, to_agent_id: AgentId, amount: int, denom: str = "X", alias: str | None = None) -> str:
-        cb_id = next((aid for aid,a in self.state.agents.items() if a.kind == AgentKind.CENTRAL_BANK), None)
+    def mint_cash(
+        self, to_agent_id: AgentId, amount: int, denom: str = "X", alias: str | None = None
+    ) -> str:
+        cb_id = next(
+            (aid for aid, a in self.state.agents.items() if a.kind == AgentKind.CENTRAL_BANK), None
+        )
         assert cb_id, "CentralBank must exist"
         instr_id = self.new_contract_id("C")
         c = Cash(
-            id=instr_id, kind=InstrumentKind.CASH, amount=amount, denom=denom,
-            asset_holder_id=to_agent_id, liability_issuer_id=cb_id
+            id=instr_id,
+            kind=InstrumentKind.CASH,
+            amount=amount,
+            denom=denom,
+            asset_holder_id=to_agent_id,
+            liability_issuer_id=cb_id,
         )
         with atomic(self):
             self.add_contract(c)
             self.state.cb_cash_outstanding += amount
             # Include alias if provided (for UI linking)
             if alias is not None:
-                self.log("CashMinted", to=to_agent_id, amount=amount, instr_id=instr_id, alias=alias)
+                self.log(
+                    "CashMinted", to=to_agent_id, amount=amount, instr_id=instr_id, alias=alias
+                )
             else:
                 self.log("CashMinted", to=to_agent_id, amount=amount, instr_id=instr_id)
         return instr_id
@@ -187,8 +211,12 @@ class System:
         # pull from holder's cash instruments (simple greedy)
         with atomic(self):
             remaining = amount
-            cash_ids = [cid for cid in self.state.agents[from_agent_id].asset_ids
-                        if cid in self.state.contracts and self.state.contracts[cid].kind == InstrumentKind.CASH]
+            cash_ids = [
+                cid
+                for cid in self.state.agents[from_agent_id].asset_ids
+                if cid in self.state.contracts
+                and self.state.contracts[cid].kind == InstrumentKind.CASH
+            ]
             for cid in list(cash_ids):
                 instr = self.state.contracts[cid]
                 take = min(instr.amount, remaining)
@@ -196,7 +224,8 @@ class System:
                     continue
                 consume(self, cid, take)
                 remaining -= take
-                if remaining == 0: break
+                if remaining == 0:
+                    break
             if remaining != 0:
                 raise ValidationError("insufficient cash to retire")
             self.state.cb_cash_outstanding -= amount
@@ -210,7 +239,8 @@ class System:
             # collect cash pieces and split as needed
             for cid in list(self.state.agents[from_agent_id].asset_ids):
                 instr = self.state.contracts.get(cid)
-                if not instr or instr.kind != InstrumentKind.CASH: continue
+                if not instr or instr.kind != InstrumentKind.CASH:
+                    continue
                 piece_id = cid
                 if instr.amount > remaining:
                     piece_id = split(self, cid, remaining)
@@ -219,14 +249,25 @@ class System:
                 self.state.agents[from_agent_id].asset_ids.remove(piece_id)
                 self.state.agents[to_agent_id].asset_ids.append(piece_id)
                 piece.asset_holder_id = to_agent_id
-                self.log("CashTransferred", frm=from_agent_id, to=to_agent_id, amount=min(remaining, piece.amount), instr_id=piece_id)
+                self.log(
+                    "CashTransferred",
+                    frm=from_agent_id,
+                    to=to_agent_id,
+                    amount=min(remaining, piece.amount),
+                    instr_id=piece_id,
+                )
                 remaining -= piece.amount
-                if remaining == 0: break
+                if remaining == 0:
+                    break
             if remaining != 0:
                 raise ValidationError("insufficient cash")
             # optional coalesce at receiver (merge duplicates)
-            rx_ids = [cid for cid in self.state.agents[to_agent_id].asset_ids
-                      if cid in self.state.contracts and self.state.contracts[cid].kind == InstrumentKind.CASH]
+            rx_ids = [
+                cid
+                for cid in self.state.agents[to_agent_id].asset_ids
+                if cid in self.state.contracts
+                and self.state.contracts[cid].kind == InstrumentKind.CASH
+            ]
             # naive coalesce: pairwise merge same-key
             seen: dict[tuple[str, str], str] = {}
             for cid in rx_ids:
@@ -243,24 +284,34 @@ class System:
     # ---- reserve operations
     def _central_bank_id(self) -> str:
         """Find and return the central bank agent ID"""
-        cb_id = next((aid for aid, a in self.state.agents.items() if a.kind == AgentKind.CENTRAL_BANK), None)
+        cb_id = next(
+            (aid for aid, a in self.state.agents.items() if a.kind == AgentKind.CENTRAL_BANK), None
+        )
         if not cb_id:
             raise ValidationError("CentralBank must exist")
         return cb_id
 
-    def mint_reserves(self, to_bank_id: str, amount: int, denom: str = "X", alias: str | None = None) -> str:
+    def mint_reserves(
+        self, to_bank_id: str, amount: int, denom: str = "X", alias: str | None = None
+    ) -> str:
         """Mint reserves to a bank"""
         cb_id = self._central_bank_id()
         instr_id = self.new_contract_id("R")
         c = ReserveDeposit(
-            id=instr_id, kind=InstrumentKind.RESERVE_DEPOSIT, amount=amount, denom=denom,
-            asset_holder_id=to_bank_id, liability_issuer_id=cb_id
+            id=instr_id,
+            kind=InstrumentKind.RESERVE_DEPOSIT,
+            amount=amount,
+            denom=denom,
+            asset_holder_id=to_bank_id,
+            liability_issuer_id=cb_id,
         )
         with atomic(self):
             self.add_contract(c)
             self.state.cb_reserves_outstanding += amount
             if alias is not None:
-                self.log("ReservesMinted", to=to_bank_id, amount=amount, instr_id=instr_id, alias=alias)
+                self.log(
+                    "ReservesMinted", to=to_bank_id, amount=amount, instr_id=instr_id, alias=alias
+                )
             else:
                 self.log("ReservesMinted", to=to_bank_id, amount=amount, instr_id=instr_id)
         return instr_id
@@ -274,7 +325,8 @@ class System:
             # collect reserve pieces and split as needed
             for cid in list(self.state.agents[from_bank_id].asset_ids):
                 instr = self.state.contracts.get(cid)
-                if not instr or instr.kind != InstrumentKind.RESERVE_DEPOSIT: continue
+                if not instr or instr.kind != InstrumentKind.RESERVE_DEPOSIT:
+                    continue
                 piece_id = cid
                 if instr.amount > remaining:
                     piece_id = split(self, cid, remaining)
@@ -283,14 +335,25 @@ class System:
                 self.state.agents[from_bank_id].asset_ids.remove(piece_id)
                 self.state.agents[to_bank_id].asset_ids.append(piece_id)
                 piece.asset_holder_id = to_bank_id
-                self.log("ReservesTransferred", frm=from_bank_id, to=to_bank_id, amount=min(remaining, piece.amount), instr_id=piece_id)
+                self.log(
+                    "ReservesTransferred",
+                    frm=from_bank_id,
+                    to=to_bank_id,
+                    amount=min(remaining, piece.amount),
+                    instr_id=piece_id,
+                )
                 remaining -= piece.amount
-                if remaining == 0: break
+                if remaining == 0:
+                    break
             if remaining != 0:
                 raise ValidationError("insufficient reserves")
             # optional coalesce at receiver (merge duplicates)
-            rx_ids = [cid for cid in self.state.agents[to_bank_id].asset_ids
-                      if cid in self.state.contracts and self.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT]
+            rx_ids = [
+                cid
+                for cid in self.state.agents[to_bank_id].asset_ids
+                if cid in self.state.contracts
+                and self.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
+            ]
             # naive coalesce: pairwise merge same-key
             seen: dict[tuple[str, str], str] = {}
             for cid in rx_ids:
@@ -308,14 +371,19 @@ class System:
         with atomic(self):
             # consume reserves
             remaining = amount
-            reserve_ids = [cid for cid in self.state.agents[bank_id].asset_ids
-                          if cid in self.state.contracts and self.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT]
+            reserve_ids = [
+                cid
+                for cid in self.state.agents[bank_id].asset_ids
+                if cid in self.state.contracts
+                and self.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
+            ]
             for cid in list(reserve_ids):
                 instr = self.state.contracts[cid]
                 take = min(instr.amount, remaining)
                 consume(self, cid, take)
                 remaining -= take
-                if remaining == 0: break
+                if remaining == 0:
+                    break
             if remaining != 0:
                 raise ValidationError("insufficient reserves to convert")
             # update outstanding reserves
@@ -325,8 +393,12 @@ class System:
             cb_id = self._central_bank_id()
             instr_id = self.new_contract_id("C")
             c = Cash(
-                id=instr_id, kind=InstrumentKind.CASH, amount=amount, denom="X",
-                asset_holder_id=bank_id, liability_issuer_id=cb_id
+                id=instr_id,
+                kind=InstrumentKind.CASH,
+                amount=amount,
+                denom="X",
+                asset_holder_id=bank_id,
+                liability_issuer_id=cb_id,
             )
             self.add_contract(c)
             self.log("ReservesToCash", bank_id=bank_id, amount=amount, instr_id=instr_id)
@@ -336,14 +408,19 @@ class System:
         with atomic(self):
             # consume cash
             remaining = amount
-            cash_ids = [cid for cid in self.state.agents[bank_id].asset_ids
-                       if cid in self.state.contracts and self.state.contracts[cid].kind == InstrumentKind.CASH]
+            cash_ids = [
+                cid
+                for cid in self.state.agents[bank_id].asset_ids
+                if cid in self.state.contracts
+                and self.state.contracts[cid].kind == InstrumentKind.CASH
+            ]
             for cid in list(cash_ids):
                 instr = self.state.contracts[cid]
                 take = min(instr.amount, remaining)
                 consume(self, cid, take)
                 remaining -= take
-                if remaining == 0: break
+                if remaining == 0:
+                    break
             if remaining != 0:
                 raise ValidationError("insufficient cash to convert")
             # update outstanding cash
@@ -353,8 +430,12 @@ class System:
             cb_id = self._central_bank_id()
             instr_id = self.new_contract_id("R")
             c = ReserveDeposit(
-                id=instr_id, kind=InstrumentKind.RESERVE_DEPOSIT, amount=amount, denom="X",
-                asset_holder_id=bank_id, liability_issuer_id=cb_id
+                id=instr_id,
+                kind=InstrumentKind.RESERVE_DEPOSIT,
+                amount=amount,
+                denom="X",
+                asset_holder_id=bank_id,
+                liability_issuer_id=cb_id,
             )
             self.add_contract(c)
             self.log("CashToReserves", bank_id=bank_id, amount=amount, instr_id=instr_id)
@@ -395,7 +476,9 @@ class System:
                 denom=denom,
                 asset_holder_id=bank_id,
                 liability_issuer_id=cb_id,
-                remuneration_rate=cb.reserve_remuneration_rate if isinstance(cb, CentralBank) else None,
+                remuneration_rate=cb.reserve_remuneration_rate
+                if isinstance(cb, CentralBank)
+                else None,
                 issuance_day=day,
             )
             self.add_contract(reserve)
@@ -416,13 +499,15 @@ class System:
             self.add_contract(loan)
             self.state.cb_loans_outstanding += amount
 
-            self.log("CBLoanCreated",
-                     bank_id=bank_id,
-                     amount=amount,
-                     loan_id=loan_id,
-                     reserve_id=reserve_id,
-                     cb_rate=str(cb_rate),
-                     maturity_day=day + 2)
+            self.log(
+                "CBLoanCreated",
+                bank_id=bank_id,
+                amount=amount,
+                loan_id=loan_id,
+                reserve_id=reserve_id,
+                cb_rate=str(cb_rate),
+                maturity_day=day + 2,
+            )
 
         return loan_id
 
@@ -457,8 +542,12 @@ class System:
         with atomic(self):
             # 1. Consume reserves from bank (repayment amount)
             remaining = repayment_amount
-            reserve_ids = [cid for cid in self.state.agents[bank_id].asset_ids
-                          if cid in self.state.contracts and self.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT]
+            reserve_ids = [
+                cid
+                for cid in self.state.agents[bank_id].asset_ids
+                if cid in self.state.contracts
+                and self.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
+            ]
 
             for cid in list(reserve_ids):
                 instr = self.state.contracts[cid]
@@ -469,7 +558,9 @@ class System:
                     break
 
             if remaining != 0:
-                raise ValidationError(f"Insufficient reserves to repay CB loan: needed {repayment_amount}, short by {remaining}")
+                raise ValidationError(
+                    f"Insufficient reserves to repay CB loan: needed {repayment_amount}, short by {remaining}"
+                )
 
             self.state.cb_reserves_outstanding -= repayment_amount
 
@@ -493,12 +584,14 @@ class System:
             del self.state.contracts[loan_id]
             self.state.cb_loans_outstanding -= principal
 
-            self.log("CBLoanRepaid",
-                     bank_id=bank_id,
-                     loan_id=loan_id,
-                     principal=principal,
-                     interest=repayment_amount - principal,
-                     total_repaid=repayment_amount)
+            self.log(
+                "CBLoanRepaid",
+                bank_id=bank_id,
+                loan_id=loan_id,
+                principal=principal,
+                interest=repayment_amount - principal,
+                total_repaid=repayment_amount,
+            )
 
         return repayment_amount
 
@@ -506,7 +599,11 @@ class System:
         """Get all CB loans that are due on the given day."""
         due_loans = []
         for cid, contract in self.state.contracts.items():
-            if contract.kind == InstrumentKind.CB_LOAN and isinstance(contract, CBLoan) and contract.is_due(day):
+            if (
+                contract.kind == InstrumentKind.CB_LOAN
+                and isinstance(contract, CBLoan)
+                and contract.is_due(day)
+            ):
                 due_loans.append(cid)
         return due_loans
 
@@ -541,9 +638,9 @@ class System:
         # Find lender's cash and consume amount
         remaining = amount
         cash_ids = [
-            cid for cid in self.state.agents[lender_id].asset_ids
-            if cid in self.state.contracts
-            and self.state.contracts[cid].kind == InstrumentKind.CASH
+            cid
+            for cid in self.state.agents[lender_id].asset_ids
+            if cid in self.state.contracts and self.state.contracts[cid].kind == InstrumentKind.CASH
         ]
 
         cb_id = self._central_bank_id()
@@ -635,9 +732,9 @@ class System:
 
         # Check if borrower has enough cash
         borrower_cash = sum(
-            c.amount for cid in self.state.agents[borrower_id].asset_ids
-            if (c := self.state.contracts.get(cid)) is not None
-            and c.kind == InstrumentKind.CASH
+            c.amount
+            for cid in self.state.agents[borrower_id].asset_ids
+            if (c := self.state.contracts.get(cid)) is not None and c.kind == InstrumentKind.CASH
         )
 
         if borrower_cash < repayment_amount:
@@ -659,7 +756,8 @@ class System:
             # 1. Consume cash from borrower
             remaining = repayment_amount
             cash_ids = [
-                cid for cid in self.state.agents[borrower_id].asset_ids
+                cid
+                for cid in self.state.agents[borrower_id].asset_ids
                 if cid in self.state.contracts
                 and self.state.contracts[cid].kind == InstrumentKind.CASH
             ]
@@ -724,9 +822,11 @@ class System:
         """Get all NonBankLoans that are due on the given day."""
         due_loans = []
         for cid, contract in self.state.contracts.items():
-            if (contract.kind == InstrumentKind.NON_BANK_LOAN
-                    and isinstance(contract, NonBankLoan)
-                    and contract.is_due(day)):
+            if (
+                contract.kind == InstrumentKind.NON_BANK_LOAN
+                and isinstance(contract, NonBankLoan)
+                and contract.is_due(day)
+            ):
                 due_loans.append(cid)
         return due_loans
 
@@ -793,22 +893,19 @@ class System:
 
                 total_interest += interest
 
-                self.log("ReserveInterestCredited",
-                         bank_id=bank_id,
-                         reserve_id=cid,
-                         interest_reserve_id=interest_id,
-                         interest=interest,
-                         day=day)
+                self.log(
+                    "ReserveInterestCredited",
+                    bank_id=bank_id,
+                    reserve_id=cid,
+                    interest_reserve_id=interest_id,
+                    interest=interest,
+                    day=day,
+                )
 
         return total_interest
 
     def mint_reserves_with_interest(
-        self,
-        to_bank_id: str,
-        amount: int,
-        day: int,
-        denom: str = "X",
-        alias: str | None = None
+        self, to_bank_id: str, amount: int, day: int, denom: str = "X", alias: str | None = None
     ) -> str:
         """
         Mint reserves to a bank with interest accrual enabled.
@@ -831,7 +928,9 @@ class System:
 
         remuneration_rate = None
         if cb.reserves_accrue_interest if isinstance(cb, CentralBank) else True:
-            remuneration_rate = cb.reserve_remuneration_rate if isinstance(cb, CentralBank) else Decimal("0.01")
+            remuneration_rate = (
+                cb.reserve_remuneration_rate if isinstance(cb, CentralBank) else Decimal("0.01")
+            )
 
         instr_id = self.new_contract_id("R")
         reserve = ReserveDeposit(
@@ -849,7 +948,9 @@ class System:
             self.add_contract(reserve)
             self.state.cb_reserves_outstanding += amount
             if alias is not None:
-                self.log("ReservesMinted", to=to_bank_id, amount=amount, instr_id=instr_id, alias=alias)
+                self.log(
+                    "ReservesMinted", to=to_bank_id, amount=amount, instr_id=instr_id, alias=alias
+                )
             else:
                 self.log("ReservesMinted", to=to_bank_id, amount=amount, instr_id=instr_id)
 
@@ -869,20 +970,22 @@ class System:
 
     def total_deposit(self, customer_id: str, bank_id: str) -> int:
         """Calculate total deposit amount for customer at bank"""
-        return sum(self.state.contracts[cid].amount for cid in self.deposit_ids(customer_id, bank_id))
+        return sum(
+            self.state.contracts[cid].amount for cid in self.deposit_ids(customer_id, bank_id)
+        )
 
     # ---- obligation settlement
 
     def settle_obligation(self, contract_id: InstrId) -> None:
         """
         Settle and extinguish a bilateral obligation.
-        
+
         This removes a matched asset-liability pair when the obligation has been fulfilled,
         such as after delivering goods or services that were promised.
-        
+
         Args:
             contract_id: The ID of the contract to settle
-            
+
         Raises:
             ValidationError: If the contract doesn't exist
         """
@@ -890,15 +993,15 @@ class System:
             # Validate contract exists
             if contract_id not in self.state.contracts:
                 raise ValidationError(f"Contract {contract_id} not found")
-            
+
             contract = self.state.contracts[contract_id]
-            
+
             # Remove from holder's assets
             holder = self.state.agents[contract.asset_holder_id]
             if contract_id not in holder.asset_ids:
                 raise ValidationError(f"Contract {contract_id} not in holder's assets")
             holder.asset_ids.remove(contract_id)
-            
+
             # Remove from issuer's liabilities
             issuer = self.state.agents[contract.liability_issuer_id]
             if contract_id not in issuer.liability_ids:
@@ -921,15 +1024,24 @@ class System:
             del self.state.contracts[contract_id]
 
             # Log the settlement
-            self.log("ObligationSettled",
-                    contract_id=contract_id,
-                    holder_id=contract.asset_holder_id,
-                    issuer_id=contract.liability_issuer_id,
-                    contract_kind=contract.kind,
-                    amount=contract.amount)
+            self.log(
+                "ObligationSettled",
+                contract_id=contract_id,
+                holder_id=contract.asset_holder_id,
+                issuer_id=contract.liability_issuer_id,
+                contract_kind=contract.kind,
+                amount=contract.amount,
+            )
 
     # ---- stock operations (inventory)
-    def create_stock(self, owner_id: AgentId, sku: str, quantity: int, unit_price: Decimal, divisible: bool=True) -> InstrId:
+    def create_stock(
+        self,
+        owner_id: AgentId,
+        sku: str,
+        quantity: int,
+        unit_price: Decimal,
+        divisible: bool = True,
+    ) -> InstrId:
         """Create a new stock lot (inventory)."""
         stock_id = new_id("S")
         stock = StockLot(
@@ -939,12 +1051,19 @@ class System:
             quantity=quantity,
             unit_price=unit_price,
             owner_id=owner_id,
-            divisible=divisible
+            divisible=divisible,
         )
         with atomic(self):
             self.state.stocks[stock_id] = stock
             self.state.agents[owner_id].stock_ids.append(stock_id)
-            self.log("StockCreated", owner=owner_id, sku=sku, qty=quantity, unit_price=unit_price, stock_id=stock_id)
+            self.log(
+                "StockCreated",
+                owner=owner_id,
+                sku=sku,
+                qty=quantity,
+                unit_price=unit_price,
+                stock_id=stock_id,
+            )
         return stock_id
 
     def split_stock(self, stock_id: InstrId, quantity: int) -> InstrId:
@@ -957,12 +1076,14 @@ class System:
         with atomic(self):
             return merge_stock(self, stock_id_keep, stock_id_into)
 
-    def _transfer_stock_internal(self, stock_id: InstrId, from_owner: AgentId, to_owner: AgentId, quantity: int | None = None) -> InstrId:
+    def _transfer_stock_internal(
+        self, stock_id: InstrId, from_owner: AgentId, to_owner: AgentId, quantity: int | None = None
+    ) -> InstrId:
         """Internal helper for stock transfer without atomic wrapper."""
         stock = self.state.stocks[stock_id]
         if stock.owner_id != from_owner:
             raise ValidationError("Stock owner mismatch")
-        
+
         moving_id = stock_id
         if quantity is not None:
             if not stock.divisible:
@@ -971,28 +1092,41 @@ class System:
                 raise ValidationError("Invalid transfer quantity")
             if quantity < stock.quantity:
                 moving_id = split_stock(self, stock_id, quantity)
-        
+
         # Transfer ownership
         moving_stock = self.state.stocks[moving_id]
         self.state.agents[from_owner].stock_ids.remove(moving_id)
         self.state.agents[to_owner].stock_ids.append(moving_id)
         moving_stock.owner_id = to_owner
-        
-        self.log("StockTransferred", 
-                frm=from_owner, 
-                to=to_owner, 
-                stock_id=moving_id, 
-                sku=moving_stock.sku,
-                qty=moving_stock.quantity)
+
+        self.log(
+            "StockTransferred",
+            frm=from_owner,
+            to=to_owner,
+            stock_id=moving_id,
+            sku=moving_stock.sku,
+            qty=moving_stock.quantity,
+        )
         return moving_id
 
-    def transfer_stock(self, stock_id: InstrId, from_owner: AgentId, to_owner: AgentId, quantity: int | None = None) -> InstrId:
+    def transfer_stock(
+        self, stock_id: InstrId, from_owner: AgentId, to_owner: AgentId, quantity: int | None = None
+    ) -> InstrId:
         """Transfer stock from one owner to another."""
         with atomic(self):
             return self._transfer_stock_internal(stock_id, from_owner, to_owner, quantity)
 
     # ---- delivery obligation operations
-    def create_delivery_obligation(self, from_agent: AgentId, to_agent: AgentId, sku: str, quantity: int, unit_price: Decimal, due_day: int, alias: str | None = None) -> InstrId:
+    def create_delivery_obligation(
+        self,
+        from_agent: AgentId,
+        to_agent: AgentId,
+        sku: str,
+        quantity: int,
+        unit_price: Decimal,
+        due_day: int,
+        alias: str | None = None,
+    ) -> InstrId:
         """Create a delivery obligation (bilateral promise to deliver goods)."""
         obligation_id = self.new_contract_id("D")
         obligation = DeliveryObligation(
@@ -1004,29 +1138,33 @@ class System:
             liability_issuer_id=from_agent,
             sku=sku,
             unit_price=unit_price,
-            due_day=due_day
+            due_day=due_day,
         )
         with atomic(self):
             self.add_contract(obligation)
             if alias is not None:
-                self.log("DeliveryObligationCreated", 
-                        id=obligation_id, 
-                        frm=from_agent, 
-                        to=to_agent, 
-                        sku=sku, 
-                        qty=quantity, 
-                        due_day=due_day, 
-                        unit_price=unit_price,
-                        alias=alias)
+                self.log(
+                    "DeliveryObligationCreated",
+                    id=obligation_id,
+                    frm=from_agent,
+                    to=to_agent,
+                    sku=sku,
+                    qty=quantity,
+                    due_day=due_day,
+                    unit_price=unit_price,
+                    alias=alias,
+                )
             else:
-                self.log("DeliveryObligationCreated", 
-                        id=obligation_id, 
-                        frm=from_agent, 
-                        to=to_agent, 
-                        sku=sku, 
-                        qty=quantity, 
-                        due_day=due_day, 
-                        unit_price=unit_price)
+                self.log(
+                    "DeliveryObligationCreated",
+                    id=obligation_id,
+                    frm=from_agent,
+                    to=to_agent,
+                    sku=sku,
+                    qty=quantity,
+                    due_day=due_day,
+                    unit_price=unit_price,
+                )
         return obligation_id
 
     def _cancel_delivery_obligation_internal(self, obligation_id: InstrId) -> None:
@@ -1034,7 +1172,7 @@ class System:
         # Validate contract exists and is a delivery obligation
         if obligation_id not in self.state.contracts:
             raise ValidationError(f"Contract {obligation_id} not found")
-        
+
         contract_instr = self.state.contracts[obligation_id]
         if contract_instr.kind != InstrumentKind.DELIVERY_OBLIGATION:
             raise ValidationError(f"Contract {obligation_id} is not a delivery obligation")
@@ -1047,7 +1185,7 @@ class System:
         if obligation_id not in holder.asset_ids:
             raise ValidationError(f"Contract {obligation_id} not in holder's assets")
         holder.asset_ids.remove(obligation_id)
-        
+
         # Remove from issuer's liabilities
         issuer = self.state.agents[contract.liability_issuer_id]
         if obligation_id not in issuer.liability_ids:
@@ -1071,15 +1209,18 @@ class System:
 
         # Log the cancellation with alias (if any) and contract_id for UI consistency
         from bilancio.ops.aliases import get_alias_for_id
+
         alias = get_alias_for_id(self, obligation_id)
-        self.log("DeliveryObligationCancelled",
-                obligation_id=obligation_id,
-                contract_id=obligation_id,
-                alias=alias,
-                debtor=contract.liability_issuer_id,
-                creditor=contract.asset_holder_id,
-                sku=contract.sku,
-                qty=contract.amount)
+        self.log(
+            "DeliveryObligationCancelled",
+            obligation_id=obligation_id,
+            contract_id=obligation_id,
+            alias=alias,
+            debtor=contract.liability_issuer_id,
+            creditor=contract.asset_holder_id,
+            sku=contract.sku,
+            qty=contract.amount,
+        )
 
     def cancel_delivery_obligation(self, obligation_id: InstrId) -> None:
         """Cancel (extinguish) a delivery obligation. Used by settlement engine after fulfillment."""
