@@ -598,6 +598,7 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
                 aggressiveness=config.balanced_dealer.aggressiveness,
                 default_observability=config.balanced_dealer.default_observability,
                 buy_reserve_fraction=config.balanced_dealer.buy_reserve_fraction,
+                trading_motive=config.balanced_dealer.trading_motive,
             )
             vbt_profile = VBTProfile(
                 mid_sensitivity=config.balanced_dealer.vbt_mid_sensitivity,

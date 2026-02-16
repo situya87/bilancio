@@ -350,9 +350,18 @@ def _check_buy_risk_assessment(
     return True  # Trade rejected
 
 
+def _is_liquidity_buy(trader: TraderState, ticket: "Ticket", current_day: int) -> bool:
+    """True if ticket matures at or before the trader's earliest obligation."""
+    earliest = trader.earliest_liability_day(current_day)
+    if earliest is None:
+        return False
+    return ticket.maturity_day <= earliest
+
+
 def _record_buy_trade(
     subsystem: "DealerSubsystem",
     trader_id: str,
+    trader: TraderState,
     ticket: "Ticket",
     bucket_id: str,
     current_day: int,
@@ -403,7 +412,7 @@ def _record_buy_trade(
         dealer_ask_after=dealer.ask,
         trader_cash_after=trader_cash_after,
         trader_safety_margin_after=post_safety_margin,
-        is_liquidity_driven=False,  # BUYs are never liquidity-driven
+        is_liquidity_driven=_is_liquidity_buy(trader, ticket, current_day),
         reduces_margin_below_zero=reduces_margin_below_zero,
     )
     subsystem.metrics.trades.append(trade_record)
@@ -447,9 +456,15 @@ def _execute_buy_trade(
     """Process a single buy trade attempt for a trader. Returns cash drained from ring."""
     trader = subsystem.traders[trader_id]
 
-    # Shuffle bucket order so buys don't always hit the same bucket first
-    bucket_ids = list(subsystem.dealers.keys())
-    subsystem.rng.shuffle(bucket_ids)
+    # Bucket ordering depends on trading motive
+    motive = subsystem.trader_profile.trading_motive
+    if motive in ("liquidity_only", "liquidity_then_earning"):
+        # Sort by tau_min ascending (short bucket first) — prefer tickets maturing soonest
+        tau_min_by_name = {bc.name: bc.tau_min for bc in subsystem.bucket_configs}
+        bucket_ids = sorted(subsystem.dealers.keys(), key=lambda b: tau_min_by_name.get(b, 999))
+    else:
+        bucket_ids = list(subsystem.dealers.keys())
+        subsystem.rng.shuffle(bucket_ids)
     for bucket_id in bucket_ids:
         dealer = subsystem.dealers[bucket_id]
         vbt = subsystem.vbts[bucket_id]
@@ -481,6 +496,12 @@ def _execute_buy_trade(
                 continue  # Risk rejected, try next bucket
 
         if result.executed and result.ticket:
+            # Liquidity-only gate: reject buys of tickets maturing after earliest obligation
+            if motive == "liquidity_only" and not _is_liquidity_buy(trader, result.ticket, current_day):
+                _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
+                recompute_dealer_state(dealer, vbt, subsystem.params)
+                continue
+
             # Scale price by ticket face value
             scaled_price = result.price * result.ticket.face
 
@@ -499,7 +520,7 @@ def _execute_buy_trade(
 
             # Record trade in metrics, ticket outcomes, and events
             _record_buy_trade(
-                subsystem, trader_id, result.ticket, bucket_id, current_day,
+                subsystem, trader_id, trader, result.ticket, bucket_id, current_day,
                 scaled_price, result.price, result.is_passthrough,
                 pre_dealer_inventory, pre_dealer_cash,
                 pre_dealer_bid, pre_dealer_ask,
@@ -567,6 +588,9 @@ def _build_eligible_buyers(
         horizon = subsystem.trader_profile.buy_horizon
     eligible_buyers = []
     for trader_id, trader in subsystem.traders.items():
+        if subsystem.trader_profile.trading_motive == "liquidity_only":
+            if trader.earliest_liability_day(current_day) is None:
+                continue
         total_upcoming_dues = Decimal(0)
         for day_offset in range(horizon + 1):
             total_upcoming_dues += trader.payment_due(current_day + day_offset)

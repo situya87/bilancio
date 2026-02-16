@@ -20,12 +20,15 @@ class TraderProfile:
     aggressiveness: Decimal = Decimal("1.0")
     default_observability: Decimal = Decimal("1.0")
     buy_reserve_fraction: Decimal = Decimal("0.5")  # 0.5 balances buyer pool size vs prudence
+    trading_motive: str = "liquidity_then_earning"
 
     def __post_init__(self) -> None:
         if not (1 <= self.planning_horizon <= 20):
             raise ValueError("planning_horizon must be between 1 and 20")
         if not (Decimal("0") <= self.buy_reserve_fraction <= Decimal("1")):
             raise ValueError("buy_reserve_fraction must be between 0 and 1")
+        if self.trading_motive not in ("liquidity_only", "liquidity_then_earning", "unrestricted"):
+            raise ValueError("trading_motive must be one of: liquidity_only, liquidity_then_earning, unrestricted")
 
     @property
     def base_risk_premium(self) -> Decimal:
