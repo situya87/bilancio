@@ -610,6 +610,7 @@ Present the following table to the user. Show the **current value** (from CLI ar
 | `aggressiveness` | 1.0 | ? | 0=conservative buyer, 1=eager | Lower → higher surplus needed to buy |
 | `buy_reserve_fraction` | 0.5 | ? | Fraction of upcoming dues reserved | Lower → more buyers eligible, less prudent |
 | `default_observability` | 1.0 | ? | 0=ignore defaults, 1=full tracking | Lower → agents slower to react to defaults |
+| `trading_motive` | liquidity_then_earning | ? | Trading motivation: liquidity_only, liquidity_then_earning, or unrestricted | Higher → restricts speculative buys |
 
 #### D. Dealer & VBT
 

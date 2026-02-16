@@ -743,6 +743,18 @@ class BalancedDealerConfig(BaseModel):
         le=Decimal("1"),
         description="VBT spread sensitivity to defaults (0=fixed, 1=widen with defaults)",
     )
+    trading_motive: str = Field(
+        default="liquidity_then_earning",
+        description="Trading motivation: liquidity_only, liquidity_then_earning, or unrestricted",
+    )
+
+    @field_validator("trading_motive")
+    @classmethod
+    def validate_trading_motive(cls, v: str) -> str:
+        valid = {"liquidity_only", "liquidity_then_earning", "unrestricted"}
+        if v not in valid:
+            raise ValueError(f"trading_motive must be one of {valid}")
+        return v
 
     @field_validator("face_value")
     @classmethod

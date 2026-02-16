@@ -50,6 +50,7 @@ from bilancio.engines.dealer_trades import (
     _build_eligible_sellers,
     _build_eligible_buyers,
     _execute_interleaved_order_flow,
+    _is_liquidity_buy,
 )
 
 
@@ -550,12 +551,13 @@ class TestRecordBuyTrade:
         """First buy creates a new TicketOutcome entry."""
         subsystem = _make_subsystem()
         ticket = _make_ticket(id="buy_new")
+        trader = _add_trader(subsystem, "T1", cash=Decimal(100))
         dealer = subsystem.dealers["short"]
         vbt = subsystem.vbts["short"]
         events: list[dict] = []
 
         _record_buy_trade(
-            subsystem, "T1", ticket, "short", 1,
+            subsystem, "T1", trader, ticket, "short", 1,
             scaled_price=Decimal("0.90"),
             unit_price=Decimal("0.90"),
             is_passthrough=False,
@@ -577,6 +579,7 @@ class TestRecordBuyTrade:
         """Cover line 412: existing TicketOutcome is updated, not replaced."""
         subsystem = _make_subsystem()
         ticket = _make_ticket(id="buy_exist")
+        trader = _add_trader(subsystem, "T1", cash=Decimal(100))
         dealer = subsystem.dealers["short"]
         vbt = subsystem.vbts["short"]
 
@@ -594,7 +597,7 @@ class TestRecordBuyTrade:
         events: list[dict] = []
 
         _record_buy_trade(
-            subsystem, "T1", ticket, "short", 1,
+            subsystem, "T1", trader, ticket, "short", 1,
             scaled_price=Decimal("0.90"),
             unit_price=Decimal("0.90"),
             is_passthrough=False,
@@ -619,12 +622,13 @@ class TestRecordBuyTrade:
         """Test reduces_margin_below_zero flag when pre >= 0 and post < 0."""
         subsystem = _make_subsystem()
         ticket = _make_ticket(id="buy_margin")
+        trader = _add_trader(subsystem, "T1", cash=Decimal(100))
         dealer = subsystem.dealers["short"]
         vbt = subsystem.vbts["short"]
         events: list[dict] = []
 
         _record_buy_trade(
-            subsystem, "T1", ticket, "short", 1,
+            subsystem, "T1", trader, ticket, "short", 1,
             scaled_price=Decimal("0.90"),
             unit_price=Decimal("0.90"),
             is_passthrough=False,
@@ -981,3 +985,120 @@ class TestInterleavedOrderFlow:
         )
         # Both sellers and buyers should be processed
         assert isinstance(events, list)
+
+
+# ===================================================================
+# TestTradingMotive
+# ===================================================================
+
+
+class TestTradingMotive:
+    """Tests for trading_motive parameter behavior."""
+
+    def test_is_liquidity_buy_helper_matches(self):
+        """Ticket maturing at or before earliest obligation is a liquidity buy."""
+        # Trader has obligation on day 10
+        obligation = _make_ticket(id="obl1", maturity_day=10, serial=0, bucket_id="short")
+        trader = TraderState(agent_id="T1", cash=Decimal(50), tickets_owned=[], obligations=[obligation])
+
+        # Ticket maturing on day 8 -> before obligation -> liquidity buy
+        ticket_short = _make_ticket(id="t_short", maturity_day=8, serial=0, bucket_id="short")
+        assert _is_liquidity_buy(trader, ticket_short, current_day=0) is True
+
+        # Ticket maturing on day 10 -> at obligation -> liquidity buy
+        ticket_at = _make_ticket(id="t_at", maturity_day=10, serial=0, bucket_id="short")
+        assert _is_liquidity_buy(trader, ticket_at, current_day=0) is True
+
+        # Ticket maturing on day 15 -> after obligation -> NOT a liquidity buy
+        ticket_long = _make_ticket(id="t_long", maturity_day=15, serial=0, bucket_id="short")
+        assert _is_liquidity_buy(trader, ticket_long, current_day=0) is False
+
+    def test_is_liquidity_buy_no_obligations(self):
+        """Trader with no future obligations -> never a liquidity buy."""
+        trader = TraderState(agent_id="T1", cash=Decimal(50), tickets_owned=[], obligations=[])
+        ticket = _make_ticket(id="t1", maturity_day=5, serial=0, bucket_id="short")
+        assert _is_liquidity_buy(trader, ticket, current_day=0) is False
+
+    def test_liquidity_only_rejects_no_obligation_buyer(self):
+        """In liquidity_only mode, traders without obligations are not eligible to buy."""
+        from bilancio.decision.profiles import TraderProfile
+        subsystem = _make_subsystem(dealer_tickets=3, dealer_cash=Decimal(5))
+        subsystem.trader_profile = TraderProfile(trading_motive="liquidity_only")
+
+        # Trader with no obligations but lots of cash
+        _add_trader(subsystem, "T1", cash=Decimal(100), obligations=[])
+
+        eligible = _build_eligible_buyers(subsystem, current_day=0)
+        assert "T1" not in eligible
+
+    def test_liquidity_only_accepts_obligation_buyer(self):
+        """In liquidity_only mode, traders WITH obligations can be eligible."""
+        from bilancio.decision.profiles import TraderProfile
+        subsystem = _make_subsystem(dealer_tickets=3, dealer_cash=Decimal(5))
+        subsystem.trader_profile = TraderProfile(trading_motive="liquidity_only")
+
+        # Trader with obligation and surplus cash
+        obligation = _make_ticket(id="obl1", maturity_day=10, serial=0, bucket_id="short")
+        _add_trader(subsystem, "T1", cash=Decimal(100), obligations=[obligation])
+
+        eligible = _build_eligible_buyers(subsystem, current_day=0)
+        assert "T1" in eligible
+
+    def test_unrestricted_allows_no_obligation_buyer(self):
+        """In unrestricted mode, traders without obligations can buy."""
+        from bilancio.decision.profiles import TraderProfile
+        subsystem = _make_subsystem(dealer_tickets=3, dealer_cash=Decimal(5))
+        subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
+
+        # Trader with no obligations but lots of cash
+        _add_trader(subsystem, "T1", cash=Decimal(100), obligations=[])
+
+        eligible = _build_eligible_buyers(subsystem, current_day=0)
+        assert "T1" in eligible
+
+    def test_bucket_ordering_liquidity_mode(self):
+        """In liquidity modes, buckets should be sorted by tau_min (short first)."""
+        from bilancio.decision.profiles import TraderProfile
+        from bilancio.dealer.models import BucketConfig
+        from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
+        from bilancio.dealer.trading import TradeExecutor
+        from bilancio.dealer.metrics import RunMetrics
+        import random as rng_mod
+
+        params = KernelParams(S=Decimal(1))
+
+        # Create multi-bucket subsystem: long, mid, short (intentionally unordered)
+        dealer_long = _make_dealer(bucket_id="long", n_tickets=1, cash=Decimal(5))
+        vbt_long = _make_vbt(bucket_id="long", n_tickets=0, cash=Decimal(100))
+        recompute_dealer_state(dealer_long, vbt_long, params)
+
+        dealer_mid = _make_dealer(bucket_id="mid", n_tickets=1, cash=Decimal(5))
+        vbt_mid = _make_vbt(bucket_id="mid", n_tickets=0, cash=Decimal(100))
+        recompute_dealer_state(dealer_mid, vbt_mid, params)
+
+        dealer_short = _make_dealer(bucket_id="short", n_tickets=1, cash=Decimal(5))
+        vbt_short = _make_vbt(bucket_id="short", n_tickets=0, cash=Decimal(100))
+        recompute_dealer_state(dealer_short, vbt_short, params)
+
+        subsystem = DealerSubsystem(
+            dealers={"long": dealer_long, "mid": dealer_mid, "short": dealer_short},
+            vbts={"long": vbt_long, "mid": vbt_mid, "short": vbt_short},
+            traders={},
+            tickets={},
+            bucket_configs=[
+                BucketConfig("short", 1, 3),
+                BucketConfig("mid", 4, 8),
+                BucketConfig("long", 9, 999),
+            ],
+            params=params,
+            executor=TradeExecutor(params, rng_mod.Random(42)),
+            rng=rng_mod.Random(42),
+            face_value=Decimal(1),
+            metrics=RunMetrics(),
+        )
+
+        # Test liquidity_only: buckets should be sorted by tau_min
+        subsystem.trader_profile = TraderProfile(trading_motive="liquidity_only")
+        tau_min_by_name = {bc.name: bc.tau_min for bc in subsystem.bucket_configs}
+        sorted_ids = sorted(subsystem.dealers.keys(), key=lambda b: tau_min_by_name.get(b, 999))
+        assert sorted_ids == ["short", "mid", "long"]

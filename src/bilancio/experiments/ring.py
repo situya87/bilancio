@@ -260,6 +260,7 @@ class RingSweepRunner:
         default_observability: Decimal = Decimal("1.0"),
         vbt_mid_sensitivity: Decimal = Decimal("1.0"),
         vbt_spread_sensitivity: Decimal = Decimal("0.0"),
+        trading_motive: str = "liquidity_then_earning",
         lender_mode: bool = False,
         lender_share: Decimal = Decimal("0.10"),
         balanced_mode_override: Optional[str] = None,
@@ -297,6 +298,7 @@ class RingSweepRunner:
         self.default_observability = default_observability
         self.vbt_mid_sensitivity = vbt_mid_sensitivity
         self.vbt_spread_sensitivity = vbt_spread_sensitivity
+        self.trading_motive = trading_motive
         self.lender_mode = lender_mode
         self.lender_share = lender_share
         self.balanced_mode_override = balanced_mode_override
@@ -628,6 +630,7 @@ class RingSweepRunner:
                     "default_observability": str(self.default_observability),
                     "vbt_mid_sensitivity": str(self.vbt_mid_sensitivity),
                     "vbt_spread_sensitivity": str(self.vbt_spread_sensitivity),
+                    "trading_motive": self.trading_motive,
                 }
 
             if self.lender_mode:
@@ -919,6 +922,7 @@ class RingSweepRunner:
                     "default_observability": str(self.default_observability),
                     "vbt_mid_sensitivity": str(self.vbt_mid_sensitivity),
                     "vbt_spread_sensitivity": str(self.vbt_spread_sensitivity),
+                    "trading_motive": self.trading_motive,
                 }
 
             if self.lender_mode:
