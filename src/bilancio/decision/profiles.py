@@ -19,7 +19,7 @@ class TraderProfile:
     planning_horizon: int = 10
     aggressiveness: Decimal = Decimal("1.0")
     default_observability: Decimal = Decimal("1.0")
-    buy_reserve_fraction: Decimal = Decimal("0.5")
+    buy_reserve_fraction: Decimal = Decimal("0.5")  # 0.5 balances buyer pool size vs prudence
 
     def __post_init__(self) -> None:
         if not (1 <= self.planning_horizon <= 20):

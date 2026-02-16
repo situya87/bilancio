@@ -305,7 +305,12 @@ class TraderState:
         return max(Decimal(0), due - self.cash)
 
     def upcoming_shortfall(self, start_day: int, horizon: int) -> Decimal:
-        """Maximum shortfall across upcoming days (for urgency computation)."""
+        """Maximum shortfall across upcoming days (for urgency computation).
+
+        Used by sell risk assessment to determine trader urgency. A seller
+        with non-zero upcoming shortfall will have reduced risk thresholds,
+        making them more willing to accept dealer bids below EV.
+        """
         max_sf = Decimal(0)
         for day_offset in range(horizon + 1):
             max_sf = max(max_sf, self.shortfall(start_day + day_offset))
