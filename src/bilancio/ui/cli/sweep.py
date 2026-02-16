@@ -558,6 +558,12 @@ def sweep_comparison(
     help='VBT spread sensitivity to defaults (0=fixed, 1=widen with defaults, default: 0.0)',
 )
 @click.option(
+    '--trading-motive',
+    type=click.Choice(["liquidity_only", "liquidity_then_earning", "unrestricted"]),
+    default="liquidity_then_earning",
+    help='Trading motivation (default: liquidity_then_earning)',
+)
+@click.option(
     '--enable-lender/--no-lender',
     default=False,
     help='Enable third comparison arm with non-bank lender (default: disabled)',
@@ -602,6 +608,7 @@ def sweep_balanced(
     default_observability: Decimal,
     vbt_mid_sensitivity: Decimal,
     vbt_spread_sensitivity: Decimal,
+    trading_motive: str,
     enable_lender: bool,
     lender_share: Decimal,
     enable_dealer_lender: bool,
@@ -714,6 +721,7 @@ def sweep_balanced(
         default_observability=default_observability,
         vbt_mid_sensitivity=vbt_mid_sensitivity,
         vbt_spread_sensitivity=vbt_spread_sensitivity,
+        trading_motive=trading_motive,
         enable_lender=enable_lender,
         lender_share=lender_share,
         enable_dealer_lender=enable_dealer_lender,

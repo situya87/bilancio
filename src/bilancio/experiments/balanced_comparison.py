@@ -275,6 +275,7 @@ class BalancedComparisonConfig(BaseModel):
     default_observability: Decimal = Field(default=Decimal("1.0"), description="Trader default observability (0-1)")
     vbt_mid_sensitivity: Decimal = Field(default=Decimal("1.0"), description="VBT mid price sensitivity to defaults (0-1)")
     vbt_spread_sensitivity: Decimal = Field(default=Decimal("0.0"), description="VBT spread sensitivity to defaults (0-1)")
+    trading_motive: str = Field(default="liquidity_then_earning", description="Trading motivation mode")
 
     # Non-bank lender parameters
     enable_lender: bool = Field(default=False, description="Enable third comparison arm with non-bank lender")
@@ -527,6 +528,7 @@ class BalancedComparisonRunner:
             default_observability=self.config.default_observability,
             vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
             vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            trading_motive=self.config.trading_motive,
         )
 
     def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -570,6 +572,7 @@ class BalancedComparisonRunner:
             default_observability=self.config.default_observability,
             vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
             vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            trading_motive=self.config.trading_motive,
         )
 
     def _get_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -606,6 +609,7 @@ class BalancedComparisonRunner:
             default_observability=self.config.default_observability,
             vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
             vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            trading_motive=self.config.trading_motive,
             # Lender-specific: pass lender mode and config
             lender_mode=True,
             lender_share=self.config.lender_share,
@@ -651,6 +655,7 @@ class BalancedComparisonRunner:
             default_observability=self.config.default_observability,
             vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
             vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            trading_motive=self.config.trading_motive,
             # NBFI mode: lender enabled, override mode to "nbfi"
             lender_mode=True,
             lender_share=self.config.lender_share,
@@ -701,6 +706,7 @@ class BalancedComparisonRunner:
             default_observability=self.config.default_observability,
             vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
             vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            trading_motive=self.config.trading_motive,
             # Combined mode: both dealer and lender enabled
             lender_mode=True,
             lender_share=self.config.lender_share,
