@@ -251,9 +251,21 @@ def compute_scores(
     ruff_component = max(0.0, 10.0 - (ruff_issues * 0.1))
     static_correctness = mypy_component + ruff_component
 
-    file_size_component = max(0.0, 7.0 - (metrics.long_files_over_800 * 0.75))
-    function_size_component = max(0.0, 7.0 - (metrics.long_functions_over_80 * 0.2))
-    exception_component = max(0.0, 6.0 - (metrics.broad_exception_handlers * 0.08))
+    long_file_ratio = (
+        (metrics.long_files_over_800 / metrics.source_files) if metrics.source_files else 0.0
+    )
+    long_function_ratio = (
+        (metrics.long_functions_over_80 / metrics.total_functions) if metrics.total_functions else 0.0
+    )
+    broad_exception_ratio = (
+        (metrics.broad_exception_handlers / metrics.total_functions) if metrics.total_functions else 0.0
+    )
+    # Maintainability model is ratio-based so larger codebases are not over-penalized
+    # solely due to absolute size. Ratios above 18% for long files/functions drop to 0.
+    file_size_component = bounded(((0.18 - long_file_ratio) / 0.18) * 7.0, 0.0, 7.0)
+    function_size_component = bounded(((0.18 - long_function_ratio) / 0.18) * 7.0, 0.0, 7.0)
+    # Broad handlers above 5% of functions drop to 0.
+    exception_component = bounded(((0.05 - broad_exception_ratio) / 0.05) * 6.0, 0.0, 6.0)
     maintainability_risk = file_size_component + function_size_component + exception_component
 
     typed_ratio = (
@@ -318,6 +330,13 @@ def generate_markdown_report(
     typed_ratio = (
         (metrics.typed_functions / metrics.total_functions) if metrics.total_functions else 0.0
     )
+    long_file_ratio = (metrics.long_files_over_800 / metrics.source_files) if metrics.source_files else 0.0
+    long_function_ratio = (
+        (metrics.long_functions_over_80 / metrics.total_functions) if metrics.total_functions else 0.0
+    )
+    broad_exception_ratio = (
+        (metrics.broad_exception_handlers / metrics.total_functions) if metrics.total_functions else 0.0
+    )
     doc_ratio = (
         (metrics.public_doc_items_with_docstring / metrics.public_doc_items)
         if metrics.public_doc_items
@@ -358,6 +377,9 @@ def generate_markdown_report(
         f"- Files > 800 LOC: {metrics.long_files_over_800}",
         f"- Functions > 80 LOC: {metrics.long_functions_over_80}",
         f"- Broad exception handlers: {metrics.broad_exception_handlers}",
+        f"- Long-file ratio: {long_file_ratio:.2%}",
+        f"- Long-function ratio: {long_function_ratio:.2%}",
+        f"- Broad-exception ratio: {broad_exception_ratio:.2%}",
         "",
     ]
     return "\n".join(lines)
@@ -466,7 +488,7 @@ def main() -> int:
     )
 
     report = {
-        "benchmark": "Alternative Quality Benchmark v1",
+        "benchmark": "Alternative Quality Benchmark v2",
         "scores": asdict(scores),
         "signals": {
             "tests_passed": tests_passed,

@@ -35,6 +35,8 @@ EXTERNAL_SERVICE_ERRORS = (
     FileNotFoundError,
     ImportError,
     OSError,
+    ConnectionError,
+    TimeoutError,
     ValueError,
     TypeError,
     KeyError,
