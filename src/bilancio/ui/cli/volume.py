@@ -13,6 +13,8 @@ CLI_HANDLED_ERRORS = (
     click.ClickException,
     FileNotFoundError,
     OSError,
+    ConnectionError,
+    TimeoutError,
     ValueError,
     TypeError,
     KeyError,

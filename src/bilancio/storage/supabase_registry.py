@@ -17,6 +17,8 @@ SUPABASE_OPERATION_ERRORS = (
     FileNotFoundError,
     ImportError,
     OSError,
+    ConnectionError,
+    TimeoutError,
     ValueError,
     TypeError,
     KeyError,

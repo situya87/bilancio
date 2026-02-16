@@ -14,6 +14,8 @@ from bilancio.storage.models import RunStatus
 EXECUTION_ERRORS = (
     FileNotFoundError,
     OSError,
+    ConnectionError,
+    TimeoutError,
     ValueError,
     TypeError,
     KeyError,

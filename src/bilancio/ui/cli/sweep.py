@@ -25,6 +25,8 @@ CLI_HANDLED_ERRORS = (
     FileNotFoundError,
     ImportError,
     OSError,
+    ConnectionError,
+    TimeoutError,
     ValueError,
     TypeError,
     KeyError,

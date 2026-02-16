@@ -25,6 +25,8 @@ console = Console(record=True, width=120)
 SIMULATION_RECOVERABLE_ERRORS = (
     FileNotFoundError,
     OSError,
+    ConnectionError,
+    TimeoutError,
     ValueError,
     TypeError,
     KeyError,

@@ -17,9 +17,14 @@ Produce a reproducible quality score from command outputs and static code signal
 - Ruff hygiene (10): full points at 0 issues; linear penalty per issue.
 
 3. Maintainability Risk (20 points)
-- Large files (7): penalty from count of source files over 800 LOC.
-- Long functions (7): penalty from count of functions over 80 LOC.
-- Broad exception usage (6): penalty from `except Exception` and bare `except`.
+- Large files (7): ratio-based score from share of source files over 800 LOC.
+- Long functions (7): ratio-based score from share of functions over 80 LOC.
+- Broad exception usage (6): ratio-based score from share of broad handlers.
+
+Maintainability thresholds (v2):
+- Long file/function ratios score linearly, dropping to 0 at 18% incidence.
+- Broad exception ratio drops to 0 at 5% incidence.
+- This keeps scoring fair across different repository sizes.
 
 4. API Type Clarity (10 points)
 - Typed function coverage from AST analysis, with full points at 95%+ annotated functions.

@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 EXTERNAL_STORE_ERRORS = (
     FileNotFoundError,
     OSError,
+    ConnectionError,
+    TimeoutError,
     ValueError,
     TypeError,
     KeyError,
