@@ -256,15 +256,16 @@ class TraderState:
     """
     State for a ring trader.
 
-    Ring traders buy and sell tickets subject to a single-issuer constraint:
-    each trader can only hold tickets from one issuer at a time.
+    Ring traders can hold tickets from multiple issuers. The asset_issuer_id
+    tracks the issuer assigned via ring topology (payables / rollover) but does
+    NOT constrain secondary-market purchases.
 
     Attributes:
         agent_id: Trader's agent ID
         cash: Cash holdings
         tickets_owned: List of tickets owned (assets)
         obligations: List of tickets this agent issued (liabilities)
-        asset_issuer_id: Issuer of currently held tickets (single-issuer constraint)
+        asset_issuer_id: Issuer assigned via ring topology (payables / rollover only)
         defaulted: True if agent has defaulted
     """
     agent_id: AgentId

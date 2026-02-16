@@ -12,7 +12,6 @@ Targets uncovered lines:
 - Line 455: no dealer/VBT inventory -> continue to next bucket
 - Line 477: risk rejected buy -> continue to next bucket
 - Lines 485-487: trader can't afford scaled price -> reverse + recompute
-- Line 495: trader.asset_issuer_id is None (first ticket)
 - Line 518: buy returns Decimal(0) when no trade executed
 """
 
@@ -672,8 +671,8 @@ class TestExecuteBuyTrade:
         # Trader can't afford any ticket -> all reversed, returns 0
         assert result == Decimal(0)
 
-    def test_first_ticket_sets_asset_issuer(self):
-        """Cover line 495: trader.asset_issuer_id is set on first successful buy."""
+    def test_buy_does_not_set_asset_issuer(self):
+        """Secondary market buys do not constrain asset_issuer_id."""
         subsystem = _make_subsystem(dealer_tickets=3, dealer_cash=Decimal(5))
 
         trader = _add_trader(subsystem, "T1", cash=Decimal(100))
@@ -682,8 +681,8 @@ class TestExecuteBuyTrade:
         events: list[dict] = []
         result = _execute_buy_trade(subsystem, "T1", 1, events)
 
-        if result > Decimal(0):
-            assert trader.asset_issuer_id is not None
+        # asset_issuer_id stays None — only ring payables set it
+        assert trader.asset_issuer_id is None
 
     def test_successful_buy_returns_positive_value(self):
         """Successful buy returns positive scaled_price."""

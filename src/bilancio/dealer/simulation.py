@@ -971,10 +971,6 @@ class DealerRingSimulation:
         if len(seller.tickets_owned) == 0:
             seller.asset_issuer_id = None
 
-        # Update buyer's asset issuer constraint
-        if buyer.asset_issuer_id is None:
-            buyer.asset_issuer_id = ticket.issuer_id
-
         # Log the crossed trade
         self.events.log_trade(
             day=self.day,
@@ -1149,20 +1145,12 @@ class DealerRingSimulation:
         vbt = self.vbts[bucket_id]
 
         # Execute customer buy (trader buys from dealer)
-        # Note: May fail if issuer preference cannot be satisfied
-        try:
-            result = self.executor.execute_customer_buy(
-                dealer=dealer,
-                vbt=vbt,
-                buyer_id=agent_id,
-                issuer_preference=trader.asset_issuer_id,
-                check_assertions=True,
-            )
-        except ValueError as e:
-            # Cannot satisfy single-issuer constraint - skip this trade
-            # This happens when trader has asset_issuer_id set but neither
-            # dealer nor VBT has tickets from that issuer
-            return
+        result = self.executor.execute_customer_buy(
+            dealer=dealer,
+            vbt=vbt,
+            buyer_id=agent_id,
+            check_assertions=True,
+        )
 
         # Risk-based buy validation (post-execution since we need actual ticket)
         if result.ticket and self.risk_assessor:
@@ -1214,10 +1202,6 @@ class DealerRingSimulation:
         if result.ticket:
             trader.tickets_owned.append(result.ticket)
             trader.cash -= result.price
-
-            # Set asset issuer constraint
-            if trader.asset_issuer_id is None:
-                trader.asset_issuer_id = result.ticket.issuer_id
 
         # Log trade
         if result.ticket:

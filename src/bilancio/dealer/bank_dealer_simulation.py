@@ -841,9 +841,6 @@ class BankDealerSimulation:
         # Update constraints
         if len(seller.tickets_owned) == 0:
             seller.asset_issuer_id = None
-        if buyer.asset_issuer_id is None:
-            buyer.asset_issuer_id = ticket.issuer_id
-
         # Log trades
         self.events.log_trade(
             day=self.day,
@@ -985,16 +982,12 @@ class BankDealerSimulation:
             return
 
         # Execute buy
-        try:
-            result = self.executor.execute_customer_buy(
-                dealer=dealer,
-                vbt=vbt,
-                buyer_id=agent_id,
-                issuer_preference=trader.asset_issuer_id,
-                check_assertions=True,
-            )
-        except ValueError:
-            return  # Can't satisfy issuer constraint
+        result = self.executor.execute_customer_buy(
+            dealer=dealer,
+            vbt=vbt,
+            buyer_id=agent_id,
+            check_assertions=True,
+        )
 
         if result.ticket is None:
             return
@@ -1026,9 +1019,6 @@ class BankDealerSimulation:
         # Update trader - withdraw deposits
         trader.withdraw_deposits(result.price)
         trader.tickets_owned.append(result.ticket)
-
-        if trader.asset_issuer_id is None:
-            trader.asset_issuer_id = result.ticket.issuer_id
 
         # Log trade
         self.events.log_trade(

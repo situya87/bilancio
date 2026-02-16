@@ -494,10 +494,6 @@ def _execute_buy_trade(
             trader.tickets_owned.append(result.ticket)
             trader.cash -= scaled_price
 
-            # Update asset issuer if first ticket
-            if trader.asset_issuer_id is None:
-                trader.asset_issuer_id = result.ticket.issuer_id
-
             # Capture post-trade state
             post_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
 
