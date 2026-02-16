@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Protocol, Optional, List, Dict, Any, Set, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-from .models import RunResult, RegistryEntry
+from .models import RegistryEntry, RunResult
 
 
 @runtime_checkable
@@ -17,7 +17,7 @@ class ResultStore(Protocol):
         run_id: str,
         name: str,
         content: bytes,
-        content_type: str = "application/octet-stream"
+        content_type: str = "application/octet-stream",
     ) -> str:
         """Save an artifact, return its reference (path or key)."""
         ...
@@ -26,7 +26,7 @@ class ResultStore(Protocol):
         """Save a complete run result."""
         ...
 
-    def load_run(self, experiment_id: str, run_id: str) -> Optional[RunResult]:
+    def load_run(self, experiment_id: str, run_id: str) -> RunResult | None:
         """Load a run result by ID."""
         ...
 
@@ -43,26 +43,22 @@ class RegistryStore(Protocol):
         """Insert or update a registry entry."""
         ...
 
-    def get(self, experiment_id: str, run_id: str) -> Optional[RegistryEntry]:
+    def get(self, experiment_id: str, run_id: str) -> RegistryEntry | None:
         """Get a specific registry entry."""
         ...
 
-    def list_runs(self, experiment_id: str) -> List[str]:
+    def list_runs(self, experiment_id: str) -> list[str]:
         """List all run IDs for an experiment."""
         ...
 
     def get_completed_keys(
-        self,
-        experiment_id: str,
-        key_fields: Optional[List[str]] = None
-    ) -> Set[Any]:
+        self, experiment_id: str, key_fields: list[str] | None = None
+    ) -> set[Any]:
         """Get set of completed parameter keys for resumption."""
         ...
 
     def query(
-        self,
-        experiment_id: str,
-        filters: Optional[Dict[str, Any]] = None
-    ) -> List[RegistryEntry]:
+        self, experiment_id: str, filters: dict[str, Any] | None = None
+    ) -> list[RegistryEntry]:
         """Query registry entries with optional filters."""
         ...

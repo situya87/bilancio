@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class JobStatus(Enum):
@@ -22,15 +22,15 @@ class JobConfig:
 
     sweep_type: str  # "ring", "balanced", "single"
     n_agents: int
-    kappas: List[Decimal]
-    concentrations: List[Decimal]
-    mus: List[Decimal]
+    kappas: list[Decimal]
+    concentrations: list[Decimal]
+    mus: list[Decimal]
     cloud: bool = False
-    outside_mid_ratios: List[Decimal] = field(default_factory=lambda: [Decimal("1")])
+    outside_mid_ratios: list[Decimal] = field(default_factory=lambda: [Decimal("1")])
     maturity_days: int = 5
-    seeds: List[int] = field(default_factory=lambda: [42])
+    seeds: list[int] = field(default_factory=lambda: [42])
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "sweep_type": self.sweep_type,
@@ -45,7 +45,7 @@ class JobConfig:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "JobConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "JobConfig":
         """Create from dictionary."""
         return cls(
             sweep_type=data["sweep_type"],
@@ -54,9 +54,7 @@ class JobConfig:
             concentrations=[Decimal(c) for c in data["concentrations"]],
             mus=[Decimal(m) for m in data["mus"]],
             cloud=data.get("cloud", False),
-            outside_mid_ratios=[
-                Decimal(r) for r in data.get("outside_mid_ratios", ["1"])
-            ],
+            outside_mid_ratios=[Decimal(r) for r in data.get("outside_mid_ratios", ["1"])],
             maturity_days=data.get("maturity_days", 5),
             seeds=data.get("seeds", [42]),
         )
@@ -69,9 +67,9 @@ class JobEvent:
     job_id: str
     event_type: str  # "created", "started", "progress", "completed", "failed"
     timestamp: datetime
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "job_id": self.job_id,
@@ -81,7 +79,7 @@ class JobEvent:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "JobEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "JobEvent":
         """Create from dictionary."""
         return cls(
             job_id=data["job_id"],
@@ -100,14 +98,14 @@ class Job:
     status: JobStatus
     description: str
     config: JobConfig
-    run_ids: List[str] = field(default_factory=list)
-    modal_call_ids: Dict[str, str] = field(default_factory=dict)  # run_id -> modal_call_id
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
-    notes: Optional[str] = None
-    events: List[JobEvent] = field(default_factory=list)
+    run_ids: list[str] = field(default_factory=list)
+    modal_call_ids: dict[str, str] = field(default_factory=dict)  # run_id -> modal_call_id
+    completed_at: datetime | None = None
+    error: str | None = None
+    notes: str | None = None
+    events: list[JobEvent] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "job_id": self.job_id,
@@ -124,7 +122,7 @@ class Job:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Job":
+    def from_dict(cls, data: dict[str, Any]) -> "Job":
         """Create from dictionary."""
         return cls(
             job_id=data["job_id"],
@@ -135,9 +133,7 @@ class Job:
             run_ids=data.get("run_ids", []),
             modal_call_ids=data.get("modal_call_ids", {}),
             completed_at=(
-                datetime.fromisoformat(data["completed_at"])
-                if data.get("completed_at")
-                else None
+                datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None
             ),
             error=data.get("error"),
             notes=data.get("notes"),

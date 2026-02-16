@@ -17,42 +17,37 @@ Targets uncovered lines:
 
 import random
 from decimal import Decimal
-from dataclasses import field
 from unittest.mock import MagicMock
 
-import pytest
-
 from bilancio.dealer.kernel import (
-    KernelParams,
     ExecutionResult,
+    KernelParams,
     recompute_dealer_state,
 )
-from bilancio.dealer.models import (
-    DealerState,
-    VBTState,
-    TraderState,
-    Ticket,
-    BucketConfig,
-)
-from bilancio.dealer.trading import TradeExecutor
 from bilancio.dealer.metrics import RunMetrics, TicketOutcome
-from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
+from bilancio.dealer.models import (
+    BucketConfig,
+    DealerState,
+    Ticket,
+    TraderState,
+    VBTState,
+)
+from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
+from bilancio.dealer.trading import TradeExecutor
 from bilancio.engines.dealer_integration import DealerSubsystem
 from bilancio.engines.dealer_trades import (
-    _compute_trader_safety_margin,
-    _check_sell_risk_assessment,
-    _record_sell_trade,
-    _execute_sell_trade,
-    _reverse_buy_to_dealer,
-    _check_buy_risk_assessment,
-    _record_buy_trade,
-    _execute_buy_trade,
-    _build_eligible_sellers,
     _build_eligible_buyers,
+    _build_eligible_sellers,
+    _check_buy_risk_assessment,
+    _check_sell_risk_assessment,
+    _compute_trader_safety_margin,
+    _execute_buy_trade,
     _execute_interleaved_order_flow,
+    _execute_sell_trade,
     _is_liquidity_buy,
+    _record_buy_trade,
+    _reverse_buy_to_dealer,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -103,12 +98,12 @@ def _make_dealer(
 def _make_vbt(
     bucket_id: str = "short",
     M: Decimal = Decimal(1),
-    O: Decimal = Decimal("0.30"),
+    spread: Decimal = Decimal("0.30"),
     n_tickets: int = 0,
     cash: Decimal = Decimal(100),
 ) -> VBTState:
     agent_id = f"vbt_{bucket_id}"
-    vbt = VBTState(bucket_id=bucket_id, agent_id=agent_id, M=M, O=O, cash=cash)
+    vbt = VBTState(bucket_id=bucket_id, agent_id=agent_id, M=M, O=spread, cash=cash)
     vbt.recompute_quotes()
     for i in range(n_tickets):
         vbt.inventory.append(
@@ -446,8 +441,10 @@ class TestCheckBuyRiskAssessment:
         vbt = subsystem.vbts["short"]
         ticket = _make_ticket(id="buy_t1")
         result = ExecutionResult(
-            executed=True, price=Decimal("0.90"),
-            is_passthrough=False, ticket=ticket,
+            executed=True,
+            price=Decimal("0.90"),
+            is_passthrough=False,
+            ticket=ticket,
         )
         events: list[dict] = []
 
@@ -472,17 +469,20 @@ class TestCheckBuyRiskAssessment:
         vbt = subsystem.vbts["short"]
         ticket = _make_ticket(id="buy_rej", face=Decimal(1))
         trader = TraderState(
-            agent_id="T1", cash=Decimal(100),
+            agent_id="T1",
+            cash=Decimal(100),
             tickets_owned=[ticket],  # trader already has ticket (bought)
         )
 
         result = ExecutionResult(
-            executed=True, price=Decimal("0.95"),
-            is_passthrough=False, ticket=ticket,
+            executed=True,
+            price=Decimal("0.95"),
+            is_passthrough=False,
+            ticket=ticket,
         )
         events: list[dict] = []
 
-        inv_before = len(dealer.inventory)
+        len(dealer.inventory)
 
         rejected = _check_buy_risk_assessment(
             subsystem, trader, "T1", result, dealer, vbt, "short", 1, events
@@ -513,21 +513,26 @@ class TestCheckBuyRiskAssessment:
         # Add good history to lower default probability
         for d in range(20):
             subsystem.risk_assessor.update_history(
-                day=d, issuer_id="issuer_1", defaulted=False,
+                day=d,
+                issuer_id="issuer_1",
+                defaulted=False,
             )
 
         dealer = subsystem.dealers["short"]
         vbt = subsystem.vbts["short"]
         ticket = _make_ticket(id="buy_acc", face=Decimal(1))
         trader = TraderState(
-            agent_id="T1", cash=Decimal(100),
+            agent_id="T1",
+            cash=Decimal(100),
             tickets_owned=[ticket],
         )
 
         # Very low ask price -> should be accepted
         result = ExecutionResult(
-            executed=True, price=Decimal("0.50"),
-            is_passthrough=False, ticket=ticket,
+            executed=True,
+            price=Decimal("0.50"),
+            is_passthrough=False,
+            ticket=ticket,
         )
         events: list[dict] = []
 
@@ -557,15 +562,25 @@ class TestRecordBuyTrade:
         events: list[dict] = []
 
         _record_buy_trade(
-            subsystem, "T1", trader, ticket, "short", 1,
+            subsystem,
+            "T1",
+            trader,
+            ticket,
+            "short",
+            1,
             scaled_price=Decimal("0.90"),
             unit_price=Decimal("0.90"),
             is_passthrough=False,
-            pre_dealer_inventory=3, pre_dealer_cash=Decimal(5),
-            pre_dealer_bid=Decimal("0.85"), pre_dealer_ask=Decimal("0.95"),
-            pre_trader_cash=Decimal(100), pre_safety_margin=Decimal(50),
+            pre_dealer_inventory=3,
+            pre_dealer_cash=Decimal(5),
+            pre_dealer_bid=Decimal("0.85"),
+            pre_dealer_ask=Decimal("0.95"),
+            pre_trader_cash=Decimal(100),
+            pre_safety_margin=Decimal(50),
             post_safety_margin=Decimal(49),
-            dealer=dealer, vbt=vbt, trader_cash_after=Decimal(99),
+            dealer=dealer,
+            vbt=vbt,
+            trader_cash_after=Decimal(99),
             events=events,
         )
 
@@ -597,15 +612,25 @@ class TestRecordBuyTrade:
         events: list[dict] = []
 
         _record_buy_trade(
-            subsystem, "T1", trader, ticket, "short", 1,
+            subsystem,
+            "T1",
+            trader,
+            ticket,
+            "short",
+            1,
             scaled_price=Decimal("0.90"),
             unit_price=Decimal("0.90"),
             is_passthrough=False,
-            pre_dealer_inventory=3, pre_dealer_cash=Decimal(5),
-            pre_dealer_bid=Decimal("0.85"), pre_dealer_ask=Decimal("0.95"),
-            pre_trader_cash=Decimal(100), pre_safety_margin=Decimal(50),
+            pre_dealer_inventory=3,
+            pre_dealer_cash=Decimal(5),
+            pre_dealer_bid=Decimal("0.85"),
+            pre_dealer_ask=Decimal("0.95"),
+            pre_trader_cash=Decimal(100),
+            pre_safety_margin=Decimal(50),
             post_safety_margin=Decimal(49),
-            dealer=dealer, vbt=vbt, trader_cash_after=Decimal(99),
+            dealer=dealer,
+            vbt=vbt,
+            trader_cash_after=Decimal(99),
             events=events,
         )
 
@@ -628,16 +653,25 @@ class TestRecordBuyTrade:
         events: list[dict] = []
 
         _record_buy_trade(
-            subsystem, "T1", trader, ticket, "short", 1,
+            subsystem,
+            "T1",
+            trader,
+            ticket,
+            "short",
+            1,
             scaled_price=Decimal("0.90"),
             unit_price=Decimal("0.90"),
             is_passthrough=False,
-            pre_dealer_inventory=3, pre_dealer_cash=Decimal(5),
-            pre_dealer_bid=Decimal("0.85"), pre_dealer_ask=Decimal("0.95"),
+            pre_dealer_inventory=3,
+            pre_dealer_cash=Decimal(5),
+            pre_dealer_bid=Decimal("0.85"),
+            pre_dealer_ask=Decimal("0.95"),
             pre_trader_cash=Decimal(100),
-            pre_safety_margin=Decimal("0.50"),   # positive before
+            pre_safety_margin=Decimal("0.50"),  # positive before
             post_safety_margin=Decimal("-0.10"),  # negative after
-            dealer=dealer, vbt=vbt, trader_cash_after=Decimal(99),
+            dealer=dealer,
+            vbt=vbt,
+            trader_cash_after=Decimal(99),
             events=events,
         )
 
@@ -683,7 +717,7 @@ class TestExecuteBuyTrade:
         assert trader.asset_issuer_id is None
 
         events: list[dict] = []
-        result = _execute_buy_trade(subsystem, "T1", 1, events)
+        _execute_buy_trade(subsystem, "T1", 1, events)
 
         # asset_issuer_id stays None — only ring payables set it
         assert trader.asset_issuer_id is None
@@ -778,8 +812,11 @@ class TestBuildEligible:
         ticket = _make_ticket(id="t_sell", face=Decimal(100), maturity_day=5)
         obligation = _make_ticket(id="obl", face=Decimal(200), maturity_day=5)
         _add_trader(
-            subsystem, "T1", cash=Decimal(10),
-            tickets=[ticket], obligations=[obligation],
+            subsystem,
+            "T1",
+            cash=Decimal(10),
+            tickets=[ticket],
+            obligations=[obligation],
         )
         # T1 has shortfall: due 200, cash 10 -> shortfall 190
 
@@ -833,7 +870,8 @@ class TestUpcomingShortfall:
         """Trader with obligation on day 5 has shortfall when looking ahead."""
         obligation = _make_ticket(id="obl", face=Decimal(200), maturity_day=5)
         trader = TraderState(
-            agent_id="T1", cash=Decimal(50),
+            agent_id="T1",
+            cash=Decimal(50),
             obligations=[obligation],
         )
         # On day 0, no shortfall for day 0 itself
@@ -845,7 +883,8 @@ class TestUpcomingShortfall:
         """Shortfall on day 10, horizon=5 starting from day 0 misses it."""
         obligation = _make_ticket(id="obl", face=Decimal(200), maturity_day=10)
         trader = TraderState(
-            agent_id="T1", cash=Decimal(50),
+            agent_id="T1",
+            cash=Decimal(50),
             obligations=[obligation],
         )
         assert trader.upcoming_shortfall(0, 5) == Decimal(0)
@@ -895,6 +934,7 @@ class TestBuyReserveFraction:
     def test_reserve_fraction_half_allows_more_buyers(self):
         """With buy_reserve_fraction=0.5, agent reserves only half of dues."""
         from bilancio.decision.profiles import TraderProfile
+
         subsystem = _make_subsystem(face_value=Decimal(1))
         subsystem.trader_profile = TraderProfile(buy_reserve_fraction=Decimal("0.5"))
 
@@ -909,6 +949,7 @@ class TestBuyReserveFraction:
     def test_reserve_fraction_one_requires_full_coverage(self):
         """With buy_reserve_fraction=1.0, agent must cover all dues."""
         from bilancio.decision.profiles import TraderProfile
+
         subsystem = _make_subsystem(face_value=Decimal(1))
         subsystem.trader_profile = TraderProfile(buy_reserve_fraction=Decimal("1.0"))
 
@@ -923,6 +964,7 @@ class TestBuyReserveFraction:
     def test_reserve_fraction_zero_ignores_dues(self):
         """With buy_reserve_fraction=0.0, agent ignores all upcoming dues."""
         from bilancio.decision.profiles import TraderProfile
+
         subsystem = _make_subsystem(face_value=Decimal(1))
         subsystem.trader_profile = TraderProfile(buy_reserve_fraction=Decimal("0"))
 
@@ -953,7 +995,12 @@ class TestInterleavedOrderFlow:
         events: list[dict] = []
 
         _execute_interleaved_order_flow(
-            subsystem, system, 1, [], [], events,
+            subsystem,
+            system,
+            1,
+            [],
+            [],
+            events,
         )
         assert len(events) == 0
 
@@ -965,8 +1012,11 @@ class TestInterleavedOrderFlow:
         sell_ticket = _make_ticket(id="st1", face=Decimal(1), bucket_id="short", maturity_day=5)
         sell_obligation = _make_ticket(id="obl1", face=Decimal(100), maturity_day=5)
         _add_trader(
-            subsystem, "seller1", cash=Decimal(10),
-            tickets=[sell_ticket], obligations=[sell_obligation],
+            subsystem,
+            "seller1",
+            cash=Decimal(10),
+            tickets=[sell_ticket],
+            obligations=[sell_obligation],
         )
         _add_trader(subsystem, "buyer1", cash=Decimal(100))
 
@@ -980,8 +1030,12 @@ class TestInterleavedOrderFlow:
         events: list[dict] = []
 
         _execute_interleaved_order_flow(
-            subsystem, system, 5,
-            ["seller1"], ["buyer1"], events,
+            subsystem,
+            system,
+            5,
+            ["seller1"],
+            ["buyer1"],
+            events,
         )
         # Both sellers and buyers should be processed
         assert isinstance(events, list)
@@ -999,7 +1053,9 @@ class TestTradingMotive:
         """Ticket maturing at or before earliest obligation is a liquidity buy."""
         # Trader has obligation on day 10
         obligation = _make_ticket(id="obl1", maturity_day=10, serial=0, bucket_id="short")
-        trader = TraderState(agent_id="T1", cash=Decimal(50), tickets_owned=[], obligations=[obligation])
+        trader = TraderState(
+            agent_id="T1", cash=Decimal(50), tickets_owned=[], obligations=[obligation]
+        )
 
         # Ticket maturing on day 8 -> before obligation -> liquidity buy
         ticket_short = _make_ticket(id="t_short", maturity_day=8, serial=0, bucket_id="short")
@@ -1022,6 +1078,7 @@ class TestTradingMotive:
     def test_liquidity_only_rejects_no_obligation_buyer(self):
         """In liquidity_only mode, traders without obligations are not eligible to buy."""
         from bilancio.decision.profiles import TraderProfile
+
         subsystem = _make_subsystem(dealer_tickets=3, dealer_cash=Decimal(5))
         subsystem.trader_profile = TraderProfile(trading_motive="liquidity_only")
 
@@ -1034,6 +1091,7 @@ class TestTradingMotive:
     def test_liquidity_only_accepts_obligation_buyer(self):
         """In liquidity_only mode, traders WITH obligations can be eligible."""
         from bilancio.decision.profiles import TraderProfile
+
         subsystem = _make_subsystem(dealer_tickets=3, dealer_cash=Decimal(5))
         subsystem.trader_profile = TraderProfile(trading_motive="liquidity_only")
 
@@ -1047,6 +1105,7 @@ class TestTradingMotive:
     def test_unrestricted_allows_no_obligation_buyer(self):
         """In unrestricted mode, traders without obligations can buy."""
         from bilancio.decision.profiles import TraderProfile
+
         subsystem = _make_subsystem(dealer_tickets=3, dealer_cash=Decimal(5))
         subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
 
@@ -1058,12 +1117,13 @@ class TestTradingMotive:
 
     def test_bucket_ordering_liquidity_mode(self):
         """In liquidity modes, buckets should be sorted by tau_min (short first)."""
-        from bilancio.decision.profiles import TraderProfile
-        from bilancio.dealer.models import BucketConfig
-        from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
-        from bilancio.dealer.trading import TradeExecutor
-        from bilancio.dealer.metrics import RunMetrics
         import random as rng_mod
+
+        from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
+        from bilancio.dealer.metrics import RunMetrics
+        from bilancio.dealer.models import BucketConfig
+        from bilancio.dealer.trading import TradeExecutor
+        from bilancio.decision.profiles import TraderProfile
 
         params = KernelParams(S=Decimal(1))
 

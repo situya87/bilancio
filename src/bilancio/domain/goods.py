@@ -1,14 +1,16 @@
 # non-financial; not a liability of anyone
 from dataclasses import dataclass
 from decimal import Decimal
-from bilancio.core.ids import InstrId, AgentId
+
+from bilancio.core.ids import AgentId, InstrId
 
 StockId = InstrId  # reuse ID machinery
+
 
 @dataclass
 class StockLot:
     id: StockId
-    kind: str          # fixed: "stock_lot"
+    kind: str  # fixed: "stock_lot"
     sku: str
     quantity: int
     unit_price: Decimal

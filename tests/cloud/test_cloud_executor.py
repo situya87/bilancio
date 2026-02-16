@@ -1,10 +1,7 @@
 """Unit tests for CloudExecutor (mocked Modal)."""
 
 import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from bilancio.runners.cloud_executor import CloudExecutor
 from bilancio.runners.models import RunOptions

@@ -8,28 +8,31 @@ logic in isolation. Integration tests use settle_due with carefully constructed
 scenarios that guarantee the target agent defaults (by making it owe more than
 it can possibly receive through the circuit).
 """
-import pytest
+
 from decimal import Decimal
 
-from bilancio.core.errors import DefaultError
+from bilancio.dealer.models import DEFAULT_BUCKETS
+from bilancio.dealer.simulation import DealerRingConfig
+from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.domain.agents.dealer import Dealer
+from bilancio.domain.agents.household import Household
+from bilancio.domain.agents.vbt import VBT
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
-from bilancio.engines.settlement import settle_due, rollover_settled_payables, _reconnect_ring, _remove_contract, _expel_agent
 from bilancio.engines.dealer_integration import (
-    DealerSubsystem,
-    initialize_balanced_dealer_subsystem,
-    _ingest_new_payables,
     _get_agent_cash,
+    _ingest_new_payables,
+    initialize_balanced_dealer_subsystem,
     run_dealer_trading_phase,
-    sync_dealer_to_system,
+)
+from bilancio.engines.settlement import (
+    _expel_agent,
+    _reconnect_ring,
+    _remove_contract,
+    rollover_settled_payables,
+    settle_due,
 )
 from bilancio.engines.system import System
-from bilancio.domain.agents.central_bank import CentralBank
-from bilancio.domain.agents.household import Household
-from bilancio.domain.agents.dealer import Dealer
-from bilancio.domain.agents.vbt import VBT
-from bilancio.dealer.simulation import DealerRingConfig
-from bilancio.dealer.models import DEFAULT_BUCKETS
 
 
 def _ring_system(n_agents: int, default_mode: str = "expel-agent", rollover_enabled: bool = True):
@@ -231,9 +234,11 @@ class TestEdgeCases:
         # Verify final state: H2→H5 payable exists
         found = False
         for c in system.state.contracts.values():
-            if (c.kind == InstrumentKind.PAYABLE
+            if (
+                c.kind == InstrumentKind.PAYABLE
                 and c.liability_issuer_id == "H2"
-                and c.asset_holder_id == "H5"):
+                and c.asset_holder_id == "H5"
+            ):
                 found = True
                 break
         assert found, "Expected H2→H5 payable after adjacent defaults"
@@ -279,8 +284,9 @@ class TestEdgeCases:
         # No self-payable should exist (H1 should not owe itself)
         for c in system.state.contracts.values():
             if c.kind == InstrumentKind.PAYABLE:
-                assert c.liability_issuer_id != c.asset_holder_id, \
+                assert c.liability_issuer_id != c.asset_holder_id, (
                     "Self-payable should not exist after ring collapse"
+                )
 
 
 class TestRolloverGuard:
@@ -335,8 +341,11 @@ class TestEventLogging:
         assert "day" in evt
 
         # Also check PayableCreated event
-        created_events = [e for e in system.state.events
-                         if e["kind"] == "PayableCreated" and e.get("reason") == "ring_reconnection"]
+        created_events = [
+            e
+            for e in system.state.events
+            if e["kind"] == "PayableCreated" and e.get("reason") == "ring_reconnection"
+        ]
         assert len(created_events) == 1
         ce = created_events[0]
         assert ce["debtor"] == "H2"
@@ -412,6 +421,7 @@ class TestSettleDueIntegration:
 # ---------------------------------------------------------------------------
 # Helpers for Model C and ticket ingestion tests
 # ---------------------------------------------------------------------------
+
 
 def _dealer_ring_system(n_agents: int = 5, maturity_days: int = 3):
     """Create a ring system with dealer subsystem for Model C / ingestion tests.
@@ -522,7 +532,7 @@ class TestModelCRollover:
         # Record cash before rollover
         cash_before = {}
         for a in agents:
-            if not getattr(system.state.agents[a.id], 'defaulted', False):
+            if not getattr(system.state.agents[a.id], "defaulted", False):
                 cash_before[a.id] = _get_agent_cash(system, a.id)
 
         # Model C rollover: dealer_active=True → no cash transfer for traders
@@ -542,8 +552,9 @@ class TestModelCRollover:
         # Verify log events have cash_transfer=False
         rollover_events = [e for e in system.state.events if e["kind"] == "PayableRolledOver"]
         for evt in rollover_events:
-            assert evt.get("cash_transfer") is False, \
+            assert evt.get("cash_transfer") is False, (
                 f"Expected cash_transfer=False for trader rollover, got {evt}"
+            )
 
     def test_cash_transfer_for_vbt_payables(self):
         """VBT/Dealer payables should still transfer cash under Model C."""
@@ -618,12 +629,13 @@ class TestModelCRollover:
         settled = settle_due(system, 3, rollover_enabled=True)
 
         # Model A rollover: dealer_active=False → cash transfer for all
-        new_ids = rollover_settled_payables(system, 3, settled, dealer_active=False)
+        rollover_settled_payables(system, 3, settled, dealer_active=False)
 
         rollover_events = [e for e in system.state.events if e["kind"] == "PayableRolledOver"]
         for evt in rollover_events:
-            assert evt.get("cash_transfer") is True, \
+            assert evt.get("cash_transfer") is True, (
                 f"Expected cash_transfer=True for Model A rollover, got {evt}"
+            )
 
     def test_new_payable_ids_returned(self):
         """rollover_settled_payables returns list of new payable IDs."""
@@ -652,12 +664,14 @@ class TestTicketIngestion:
 
         # Initialize dealer subsystem
         subsystem = initialize_balanced_dealer_subsystem(
-            system, dealer_config, current_day=0,
+            system,
+            dealer_config,
+            current_day=0,
         )
         system.state.dealer_subsystem = subsystem
 
         initial_ticket_count = len(subsystem.tickets)
-        initial_payable_count = len(subsystem.payable_to_ticket)
+        len(subsystem.payable_to_ticket)
 
         # Manually create a new payable (simulating rollover output)
         new_payable = Payable(
@@ -995,9 +1009,6 @@ class TestPhase1BucketTransition:
         assert subsystem.tickets[ticket_id].bucket_id == "mid"
         assert subsystem.tickets[ticket_id].owner_id == "dealer_mid"
 
-        mid_cash_before = subsystem.dealers["mid"].cash
-        short_cash_before = subsystem.dealers["short"].cash
-
         # Run trading phase at day=3: remaining_tau = 5-3 = 2 → "short" (tau 1-3)
         run_dealer_trading_phase(subsystem, system, current_day=3)
 
@@ -1094,14 +1105,16 @@ class TestPhase1BucketTransition:
         # All dealer desks should have equal cash
         expected_dealer = Decimal(1000) / 3
         for dealer in subsystem.dealers.values():
-            assert dealer.cash == expected_dealer, \
+            assert dealer.cash == expected_dealer, (
                 f"dealer_{dealer.bucket_id} cash={dealer.cash}, expected {expected_dealer}"
+            )
 
         # All VBT desks should have equal cash
         expected_vbt = Decimal(600) / 3
         for vbt in subsystem.vbts.values():
-            assert vbt.cash == expected_vbt, \
+            assert vbt.cash == expected_vbt, (
                 f"vbt_{vbt.bucket_id} cash={vbt.cash}, expected {expected_vbt}"
+            )
 
     def test_trader_ticket_bucket_changes_without_owner_change(self):
         """Trader-owned ticket changes bucket but owner stays the same."""
@@ -1146,11 +1159,13 @@ class TestFullCycle:
         system.state.day = 0
 
         subsystem = initialize_balanced_dealer_subsystem(
-            system, dealer_config, current_day=0,
+            system,
+            dealer_config,
+            current_day=0,
         )
         system.state.dealer_subsystem = subsystem
 
-        initial_tickets = len(subsystem.tickets)
+        len(subsystem.tickets)
 
         # Advance to settlement day
         system.state.day = 3
@@ -1160,9 +1175,7 @@ class TestFullCycle:
         assert len(settled) > 0, "Some payables should have settled"
 
         # Rollover with Model C
-        new_payable_ids = rollover_settled_payables(
-            system, 3, settled, dealer_active=True
-        )
+        new_payable_ids = rollover_settled_payables(system, 3, settled, dealer_active=True)
         assert len(new_payable_ids) > 0, "Rollover should create new payables"
 
         # Ingest new payables into dealer subsystem
@@ -1172,22 +1185,23 @@ class TestFullCycle:
         # Verify the new tickets are for the rollover payables
         for pid in new_payable_ids:
             if pid in system.state.contracts:  # Not removed by settlement
-                assert pid in subsystem.payable_to_ticket, \
+                assert pid in subsystem.payable_to_ticket, (
                     f"Payable {pid} should have a corresponding ticket"
+                )
 
     def test_dealer_inventory_replenishes_after_rollover(self):
         """VBT/Dealer inventory should grow after ingesting rollover payables."""
-        system, trader_ids, dealer_config, _ = _dealer_ring_system(
-            n_agents=3, maturity_days=3
-        )
+        system, trader_ids, dealer_config, _ = _dealer_ring_system(n_agents=3, maturity_days=3)
         system.state.day = 0
 
         subsystem = initialize_balanced_dealer_subsystem(
-            system, dealer_config, current_day=0,
+            system,
+            dealer_config,
+            current_day=0,
         )
 
         # Count VBT short tickets before
-        vbt_before = len(subsystem.vbts["short"].inventory)
+        len(subsystem.vbts["short"].inventory)
 
         # Settle on day 3
         system.state.day = 3
@@ -1207,5 +1221,6 @@ class TestFullCycle:
             vbt_after = len(subsystem.vbts["short"].inventory)
             # Note: original tickets may have been cleaned up as matured,
             # but new ones should be added
-            assert vbt_after >= len(new_ids), \
+            assert vbt_after >= len(new_ids), (
                 f"VBT inventory ({vbt_after}) should have at least {len(new_ids)} new tickets"
+            )

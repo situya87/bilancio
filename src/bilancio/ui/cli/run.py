@@ -4,66 +4,107 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Dict, Optional
 
 import click
 from rich.console import Console
 from rich.panel import Panel
 
-from bilancio.analysis.loaders import read_events_jsonl, read_balances_csv
+from bilancio.analysis.loaders import read_balances_csv, read_events_jsonl
 from bilancio.analysis.report import (
+    compute_day_metrics,
+    parse_day_ranges,
     write_day_metrics_csv,
     write_day_metrics_json,
     write_debtor_shares_csv,
     write_intraday_csv,
     write_metrics_html,
-    compute_day_metrics,
-    parse_day_ranges,
 )
 from bilancio.ui.run import run_scenario
 from bilancio.ui.wizard import create_scenario_wizard
 
-
 console = Console()
+CLI_HANDLED_ERRORS = (
+    click.ClickException,
+    FileNotFoundError,
+    ImportError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+)
 
 
 @click.command()
-@click.argument('scenario_file', type=click.Path(exists=True, path_type=Path))
-@click.option('--mode', type=click.Choice(['step', 'until-stable']),
-              default='until-stable', help='Simulation run mode')
-@click.option('--max-days', type=int, default=90,
-              help='Maximum days to simulate')
-@click.option('--quiet-days', type=int, default=2,
-              help='Required quiet days for stable state')
-@click.option('--show', type=click.Choice(['summary', 'detailed', 'table']),
-              default='detailed', help='Event display mode')
-@click.option('--agents', type=str, default=None,
-              help='Comma-separated list of agent IDs to show balances for')
-@click.option('--check-invariants',
-              type=click.Choice(['setup', 'daily', 'none']),
-              default='setup',
-              help='When to check system invariants')
-@click.option('--export-balances', type=click.Path(path_type=Path),
-              default=None, help='Path to export balances CSV')
-@click.option('--export-events', type=click.Path(path_type=Path),
-              default=None, help='Path to export events JSONL')
-@click.option('--html', type=click.Path(path_type=Path),
-              default=None, help='Path to export colored output as HTML')
-@click.option('--t-account/--no-t-account', default=False, help='Use detailed T-account layout for balances')
-@click.option('--default-handling', type=click.Choice(['fail-fast', 'expel-agent']),
-              default=None, help='Default-handling mode (override scenario setting)')
-def run(scenario_file: Path,
-        mode: str,
-        max_days: int,
-        quiet_days: int,
-        show: str,
-        agents: Optional[str],
-        check_invariants: str,
-        export_balances: Optional[Path],
-        export_events: Optional[Path],
-        html: Optional[Path],
-        t_account: bool,
-        default_handling: Optional[str]) -> None:
+@click.argument("scenario_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--mode",
+    type=click.Choice(["step", "until-stable"]),
+    default="until-stable",
+    help="Simulation run mode",
+)
+@click.option("--max-days", type=int, default=90, help="Maximum days to simulate")
+@click.option("--quiet-days", type=int, default=2, help="Required quiet days for stable state")
+@click.option(
+    "--show",
+    type=click.Choice(["summary", "detailed", "table"]),
+    default="detailed",
+    help="Event display mode",
+)
+@click.option(
+    "--agents",
+    type=str,
+    default=None,
+    help="Comma-separated list of agent IDs to show balances for",
+)
+@click.option(
+    "--check-invariants",
+    type=click.Choice(["setup", "daily", "none"]),
+    default="setup",
+    help="When to check system invariants",
+)
+@click.option(
+    "--export-balances",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to export balances CSV",
+)
+@click.option(
+    "--export-events",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to export events JSONL",
+)
+@click.option(
+    "--html",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to export colored output as HTML",
+)
+@click.option(
+    "--t-account/--no-t-account", default=False, help="Use detailed T-account layout for balances"
+)
+@click.option(
+    "--default-handling",
+    type=click.Choice(["fail-fast", "expel-agent"]),
+    default=None,
+    help="Default-handling mode (override scenario setting)",
+)
+def run(
+    scenario_file: Path,
+    mode: str,
+    max_days: int,
+    quiet_days: int,
+    show: str,
+    agents: str | None,
+    check_invariants: str,
+    export_balances: Path | None,
+    export_events: Path | None,
+    html: Path | None,
+    t_account: bool,
+    default_handling: str | None,
+) -> None:
     """Run a Bilancio simulation scenario.
 
     Load a scenario from a YAML file and run the simulation either
@@ -73,14 +114,14 @@ def run(scenario_file: Path,
         # Parse agent list if provided
         agent_ids = None
         if agents:
-            agent_ids = [a.strip() for a in agents.split(',')]
+            agent_ids = [a.strip() for a in agents.split(",")]
 
         # Override export paths if provided via CLI
-        export_dict: Dict[str, str] = {}
+        export_dict: dict[str, str] = {}
         if export_balances:
-            export_dict['balances_csv'] = str(export_balances)
+            export_dict["balances_csv"] = str(export_balances)
         if export_events:
-            export_dict['events_jsonl'] = str(export_events)
+            export_dict["events_jsonl"] = str(export_events)
 
         # Run the scenario
         run_scenario(
@@ -94,38 +135,30 @@ def run(scenario_file: Path,
             export=export_dict if export_dict else None,
             html_output=html,
             t_account=t_account,
-            default_handling=default_handling
+            default_handling=default_handling,
         )
 
     except FileNotFoundError as e:
-        console.print(Panel(
-            f"[red]File not found:[/red] {e}",
-            title="Error",
-            border_style="red"
-        ))
+        console.print(Panel(f"[red]File not found:[/red] {e}", title="Error", border_style="red"))
         sys.exit(1)
 
     except ValueError as e:
-        console.print(Panel(
-            f"[red]Configuration error:[/red]\n{e}",
-            title="Error",
-            border_style="red"
-        ))
+        console.print(
+            Panel(f"[red]Configuration error:[/red]\n{e}", title="Error", border_style="red")
+        )
         sys.exit(1)
 
-    except Exception as e:  # Intentionally broad: top-level CLI handler
-        console.print(Panel(
-            f"[red]Unexpected error:[/red]\n{e}",
-            title="Error",
-            border_style="red"
-        ))
-        if '--debug' in sys.argv:
+    except CLI_HANDLED_ERRORS as e:
+        console.print(
+            Panel(f"[red]Unexpected error:[/red]\n{e}", title="Error", border_style="red")
+        )
+        if "--debug" in sys.argv:
             raise
         sys.exit(1)
 
 
 @click.command()
-@click.argument('scenario_file', type=click.Path(exists=True, path_type=Path))
+@click.argument("scenario_file", type=click.Path(exists=True, path_type=Path))
 def validate(scenario_file: Path) -> None:
     """Validate a Bilancio scenario configuration file.
 
@@ -134,15 +167,14 @@ def validate(scenario_file: Path) -> None:
     agent definitions, or initial actions.
     """
     try:
-        from bilancio.config import load_yaml
+        from bilancio.config import apply_to_system, load_yaml
         from bilancio.engines.system import System
-        from bilancio.config import apply_to_system
 
         # Load and parse the configuration
         console.print(f"[dim]Validating {scenario_file}...[/dim]")
         config = load_yaml(scenario_file)
 
-        console.print(f"[green]OK[/green] Configuration syntax is valid")
+        console.print("[green]OK[/green] Configuration syntax is valid")
         console.print(f"  Name: {config.name}")
         console.print(f"  Version: {config.version}")
         console.print(f"  Agents: {len(config.agents)}")
@@ -153,58 +185,56 @@ def validate(scenario_file: Path) -> None:
         test_system = System()
         apply_to_system(config, test_system)
 
-        console.print(f"[green]OK[/green] Configuration can be applied successfully")
+        console.print("[green]OK[/green] Configuration can be applied successfully")
 
         # Run invariant checks
         test_system.assert_invariants()
-        console.print(f"[green]OK[/green] System invariants pass")
+        console.print("[green]OK[/green] System invariants pass")
 
         # Summary
         console.print("\n[bold green]Configuration is valid![/bold green]")
-        console.print(f"\nAgents defined:")
+        console.print("\nAgents defined:")
         for agent in config.agents:
             console.print(f"  • {agent.id} ({agent.kind}): {agent.name}")
 
         if config.run.export.balances_csv or config.run.export.events_jsonl:
-            console.print(f"\nExports configured:")
+            console.print("\nExports configured:")
             if config.run.export.balances_csv:
                 console.print(f"  • Balances: {config.run.export.balances_csv}")
             if config.run.export.events_jsonl:
                 console.print(f"  • Events: {config.run.export.events_jsonl}")
 
     except FileNotFoundError as e:
-        console.print(Panel(
-            f"[red]File not found:[/red] {e}",
-            title="Error",
-            border_style="red"
-        ))
+        console.print(Panel(f"[red]File not found:[/red] {e}", title="Error", border_style="red"))
         sys.exit(1)
 
     except ValueError as e:
-        console.print(Panel(
-            f"[red]Configuration error:[/red]\n{e}",
-            title="Validation Failed",
-            border_style="red"
-        ))
+        console.print(
+            Panel(
+                f"[red]Configuration error:[/red]\n{e}",
+                title="Validation Failed",
+                border_style="red",
+            )
+        )
         sys.exit(1)
 
-    except Exception as e:  # Intentionally broad: top-level CLI handler
-        console.print(Panel(
-            f"[red]Validation error:[/red]\n{e}",
-            title="Validation Failed",
-            border_style="red"
-        ))
-        if '--debug' in sys.argv:
+    except CLI_HANDLED_ERRORS as e:
+        console.print(
+            Panel(
+                f"[red]Validation error:[/red]\n{e}", title="Validation Failed", border_style="red"
+            )
+        )
+        if "--debug" in sys.argv:
             raise
         sys.exit(1)
 
 
 @click.command()
-@click.option('--from', 'from_template', type=str, default=None,
-              help='Base template to use')
-@click.option('-o', '--output', type=click.Path(path_type=Path),
-              required=True, help='Output YAML file path')
-def new(from_template: Optional[str], output: Path) -> None:
+@click.option("--from", "from_template", type=str, default=None, help="Base template to use")
+@click.option(
+    "-o", "--output", type=click.Path(path_type=Path), required=True, help="Output YAML file path"
+)
+def new(from_template: str | None, output: Path) -> None:
     """Create a new scenario configuration.
 
     Interactive wizard to create a new Bilancio scenario
@@ -214,38 +244,70 @@ def new(from_template: Optional[str], output: Path) -> None:
         create_scenario_wizard(output, from_template)
         console.print(f"[green]OK[/green] Created scenario file: {output}")
 
-    except Exception as e:  # Intentionally broad: top-level CLI handler
-        console.print(Panel(
-            f"[red]Failed to create scenario:[/red]\n{e}",
-            title="Error",
-            border_style="red"
-        ))
+    except CLI_HANDLED_ERRORS as e:
+        console.print(
+            Panel(f"[red]Failed to create scenario:[/red]\n{e}", title="Error", border_style="red")
+        )
         sys.exit(1)
 
 
 @click.command()
-@click.option('--events', 'events_path', type=click.Path(exists=True, path_type=Path), required=True,
-              help='Path to events JSONL exported by a run')
-@click.option('--balances', 'balances_path', type=click.Path(exists=False, path_type=Path), required=False,
-              help='Path to balances CSV (optional, improves G_t/M_t)')
-@click.option('--days', type=str, default=None,
-              help='Days to analyze, e.g. "1,2-3". Default: infer from events')
-@click.option('--out-csv', 'out_csv', type=click.Path(path_type=Path), default=None,
-              help='Output CSV for day-level metrics')
-@click.option('--out-json', 'out_json', type=click.Path(path_type=Path), default=None,
-              help='Output JSON for day-level metrics')
-@click.option('--intraday-csv', 'intraday_csv', type=click.Path(path_type=Path), default=None,
-              help='Optional CSV for intraday P_prefix steps')
-@click.option('--html', 'html_out', type=click.Path(path_type=Path), default=None,
-              help='Optional HTML analytics report')
+@click.option(
+    "--events",
+    "events_path",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to events JSONL exported by a run",
+)
+@click.option(
+    "--balances",
+    "balances_path",
+    type=click.Path(exists=False, path_type=Path),
+    required=False,
+    help="Path to balances CSV (optional, improves G_t/M_t)",
+)
+@click.option(
+    "--days",
+    type=str,
+    default=None,
+    help='Days to analyze, e.g. "1,2-3". Default: infer from events',
+)
+@click.option(
+    "--out-csv",
+    "out_csv",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output CSV for day-level metrics",
+)
+@click.option(
+    "--out-json",
+    "out_json",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output JSON for day-level metrics",
+)
+@click.option(
+    "--intraday-csv",
+    "intraday_csv",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Optional CSV for intraday P_prefix steps",
+)
+@click.option(
+    "--html",
+    "html_out",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Optional HTML analytics report",
+)
 def analyze(
     events_path: Path,
-    balances_path: Optional[Path],
-    days: Optional[str],
-    out_csv: Optional[Path],
-    out_json: Optional[Path],
-    intraday_csv: Optional[Path],
-    html_out: Optional[Path],
+    balances_path: Path | None,
+    days: str | None,
+    out_csv: Path | None,
+    out_json: Path | None,
+    intraday_csv: Path | None,
+    html_out: Path | None,
 ) -> None:
     """Analyze a completed run and export Kalecki-style metrics.
 
@@ -299,7 +361,9 @@ def analyze(
         console.print(f"[green]OK[/green] Wrote intraday CSV: {intraday_csv}")
 
     if html_out:
-        title = f"Bilancio Analytics — {events_path.stem.replace('_events','')}"
+        title = f"Bilancio Analytics — {events_path.stem.replace('_events', '')}"
         subtitle = f"Events: {events_path.name}{' | Balances: ' + balances_path.name if balances_path else ''}"
-        write_metrics_html(html_out, metrics_rows, ds_rows, intraday_rows, title=title, subtitle=subtitle)
+        write_metrics_html(
+            html_out, metrics_rows, ds_rows, intraday_rows, title=title, subtitle=subtitle
+        )
         console.print(f"[green]OK[/green] Wrote HTML analytics: {html_out}")

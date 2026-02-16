@@ -12,7 +12,6 @@ after each ticket event, combining:
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 from bilancio.banking.state import BankDealerState, CentralBankParams
 
@@ -24,11 +23,12 @@ class ReserveProjection:
 
     R̂(h) for h ∈ {t, t+1, ..., t+10}
     """
+
     base_day: int
-    path: Dict[int, int]  # day -> projected reserves
+    path: dict[int, int]  # day -> projected reserves
 
     # Diagnostic: what legs contributed
-    legs_by_day: Dict[int, List[str]]
+    legs_by_day: dict[int, list[str]]
 
     def at_horizon(self, h: int) -> int:
         """Get projected reserves at horizon h."""
@@ -98,7 +98,7 @@ def project_reserves(
     scheduled = state.get_scheduled_legs(t + 1, t + horizon)
 
     # Build a lookup: day -> list of (amount, description)
-    legs_lookup: Dict[int, List[tuple[int, str]]] = {}
+    legs_lookup: dict[int, list[tuple[int, str]]] = {}
     for leg in scheduled:
         if leg.day not in legs_lookup:
             legs_lookup[leg.day] = []
@@ -212,7 +212,7 @@ def update_projection_after_ticket(
     old_projection: ReserveProjection,
     reserve_delta: int,
     withdrawal_delta: int,
-    new_scheduled_legs: Optional[List[tuple[int, int, str]]] = None,
+    new_scheduled_legs: list[tuple[int, int, str]] | None = None,
 ) -> ReserveProjection:
     """
     Quickly update projection after a ticket without full rebuild.

@@ -1,12 +1,10 @@
 """Tests for storage data models."""
 
-import pytest
-
 from bilancio.storage.models import (
-    RunStatus,
+    RegistryEntry,
     RunArtifacts,
     RunResult,
-    RegistryEntry,
+    RunStatus,
 )
 
 

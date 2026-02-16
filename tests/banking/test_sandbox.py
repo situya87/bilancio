@@ -10,28 +10,25 @@ Tests verify:
 - Stress scenarios (overdraft, CB top-up)
 """
 
-import pytest
 from decimal import Decimal
-from io import StringIO
-import sys
 
+from bilancio.banking.day_runner import MultiBankDayRunner
+from bilancio.banking.pricing_kernel import PricingParams
 from bilancio.banking.sandbox import (
     create_standard_cb_params,
     create_standard_pricing_params,
-    setup_bank,
-    print_separator,
     print_bank_state,
     print_quote,
+    print_separator,
     run_sandbox,
+    setup_bank,
 )
-from bilancio.banking.types import Ticket, TicketType, Quote
 from bilancio.banking.state import CentralBankParams
-from bilancio.banking.pricing_kernel import PricingParams
 from bilancio.banking.ticket_processor import (
     process_inter_bank_payment,
     process_intra_bank_payment,
 )
-from bilancio.banking.day_runner import MultiBankDayRunner
+from bilancio.banking.types import Quote, Ticket, TicketType
 
 
 class TestCentralBankParameters:
@@ -418,9 +415,7 @@ class TestDayRunner:
             pricing_params=pricing_params,
         )
 
-        multi_runner = MultiBankDayRunner(
-            runners={"BankA": runner_a, "BankB": runner_b}
-        )
+        multi_runner = MultiBankDayRunner(runners={"BankA": runner_a, "BankB": runner_b})
 
         # Run day 1
         tickets_a = [
@@ -470,9 +465,7 @@ class TestDayRunner:
             pricing_params=pricing_params,
         )
 
-        multi_runner = MultiBankDayRunner(
-            runners={"BankA": runner_a, "BankB": runner_b}
-        )
+        multi_runner = MultiBankDayRunner(runners={"BankA": runner_a, "BankB": runner_b})
 
         system_state = multi_runner.get_system_state()
 
@@ -588,7 +581,7 @@ class TestStressScenarios:
             counterparty_bank_id="BankB",
         )
 
-        result = processor.process_ticket(large_wd)
+        processor.process_ticket(large_wd)
 
         # Reserves went negative (overdraft)
         assert state.reserves < 0

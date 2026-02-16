@@ -67,5 +67,6 @@ class CentralBank(Agent):
     def validate_corridor(self) -> None:
         """Validate corridor parameters."""
         assert self.reserve_remuneration_rate >= 0, "Floor rate must be non-negative"
-        assert self.cb_lending_rate >= self.reserve_remuneration_rate, \
+        assert self.cb_lending_rate >= self.reserve_remuneration_rate, (
             "Ceiling rate must be >= floor rate"
+        )

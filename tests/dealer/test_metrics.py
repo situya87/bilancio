@@ -7,27 +7,25 @@ Tests verify the metrics tracking infrastructure for:
 - Repayment-priority diagnostics (8.4)
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.engines.system import System
-from bilancio.domain.agents import Household, CentralBank
+import pytest
+
+from bilancio.dealer.metrics import (
+    DealerSnapshot,
+    RunMetrics,
+    TraderSnapshot,
+)
+from bilancio.dealer.models import DEFAULT_BUCKETS
+from bilancio.dealer.simulation import DealerRingConfig
+from bilancio.domain.agents import CentralBank, Household
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.dealer_integration import (
     initialize_dealer_subsystem,
     run_dealer_trading_phase,
 )
-from bilancio.dealer.simulation import DealerRingConfig
-from bilancio.dealer.models import DEFAULT_BUCKETS
-from bilancio.dealer.metrics import (
-    RunMetrics,
-    TradeRecord,
-    DealerSnapshot,
-    TraderSnapshot,
-    TicketOutcome,
-    compute_safety_margin,
-)
+from bilancio.engines.system import System
 
 
 def create_test_system_with_ring():
@@ -348,6 +346,7 @@ class TestSummaryStatistics:
 
         # All values should be JSON-serializable
         import json
+
         try:
             json.dumps(summary)
         except (TypeError, ValueError) as e:
@@ -397,20 +396,56 @@ class TestMarkToMidEquity:
 class TestDealerPremiumMetrics:
     """Test dealer and VBT premium/discount metrics (Plan 020 - Phase A.3)."""
 
-    @pytest.mark.parametrize("midline,vbt_mid,bid,ask,expected_dealer_premium,expected_dealer_pct,expected_vbt_premium,expected_vbt_pct", [
-        # At par: premium is 0
-        (Decimal("1.0"), Decimal("1.0"), Decimal("0.95"), Decimal("1.05"),
-         Decimal(0), Decimal(0), Decimal(0), Decimal(0)),
-        # Above par: positive premium
-        (Decimal("1.05"), Decimal("1.02"), Decimal("1.00"), Decimal("1.10"),
-         Decimal("0.05"), Decimal("5"), Decimal("0.02"), Decimal("2")),
-        # Below par: negative premium (discount)
-        (Decimal("0.85"), Decimal("0.90"), Decimal("0.80"), Decimal("0.90"),
-         Decimal("-0.15"), Decimal("-15"), Decimal("-0.10"), Decimal("-10")),
-    ], ids=["at_par", "above_par", "below_par"])
-    def test_dealer_premium_vs_face(self, midline, vbt_mid, bid, ask,
-                                     expected_dealer_premium, expected_dealer_pct,
-                                     expected_vbt_premium, expected_vbt_pct):
+    @pytest.mark.parametrize(
+        "midline,vbt_mid,bid,ask,expected_dealer_premium,expected_dealer_pct,expected_vbt_premium,expected_vbt_pct",
+        [
+            # At par: premium is 0
+            (
+                Decimal("1.0"),
+                Decimal("1.0"),
+                Decimal("0.95"),
+                Decimal("1.05"),
+                Decimal(0),
+                Decimal(0),
+                Decimal(0),
+                Decimal(0),
+            ),
+            # Above par: positive premium
+            (
+                Decimal("1.05"),
+                Decimal("1.02"),
+                Decimal("1.00"),
+                Decimal("1.10"),
+                Decimal("0.05"),
+                Decimal("5"),
+                Decimal("0.02"),
+                Decimal("2"),
+            ),
+            # Below par: negative premium (discount)
+            (
+                Decimal("0.85"),
+                Decimal("0.90"),
+                Decimal("0.80"),
+                Decimal("0.90"),
+                Decimal("-0.15"),
+                Decimal("-15"),
+                Decimal("-0.10"),
+                Decimal("-10"),
+            ),
+        ],
+        ids=["at_par", "above_par", "below_par"],
+    )
+    def test_dealer_premium_vs_face(
+        self,
+        midline,
+        vbt_mid,
+        bid,
+        ask,
+        expected_dealer_premium,
+        expected_dealer_pct,
+        expected_vbt_premium,
+        expected_vbt_pct,
+    ):
         """Test dealer/VBT premium relative to face value."""
         snapshot = DealerSnapshot(
             day=1,
@@ -457,11 +492,15 @@ class TestDealerPremiumMetrics:
 class TestDebtToMoneyRatio:
     """Test debt-to-money ratio metric (Plan 020 - Phase B)."""
 
-    @pytest.mark.parametrize("debt,money,expected_ratio", [
-        (Decimal(10000), Decimal(5000), Decimal(2)),
-        (Decimal(10000), Decimal(0), Decimal(0)),
-        (Decimal(0), Decimal(5000), Decimal(0)),
-    ], ids=["normal", "zero_money", "zero_debt"])
+    @pytest.mark.parametrize(
+        "debt,money,expected_ratio",
+        [
+            (Decimal(10000), Decimal(5000), Decimal(2)),
+            (Decimal(10000), Decimal(0), Decimal(0)),
+            (Decimal(0), Decimal(5000), Decimal(0)),
+        ],
+        ids=["normal", "zero_money", "zero_debt"],
+    )
     def test_debt_to_money_ratio_computation(self, debt, money, expected_ratio):
         """Test debt-to-money ratio is computed correctly."""
         metrics = RunMetrics()
@@ -530,7 +569,7 @@ class TestMidPriceTimeSeries:
         assert 3 in timeseries
 
         # Each day should have entries for each bucket
-        for day, buckets in timeseries.items():
+        for _day, buckets in timeseries.items():
             assert len(buckets) == 3
             assert "short" in buckets or "mid" in buckets or "long" in buckets
 
@@ -610,7 +649,8 @@ class TestMidTimeseriesCSVExport:
 
         # Read and verify contents
         import csv
-        with open(csv_path, "r") as f:
+
+        with open(csv_path) as f:
             reader = csv.DictReader(f)
             rows = list(reader)
 

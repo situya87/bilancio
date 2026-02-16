@@ -8,22 +8,20 @@ Bilancio simulation engine, including:
 - Settlement with transferred payables
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.engines.system import System
-from bilancio.domain.agents import Bank, Household, CentralBank
+from bilancio.dealer.models import DEFAULT_BUCKETS
+from bilancio.dealer.simulation import DealerRingConfig
+from bilancio.domain.agents import Bank, CentralBank, Household
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
-from bilancio.engines.simulation import run_day
 from bilancio.engines.dealer_integration import (
-    DealerSubsystem,
     initialize_dealer_subsystem,
     run_dealer_trading_phase,
     sync_dealer_to_system,
 )
-from bilancio.dealer.simulation import DealerRingConfig
-from bilancio.dealer.models import BucketConfig, DEFAULT_BUCKETS
+from bilancio.engines.simulation import run_day
+from bilancio.engines.system import System
 
 
 def create_test_system_with_payables():
@@ -161,7 +159,9 @@ def test_initialize_dealer_subsystem():
         owned_count = len(trader.tickets_owned)
         obligations_count = len(trader.obligations)
         # In our setup, each household is both a creditor and a debtor
-        assert owned_count + obligations_count > 0, f"Trader {trader_id} should have tickets or obligations"
+        assert owned_count + obligations_count > 0, (
+            f"Trader {trader_id} should have tickets or obligations"
+        )
 
     # Verify executor was created
     assert subsystem.executor is not None, "Trade executor should be initialized"
@@ -452,11 +452,13 @@ def test_integration_multiple_days_with_dealer():
     subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
     sys.state.dealer_subsystem = subsystem
 
-    initial_payable_count = len([c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE])
+    initial_payable_count = len(
+        [c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE]
+    )
     assert initial_payable_count == 3, "Should start with 3 payables"
 
     # Run 5 days with dealer enabled
-    for day in range(5):
+    for _day in range(5):
         run_day(sys, enable_dealer=True)
 
     # Verify we're at day 5
@@ -467,7 +469,9 @@ def test_integration_multiple_days_with_dealer():
     assert len(dealer_events) == 5, "Should have dealer events for 5 days"
 
     # Verify at least one payable has settled (due_day=2)
-    final_payable_count = len([c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE])
+    final_payable_count = len(
+        [c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE]
+    )
     assert final_payable_count < initial_payable_count, "Some payables should have settled"
 
     # Verify settlement events logged

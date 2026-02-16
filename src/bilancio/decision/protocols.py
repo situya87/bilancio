@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 
-
 # ── Level 1: Portfolio Strategy ─────────────────────────────────────
+
 
 @runtime_checkable
 class PortfolioStrategy(Protocol):
@@ -47,6 +47,7 @@ class FixedPortfolioStrategy:
 
 # ── Level 2: Counterparty Screener ──────────────────────────────────
 
+
 @runtime_checkable
 class CounterpartyScreener(Protocol):
     """Screens counterparties for eligibility."""
@@ -70,6 +71,7 @@ class ThresholdScreener:
 
 
 # ── Level 3: Instrument Selector ────────────────────────────────────
+
 
 @runtime_checkable
 class InstrumentSelector(Protocol):
@@ -95,6 +97,7 @@ class FixedMaturitySelector:
 
 # ── Level 4: Transaction Pricer ─────────────────────────────────────
 
+
 @runtime_checkable
 class TransactionPricer(Protocol):
     """Prices individual transactions based on risk."""
@@ -119,6 +122,7 @@ class LinearPricer:
 
 # ── Level 5: Instrument Valuer ─────────────────────────────────────
 
+
 @runtime_checkable
 class InstrumentValuer(Protocol):
     """Values a tradable instrument — an agent's belief about worth.
@@ -132,8 +136,8 @@ class InstrumentValuer(Protocol):
     def value(self, ticket: Any, day: int) -> Any: ...
 
 
-
 # ── Level 6: VBT Pricing Model ───────────────────────────────────
+
 
 @runtime_checkable
 class VBTPricingModel(Protocol):

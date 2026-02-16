@@ -9,25 +9,25 @@ These tests run full simulations and check structural properties:
 All tests use fixed seeds for reproducibility and small rings for speed.
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.engines.system import System
-from bilancio.domain.agents import Household, CentralBank, Bank
+import pytest
+
+from bilancio.dealer.models import DEFAULT_BUCKETS
+from bilancio.dealer.simulation import DealerRingConfig
+from bilancio.domain.agents import Bank, CentralBank, Household
 from bilancio.domain.agents.non_bank_lender import NonBankLender
-from bilancio.domain.agents.firm import Firm
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
-from bilancio.engines.simulation import run_day, run_until_stable
 from bilancio.engines.dealer_integration import initialize_dealer_subsystem
 from bilancio.engines.lending import LendingConfig
-from bilancio.dealer.simulation import DealerRingConfig
-from bilancio.dealer.models import DEFAULT_BUCKETS
-
+from bilancio.engines.simulation import run_until_stable
+from bilancio.engines.system import System
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def build_ring_system(
     n_agents=20,
@@ -96,6 +96,7 @@ def count_events(system, kind):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.regression
 def test_lending_effect_is_nonzero():
     """NBFI lending must create at least one loan when agents have shortfalls.
@@ -130,12 +131,10 @@ def test_lending_effect_is_nonzero():
 
     run_until_stable(sys, max_days=10, enable_lender=True)
 
-    loan_events = [
-        e for e in sys.state.events if e.get("kind") == "NonBankLoanCreated"
-    ]
+    loan_events = [e for e in sys.state.events if e.get("kind") == "NonBankLoanCreated"]
     assert len(loan_events) >= 1, (
         f"Expected at least 1 NonBankLoanCreated event, got {len(loan_events)}. "
-        f"Event kinds: {sorted(set(e.get('kind') for e in sys.state.events))}"
+        f"Event kinds: {sorted({e.get('kind') for e in sys.state.events})}"
     )
 
 
@@ -267,12 +266,9 @@ def test_system_invariants_after_simulation():
         total_cash = sum(
             sys.state.contracts[cid].amount
             for cid in agent.asset_ids
-            if cid in sys.state.contracts
-            and sys.state.contracts[cid].kind == InstrumentKind.CASH
+            if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.CASH
         )
-        assert total_cash >= 0, (
-            f"Agent {agent_id} has negative cash: {total_cash}"
-        )
+        assert total_cash >= 0, f"Agent {agent_id} has negative cash: {total_cash}"
 
 
 @pytest.mark.regression
@@ -306,11 +302,9 @@ def test_nbfi_creates_loans_when_shortfalls_exist():
 
     run_until_stable(sys, max_days=10, enable_lender=True)
 
-    loan_events = [
-        e for e in sys.state.events if e.get("kind") == "NonBankLoanCreated"
-    ]
+    loan_events = [e for e in sys.state.events if e.get("kind") == "NonBankLoanCreated"]
     assert len(loan_events) >= 1, (
         f"Expected at least 1 NonBankLoanCreated event under extreme stress, "
         f"got {len(loan_events)}. "
-        f"Event kinds: {sorted(set(e.get('kind') for e in sys.state.events))}"
+        f"Event kinds: {sorted({e.get('kind') for e in sys.state.events})}"
     )

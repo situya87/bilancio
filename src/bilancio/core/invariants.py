@@ -13,20 +13,34 @@ def assert_cb_cash_matches_outstanding(system: System) -> None:
     if total != system.state.cb_cash_outstanding:
         raise AssertionError(f"CB cash mismatch: {total} != {system.state.cb_cash_outstanding}")
 
+
 def assert_no_negative_balances(system: System) -> None:
     for c in system.state.contracts.values():
-        if c.kind in (InstrumentKind.BANK_DEPOSIT, InstrumentKind.CASH, InstrumentKind.RESERVE_DEPOSIT) and c.amount < 0:
+        if (
+            c.kind
+            in (InstrumentKind.BANK_DEPOSIT, InstrumentKind.CASH, InstrumentKind.RESERVE_DEPOSIT)
+            and c.amount < 0
+        ):
             raise AssertionError("negative balance detected")
 
+
 def assert_cb_reserves_match(system: System) -> None:
-    total = sum(c.amount for c in system.state.contracts.values() if c.kind == InstrumentKind.RESERVE_DEPOSIT)
+    total = sum(
+        c.amount
+        for c in system.state.contracts.values()
+        if c.kind == InstrumentKind.RESERVE_DEPOSIT
+    )
     if total != system.state.cb_reserves_outstanding:
-        raise AssertionError(f"CB reserves mismatch: {total} != {system.state.cb_reserves_outstanding}")
+        raise AssertionError(
+            f"CB reserves mismatch: {total} != {system.state.cb_reserves_outstanding}"
+        )
+
 
 def assert_double_entry_numeric(system: System) -> None:
     for c in system.state.contracts.values():
-        if hasattr(c, 'amount') and c.amount < 0:
+        if hasattr(c, "amount") and c.amount < 0:
             raise AssertionError("negative amount detected")
+
 
 def assert_no_duplicate_refs(system: System) -> None:
     """No duplicate contract IDs in any agent's asset/liability lists."""
@@ -50,7 +64,9 @@ def assert_all_stock_ids_owned(system: System) -> None:
     for aid, agent in system.state.agents.items():
         for stock_id in agent.stock_ids:
             if stock_id in stock_owners:
-                raise AssertionError(f"Stock {stock_id} owned by multiple agents: {stock_owners[stock_id]} and {aid}")
+                raise AssertionError(
+                    f"Stock {stock_id} owned by multiple agents: {stock_owners[stock_id]} and {aid}"
+                )
             stock_owners[stock_id] = aid
 
     # Check that every stock in the registry has an owner
@@ -60,7 +76,9 @@ def assert_all_stock_ids_owned(system: System) -> None:
 
         # Check that the stock's owner_id matches the owning agent
         if stock.owner_id != stock_owners[stock_id]:
-            raise AssertionError(f"Stock {stock_id} owner_id {stock.owner_id} doesn't match owning agent {stock_owners[stock_id]}")
+            raise AssertionError(
+                f"Stock {stock_id} owner_id {stock.owner_id} doesn't match owning agent {stock_owners[stock_id]}"
+            )
 
 
 def assert_no_negative_stocks(system: System) -> None:

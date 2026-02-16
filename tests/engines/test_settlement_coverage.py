@@ -17,8 +17,9 @@ Focuses on:
 - rollover_settled_payables: defaulted parties, partial rollover, Model C logic
 """
 
-import pytest
 from decimal import Decimal
+
+import pytest
 
 from bilancio.core.errors import DefaultError, ValidationError
 from bilancio.domain.agents.bank import Bank
@@ -27,17 +28,13 @@ from bilancio.domain.agents.firm import Firm
 from bilancio.domain.agents.household import Household
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
-from bilancio.domain.instruments.delivery import DeliveryObligation
 from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.settlement import (
-    DEFAULT_MODE_EXPEL,
-    DEFAULT_MODE_FAIL_FAST,
     _action_references_agent,
     _action_references_contract,
     _cancel_scheduled_actions_for_agent,
     _deliver_stock,
     _expel_agent,
-    _handle_payable_default,
     _pay_bank_to_bank_with_reserves,
     _pay_with_cash,
     _pay_with_deposits,
@@ -51,10 +48,10 @@ from bilancio.engines.settlement import (
 from bilancio.engines.system import System
 from bilancio.ops.banking import deposit_cash
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _system_with_firms(default_mode: str = "fail-fast") -> tuple:
     """Create a basic system with CB + 2 firms."""
@@ -114,6 +111,7 @@ class TestPayWithDeposits:
         deposit_cash(system, "H1", "B1", 100)
         # Now withdraw all the cash back
         from bilancio.ops.banking import withdraw_cash
+
         withdraw_cash(system, "H1", "B1", 100)
 
         result = _pay_with_deposits(system, debtor.id, creditor.id, 50)
@@ -480,7 +478,8 @@ class TestCancelScheduledActions:
             {"mint_cash": {"to": "SOMEONE_ELSE", "amount": 10}},
         ]
         _cancel_scheduled_actions_for_agent(
-            system, debtor.id,
+            system,
+            debtor.id,
             cancelled_contract_ids={"C99"},
         )
         # Only the mint_cash action should remain
@@ -502,7 +501,8 @@ class TestCancelScheduledActions:
             {"transfer_claim": {"contract_alias": "MY_PAY", "to_agent": creditor.id}},
         ]
         _cancel_scheduled_actions_for_agent(
-            system, debtor.id,
+            system,
+            debtor.id,
             cancelled_aliases={"MY_PAY"},
         )
         assert 5 not in system.state.scheduled_actions_by_day
@@ -549,9 +549,13 @@ class TestExpelAgent:
         system.add_agent(extra)
 
         # Create delivery obligation: debtor owes creditor
-        d_id = system.create_delivery_obligation(
-            debtor.id, creditor.id, sku="WIDGET", quantity=10,
-            unit_price=Decimal("5"), due_day=3,
+        system.create_delivery_obligation(
+            debtor.id,
+            creditor.id,
+            sku="WIDGET",
+            quantity=10,
+            unit_price=Decimal("5"),
+            due_day=3,
         )
 
         _expel_agent(system, debtor.id, trigger_contract_id="TRIGGER")
@@ -578,7 +582,9 @@ class TestExpelAgent:
         p2 = _make_payable(system, debtor, creditor, 50, due_day=2)
 
         _expel_agent(system, debtor.id, trigger_contract_id=p1.id)
-        written_off_ids = [e["contract_id"] for e in system.state.events if e["kind"] == "ObligationWrittenOff"]
+        written_off_ids = [
+            e["contract_id"] for e in system.state.events if e["kind"] == "ObligationWrittenOff"
+        ]
         assert p2.id in written_off_ids
         assert p1.id not in written_off_ids  # trigger is skipped
 
@@ -591,7 +597,8 @@ class TestExpelAgent:
         system.state.aliases["OLD_ALIAS"] = "OLD_CONTRACT"
 
         _expel_agent(
-            system, debtor.id,
+            system,
+            debtor.id,
             cancelled_aliases={"OLD_ALIAS"},
         )
         assert "OLD_ALIAS" not in system.state.aliases
@@ -636,12 +643,18 @@ class TestSettleDueDeliveryObligations:
         system, _, debtor, creditor = _system_with_firms()
         system.create_stock(debtor.id, "WIDGET", 10, Decimal("5"))
         d_id = system.create_delivery_obligation(
-            debtor.id, creditor.id, sku="WIDGET", quantity=10,
-            unit_price=Decimal("5"), due_day=1,
+            debtor.id,
+            creditor.id,
+            sku="WIDGET",
+            quantity=10,
+            unit_price=Decimal("5"),
+            due_day=1,
         )
         settle_due_delivery_obligations(system, 1)
         assert d_id not in system.state.contracts
-        settled_events = [e for e in system.state.events if e["kind"] == "DeliveryObligationSettled"]
+        settled_events = [
+            e for e in system.state.events if e["kind"] == "DeliveryObligationSettled"
+        ]
         assert len(settled_events) == 1
         assert settled_events[0]["sku"] == "WIDGET"
         assert settled_events[0]["qty"] == 10
@@ -651,8 +664,12 @@ class TestSettleDueDeliveryObligations:
         system, _, debtor, creditor = _system_with_firms()
         system.create_stock(debtor.id, "WIDGET", 5, Decimal("5"))
         system.create_delivery_obligation(
-            debtor.id, creditor.id, sku="WIDGET", quantity=10,
-            unit_price=Decimal("5"), due_day=1,
+            debtor.id,
+            creditor.id,
+            sku="WIDGET",
+            quantity=10,
+            unit_price=Decimal("5"),
+            due_day=1,
         )
         with pytest.raises(DefaultError, match="Insufficient stock"):
             settle_due_delivery_obligations(system, 1)
@@ -666,8 +683,12 @@ class TestSettleDueDeliveryObligations:
 
         system.create_stock(debtor.id, "WIDGET", 3, Decimal("5"))
         system.create_delivery_obligation(
-            debtor.id, creditor.id, sku="WIDGET", quantity=10,
-            unit_price=Decimal("5"), due_day=1,
+            debtor.id,
+            creditor.id,
+            sku="WIDGET",
+            quantity=10,
+            unit_price=Decimal("5"),
+            due_day=1,
         )
         settle_due_delivery_obligations(system, 1)
 
@@ -688,8 +709,12 @@ class TestSettleDueDeliveryObligations:
         system.add_agent(extra)
 
         system.create_delivery_obligation(
-            debtor.id, creditor.id, sku="WIDGET", quantity=10,
-            unit_price=Decimal("5"), due_day=1,
+            debtor.id,
+            creditor.id,
+            sku="WIDGET",
+            quantity=10,
+            unit_price=Decimal("5"),
+            due_day=1,
         )
         settle_due_delivery_obligations(system, 1)
 
@@ -704,8 +729,12 @@ class TestSettleDueDeliveryObligations:
         system.state.defaulted_agent_ids.add(debtor.id)
 
         d_id = system.create_delivery_obligation(
-            debtor.id, creditor.id, sku="WIDGET", quantity=10,
-            unit_price=Decimal("5"), due_day=1,
+            debtor.id,
+            creditor.id,
+            sku="WIDGET",
+            quantity=10,
+            unit_price=Decimal("5"),
+            due_day=1,
         )
         settle_due_delivery_obligations(system, 1)
         # Obligation should still exist (was skipped)
@@ -715,8 +744,12 @@ class TestSettleDueDeliveryObligations:
         """If obligation was removed mid-iteration, it's skipped."""
         system, _, debtor, creditor = _system_with_firms()
         d_id = system.create_delivery_obligation(
-            debtor.id, creditor.id, sku="WIDGET", quantity=10,
-            unit_price=Decimal("5"), due_day=1,
+            debtor.id,
+            creditor.id,
+            sku="WIDGET",
+            quantity=10,
+            unit_price=Decimal("5"),
+            due_day=1,
         )
         # Remove it before settlement
         _remove_contract(system, d_id)
@@ -741,9 +774,13 @@ class TestDueQueries:
         """Non-payable contracts in the due_day index are skipped."""
         system, _, debtor, creditor = _system_with_firms()
         # Create a delivery obligation on the same due_day
-        d_id = system.create_delivery_obligation(
-            debtor.id, creditor.id, sku="WIDGET", quantity=5,
-            unit_price=Decimal("10"), due_day=1,
+        system.create_delivery_obligation(
+            debtor.id,
+            creditor.id,
+            sku="WIDGET",
+            quantity=5,
+            unit_price=Decimal("10"),
+            due_day=1,
         )
         result = list(due_payables(system, 1))
         assert len(result) == 0  # delivery obligation is not a payable
@@ -762,8 +799,12 @@ class TestDueQueries:
         system, _, debtor, creditor = _system_with_firms()
         _make_payable(system, debtor, creditor, 100, due_day=1)
         d_id = system.create_delivery_obligation(
-            debtor.id, creditor.id, sku="WIDGET", quantity=5,
-            unit_price=Decimal("10"), due_day=1,
+            debtor.id,
+            creditor.id,
+            sku="WIDGET",
+            quantity=5,
+            unit_price=Decimal("10"),
+            due_day=1,
         )
         result = list(due_delivery_obligations(system, 1))
         assert len(result) == 1
@@ -843,6 +884,7 @@ class TestSettleDueEdgeCases:
         class MockRiskAssessor:
             def __init__(self):
                 self.calls = []
+
             def update_history(self, day, issuer_id, defaulted):
                 self.calls.append((day, issuer_id, defaulted))
 
@@ -868,6 +910,7 @@ class TestSettleDueEdgeCases:
         class MockRiskAssessor:
             def __init__(self):
                 self.calls = []
+
             def update_history(self, day, issuer_id, defaulted):
                 self.calls.append((day, issuer_id, defaulted))
 
@@ -953,7 +996,8 @@ class TestRolloverSettledPayables:
         cash_before = sum(
             system.state.contracts[cid].amount
             for cid in system.state.agents[creditor.id].asset_ids
-            if cid in system.state.contracts and system.state.contracts[cid].kind == InstrumentKind.CASH
+            if cid in system.state.contracts
+            and system.state.contracts[cid].kind == InstrumentKind.CASH
         )
 
         settled = [(debtor.id, creditor.id, 100, 3)]
@@ -963,7 +1007,8 @@ class TestRolloverSettledPayables:
         cash_after = sum(
             system.state.contracts[cid].amount
             for cid in system.state.agents[creditor.id].asset_ids
-            if cid in system.state.contracts and system.state.contracts[cid].kind == InstrumentKind.CASH
+            if cid in system.state.contracts
+            and system.state.contracts[cid].kind == InstrumentKind.CASH
         )
         assert cash_after == cash_before  # no transfer
 
@@ -1004,7 +1049,6 @@ class TestReconnectRingMaturityFallback:
 
     def _setup_ring(self, maturity_distance, due_day):
         """Create a 3-agent ring with specific maturity settings."""
-        from bilancio.engines.settlement import _reconnect_ring
         system = System(default_mode="expel-agent")
         cb = CentralBank(id="CB", name="CB", kind="central_bank")
         system.add_agent(cb)
@@ -1045,7 +1089,9 @@ class TestReconnectRingMaturityFallback:
         # Simulate default
         successor_id = payables[1].asset_holder_id
         _remove_contract(system, payables[1].id)
-        _expel_agent(system, "H2", trigger_contract_id=payables[1].id, trigger_kind=payables[1].kind)
+        _expel_agent(
+            system, "H2", trigger_contract_id=payables[1].id, trigger_kind=payables[1].kind
+        )
 
         result = _reconnect_ring(system, "H2", successor_id, day=3)
         assert result is not None
@@ -1066,7 +1112,9 @@ class TestReconnectRingMaturityFallback:
 
         successor_id = payables[1].asset_holder_id
         _remove_contract(system, payables[1].id)
-        _expel_agent(system, "H2", trigger_contract_id=payables[1].id, trigger_kind=payables[1].kind)
+        _expel_agent(
+            system, "H2", trigger_contract_id=payables[1].id, trigger_kind=payables[1].kind
+        )
 
         result = _reconnect_ring(system, "H2", successor_id, day=3)
         assert result is not None

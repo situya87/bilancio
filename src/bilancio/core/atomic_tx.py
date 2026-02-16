@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Generator, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bilancio.engines.system import System
@@ -23,6 +24,6 @@ def atomic(system: System) -> Generator[None, None, None]:
     snapshot = copy.deepcopy(system.state)
     try:
         yield
-    except Exception:  # Intentionally broad: must rollback on any failure
+    except BaseException:  # Roll back on any failure, including interrupts.
         system.state = snapshot
         raise

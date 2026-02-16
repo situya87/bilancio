@@ -17,17 +17,28 @@ import csv
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from bilancio.experiments.ring import RingSweepRunner, RingRunSummary, PreparedRun
-from bilancio.runners import SimulationExecutor, LocalExecutor, RunOptions
+from bilancio.experiments.ring import PreparedRun, RingRunSummary, RingSweepRunner
+from bilancio.runners import LocalExecutor, RunOptions, SimulationExecutor
 
 logger = logging.getLogger(__name__)
+EXTERNAL_OPERATION_ERRORS = (
+    FileNotFoundError,
+    ImportError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+)
 
 
 @dataclass
@@ -47,22 +58,22 @@ class BalancedComparisonResult:
     big_entity_share: Decimal  # DEPRECATED
 
     # C (Passive) metrics
-    delta_passive: Optional[Decimal]
-    phi_passive: Optional[Decimal]
+    delta_passive: Decimal | None
+    phi_passive: Decimal | None
     passive_run_id: str
     passive_status: str
 
     # D (Active) metrics
-    delta_active: Optional[Decimal]
-    phi_active: Optional[Decimal]
+    delta_active: Decimal | None
+    phi_active: Decimal | None
     active_run_id: str
     active_status: str
 
     # Cascade/contagion metrics
     n_defaults_passive: int = 0
     n_defaults_active: int = 0
-    cascade_fraction_passive: Optional[Decimal] = None
-    cascade_fraction_active: Optional[Decimal] = None
+    cascade_fraction_passive: Decimal | None = None
+    cascade_fraction_active: Decimal | None = None
 
     # Balanced mode parameters with defaults (Plan 024)
     vbt_share_per_bucket: Decimal = Decimal("0.25")
@@ -81,51 +92,51 @@ class BalancedComparisonResult:
     vbt_spread_sensitivity: Decimal = Decimal("0.0")
 
     # Dealer metrics from active run
-    dealer_total_pnl: Optional[float] = None
-    dealer_total_return: Optional[float] = None
-    total_trades: Optional[int] = None
+    dealer_total_pnl: float | None = None
+    dealer_total_return: float | None = None
+    total_trades: int | None = None
 
     # Big entity loss metrics
-    big_entity_loss_passive: Optional[float] = None
-    big_entity_pnl_active: Optional[float] = None
+    big_entity_loss_passive: float | None = None
+    big_entity_pnl_active: float | None = None
 
     # Modal call IDs for cloud execution debugging
-    passive_modal_call_id: Optional[str] = None
-    active_modal_call_id: Optional[str] = None
+    passive_modal_call_id: str | None = None
+    active_modal_call_id: str | None = None
 
     # Comparative dealer PnL (passive vs active)
-    dealer_passive_pnl: Optional[float] = None
-    dealer_passive_return: Optional[float] = None
-    dealer_trading_incremental_pnl: Optional[float] = None
+    dealer_passive_pnl: float | None = None
+    dealer_passive_return: float | None = None
+    dealer_trading_incremental_pnl: float | None = None
 
     # E (Lender) metrics
-    delta_lender: Optional[Decimal] = None
-    phi_lender: Optional[Decimal] = None
+    delta_lender: Decimal | None = None
+    phi_lender: Decimal | None = None
     lender_run_id: str = ""
     lender_status: str = ""
     n_defaults_lender: int = 0
-    cascade_fraction_lender: Optional[Decimal] = None
-    lender_modal_call_id: Optional[str] = None
+    cascade_fraction_lender: Decimal | None = None
+    lender_modal_call_id: str | None = None
 
     # Lender-specific metrics
-    lender_total_pnl: Optional[float] = None
-    lender_total_return: Optional[float] = None
-    total_loans: Optional[int] = None
+    lender_total_pnl: float | None = None
+    lender_total_return: float | None = None
+    total_loans: int | None = None
 
     # F (Dealer+Lender) metrics
-    delta_dealer_lender: Optional[Decimal] = None
-    phi_dealer_lender: Optional[Decimal] = None
+    delta_dealer_lender: Decimal | None = None
+    phi_dealer_lender: Decimal | None = None
     dealer_lender_run_id: str = ""
     dealer_lender_status: str = ""
     n_defaults_dealer_lender: int = 0
-    cascade_fraction_dealer_lender: Optional[Decimal] = None
-    dealer_lender_modal_call_id: Optional[str] = None
+    cascade_fraction_dealer_lender: Decimal | None = None
+    dealer_lender_modal_call_id: str | None = None
 
     @staticmethod
     def _compute_incremental_pnl(
-        active_metrics: Optional[Dict[str, Any]],
-        passive_metrics: Optional[Dict[str, Any]],
-    ) -> Optional[float]:
+        active_metrics: dict[str, Any] | None,
+        passive_metrics: dict[str, Any] | None,
+    ) -> float | None:
         """Compute trading incremental PnL = active_pnl - passive_pnl.
 
         Returns None if either metric is unavailable.
@@ -138,7 +149,7 @@ class BalancedComparisonResult:
         return None
 
     @property
-    def trading_effect(self) -> Optional[Decimal]:
+    def trading_effect(self) -> Decimal | None:
         """Effect of trading = delta_passive - delta_active.
 
         Positive means trading reduced defaults.
@@ -148,7 +159,7 @@ class BalancedComparisonResult:
         return self.delta_passive - self.delta_active
 
     @property
-    def trading_relief_ratio(self) -> Optional[Decimal]:
+    def trading_relief_ratio(self) -> Decimal | None:
         """Percentage reduction in defaults from trading."""
         if self.delta_passive is None or self.delta_active is None:
             return None
@@ -159,7 +170,7 @@ class BalancedComparisonResult:
         return effect / self.delta_passive
 
     @property
-    def cascade_effect(self) -> Optional[Decimal]:
+    def cascade_effect(self) -> Decimal | None:
         """Effect of trading on cascade fraction = passive - active.
 
         Positive means trading reduced cascading defaults.
@@ -169,7 +180,7 @@ class BalancedComparisonResult:
         return self.cascade_fraction_passive - self.cascade_fraction_active
 
     @property
-    def lending_effect(self) -> Optional[Decimal]:
+    def lending_effect(self) -> Decimal | None:
         """Effect of lending = delta_passive - delta_lender.
 
         Positive means lending reduced defaults.
@@ -179,7 +190,7 @@ class BalancedComparisonResult:
         return self.delta_passive - self.delta_lender
 
     @property
-    def combined_effect(self) -> Optional[Decimal]:
+    def combined_effect(self) -> Decimal | None:
         """Effect of combined dealer+lender = delta_passive - delta_dealer_lender.
 
         Positive means the combination reduced defaults.
@@ -205,89 +216,131 @@ class BalancedComparisonConfig(BaseModel):
     # Detailed logging (Plan 022)
     detailed_logging: bool = Field(
         default=False,
-        description="Enable detailed CSV logging (trades.csv, inventory_timeseries.csv, system_state_timeseries.csv)"
+        description="Enable detailed CSV logging (trades.csv, inventory_timeseries.csv, system_state_timeseries.csv)",
     )
 
     # Grid parameters
-    kappas: List[Decimal] = Field(
-        default_factory=lambda: [Decimal("0.25"), Decimal("0.5"), Decimal("1"), Decimal("2"), Decimal("4")]
+    kappas: list[Decimal] = Field(
+        default_factory=lambda: [
+            Decimal("0.25"),
+            Decimal("0.5"),
+            Decimal("1"),
+            Decimal("2"),
+            Decimal("4"),
+        ]
     )
-    concentrations: List[Decimal] = Field(
-        default_factory=lambda: [Decimal("0.2"), Decimal("0.5"), Decimal("1"), Decimal("2"), Decimal("5")]
+    concentrations: list[Decimal] = Field(
+        default_factory=lambda: [
+            Decimal("0.2"),
+            Decimal("0.5"),
+            Decimal("1"),
+            Decimal("2"),
+            Decimal("5"),
+        ]
     )
-    mus: List[Decimal] = Field(
-        default_factory=lambda: [Decimal("0"), Decimal("0.25"), Decimal("0.5"), Decimal("0.75"), Decimal("1")]
+    mus: list[Decimal] = Field(
+        default_factory=lambda: [
+            Decimal("0"),
+            Decimal("0.25"),
+            Decimal("0.5"),
+            Decimal("0.75"),
+            Decimal("1"),
+        ]
     )
-    monotonicities: List[Decimal] = Field(default_factory=lambda: [Decimal("0")])
+    monotonicities: list[Decimal] = Field(default_factory=lambda: [Decimal("0")])
 
     # Balanced dealer parameters (Plan 024)
-    face_value: Decimal = Field(default=Decimal("20"), description="Face value S (cashflow at maturity)")
-    outside_mid_ratios: List[Decimal] = Field(
-        default_factory=lambda: [Decimal("1.0")],
-        description="M/S ratios to sweep (kept for backward compat; VBT pricing now uses kappa-informed prior)"
+    face_value: Decimal = Field(
+        default=Decimal("20"), description="Face value S (cashflow at maturity)"
     )
-    big_entity_share: Decimal = Field(default=Decimal("0.25"), description="DEPRECATED - use vbt/dealer shares")
+    outside_mid_ratios: list[Decimal] = Field(
+        default_factory=lambda: [Decimal("1.0")],
+        description="M/S ratios to sweep (kept for backward compat; VBT pricing now uses kappa-informed prior)",
+    )
+    big_entity_share: Decimal = Field(
+        default=Decimal("0.25"), description="DEPRECATED - use vbt/dealer shares"
+    )
     vbt_share_per_bucket: Decimal = Field(
-        default=Decimal("0.25"),
-        description="VBT holds 25% of claims per maturity bucket"
+        default=Decimal("0.25"), description="VBT holds 25% of claims per maturity bucket"
     )
     dealer_share_per_bucket: Decimal = Field(
-        default=Decimal("0.125"),
-        description="Dealer holds 12.5% of claims per maturity bucket"
+        default=Decimal("0.125"), description="Dealer holds 12.5% of claims per maturity bucket"
     )
     rollover_enabled: bool = Field(
-        default=True,
-        description="Enable continuous rollover of matured claims"
+        default=True, description="Enable continuous rollover of matured claims"
     )
 
     # Plan 030: Quiet mode for faster sweeps
-    quiet: bool = Field(
-        default=True,
-        description="Suppress verbose console output during sweeps"
-    )
+    quiet: bool = Field(default=True, description="Suppress verbose console output during sweeps")
 
     # VBT configuration (for active mode)
-    vbt_share: Decimal = Field(default=Decimal("0.50"), description="VBT capital as fraction of system cash")
+    vbt_share: Decimal = Field(
+        default=Decimal("0.50"), description="VBT capital as fraction of system cash"
+    )
 
     # Risk assessment configuration
     risk_assessment_enabled: bool = Field(
-        default=True,
-        description="Enable risk-based trader decision making"
+        default=True, description="Enable risk-based trader decision making"
     )
-    risk_assessment_config: Dict[str, Any] = Field(
+    risk_assessment_config: dict[str, Any] = Field(
         default_factory=lambda: {
             "base_risk_premium": "0.02",
             "urgency_sensitivity": "0.10",
             "buy_premium_multiplier": "1.0",
             "lookback_window": 5,
         },
-        description="Risk assessment parameters"
+        description="Risk assessment parameters",
     )
 
     # Informedness parameters (credit-informed pricing)
-    alpha_vbt: Decimal = Field(default=Decimal("0"), description="VBT informedness (0=naive, 1=fully informed)")
-    alpha_trader: Decimal = Field(default=Decimal("0"), description="Trader informedness (0=naive, 1=fully informed)")
+    alpha_vbt: Decimal = Field(
+        default=Decimal("0"), description="VBT informedness (0=naive, 1=fully informed)"
+    )
+    alpha_trader: Decimal = Field(
+        default=Decimal("0"), description="Trader informedness (0=naive, 1=fully informed)"
+    )
 
     # Decision module parameters
     risk_aversion: Decimal = Field(default=Decimal("0"), description="Trader risk aversion (0-1)")
     planning_horizon: int = Field(default=10, description="Trader planning horizon (1-20 days)")
-    aggressiveness: Decimal = Field(default=Decimal("1.0"), description="Buyer aggressiveness (0-1)")
-    default_observability: Decimal = Field(default=Decimal("1.0"), description="Trader default observability (0-1)")
-    vbt_mid_sensitivity: Decimal = Field(default=Decimal("1.0"), description="VBT mid price sensitivity to defaults (0-1)")
-    vbt_spread_sensitivity: Decimal = Field(default=Decimal("0.0"), description="VBT spread sensitivity to defaults (0-1)")
-    trading_motive: str = Field(default="liquidity_then_earning", description="Trading motivation mode")
+    aggressiveness: Decimal = Field(
+        default=Decimal("1.0"), description="Buyer aggressiveness (0-1)"
+    )
+    default_observability: Decimal = Field(
+        default=Decimal("1.0"), description="Trader default observability (0-1)"
+    )
+    vbt_mid_sensitivity: Decimal = Field(
+        default=Decimal("1.0"), description="VBT mid price sensitivity to defaults (0-1)"
+    )
+    vbt_spread_sensitivity: Decimal = Field(
+        default=Decimal("0.0"), description="VBT spread sensitivity to defaults (0-1)"
+    )
+    trading_motive: str = Field(
+        default="liquidity_then_earning", description="Trading motivation mode"
+    )
 
     # Non-bank lender parameters
-    enable_lender: bool = Field(default=False, description="Enable third comparison arm with non-bank lender")
-    enable_dealer_lender: bool = Field(
-        default=False,
-        description="Enable fourth arm: dealer trading + non-bank lending combined"
+    enable_lender: bool = Field(
+        default=False, description="Enable third comparison arm with non-bank lender"
     )
-    lender_share: Decimal = Field(default=Decimal("0.10"), description="Lender capital as fraction of system cash")
-    lender_base_rate: Decimal = Field(default=Decimal("0.05"), description="Lender base interest rate")
-    lender_risk_premium_scale: Decimal = Field(default=Decimal("0.20"), description="Rate = base + scale × P(default)")
-    lender_max_single_exposure: Decimal = Field(default=Decimal("0.15"), description="Max fraction of capital to one borrower")
-    lender_max_total_exposure: Decimal = Field(default=Decimal("0.80"), description="Max fraction of capital deployed")
+    enable_dealer_lender: bool = Field(
+        default=False, description="Enable fourth arm: dealer trading + non-bank lending combined"
+    )
+    lender_share: Decimal = Field(
+        default=Decimal("0.10"), description="Lender capital as fraction of system cash"
+    )
+    lender_base_rate: Decimal = Field(
+        default=Decimal("0.05"), description="Lender base interest rate"
+    )
+    lender_risk_premium_scale: Decimal = Field(
+        default=Decimal("0.20"), description="Rate = base + scale × P(default)"
+    )
+    lender_max_single_exposure: Decimal = Field(
+        default=Decimal("0.15"), description="Max fraction of capital to one borrower"
+    )
+    lender_max_total_exposure: Decimal = Field(
+        default=Decimal("0.80"), description="Max fraction of capital deployed"
+    )
     lender_maturity_days: int = Field(default=2, description="Loan term in days")
     lender_horizon: int = Field(default=3, description="Look-ahead for upcoming obligations")
 
@@ -369,8 +422,8 @@ class BalancedComparisonRunner:
         self,
         config: BalancedComparisonConfig,
         out_dir: Path,
-        executor: Optional[SimulationExecutor] = None,
-        job_id: Optional[str] = None,
+        executor: SimulationExecutor | None = None,
+        job_id: str | None = None,
         enable_supabase: bool = True,
     ) -> None:
         self.config = config
@@ -380,6 +433,7 @@ class BalancedComparisonRunner:
         # Cloud-only mode: skip local processing when using cloud executor
         # Modal already saves runs to Supabase, so no need to duplicate
         from bilancio.runners.cloud_executor import CloudExecutor
+
         self.skip_local_processing = isinstance(executor, CloudExecutor)
 
         self.passive_dir = self.base_dir / "passive"
@@ -398,17 +452,17 @@ class BalancedComparisonRunner:
                 self.dealer_lender_dir.mkdir(parents=True, exist_ok=True)
             self.aggregate_dir.mkdir(parents=True, exist_ok=True)
 
-        self.comparison_results: List[BalancedComparisonResult] = []
+        self.comparison_results: list[BalancedComparisonResult] = []
         self.comparison_path = self.aggregate_dir / "comparison.csv"
         self.summary_path = self.aggregate_dir / "summary.json"
 
-        self._passive_runner: Optional[RingSweepRunner] = None
-        self._active_runner: Optional[RingSweepRunner] = None
+        self._passive_runner: RingSweepRunner | None = None
+        self._active_runner: RingSweepRunner | None = None
         self.seed_counter = config.base_seed
 
         # For progress tracking
-        self._start_time: Optional[float] = None
-        self._completed_keys: Set[Tuple[str, str, str, str, str]] = set()
+        self._start_time: float | None = None
+        self._completed_keys: set[tuple[str, str, str, str, str]] = set()
 
         # Job tracking
         self.job_id = job_id
@@ -418,11 +472,13 @@ class BalancedComparisonRunner:
         if enable_supabase and not self.skip_local_processing:
             try:
                 from bilancio.storage.supabase_client import is_supabase_configured
+
                 if is_supabase_configured():
                     from bilancio.storage.supabase_registry import SupabaseRegistryStore
+
                     self._supabase_store = SupabaseRegistryStore()
                     logger.info("Supabase registry enabled for run persistence")
-            except Exception as e:  # Intentionally broad: external service init
+            except EXTERNAL_OPERATION_ERRORS as e:
                 logger.warning(f"Failed to initialize Supabase registry: {e}")
 
         # Load existing results for resumption
@@ -460,7 +516,7 @@ class BalancedComparisonRunner:
                     len(self._completed_keys),
                     self.seed_counter,
                 )
-        except Exception as e:  # Intentionally broad: sweep resumption
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Could not load existing results: %s", e)
 
     def _make_key(
@@ -470,7 +526,7 @@ class BalancedComparisonRunner:
         mu: Decimal,
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
-    ) -> Tuple[str, str, str, str, str]:
+    ) -> tuple[str, str, str, str, str]:
         """Create a key for tracking completed pairs."""
         return (str(kappa), str(concentration), str(mu), str(monotonicity), str(outside_mid_ratio))
 
@@ -519,7 +575,9 @@ class BalancedComparisonRunner:
             executor=self.executor,  # Plan 028 cloud support
             quiet=self.config.quiet,  # Plan 030
             risk_assessment_enabled=self.config.risk_assessment_enabled,
-            risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
+            risk_assessment_config=self.config.risk_assessment_config
+            if self.config.risk_assessment_enabled
+            else None,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
             risk_aversion=self.config.risk_aversion,
@@ -563,7 +621,9 @@ class BalancedComparisonRunner:
             executor=self.executor,  # Plan 028 cloud support
             quiet=self.config.quiet,  # Plan 030
             risk_assessment_enabled=self.config.risk_assessment_enabled,
-            risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
+            risk_assessment_config=self.config.risk_assessment_config
+            if self.config.risk_assessment_enabled
+            else None,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
             risk_aversion=self.config.risk_aversion,
@@ -600,7 +660,9 @@ class BalancedComparisonRunner:
             executor=self.executor,
             quiet=self.config.quiet,
             risk_assessment_enabled=self.config.risk_assessment_enabled,
-            risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
+            risk_assessment_config=self.config.risk_assessment_config
+            if self.config.risk_assessment_enabled
+            else None,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
             risk_aversion=self.config.risk_aversion,
@@ -646,7 +708,9 @@ class BalancedComparisonRunner:
             executor=self.executor,
             quiet=self.config.quiet,
             risk_assessment_enabled=self.config.risk_assessment_enabled,
-            risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
+            risk_assessment_config=self.config.risk_assessment_config
+            if self.config.risk_assessment_enabled
+            else None,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
             risk_aversion=self.config.risk_aversion,
@@ -697,7 +761,9 @@ class BalancedComparisonRunner:
             executor=self.executor,
             quiet=self.config.quiet,
             risk_assessment_enabled=self.config.risk_assessment_enabled,
-            risk_assessment_config=self.config.risk_assessment_config if self.config.risk_assessment_enabled else None,
+            risk_assessment_config=self.config.risk_assessment_config
+            if self.config.risk_assessment_enabled
+            else None,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
             risk_aversion=self.config.risk_aversion,
@@ -713,19 +779,19 @@ class BalancedComparisonRunner:
             balanced_mode_override="nbfi_dealer",  # 50/50 cash split
         )
 
-    def run_all(self) -> List[BalancedComparisonResult]:
+    def run_all(self) -> list[BalancedComparisonResult]:
         """Execute all passive/active pairs and return comparison results.
 
         Uses batch execution if the executor supports it (CloudExecutor),
         otherwise falls back to sequential execution (LocalExecutor).
         """
         # Check if executor supports batch execution
-        if hasattr(self.executor, 'execute_batch'):
+        if hasattr(self.executor, "execute_batch"):
             return self._run_all_batch()
         else:
             return self._run_all_sequential()
 
-    def _run_all_batch(self) -> List[BalancedComparisonResult]:
+    def _run_all_batch(self) -> list[BalancedComparisonResult]:
         """Execute all pairs using batch execution (parallel on Modal)."""
         # Lender/dealer+lender arms not yet optimized for batch - fall back to sequential
         if self.config.enable_lender or self.config.enable_dealer_lender:
@@ -758,7 +824,9 @@ class BalancedComparisonRunner:
 
         # Phase 1: Prepare all runs
         print(f"Preparing {remaining * 2} runs...", flush=True)
-        prepared_runs: List[Tuple[PreparedRun, PreparedRun, Decimal, Decimal, Decimal, Decimal, Decimal, int]] = []
+        prepared_runs: list[
+            tuple[PreparedRun, PreparedRun, Decimal, Decimal, Decimal, Decimal, Decimal, int]
+        ] = []
 
         for outside_mid_ratio in self.config.outside_mid_ratios:
             passive_runner = self._get_passive_runner(outside_mid_ratio)
@@ -768,7 +836,9 @@ class BalancedComparisonRunner:
                 for concentration in self.config.concentrations:
                     for mu in self.config.mus:
                         for monotonicity in self.config.monotonicities:
-                            key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio)
+                            key = self._make_key(
+                                kappa, concentration, mu, monotonicity, outside_mid_ratio
+                            )
                             if key in self._completed_keys:
                                 continue
 
@@ -794,35 +864,49 @@ class BalancedComparisonRunner:
                                 seed=seed,
                             )
 
-                            prepared_runs.append((
-                                passive_prep, active_prep,
-                                kappa, concentration, mu, monotonicity, outside_mid_ratio, seed
-                            ))
+                            prepared_runs.append(
+                                (
+                                    passive_prep,
+                                    active_prep,
+                                    kappa,
+                                    concentration,
+                                    mu,
+                                    monotonicity,
+                                    outside_mid_ratio,
+                                    seed,
+                                )
+                            )
 
         if not prepared_runs:
             print("All pairs already completed!", flush=True)
             return self.comparison_results
 
         # Phase 2: Build batch and execute
-        print(f"Submitting {len(prepared_runs) * 2} runs to Modal (parallel execution)...", flush=True)
+        print(
+            f"Submitting {len(prepared_runs) * 2} runs to Modal (parallel execution)...", flush=True
+        )
 
         # Build flat list for batch execution
-        batch_runs: List[Tuple[Dict[str, Any], str, RunOptions]] = []
-        run_index_map: Dict[str, int] = {}  # run_id -> index in prepared_runs
+        batch_runs: list[tuple[dict[str, Any], str, RunOptions]] = []
+        run_index_map: dict[str, int] = {}  # run_id -> index in prepared_runs
 
         for idx, (passive_prep, active_prep, *_) in enumerate(prepared_runs):
-            batch_runs.append((
-                passive_prep.scenario_config,
-                passive_prep.run_id,
-                passive_prep.options,
-            ))
+            batch_runs.append(
+                (
+                    passive_prep.scenario_config,
+                    passive_prep.run_id,
+                    passive_prep.options,
+                )
+            )
             run_index_map[passive_prep.run_id] = idx * 2  # even indices are passive
 
-            batch_runs.append((
-                active_prep.scenario_config,
-                active_prep.run_id,
-                active_prep.options,
-            ))
+            batch_runs.append(
+                (
+                    active_prep.scenario_config,
+                    active_prep.run_id,
+                    active_prep.options,
+                )
+            )
             run_index_map[active_prep.run_id] = idx * 2 + 1  # odd indices are active
 
         # Execute batch with progress callback
@@ -834,7 +918,11 @@ class BalancedComparisonRunner:
             elapsed = time.time() - self._start_time
             if done > 0:
                 eta = elapsed / done * (total - done)
-                print(f"\r  Progress: {done}/{total} runs ({done * 100 // total}%) - ETA: {self._format_time(eta)}    ", end="", flush=True)
+                print(
+                    f"\r  Progress: {done}/{total} runs ({done * 100 // total}%) - ETA: {self._format_time(eta)}    ",
+                    end="",
+                    flush=True,
+                )
 
         results = self.executor.execute_batch(  # type: ignore[attr-defined]
             [(config, run_id, opts) for config, run_id, opts, *_ in batch_runs],
@@ -845,7 +933,16 @@ class BalancedComparisonRunner:
         # Phase 3: Finalize runs and build results
         print("Finalizing results...", flush=True)
 
-        for idx, (passive_prep, active_prep, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed) in enumerate(prepared_runs):
+        for idx, (
+            passive_prep,
+            active_prep,
+            kappa,
+            concentration,
+            mu,
+            monotonicity,
+            outside_mid_ratio,
+            seed,
+        ) in enumerate(prepared_runs):
             passive_result = results[idx * 2]
             active_result = results[idx * 2 + 1]
 
@@ -897,9 +994,12 @@ class BalancedComparisonRunner:
                 vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
                 vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
                 dealer_passive_pnl=(passive_summary.dealer_metrics or {}).get("dealer_total_pnl"),
-                dealer_passive_return=(passive_summary.dealer_metrics or {}).get("dealer_total_return"),
+                dealer_passive_return=(passive_summary.dealer_metrics or {}).get(
+                    "dealer_total_return"
+                ),
                 dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
-                    dm, passive_summary.dealer_metrics,
+                    dm,
+                    passive_summary.dealer_metrics,
                 ),
             )
 
@@ -908,8 +1008,12 @@ class BalancedComparisonRunner:
             self._completed_keys.add(key)
 
             # Persist runs to Supabase (batch path)
-            self._persist_run_to_supabase(passive_summary, "passive", kappa, concentration, mu, outside_mid_ratio, seed)
-            self._persist_run_to_supabase(active_summary, "active", kappa, concentration, mu, outside_mid_ratio, seed)
+            self._persist_run_to_supabase(
+                passive_summary, "passive", kappa, concentration, mu, outside_mid_ratio, seed
+            )
+            self._persist_run_to_supabase(
+                active_summary, "active", kappa, concentration, mu, outside_mid_ratio, seed
+            )
 
             # Incremental CSV write
             self._write_comparison_csv()
@@ -918,7 +1022,7 @@ class BalancedComparisonRunner:
         self._write_summary_json()
 
         # Compute aggregate metrics on Modal (if using cloud executor)
-        if hasattr(self.executor, 'compute_aggregate_metrics'):
+        if hasattr(self.executor, "compute_aggregate_metrics"):
             all_run_ids = []
             for result in self.comparison_results:
                 if result.passive_run_id:
@@ -928,17 +1032,20 @@ class BalancedComparisonRunner:
             if all_run_ids:
                 try:
                     self.executor.compute_aggregate_metrics(all_run_ids)
-                except Exception as e:  # Intentionally broad: sweep orchestration
+                except EXTERNAL_OPERATION_ERRORS as e:
                     print(f"\nWarning: Aggregate metrics computation failed: {e}", flush=True)
                     print("Local comparison.csv is still available.", flush=True)
 
         total_time = time.time() - self._start_time
-        print(f"\nSweep complete! {len(prepared_runs)} pairs in {self._format_time(total_time)}", flush=True)
+        print(
+            f"\nSweep complete! {len(prepared_runs)} pairs in {self._format_time(total_time)}",
+            flush=True,
+        )
         print(f"Results at: {self.aggregate_dir}", flush=True)
 
         return self.comparison_results
 
-    def _run_all_sequential(self) -> List[BalancedComparisonResult]:
+    def _run_all_sequential(self) -> list[BalancedComparisonResult]:
         """Execute all pairs sequentially (fallback for LocalExecutor)."""
         total_pairs = (
             len(self.config.kappas)
@@ -975,7 +1082,9 @@ class BalancedComparisonRunner:
                             pair_idx += 1
 
                             # Check if already completed
-                            key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio)
+                            key = self._make_key(
+                                kappa, concentration, mu, monotonicity, outside_mid_ratio
+                            )
                             if key in self._completed_keys:
                                 continue
 
@@ -984,7 +1093,10 @@ class BalancedComparisonRunner:
                                 elapsed = time.time() - self._start_time
                                 avg_time = elapsed / completed_this_run
                                 eta = avg_time * (remaining - completed_this_run)
-                                progress_str = f"[{pair_idx}/{total_pairs}] ({completed_this_run}/{remaining} this run) ETA: {self._format_time(eta)}"
+                                progress_str = (
+                                    f"[{pair_idx}/{total_pairs}] ({completed_this_run}/{remaining} this run) "
+                                    f"ETA: {self._format_time(eta)}"
+                                )
                             else:
                                 progress_str = f"[{pair_idx}/{total_pairs}]"
 
@@ -1023,9 +1135,15 @@ class BalancedComparisonRunner:
         self._write_summary_json()
 
         total_time = time.time() - self._start_time
-        print(f"\nSweep complete! {completed_this_run} pairs in {self._format_time(total_time)}", flush=True)
+        print(
+            f"\nSweep complete! {completed_this_run} pairs in {self._format_time(total_time)}",
+            flush=True,
+        )
         if self.skip_local_processing:
-            print(f"Results saved to Supabase. Query with: bilancio jobs get {self.job_id} --cloud", flush=True)
+            print(
+                f"Results saved to Supabase. Query with: bilancio jobs get {self.job_id} --cloud",
+                flush=True,
+            )
         else:
             print(f"Results at: {self.aggregate_dir}", flush=True)
 
@@ -1034,10 +1152,15 @@ class BalancedComparisonRunner:
 
     def _make_progress_callback(self, run_type: str) -> Callable[[int, int], None]:
         """Create a progress callback that prints day-by-day progress."""
+
         def callback(current_day: int, max_days: int) -> None:
             assert self._start_time is not None
             elapsed = time.time() - self._start_time
-            print(f"    {run_type}: day {current_day}/{max_days} (elapsed: {self._format_time(elapsed)})", flush=True)
+            print(
+                f"    {run_type}: day {current_day}/{max_days} (elapsed: {self._format_time(elapsed)})",
+                flush=True,
+            )
+
         return callback
 
     def _run_pair(
@@ -1085,7 +1208,7 @@ class BalancedComparisonRunner:
         dm = active_result.dealer_metrics or {}
 
         # Run lender (optional third arm — NBFI mode)
-        lender_result_data: Dict[str, Any] = {}
+        lender_result_data: dict[str, Any] = {}
         if self.config.enable_lender:
             logger.info("  Running NBFI lender...")
             print("  NBFI run:", flush=True)
@@ -1110,7 +1233,7 @@ class BalancedComparisonRunner:
             }
 
         # Run dealer+lender (optional fourth arm — combined mode)
-        dealer_lender_data: Dict[str, Any] = {}
+        dealer_lender_data: dict[str, Any] = {}
         if self.config.enable_dealer_lender:
             logger.info("  Running Dealer+Lender...")
             print("  Dealer+Lender run:", flush=True)
@@ -1128,7 +1251,9 @@ class BalancedComparisonRunner:
                 "delta_dealer_lender": dl_result.delta_total,
                 "phi_dealer_lender": dl_result.phi_total,
                 "dealer_lender_run_id": dl_result.run_id,
-                "dealer_lender_status": "completed" if dl_result.delta_total is not None else "failed",
+                "dealer_lender_status": "completed"
+                if dl_result.delta_total is not None
+                else "failed",
                 "n_defaults_dealer_lender": dl_result.n_defaults,
                 "cascade_fraction_dealer_lender": dl_result.cascade_fraction,
                 "dealer_lender_modal_call_id": dl_result.modal_call_id,
@@ -1173,7 +1298,8 @@ class BalancedComparisonRunner:
             dealer_passive_pnl=(passive_result.dealer_metrics or {}).get("dealer_total_pnl"),
             dealer_passive_return=(passive_result.dealer_metrics or {}).get("dealer_total_return"),
             dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
-                dm, passive_result.dealer_metrics,
+                dm,
+                passive_result.dealer_metrics,
             ),
             **lender_result_data,
             **dealer_lender_data,
@@ -1192,12 +1318,20 @@ class BalancedComparisonRunner:
             logger.warning("  Comparison: One or both runs failed")
 
         # Persist runs to Supabase
-        self._persist_run_to_supabase(passive_result, "passive", kappa, concentration, mu, outside_mid_ratio, seed)
-        self._persist_run_to_supabase(active_result, "active", kappa, concentration, mu, outside_mid_ratio, seed)
+        self._persist_run_to_supabase(
+            passive_result, "passive", kappa, concentration, mu, outside_mid_ratio, seed
+        )
+        self._persist_run_to_supabase(
+            active_result, "active", kappa, concentration, mu, outside_mid_ratio, seed
+        )
         if self.config.enable_lender and lender_result_data.get("lender_run_id"):
-            self._persist_run_to_supabase(lender_result, "nbfi", kappa, concentration, mu, outside_mid_ratio, seed)
+            self._persist_run_to_supabase(
+                lender_result, "nbfi", kappa, concentration, mu, outside_mid_ratio, seed
+            )
         if self.config.enable_dealer_lender and dealer_lender_data.get("dealer_lender_run_id"):
-            self._persist_run_to_supabase(dl_result, "dealer_lender", kappa, concentration, mu, outside_mid_ratio, seed)
+            self._persist_run_to_supabase(
+                dl_result, "dealer_lender", kappa, concentration, mu, outside_mid_ratio, seed
+            )
 
         return result
 
@@ -1242,7 +1376,7 @@ class BalancedComparisonRunner:
             }
 
             # Build metrics dict
-            metrics: Dict[str, Any] = {}
+            metrics: dict[str, Any] = {}
             if run_result.delta_total is not None:
                 metrics["delta_total"] = float(run_result.delta_total)
             if run_result.phi_total is not None:
@@ -1251,7 +1385,10 @@ class BalancedComparisonRunner:
                 metrics["n_defaults"] = run_result.n_defaults
             if hasattr(run_result, "n_clears") and run_result.n_clears is not None:
                 metrics["n_clears"] = run_result.n_clears
-            if hasattr(run_result, "time_to_stability") and run_result.time_to_stability is not None:
+            if (
+                hasattr(run_result, "time_to_stability")
+                and run_result.time_to_stability is not None
+            ):
                 metrics["time_to_stability"] = run_result.time_to_stability
             if hasattr(run_result, "dealer_metrics") and run_result.dealer_metrics:
                 dm = run_result.dealer_metrics
@@ -1261,7 +1398,7 @@ class BalancedComparisonRunner:
                     metrics["total_trade_volume"] = dm["total_trade_volume"]
 
             # Build artifact paths (for cloud runs)
-            artifact_paths: Dict[str, str] = {}
+            artifact_paths: dict[str, str] = {}
             if hasattr(run_result, "artifact_paths") and run_result.artifact_paths:
                 artifact_paths = run_result.artifact_paths
 
@@ -1278,7 +1415,7 @@ class BalancedComparisonRunner:
             self._supabase_store.upsert(entry)
             logger.debug(f"Persisted run {run_result.run_id} to Supabase")
 
-        except Exception as e:  # Intentionally broad: external service call
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning(f"Failed to persist run to Supabase: {e}")
 
     def _write_comparison_csv(self) -> None:
@@ -1298,52 +1435,100 @@ class BalancedComparisonRunner:
                     "face_value": str(result.face_value),
                     "outside_mid_ratio": str(result.outside_mid_ratio),
                     "big_entity_share": str(result.big_entity_share),
-                    "delta_passive": str(result.delta_passive) if result.delta_passive is not None else "",
-                    "delta_active": str(result.delta_active) if result.delta_active is not None else "",
-                    "trading_effect": str(result.trading_effect) if result.trading_effect is not None else "",
-                    "trading_relief_ratio": str(result.trading_relief_ratio) if result.trading_relief_ratio is not None else "",
-                    "phi_passive": str(result.phi_passive) if result.phi_passive is not None else "",
+                    "delta_passive": str(result.delta_passive)
+                    if result.delta_passive is not None
+                    else "",
+                    "delta_active": str(result.delta_active)
+                    if result.delta_active is not None
+                    else "",
+                    "trading_effect": str(result.trading_effect)
+                    if result.trading_effect is not None
+                    else "",
+                    "trading_relief_ratio": str(result.trading_relief_ratio)
+                    if result.trading_relief_ratio is not None
+                    else "",
+                    "phi_passive": str(result.phi_passive)
+                    if result.phi_passive is not None
+                    else "",
                     "phi_active": str(result.phi_active) if result.phi_active is not None else "",
                     "passive_run_id": result.passive_run_id,
                     "passive_status": result.passive_status,
                     "active_run_id": result.active_run_id,
                     "active_status": result.active_status,
-                    "dealer_total_pnl": str(result.dealer_total_pnl) if result.dealer_total_pnl is not None else "",
-                    "dealer_total_return": str(result.dealer_total_return) if result.dealer_total_return is not None else "",
-                    "total_trades": str(result.total_trades) if result.total_trades is not None else "",
+                    "dealer_total_pnl": str(result.dealer_total_pnl)
+                    if result.dealer_total_pnl is not None
+                    else "",
+                    "dealer_total_return": str(result.dealer_total_return)
+                    if result.dealer_total_return is not None
+                    else "",
+                    "total_trades": str(result.total_trades)
+                    if result.total_trades is not None
+                    else "",
                     "n_defaults_passive": str(result.n_defaults_passive),
                     "n_defaults_active": str(result.n_defaults_active),
-                    "cascade_fraction_passive": str(result.cascade_fraction_passive) if result.cascade_fraction_passive is not None else "",
-                    "cascade_fraction_active": str(result.cascade_fraction_active) if result.cascade_fraction_active is not None else "",
-                    "cascade_effect": str(result.cascade_effect) if result.cascade_effect is not None else "",
+                    "cascade_fraction_passive": str(result.cascade_fraction_passive)
+                    if result.cascade_fraction_passive is not None
+                    else "",
+                    "cascade_fraction_active": str(result.cascade_fraction_active)
+                    if result.cascade_fraction_active is not None
+                    else "",
+                    "cascade_effect": str(result.cascade_effect)
+                    if result.cascade_effect is not None
+                    else "",
                     "alpha_vbt": str(result.alpha_vbt),
                     "alpha_trader": str(result.alpha_trader),
-                    "dealer_passive_pnl": str(result.dealer_passive_pnl) if result.dealer_passive_pnl is not None else "",
-                    "dealer_passive_return": str(result.dealer_passive_return) if result.dealer_passive_return is not None else "",
-                    "dealer_trading_incremental_pnl": str(result.dealer_trading_incremental_pnl) if result.dealer_trading_incremental_pnl is not None else "",
+                    "dealer_passive_pnl": str(result.dealer_passive_pnl)
+                    if result.dealer_passive_pnl is not None
+                    else "",
+                    "dealer_passive_return": str(result.dealer_passive_return)
+                    if result.dealer_passive_return is not None
+                    else "",
+                    "dealer_trading_incremental_pnl": str(result.dealer_trading_incremental_pnl)
+                    if result.dealer_trading_incremental_pnl is not None
+                    else "",
                     "risk_aversion": str(result.risk_aversion),
                     "planning_horizon": str(result.planning_horizon),
                     "aggressiveness": str(result.aggressiveness),
                     "default_observability": str(result.default_observability),
                     "vbt_mid_sensitivity": str(result.vbt_mid_sensitivity),
                     "vbt_spread_sensitivity": str(result.vbt_spread_sensitivity),
-                    "delta_lender": str(result.delta_lender) if result.delta_lender is not None else "",
-                    "lending_effect": str(result.lending_effect) if result.lending_effect is not None else "",
+                    "delta_lender": str(result.delta_lender)
+                    if result.delta_lender is not None
+                    else "",
+                    "lending_effect": str(result.lending_effect)
+                    if result.lending_effect is not None
+                    else "",
                     "phi_lender": str(result.phi_lender) if result.phi_lender is not None else "",
                     "lender_run_id": result.lender_run_id,
                     "lender_status": result.lender_status,
                     "n_defaults_lender": str(result.n_defaults_lender),
-                    "cascade_fraction_lender": str(result.cascade_fraction_lender) if result.cascade_fraction_lender is not None else "",
-                    "lender_total_pnl": str(result.lender_total_pnl) if result.lender_total_pnl is not None else "",
-                    "lender_total_return": str(result.lender_total_return) if result.lender_total_return is not None else "",
-                    "total_loans": str(result.total_loans) if result.total_loans is not None else "",
-                    "delta_dealer_lender": str(result.delta_dealer_lender) if result.delta_dealer_lender is not None else "",
-                    "combined_effect": str(result.combined_effect) if result.combined_effect is not None else "",
-                    "phi_dealer_lender": str(result.phi_dealer_lender) if result.phi_dealer_lender is not None else "",
+                    "cascade_fraction_lender": str(result.cascade_fraction_lender)
+                    if result.cascade_fraction_lender is not None
+                    else "",
+                    "lender_total_pnl": str(result.lender_total_pnl)
+                    if result.lender_total_pnl is not None
+                    else "",
+                    "lender_total_return": str(result.lender_total_return)
+                    if result.lender_total_return is not None
+                    else "",
+                    "total_loans": str(result.total_loans)
+                    if result.total_loans is not None
+                    else "",
+                    "delta_dealer_lender": str(result.delta_dealer_lender)
+                    if result.delta_dealer_lender is not None
+                    else "",
+                    "combined_effect": str(result.combined_effect)
+                    if result.combined_effect is not None
+                    else "",
+                    "phi_dealer_lender": str(result.phi_dealer_lender)
+                    if result.phi_dealer_lender is not None
+                    else "",
                     "dealer_lender_run_id": result.dealer_lender_run_id,
                     "dealer_lender_status": result.dealer_lender_status,
                     "n_defaults_dealer_lender": str(result.n_defaults_dealer_lender),
-                    "cascade_fraction_dealer_lender": str(result.cascade_fraction_dealer_lender) if result.cascade_fraction_dealer_lender is not None else "",
+                    "cascade_fraction_dealer_lender": str(result.cascade_fraction_dealer_lender)
+                    if result.cascade_fraction_dealer_lender is not None
+                    else "",
                 }
                 writer.writerow(row)
 
@@ -1354,26 +1539,60 @@ class BalancedComparisonRunner:
         completed = [r for r in self.comparison_results if r.trading_effect is not None]
 
         if completed:
-            delta_passives = [float(r.delta_passive) for r in completed if r.delta_passive is not None]
+            delta_passives = [
+                float(r.delta_passive) for r in completed if r.delta_passive is not None
+            ]
             delta_actives = [float(r.delta_active) for r in completed if r.delta_active is not None]
-            trading_effects = [float(r.trading_effect) for r in completed if r.trading_effect is not None]
-            relief_ratios = [float(r.trading_relief_ratio) for r in completed if r.trading_relief_ratio is not None]
+            trading_effects = [
+                float(r.trading_effect) for r in completed if r.trading_effect is not None
+            ]
+            relief_ratios = [
+                float(r.trading_relief_ratio)
+                for r in completed
+                if r.trading_relief_ratio is not None
+            ]
 
-            mean_delta_passive = sum(delta_passives) / len(delta_passives) if delta_passives else None
+            mean_delta_passive = (
+                sum(delta_passives) / len(delta_passives) if delta_passives else None
+            )
             mean_delta_active = sum(delta_actives) / len(delta_actives) if delta_actives else None
-            mean_trading_effect = sum(trading_effects) / len(trading_effects) if trading_effects else None
+            mean_trading_effect = (
+                sum(trading_effects) / len(trading_effects) if trading_effects else None
+            )
             mean_relief_ratio = sum(relief_ratios) / len(relief_ratios) if relief_ratios else None
 
             # Cascade metrics
             n_defaults_passive_vals = [r.n_defaults_passive for r in completed]
             n_defaults_active_vals = [r.n_defaults_active for r in completed]
-            mean_n_defaults_passive = sum(n_defaults_passive_vals) / len(n_defaults_passive_vals) if n_defaults_passive_vals else None
-            mean_n_defaults_active = sum(n_defaults_active_vals) / len(n_defaults_active_vals) if n_defaults_active_vals else None
+            mean_n_defaults_passive = (
+                sum(n_defaults_passive_vals) / len(n_defaults_passive_vals)
+                if n_defaults_passive_vals
+                else None
+            )
+            mean_n_defaults_active = (
+                sum(n_defaults_active_vals) / len(n_defaults_active_vals)
+                if n_defaults_active_vals
+                else None
+            )
 
-            cascade_passive_vals = [float(r.cascade_fraction_passive) for r in completed if r.cascade_fraction_passive is not None]
-            cascade_active_vals = [float(r.cascade_fraction_active) for r in completed if r.cascade_fraction_active is not None]
-            mean_cascade_passive = sum(cascade_passive_vals) / len(cascade_passive_vals) if cascade_passive_vals else None
-            mean_cascade_active = sum(cascade_active_vals) / len(cascade_active_vals) if cascade_active_vals else None
+            cascade_passive_vals = [
+                float(r.cascade_fraction_passive)
+                for r in completed
+                if r.cascade_fraction_passive is not None
+            ]
+            cascade_active_vals = [
+                float(r.cascade_fraction_active)
+                for r in completed
+                if r.cascade_fraction_active is not None
+            ]
+            mean_cascade_passive = (
+                sum(cascade_passive_vals) / len(cascade_passive_vals)
+                if cascade_passive_vals
+                else None
+            )
+            mean_cascade_active = (
+                sum(cascade_active_vals) / len(cascade_active_vals) if cascade_active_vals else None
+            )
 
             improved = sum(1 for r in completed if r.trading_effect and r.trading_effect > 0)
             unchanged = sum(1 for r in completed if r.trading_effect == 0)
@@ -1435,14 +1654,14 @@ def run_balanced_comparison_sweep(
     kappas: Sequence[Decimal],
     concentrations: Sequence[Decimal],
     mus: Sequence[Decimal],
-    monotonicities: Optional[Sequence[Decimal]] = None,
+    monotonicities: Sequence[Decimal] | None = None,
     face_value: Decimal = Decimal("20"),
     outside_mid_ratios: Sequence[Decimal],
     big_entity_share: Decimal = Decimal("0.25"),
     base_seed: int = 42,
     default_handling: str = "expel-agent",
     name_prefix: str = "Balanced Comparison",
-) -> List[BalancedComparisonResult]:
+) -> list[BalancedComparisonResult]:
     """
     Convenience function to run a balanced comparison sweep.
 

@@ -8,17 +8,14 @@ Targets uncovered lines:
 - Lines 136-150: ValidationError fallback path (create overnight payable)
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-
-from bilancio.engines.system import System
-from bilancio.engines.clearing import compute_intraday_nets, settle_intraday_nets
-from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.core.errors import ValidationError
 from bilancio.domain.agents.bank import Bank
+from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.household import Household
 from bilancio.domain.instruments.base import InstrumentKind
-from bilancio.ops.banking import deposit_cash, client_payment
-from bilancio.core.errors import ValidationError
+from bilancio.engines.clearing import compute_intraday_nets, settle_intraday_nets
+from bilancio.engines.system import System
+from bilancio.ops.banking import client_payment, deposit_cash
 
 
 def _setup_two_bank_system() -> tuple:
@@ -67,7 +64,8 @@ class TestComputeIntradayNetsZero:
         settle_intraday_nets(sys, current_day)
 
         interbank_events = [
-            e for e in sys.state.events
+            e
+            for e in sys.state.events
             if e["kind"] in ("InterbankCleared", "InterbankOvernightCreated")
         ]
         assert len(interbank_events) == 0
@@ -160,10 +158,7 @@ class TestNoReservesAvailable:
         settle_intraday_nets(sys, current_day)
 
         # Check overnight payable was created
-        overnight_events = [
-            e for e in sys.state.events
-            if e["kind"] == "InterbankOvernightCreated"
-        ]
+        overnight_events = [e for e in sys.state.events if e["kind"] == "InterbankOvernightCreated"]
         assert len(overnight_events) == 1
         assert overnight_events[0]["debtor_bank"] == "B1"
         assert overnight_events[0]["creditor_bank"] == "B2"
@@ -228,7 +223,6 @@ class TestValidationErrorFallback:
         current_day = sys.state.day
 
         # Patch transfer_reserves to raise ValidationError
-        original_transfer = sys.transfer_reserves
 
         def failing_transfer(*args, **kwargs):
             raise ValidationError("simulated transfer failure")
@@ -239,10 +233,7 @@ class TestValidationErrorFallback:
         settle_intraday_nets(sys, current_day)
 
         # Verify overnight payable was created as fallback
-        overnight_events = [
-            e for e in sys.state.events
-            if e["kind"] == "InterbankOvernightCreated"
-        ]
+        overnight_events = [e for e in sys.state.events if e["kind"] == "InterbankOvernightCreated"]
         assert len(overnight_events) == 1
         assert overnight_events[0]["debtor_bank"] == "B1"
         assert overnight_events[0]["creditor_bank"] == "B2"
@@ -254,10 +245,7 @@ class TestValidationErrorFallback:
         assert len(cleared) == 0
 
         # Verify a Payable contract was created
-        payables = [
-            c for c in sys.state.contracts.values()
-            if c.kind == InstrumentKind.PAYABLE
-        ]
+        payables = [c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE]
         assert len(payables) == 1
         assert payables[0].amount == 80
         assert payables[0].liability_issuer_id == "B1"

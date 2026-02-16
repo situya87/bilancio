@@ -30,6 +30,7 @@ class AgentKind(str, Enum):
     Using str mixin ensures AgentKind values work as dict keys,
     compare equal to their string values, and are JSON-serializable.
     """
+
     CENTRAL_BANK = "central_bank"
     BANK = "bank"
     HOUSEHOLD = "household"

@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from bilancio.analysis.dealer_usage_summary import (
+    _compute_inventory_metrics,
+    _compute_repayment_metrics,
+    _compute_system_state_metrics,
+    _compute_trade_metrics,
+    _empty_inventory_metrics,
+    _empty_repayment_metrics,
+    _empty_system_state_metrics,
+    _empty_trade_metrics,
     build_dealer_usage_by_run,
     run_dealer_usage_analysis,
-    _compute_trade_metrics,
-    _compute_inventory_metrics,
-    _compute_system_state_metrics,
-    _compute_repayment_metrics,
-    _empty_trade_metrics,
-    _empty_inventory_metrics,
-    _empty_system_state_metrics,
-    _empty_repayment_metrics,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build experiment directory trees
@@ -168,18 +167,14 @@ class TestComputeTradeMetrics:
 
     def test_missing_trader_id_column(self) -> None:
         """No trader_id column -> trader_trades is empty."""
-        trades = pd.DataFrame(
-            {"face_value": [100, 200], "price": [90, 180]}
-        )
+        trades = pd.DataFrame({"face_value": [100, 200], "price": [90, 180]})
         m = _compute_trade_metrics(trades)
         assert m["dealer_trade_count"] == 2
         assert m["trader_dealer_trade_count"] == 0
 
     def test_missing_face_value_column(self) -> None:
         """No face_value column for H-traders -> total_face_traded is 0."""
-        trades = pd.DataFrame(
-            {"trader_id": ["H1", "H2"], "price": [90, 180]}
-        )
+        trades = pd.DataFrame({"trader_id": ["H1", "H2"], "price": [90, 180]})
         m = _compute_trade_metrics(trades)
         assert m["trader_dealer_trade_count"] == 2
         assert m["total_face_traded"] == 0.0
@@ -187,9 +182,7 @@ class TestComputeTradeMetrics:
 
     def test_missing_price_column(self) -> None:
         """No price column for H-traders -> total_cash_volume is 0."""
-        trades = pd.DataFrame(
-            {"trader_id": ["H1"], "face_value": [100]}
-        )
+        trades = pd.DataFrame({"trader_id": ["H1"], "face_value": [100]})
         m = _compute_trade_metrics(trades)
         assert m["total_cash_volume"] == 0.0
         assert m["total_face_traded"] == 100.0
@@ -325,9 +318,7 @@ class TestComputeSystemStateMetrics:
         assert m["debt_shrink_rate"] == pytest.approx(0.0)
 
     def test_single_row(self) -> None:
-        sys_ts = pd.DataFrame(
-            {"debt_to_money": [3.0], "total_face_value": [5000]}
-        )
+        sys_ts = pd.DataFrame({"debt_to_money": [3.0], "total_face_value": [5000]})
         m = _compute_system_state_metrics(sys_ts)
         assert m["mean_debt_to_money"] == pytest.approx(3.0)
         assert m["final_debt_to_money"] == pytest.approx(3.0)

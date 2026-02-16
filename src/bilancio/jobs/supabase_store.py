@@ -7,11 +7,21 @@ to a Supabase PostgreSQL database for durable, queryable storage.
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from .models import Job, JobConfig, JobEvent, JobStatus
 
 logger = logging.getLogger(__name__)
+SUPABASE_OPERATION_ERRORS = (
+    FileNotFoundError,
+    ImportError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+)
 
 
 class SupabaseJobStore:
@@ -25,7 +35,7 @@ class SupabaseJobStore:
     storage fallback.
     """
 
-    def __init__(self, client: Optional[Any] = None) -> None:
+    def __init__(self, client: Any | None = None) -> None:
         """Initialize the Supabase job store.
 
         Args:
@@ -36,7 +46,7 @@ class SupabaseJobStore:
         self._initialized = False
 
     @property
-    def client(self) -> Optional[Any]:
+    def client(self) -> Any | None:
         """Lazily initialize and return the Supabase client."""
         if self._client is not None:
             return self._client
@@ -61,7 +71,7 @@ class SupabaseJobStore:
         except ImportError:
             logger.warning("supabase_client module not found")
             return None
-        except Exception as e:  # Intentionally broad: external service init
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to initialize Supabase client: {e}")
             return None
 
@@ -111,7 +121,7 @@ class SupabaseJobStore:
 
             logger.debug(f"Saved job {job.job_id} to Supabase")
 
-        except Exception as e:  # Intentionally broad: external service call
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to save job to Supabase: {e}")
 
     def save_event(self, event: JobEvent) -> None:
@@ -136,10 +146,10 @@ class SupabaseJobStore:
 
             logger.debug(f"Saved event {event.event_type} for job {event.job_id}")
 
-        except Exception as e:  # Intentionally broad: external service call
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to save event to Supabase: {e}")
 
-    def get_job(self, job_id: str) -> Optional[Job]:
+    def get_job(self, job_id: str) -> Job | None:
         """Load a job from Supabase by ID.
 
         Args:
@@ -153,26 +163,20 @@ class SupabaseJobStore:
             return None
 
         try:
-            response = (
-                self.client.table("jobs")
-                .select("*")
-                .eq("job_id", job_id)
-                .single()
-                .execute()
-            )
+            response = self.client.table("jobs").select("*").eq("job_id", job_id).single().execute()
 
             if not response.data:
                 return None
 
             return self._row_to_job(response.data)
 
-        except Exception as e:  # Intentionally broad: external service call
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to get job from Supabase: {e}")
             return None
 
     def list_jobs(
         self,
-        status: Optional[str] = None,
+        status: str | None = None,
         limit: int = 100,
     ) -> list[Job]:
         """List jobs from Supabase with optional filtering.
@@ -190,10 +194,7 @@ class SupabaseJobStore:
 
         try:
             query = (
-                self.client.table("jobs")
-                .select("*")
-                .order("created_at", desc=True)
-                .limit(limit)
+                self.client.table("jobs").select("*").order("created_at", desc=True).limit(limit)
             )
 
             if status:
@@ -206,7 +207,7 @@ class SupabaseJobStore:
 
             return [self._row_to_job(row) for row in response.data]
 
-        except Exception as e:  # Intentionally broad: external service call
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to list jobs from Supabase: {e}")
             return []
 
@@ -224,12 +225,7 @@ class SupabaseJobStore:
 
         try:
             # Query runs table and count by job_id
-            response = (
-                self.client.table("runs")
-                .select("job_id")
-                .in_("job_id", job_ids)
-                .execute()
-            )
+            response = self.client.table("runs").select("job_id").in_("job_id", job_ids).execute()
 
             if not response.data:
                 return {}
@@ -242,7 +238,7 @@ class SupabaseJobStore:
 
             return counts
 
-        except Exception as e:  # Intentionally broad: external service call
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to get run counts from Supabase: {e}")
             return {}
 
@@ -250,8 +246,8 @@ class SupabaseJobStore:
         self,
         job_id: str,
         status: JobStatus,
-        completed_at: Optional[datetime] = None,
-        error: Optional[str] = None,
+        completed_at: datetime | None = None,
+        error: str | None = None,
     ) -> None:
         """Update the status of a job.
 
@@ -281,7 +277,7 @@ class SupabaseJobStore:
 
             logger.debug(f"Updated job {job_id} status to {status.value}")
 
-        except Exception as e:  # Intentionally broad: external service call
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to update job status in Supabase: {e}")
 
     def _row_to_job(self, row: dict[str, Any]) -> Job:
@@ -297,9 +293,7 @@ class SupabaseJobStore:
         kappas = [Decimal(str(k)) for k in (row.get("kappas") or [])]
         concentrations = [Decimal(str(c)) for c in (row.get("concentrations") or [])]
         mus = [Decimal(str(m)) for m in (row.get("mus") or [])]
-        outside_mid_ratios = [
-            Decimal(str(r)) for r in (row.get("outside_mid_ratios") or ["1"])
-        ]
+        outside_mid_ratios = [Decimal(str(r)) for r in (row.get("outside_mid_ratios") or ["1"])]
         seeds = row.get("seeds") or [42]
 
         # Build JobConfig
@@ -319,9 +313,7 @@ class SupabaseJobStore:
         created_at = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
         completed_at = None
         if row.get("completed_at"):
-            completed_at = datetime.fromisoformat(
-                row["completed_at"].replace("Z", "+00:00")
-            )
+            completed_at = datetime.fromisoformat(row["completed_at"].replace("Z", "+00:00"))
 
         # Build Job (events are loaded separately if needed)
         return Job(
@@ -365,9 +357,7 @@ class SupabaseJobStore:
 
             events = []
             for row in response.data:
-                timestamp = datetime.fromisoformat(
-                    row["timestamp"].replace("Z", "+00:00")
-                )
+                timestamp = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
                 events.append(
                     JobEvent(
                         job_id=row["job_id"],
@@ -379,6 +369,6 @@ class SupabaseJobStore:
 
             return events
 
-        except Exception as e:  # Intentionally broad: external service call
+        except SUPABASE_OPERATION_ERRORS as e:
             logger.warning(f"Failed to get events from Supabase: {e}")
             return []

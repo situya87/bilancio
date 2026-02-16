@@ -9,35 +9,36 @@ Targets maximum code coverage across:
 - assertions.py: assert_c1_double_entry, assert_c3_feasibility, assert_c4_passthrough_invariant
 """
 
-import pytest
 import random
-from decimal import Decimal
 from copy import deepcopy
+from decimal import Decimal
 
-from bilancio.dealer.models import Ticket, DealerState, VBTState
-from bilancio.dealer.kernel import (
-    recompute_dealer_state,
-    can_interior_buy,
-    can_interior_sell,
-    KernelParams,
-    ExecutionResult,
-    M_MIN,
-)
-from bilancio.dealer.trading import TradeExecutor
-from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
+import pytest
+
 from bilancio.dealer.assertions import (
+    EPSILON_CASH,
     assert_c1_double_entry,
     assert_c3_feasibility,
     assert_c4_passthrough_invariant,
     assert_c6_anchor_timing,
     run_all_assertions,
-    EPSILON_CASH,
 )
-
+from bilancio.dealer.kernel import (
+    M_MIN,
+    ExecutionResult,
+    KernelParams,
+    can_interior_buy,
+    can_interior_sell,
+    recompute_dealer_state,
+)
+from bilancio.dealer.models import DealerState, Ticket, VBTState
+from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
+from bilancio.dealer.trading import TradeExecutor
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ticket(
     id: str = "t1",
@@ -86,7 +87,7 @@ def _make_dealer(
 
 def _make_vbt(
     M: Decimal = Decimal(1),
-    O: Decimal = Decimal("0.30"),
+    O: Decimal = Decimal("0.30"),  # noqa: E741
     n_tickets: int = 0,
     cash: Decimal = Decimal(100),
 ) -> VBTState:
@@ -599,9 +600,7 @@ class TestExecuteCustomerSellPassthrough:
 
         ticket = _make_ticket(id="pt_ticket", owner_id="customer")
         executor = TradeExecutor(params)
-        result = executor.execute_customer_sell(
-            dealer, vbt, ticket, check_assertions=False
-        )
+        result = executor.execute_customer_sell(dealer, vbt, ticket, check_assertions=False)
         assert result.is_passthrough is True
 
     def test_passthrough_vbt_cash_decreases(self):
@@ -802,9 +801,7 @@ class TestSelectTicketToSell:
         t1 = _make_ticket(id="t1", issuer_id="A", maturity_day=200, serial=1)
         t2 = _make_ticket(id="t2", issuer_id="A", maturity_day=150, serial=0)
         t3 = _make_ticket(id="t3", issuer_id="B", maturity_day=50, serial=0)
-        selected = executor._select_ticket_to_sell(
-            [t1, t2, t3], issuer_preference="A"
-        )
+        selected = executor._select_ticket_to_sell([t1, t2, t3], issuer_preference="A")
         assert selected is t2  # Lowest maturity among A's
 
 
@@ -822,9 +819,7 @@ class TestCustomerBuyWithIssuerPreference:
         recompute_dealer_state(dealer, vbt, params)
 
         executor = TradeExecutor(params)
-        result = executor.execute_customer_buy(
-            dealer, vbt, buyer_id="buyer", issuer_preference="A"
-        )
+        result = executor.execute_customer_buy(dealer, vbt, buyer_id="buyer", issuer_preference="A")
 
         assert result.ticket is t_a
         assert result.ticket.owner_id == "buyer"
@@ -867,9 +862,7 @@ class TestUpdateHistory:
         assert len(assessor.issuer_history) == 0
 
     def test_issuer_specific_history_enabled(self):
-        assessor = RiskAssessor(
-            RiskAssessmentParams(use_issuer_specific=True)
-        )
+        assessor = RiskAssessor(RiskAssessmentParams(use_issuer_specific=True))
         assessor.update_history(day=1, issuer_id="a", defaulted=True)
         assessor.update_history(day=2, issuer_id="a", defaulted=False)
         assessor.update_history(day=3, issuer_id="b", defaulted=True)
@@ -987,9 +980,7 @@ class TestComputeEffectiveThreshold:
     """Urgency-adjusted risk premium threshold."""
 
     def test_no_urgency_returns_base(self):
-        assessor = RiskAssessor(
-            RiskAssessmentParams(base_risk_premium=Decimal("0.05"))
-        )
+        assessor = RiskAssessor(RiskAssessmentParams(base_risk_premium=Decimal("0.05")))
         result = assessor.compute_effective_threshold(
             cash=Decimal(100), shortfall=Decimal(0), asset_value=Decimal(50)
         )
@@ -1039,9 +1030,7 @@ class TestComputeEffectiveThreshold:
 
     def test_negative_shortfall_returns_base(self):
         """Negative shortfall (surplus) should use base threshold."""
-        assessor = RiskAssessor(
-            RiskAssessmentParams(base_risk_premium=Decimal("0.05"))
-        )
+        assessor = RiskAssessor(RiskAssessmentParams(base_risk_premium=Decimal("0.05")))
         result = assessor.compute_effective_threshold(
             cash=Decimal(100), shortfall=Decimal("-10"), asset_value=Decimal(50)
         )
@@ -1058,8 +1047,11 @@ class TestShouldSell:
         # Need: bid * face >= EV + threshold * face
         # bid * 1 >= 0.85 + 0.02 = 0.87
         accept = assessor.should_sell(
-            ticket=t, dealer_bid=Decimal("0.90"), current_day=1,
-            trader_cash=Decimal(100), trader_shortfall=Decimal(0),
+            ticket=t,
+            dealer_bid=Decimal("0.90"),
+            current_day=1,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(0),
             trader_asset_value=Decimal(50),
         )
         assert accept is True
@@ -1069,8 +1061,11 @@ class TestShouldSell:
         t = _make_ticket(face=Decimal(1))
         # Need >= 0.77
         accept = assessor.should_sell(
-            ticket=t, dealer_bid=Decimal("0.70"), current_day=1,
-            trader_cash=Decimal(100), trader_shortfall=Decimal(0),
+            ticket=t,
+            dealer_bid=Decimal("0.70"),
+            current_day=1,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(0),
             trader_asset_value=Decimal(50),
         )
         assert accept is False
@@ -1088,8 +1083,11 @@ class TestShouldSell:
         # threshold = 0.10 - 0.50*0.9 = -0.35
         # Need >= 0.75 - 0.35 = 0.40
         accept = assessor.should_sell(
-            ticket=t, dealer_bid=Decimal("0.50"), current_day=1,
-            trader_cash=Decimal(100), trader_shortfall=Decimal(90),
+            ticket=t,
+            dealer_bid=Decimal("0.50"),
+            current_day=1,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(90),
             trader_asset_value=Decimal(0),
         )
         assert accept is True
@@ -1110,8 +1108,11 @@ class TestShouldBuy:
         # Need: EV >= ask * face + threshold * face
         # 0.75 >= ask + 0.02 => ask <= 0.73
         accept = assessor.should_buy(
-            ticket=t, dealer_ask=Decimal("0.70"), current_day=1,
-            trader_cash=Decimal(100), trader_shortfall=Decimal(0),
+            ticket=t,
+            dealer_ask=Decimal("0.70"),
+            current_day=1,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(0),
             trader_asset_value=Decimal(50),
         )
         assert accept is True
@@ -1127,8 +1128,11 @@ class TestShouldBuy:
         # No history: EV = 0.85, threshold = 0.02
         # Need: EV >= ask * face + threshold * face => ask <= 0.85 - 0.02 = 0.83
         accept = assessor.should_buy(
-            ticket=t, dealer_ask=Decimal("0.90"), current_day=1,
-            trader_cash=Decimal(100), trader_shortfall=Decimal(0),
+            ticket=t,
+            dealer_ask=Decimal("0.90"),
+            current_day=1,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(0),
             trader_asset_value=Decimal(50),
         )
         assert accept is False
@@ -1151,13 +1155,19 @@ class TestShouldBuy:
 
         ask = Decimal("0.75")
         buy_low = a_low.should_buy(
-            ticket=t, dealer_ask=ask, current_day=1,
-            trader_cash=Decimal(100), trader_shortfall=Decimal(0),
+            ticket=t,
+            dealer_ask=ask,
+            current_day=1,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(0),
             trader_asset_value=Decimal(50),
         )
         buy_high = a_high.should_buy(
-            ticket=t, dealer_ask=ask, current_day=1,
-            trader_cash=Decimal(100), trader_shortfall=Decimal(0),
+            ticket=t,
+            dealer_ask=ask,
+            current_day=1,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(0),
             trader_asset_value=Decimal(50),
         )
         assert buy_low is True
@@ -1176,8 +1186,11 @@ class TestShouldBuy:
         # Not affected by urgency_sensitivity
         # EV = 0.85 (p_default=0.15), need EV >= ask + 0.05 => ask <= 0.80
         result = assessor.should_buy(
-            ticket=t, dealer_ask=Decimal("0.70"), current_day=1,
-            trader_cash=Decimal(100), trader_shortfall=Decimal(90),  # high urgency, ignored
+            ticket=t,
+            dealer_ask=Decimal("0.70"),
+            current_day=1,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(90),  # high urgency, ignored
             trader_asset_value=Decimal(0),
         )
         assert result is True
@@ -1210,9 +1223,7 @@ class TestGetDiagnostics:
         assert diag["recent_defaults_count"] == 2
 
     def test_issuer_specific_diagnostics(self):
-        assessor = RiskAssessor(
-            RiskAssessmentParams(lookback_window=5, use_issuer_specific=True)
-        )
+        assessor = RiskAssessor(RiskAssessmentParams(lookback_window=5, use_issuer_specific=True))
         assessor.update_history(day=1, issuer_id="a", defaulted=True)
         assessor.update_history(day=2, issuer_id="b", defaulted=False)
 
@@ -1221,9 +1232,7 @@ class TestGetDiagnostics:
         assert diag["issuers_tracked"] == 2
 
     def test_base_risk_premium_in_diagnostics(self):
-        assessor = RiskAssessor(
-            RiskAssessmentParams(base_risk_premium=Decimal("0.07"))
-        )
+        assessor = RiskAssessor(RiskAssessmentParams(base_risk_premium=Decimal("0.07")))
         diag = assessor.get_diagnostics(current_day=0)
         assert diag["base_risk_premium"] == 0.07
 

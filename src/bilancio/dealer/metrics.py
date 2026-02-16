@@ -17,11 +17,11 @@ References:
     - R1-R6: Requirements for simulation analysis
 """
 
+import json
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, List, Optional, Any
-import json
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -41,6 +41,7 @@ class TradeRecord:
     - run_id/regime for experiment tracking
     - hit_inventory_limit flag for VBT routing analysis
     """
+
     # Core trade identifiers
     day: int
     bucket: str
@@ -59,8 +60,8 @@ class TradeRecord:
     # === Fields with defaults below ===
 
     # Run context (Plan 022 - Phase 1)
-    run_id: str = ""              # e.g., "grid_abc123"
-    regime: str = ""              # "passive" or "active"
+    run_id: str = ""  # e.g., "grid_abc123"
+    regime: str = ""  # "passive" or "active"
 
     # Pre-trade state
     dealer_inventory_before: int = 0
@@ -90,7 +91,7 @@ class TradeRecord:
     #   (side=SELL and dealer at max_capacity, or side=BUY and dealer at 0 inventory)
     hit_inventory_limit: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary with serialized Decimals."""
         return {
             # Run context (Plan 022)
@@ -144,6 +145,7 @@ class DealerSnapshot:
     - is_at_zero, hit_vbt_this_step for VBT routing analysis
     - total_system_face, dealer_share_pct for system-level context
     """
+
     day: int
     bucket: str
     inventory: int  # a_t^(b) - number of tickets
@@ -156,13 +158,13 @@ class DealerSnapshot:
     ticket_size: Decimal  # S
 
     # Plan 022 - Phase 3: Inventory timeseries fields
-    run_id: str = ""              # Run identifier for tracking
-    regime: str = ""              # "passive" or "active"
-    max_capacity: int = 0         # K* - max dealer inventory capacity
-    is_at_zero: bool = False      # inventory == 0?
+    run_id: str = ""  # Run identifier for tracking
+    regime: str = ""  # "passive" or "active"
+    max_capacity: int = 0  # K* - max dealer inventory capacity
+    is_at_zero: bool = False  # inventory == 0?
     hit_vbt_this_step: bool = False  # Did we route to VBT this step?
     total_system_face: Decimal = Decimal(0)  # Total face value in system for this bucket
-    dealer_share_pct: Decimal = Decimal(0)   # % of bucket's face held by dealer
+    dealer_share_pct: Decimal = Decimal(0)  # % of bucket's face held by dealer
 
     @property
     def mark_to_mid_equity(self) -> Decimal:
@@ -226,7 +228,7 @@ class DealerSnapshot:
         """
         return (self.vbt_mid - Decimal(1)) * 100
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary with serialized Decimals."""
         return {
             # Run context (Plan 022)
@@ -268,18 +270,19 @@ class TraderSnapshot:
     - Schedule of future obligations
     - Safety margin m_i(t) (Section 8.4)
     """
+
     day: int
     trader_id: str
     cash: Decimal
     tickets_held_count: int
-    tickets_held_ids: List[str]
+    tickets_held_ids: list[str]
     total_face_held: Decimal
     obligations_remaining: Decimal  # D_i(t) - future obligations
     saleable_value: Decimal  # Value of tickets at dealer bid prices
     safety_margin: Decimal  # m_i(t) = A_i(t) - D_i(t)
     defaulted: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary with serialized Decimals."""
         return {
             "day": self.day,
@@ -308,6 +311,7 @@ class TicketOutcome:
     - Resale price if sold to dealer
     - Coupon payments (future extension)
     """
+
     ticket_id: str
     issuer_id: str
     maturity_day: int
@@ -315,23 +319,23 @@ class TicketOutcome:
 
     # Purchase from dealer (if applicable)
     purchased_from_dealer: bool = False
-    purchase_day: Optional[int] = None
-    purchase_price: Optional[Decimal] = None
-    purchaser_id: Optional[str] = None
+    purchase_day: int | None = None
+    purchase_price: Decimal | None = None
+    purchaser_id: str | None = None
 
     # Sale to dealer (if applicable)
     sold_to_dealer: bool = False
-    sale_day: Optional[int] = None
-    sale_price: Optional[Decimal] = None
-    seller_id: Optional[str] = None
+    sale_day: int | None = None
+    sale_price: Decimal | None = None
+    seller_id: str | None = None
 
     # Settlement outcome
     settled: bool = False
-    settlement_day: Optional[int] = None
-    recovery_rate: Optional[Decimal] = None
-    settlement_amount: Optional[Decimal] = None
+    settlement_day: int | None = None
+    recovery_rate: Decimal | None = None
+    settlement_amount: Decimal | None = None
 
-    def realized_return(self) -> Optional[Decimal]:
+    def realized_return(self) -> Decimal | None:
         """
         Calculate realized return R_τ for ticket purchased from dealer.
 
@@ -361,7 +365,7 @@ class TicketOutcome:
 
         return (x_tau - p_buy) / p_buy
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary with serialized Decimals."""
         return {
             "ticket_id": self.ticket_id,
@@ -380,7 +384,9 @@ class TicketOutcome:
             "settlement_day": self.settlement_day,
             "recovery_rate": str(self.recovery_rate) if self.recovery_rate else None,
             "settlement_amount": str(self.settlement_amount) if self.settlement_amount else None,
-            "realized_return": str(self.realized_return()) if self.realized_return() is not None else None,
+            "realized_return": str(self.realized_return())
+            if self.realized_return() is not None
+            else None,
         }
 
 
@@ -400,12 +406,13 @@ class SystemStateSnapshot:
     - total_cash: Sum of all agent cash holdings
     - debt_to_money: Current debt/money ratio
     """
+
     run_id: str
     regime: str
     day: int
 
     # Total face value outstanding
-    total_face_value: Decimal        # All maturities
+    total_face_value: Decimal  # All maturities
     face_bucket_short: Decimal = Decimal(0)
     face_bucket_mid: Decimal = Decimal(0)
     face_bucket_long: Decimal = Decimal(0)
@@ -420,7 +427,7 @@ class SystemStateSnapshot:
             return self.total_face_value / self.total_cash
         return Decimal(0)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary with serialized Decimals."""
         return {
             "run_id": self.run_id,
@@ -447,15 +454,16 @@ class RepaymentEvent:
 
     This enables analysis of whether trading helped traders avoid defaults.
     """
+
     run_id: str
     regime: str
     trader_id: str
-    liability_id: str      # The contract/ticket ID representing their debt
+    liability_id: str  # The contract/ticket ID representing their debt
     maturity_day: int
     face_value: Decimal
 
     # Outcome
-    outcome: str           # "repaid" or "defaulted"
+    outcome: str  # "repaid" or "defaulted"
 
     # Trading activity BEFORE this maturity
     buy_count: int = 0
@@ -463,9 +471,9 @@ class RepaymentEvent:
     net_cash_pnl: Decimal = Decimal(0)  # Net cash from trading (sells - buys)
 
     # Strategy classification
-    strategy: str = ""     # "no_trade", "hold_to_maturity", "sell_before", "round_trip"
+    strategy: str = ""  # "no_trade", "hold_to_maturity", "sell_before", "round_trip"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary with serialized Decimals."""
         return {
             "run_id": self.run_id,
@@ -517,28 +525,29 @@ class RunMetrics:
     - Trader investment returns (8.3)
     - Repayment-priority diagnostics (8.4)
     """
+
     # Trade log (Section 8.1)
-    trades: List[TradeRecord] = field(default_factory=list)
+    trades: list[TradeRecord] = field(default_factory=list)
 
     # Daily snapshots (Section 8.1)
-    dealer_snapshots: List[DealerSnapshot] = field(default_factory=list)
-    trader_snapshots: List[TraderSnapshot] = field(default_factory=list)
+    dealer_snapshots: list[DealerSnapshot] = field(default_factory=list)
+    trader_snapshots: list[TraderSnapshot] = field(default_factory=list)
 
     # System state timeseries (Plan 022 - Phase 4)
-    system_state_snapshots: List[SystemStateSnapshot] = field(default_factory=list)
+    system_state_snapshots: list[SystemStateSnapshot] = field(default_factory=list)
 
     # Repayment events (Plan 022 - Phase 2)
-    repayment_events: List[RepaymentEvent] = field(default_factory=list)
+    repayment_events: list[RepaymentEvent] = field(default_factory=list)
 
     # Ticket outcomes (Section 8.3)
-    ticket_outcomes: Dict[str, TicketOutcome] = field(default_factory=dict)
+    ticket_outcomes: dict[str, TicketOutcome] = field(default_factory=dict)
 
     # Initial equity by bucket (for P&L calculation)
-    initial_equity_by_bucket: Dict[str, Decimal] = field(default_factory=dict)
+    initial_equity_by_bucket: dict[str, Decimal] = field(default_factory=dict)
 
     # System-level initial state (debt-to-money ratio control variable)
-    initial_total_debt: Decimal = Decimal(0)    # Sum of all payable amounts at t=0
-    initial_total_money: Decimal = Decimal(0)   # Sum of all cash holdings at t=0
+    initial_total_debt: Decimal = Decimal(0)  # Sum of all payable amounts at t=0
+    initial_total_money: Decimal = Decimal(0)  # Sum of all cash holdings at t=0
 
     # Run context (Plan 022 - for tracking)
     run_id: str = ""
@@ -563,7 +572,7 @@ class RunMetrics:
     # Section 8.2: Dealer and VBT Profitability
     # =========================================================================
 
-    def dealer_pnl_by_bucket(self) -> Dict[str, Decimal]:
+    def dealer_pnl_by_bucket(self) -> dict[str, Decimal]:
         """
         Compute dealer P&L by bucket: Π_r^(b) = E_T^(b) - E_0^(b)
 
@@ -573,10 +582,7 @@ class RunMetrics:
         pnl = {}
         for bucket_id, initial_equity in self.initial_equity_by_bucket.items():
             # Find final equity for this bucket
-            final_snapshots = [
-                s for s in self.dealer_snapshots
-                if s.bucket == bucket_id
-            ]
+            final_snapshots = [s for s in self.dealer_snapshots if s.bucket == bucket_id]
             if final_snapshots:
                 # Take the last snapshot
                 final_equity = max(final_snapshots, key=lambda s: s.day).mark_to_mid_equity
@@ -585,7 +591,7 @@ class RunMetrics:
                 pnl[bucket_id] = Decimal(0)
         return pnl
 
-    def dealer_return_by_bucket(self) -> Dict[str, Decimal]:
+    def dealer_return_by_bucket(self) -> dict[str, Decimal]:
         """
         Compute dealer return by bucket: π_r^(b) = Π_r^(b) / E_0^(b)
 
@@ -660,7 +666,7 @@ class RunMetrics:
     # Section 8.3: Trader Investment Returns and Liquidity Use
     # =========================================================================
 
-    def trader_returns(self) -> Dict[str, Decimal]:
+    def trader_returns(self) -> dict[str, Decimal]:
         """
         Compute investment return R_i for each trader.
 
@@ -670,7 +676,7 @@ class RunMetrics:
             Dictionary mapping trader_id to mean return
         """
         # Group outcomes by purchaser
-        returns_by_trader: Dict[str, List[Decimal]] = {}
+        returns_by_trader: dict[str, list[Decimal]] = {}
 
         for outcome in self.ticket_outcomes.values():
             if outcome.purchased_from_dealer and outcome.purchaser_id:
@@ -681,7 +687,7 @@ class RunMetrics:
                     returns_by_trader[outcome.purchaser_id].append(r_tau)
 
         # Compute mean return per trader
-        trader_returns: Dict[str, Decimal] = {}
+        trader_returns: dict[str, Decimal] = {}
         for trader_id, returns in returns_by_trader.items():
             if returns:
                 trader_returns[trader_id] = sum(returns, Decimal(0)) / len(returns)
@@ -727,8 +733,7 @@ class RunMetrics:
         for trade in self.trades:
             if trade.side == "SELL" and trade.is_liquidity_driven:
                 # Check if trade moved margin from negative to positive
-                if (trade.trader_safety_margin_before < 0 and
-                    trade.trader_safety_margin_after >= 0):
+                if trade.trader_safety_margin_before < 0 and trade.trader_safety_margin_after >= 0:
                     rescues += 1
         return rescues
 
@@ -748,7 +753,7 @@ class RunMetrics:
         unsafe = sum(1 for t in buys if t.reduces_margin_below_zero)
         return Decimal(unsafe) / len(buys)
 
-    def margin_at_default_distribution(self) -> List[Decimal]:
+    def margin_at_default_distribution(self) -> list[Decimal]:
         """
         Distribution of safety margins at time of default.
 
@@ -760,7 +765,7 @@ class RunMetrics:
                 margins.append(snapshot.safety_margin)
         return margins
 
-    def mean_margin_at_default(self) -> Optional[Decimal]:
+    def mean_margin_at_default(self) -> Decimal | None:
         """Mean safety margin at default time."""
         margins = self.margin_at_default_distribution()
         if margins:
@@ -771,96 +776,96 @@ class RunMetrics:
     # Mid Price Time Series (Plan 020)
     # =========================================================================
 
-    def dealer_mid_timeseries(self) -> Dict[int, Dict[str, Decimal]]:
+    def dealer_mid_timeseries(self) -> dict[int, dict[str, Decimal]]:
         """
         Extract dealer midline time series by bucket.
 
         Returns:
             {day: {bucket_id: midline_value}}
         """
-        result: Dict[int, Dict[str, Decimal]] = {}
+        result: dict[int, dict[str, Decimal]] = {}
         for snap in self.dealer_snapshots:
             if snap.day not in result:
                 result[snap.day] = {}
             result[snap.day][snap.bucket] = snap.midline
         return result
 
-    def vbt_mid_timeseries(self) -> Dict[int, Dict[str, Decimal]]:
+    def vbt_mid_timeseries(self) -> dict[int, dict[str, Decimal]]:
         """
         Extract VBT mid (M) time series by bucket.
 
         Returns:
             {day: {bucket_id: M_value}}
         """
-        result: Dict[int, Dict[str, Decimal]] = {}
+        result: dict[int, dict[str, Decimal]] = {}
         for snap in self.dealer_snapshots:
             if snap.day not in result:
                 result[snap.day] = {}
             result[snap.day][snap.bucket] = snap.vbt_mid
         return result
 
-    def dealer_premium_timeseries(self) -> Dict[int, Dict[str, Decimal]]:
+    def dealer_premium_timeseries(self) -> dict[int, dict[str, Decimal]]:
         """
         Extract dealer premium/discount vs face time series.
 
         Returns:
             {day: {bucket_id: premium_pct}}
         """
-        result: Dict[int, Dict[str, Decimal]] = {}
+        result: dict[int, dict[str, Decimal]] = {}
         for snap in self.dealer_snapshots:
             if snap.day not in result:
                 result[snap.day] = {}
             result[snap.day][snap.bucket] = snap.dealer_premium_pct
         return result
 
-    def vbt_premium_timeseries(self) -> Dict[int, Dict[str, Decimal]]:
+    def vbt_premium_timeseries(self) -> dict[int, dict[str, Decimal]]:
         """
         Extract VBT premium/discount vs face time series.
 
         Returns:
             {day: {bucket_id: premium_pct}}
         """
-        result: Dict[int, Dict[str, Decimal]] = {}
+        result: dict[int, dict[str, Decimal]] = {}
         for snap in self.dealer_snapshots:
             if snap.day not in result:
                 result[snap.day] = {}
             result[snap.day][snap.bucket] = snap.vbt_premium_pct
         return result
 
-    def _final_dealer_mids(self) -> Dict[str, float]:
+    def _final_dealer_mids(self) -> dict[str, float]:
         """Get final dealer midline by bucket."""
         result = {}
-        for bucket_id in set(s.bucket for s in self.dealer_snapshots):
+        for bucket_id in {s.bucket for s in self.dealer_snapshots}:
             bucket_snaps = [s for s in self.dealer_snapshots if s.bucket == bucket_id]
             if bucket_snaps:
                 final = max(bucket_snaps, key=lambda s: s.day)
                 result[bucket_id] = float(final.midline)
         return result
 
-    def _final_vbt_mids(self) -> Dict[str, float]:
+    def _final_vbt_mids(self) -> dict[str, float]:
         """Get final VBT mid by bucket."""
         result = {}
-        for bucket_id in set(s.bucket for s in self.dealer_snapshots):
+        for bucket_id in {s.bucket for s in self.dealer_snapshots}:
             bucket_snaps = [s for s in self.dealer_snapshots if s.bucket == bucket_id]
             if bucket_snaps:
                 final = max(bucket_snaps, key=lambda s: s.day)
                 result[bucket_id] = float(final.vbt_mid)
         return result
 
-    def _final_dealer_premiums(self) -> Dict[str, float]:
+    def _final_dealer_premiums(self) -> dict[str, float]:
         """Get final dealer premium % by bucket."""
         result = {}
-        for bucket_id in set(s.bucket for s in self.dealer_snapshots):
+        for bucket_id in {s.bucket for s in self.dealer_snapshots}:
             bucket_snaps = [s for s in self.dealer_snapshots if s.bucket == bucket_id]
             if bucket_snaps:
                 final = max(bucket_snaps, key=lambda s: s.day)
                 result[bucket_id] = float(final.dealer_premium_pct)
         return result
 
-    def _final_vbt_premiums(self) -> Dict[str, float]:
+    def _final_vbt_premiums(self) -> dict[str, float]:
         """Get final VBT premium % by bucket."""
         result = {}
-        for bucket_id in set(s.bucket for s in self.dealer_snapshots):
+        for bucket_id in {s.bucket for s in self.dealer_snapshots}:
             bucket_snaps = [s for s in self.dealer_snapshots if s.bucket == bucket_id]
             if bucket_snaps:
                 final = max(bucket_snaps, key=lambda s: s.day)
@@ -871,7 +876,7 @@ class RunMetrics:
     # Section 8.5: Experiment-Level Summary Statistics
     # =========================================================================
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """
         Generate summary statistics for experiment-level aggregation.
 
@@ -883,32 +888,31 @@ class RunMetrics:
             "dealer_total_return": float(self.total_dealer_return()),
             "dealer_profitable": self.is_dealer_profitable(),
             "dealer_pnl_by_bucket": {k: float(v) for k, v in self.dealer_pnl_by_bucket().items()},
-            "dealer_return_by_bucket": {k: float(v) for k, v in self.dealer_return_by_bucket().items()},
+            "dealer_return_by_bucket": {
+                k: float(v) for k, v in self.dealer_return_by_bucket().items()
+            },
             "spread_income_total": float(self.spread_income_total()),
             "interior_trades": self.interior_count(),
             "passthrough_trades": self.passthrough_count(),
-
             # Trader returns (8.3)
             "mean_trader_return": float(self.mean_trader_return()),
             "fraction_profitable_traders": float(self.fraction_profitable_traders()),
             "liquidity_driven_sales": self.liquidity_driven_sales(),
             "rescue_events": self.rescue_events(),
-
             # Repayment priority (8.4)
             "unsafe_buy_count": self.unsafe_buy_count(),
             "fraction_unsafe_buys": float(self.fraction_unsafe_buys()),
-            "mean_margin_at_default": (lambda v: float(v) if v is not None else None)(self.mean_margin_at_default()),
-
+            "mean_margin_at_default": (lambda v: float(v) if v is not None else None)(
+                self.mean_margin_at_default()
+            ),
             # Trade counts
             "total_trades": len(self.trades),
             "total_sell_trades": sum(1 for t in self.trades if t.side == "SELL"),
             "total_buy_trades": sum(1 for t in self.trades if t.side == "BUY"),
-
             # System-level control variable (Plan 020 - Phase B)
             "initial_total_debt": float(self.initial_total_debt),
             "initial_total_money": float(self.initial_total_money),
             "debt_to_money_ratio": float(self.debt_to_money_ratio),
-
             # Mid price summary stats (Plan 020 - Phase A.2, A.3)
             "dealer_mid_final": self._final_dealer_mids(),
             "vbt_mid_final": self._final_vbt_mids(),
@@ -923,6 +927,7 @@ class RunMetrics:
     def to_trade_log_csv(self, path: str) -> None:
         """Export trade log to CSV file."""
         import csv
+
         path_obj = Path(path)
         path_obj.parent.mkdir(parents=True, exist_ok=True)
 
@@ -938,6 +943,7 @@ class RunMetrics:
     def to_dealer_snapshots_csv(self, path: str) -> None:
         """Export dealer snapshots to CSV file."""
         import csv
+
         path_obj = Path(path)
         path_obj.parent.mkdir(parents=True, exist_ok=True)
 
@@ -953,6 +959,7 @@ class RunMetrics:
     def to_trader_snapshots_csv(self, path: str) -> None:
         """Export trader snapshots to CSV file."""
         import csv
+
         path_obj = Path(path)
         path_obj.parent.mkdir(parents=True, exist_ok=True)
 
@@ -960,7 +967,9 @@ class RunMetrics:
             return
 
         # Filter out tickets_held_ids for CSV (too verbose)
-        fieldnames = [k for k in self.trader_snapshots[0].to_dict().keys() if k != "tickets_held_ids"]
+        fieldnames = [
+            k for k in self.trader_snapshots[0].to_dict().keys() if k != "tickets_held_ids"
+        ]
 
         with open(path_obj, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -972,6 +981,7 @@ class RunMetrics:
     def to_ticket_outcomes_csv(self, path: str) -> None:
         """Export ticket outcomes to CSV file."""
         import csv
+
         path_obj = Path(path)
         path_obj.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1000,6 +1010,7 @@ class RunMetrics:
         Columns: day, bucket, dealer_midline, vbt_mid, dealer_premium_pct, vbt_premium_pct
         """
         import csv
+
         path_obj = Path(path)
         path_obj.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1007,23 +1018,28 @@ class RunMetrics:
             return
 
         fieldnames = [
-            "day", "bucket",
-            "dealer_midline", "vbt_mid",
-            "dealer_premium_pct", "vbt_premium_pct"
+            "day",
+            "bucket",
+            "dealer_midline",
+            "vbt_mid",
+            "dealer_premium_pct",
+            "vbt_premium_pct",
         ]
 
         with open(path_obj, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             for snap in sorted(self.dealer_snapshots, key=lambda s: (s.day, s.bucket)):
-                writer.writerow({
-                    "day": snap.day,
-                    "bucket": snap.bucket,
-                    "dealer_midline": str(snap.midline),
-                    "vbt_mid": str(snap.vbt_mid),
-                    "dealer_premium_pct": str(snap.dealer_premium_pct),
-                    "vbt_premium_pct": str(snap.vbt_premium_pct),
-                })
+                writer.writerow(
+                    {
+                        "day": snap.day,
+                        "bucket": snap.bucket,
+                        "dealer_midline": str(snap.midline),
+                        "vbt_mid": str(snap.vbt_mid),
+                        "dealer_premium_pct": str(snap.dealer_premium_pct),
+                        "vbt_premium_pct": str(snap.vbt_premium_pct),
+                    }
+                )
 
     def to_inventory_timeseries_csv(self, path: str) -> None:
         """
@@ -1036,6 +1052,7 @@ class RunMetrics:
                  dealer_share_pct
         """
         import csv
+
         path_obj = Path(path)
         path_obj.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1043,29 +1060,38 @@ class RunMetrics:
             return
 
         fieldnames = [
-            "run_id", "regime", "day", "bucket",
-            "dealer_inventory", "max_capacity", "capacity_pct",
-            "is_at_zero", "hit_vbt_this_step",
-            "total_system_face", "dealer_share_pct"
+            "run_id",
+            "regime",
+            "day",
+            "bucket",
+            "dealer_inventory",
+            "max_capacity",
+            "capacity_pct",
+            "is_at_zero",
+            "hit_vbt_this_step",
+            "total_system_face",
+            "dealer_share_pct",
         ]
 
         with open(path_obj, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             for snap in sorted(self.dealer_snapshots, key=lambda s: (s.day, s.bucket)):
-                writer.writerow({
-                    "run_id": snap.run_id,
-                    "regime": snap.regime,
-                    "day": snap.day,
-                    "bucket": snap.bucket,
-                    "dealer_inventory": snap.inventory,
-                    "max_capacity": snap.max_capacity,
-                    "capacity_pct": str(snap.capacity_pct),
-                    "is_at_zero": snap.is_at_zero,
-                    "hit_vbt_this_step": snap.hit_vbt_this_step,
-                    "total_system_face": str(snap.total_system_face),
-                    "dealer_share_pct": str(snap.dealer_share_pct),
-                })
+                writer.writerow(
+                    {
+                        "run_id": snap.run_id,
+                        "regime": snap.regime,
+                        "day": snap.day,
+                        "bucket": snap.bucket,
+                        "dealer_inventory": snap.inventory,
+                        "max_capacity": snap.max_capacity,
+                        "capacity_pct": str(snap.capacity_pct),
+                        "is_at_zero": snap.is_at_zero,
+                        "hit_vbt_this_step": snap.hit_vbt_this_step,
+                        "total_system_face": str(snap.total_system_face),
+                        "dealer_share_pct": str(snap.dealer_share_pct),
+                    }
+                )
 
     def to_system_state_csv(self, path: str) -> None:
         """
@@ -1077,6 +1103,7 @@ class RunMetrics:
                  face_bucket_mid, face_bucket_long, total_cash, debt_to_money
         """
         import csv
+
         path_obj = Path(path)
         path_obj.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1084,10 +1111,7 @@ class RunMetrics:
             return
 
         with open(path_obj, "w", newline="") as f:
-            writer = csv.DictWriter(
-                f,
-                fieldnames=self.system_state_snapshots[0].to_dict().keys()
-            )
+            writer = csv.DictWriter(f, fieldnames=self.system_state_snapshots[0].to_dict().keys())
             writer.writeheader()
             for snapshot in sorted(self.system_state_snapshots, key=lambda s: s.day):
                 writer.writerow(snapshot.to_dict())
@@ -1103,6 +1127,7 @@ class RunMetrics:
                  outcome, buy_count, sell_count, net_cash_pnl, strategy
         """
         import csv
+
         path_obj = Path(path)
         path_obj.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1110,10 +1135,7 @@ class RunMetrics:
             return
 
         with open(path_obj, "w", newline="") as f:
-            writer = csv.DictWriter(
-                f,
-                fieldnames=self.repayment_events[0].to_dict().keys()
-            )
+            writer = csv.DictWriter(f, fieldnames=self.repayment_events[0].to_dict().keys())
             writer.writeheader()
             for event in sorted(self.repayment_events, key=lambda e: (e.maturity_day, e.trader_id)):
                 writer.writerow(event.to_dict())
@@ -1123,12 +1145,13 @@ class RunMetrics:
 # Helper Functions for Safety Margin Computation
 # =============================================================================
 
+
 def compute_safety_margin(
     cash: Decimal,
-    tickets_held: List[Any],  # List of Ticket objects
-    obligations: List[Any],   # List of Ticket objects (where trader is issuer)
-    dealers: Dict[str, Any],  # bucket_id -> DealerState
-    ticket_size: Decimal
+    tickets_held: list[Any],  # List of Ticket objects
+    obligations: list[Any],  # List of Ticket objects (where trader is issuer)
+    dealers: dict[str, Any],  # bucket_id -> DealerState
+    ticket_size: Decimal,
 ) -> Decimal:
     """
     Compute deterministic safety margin m_i(t) for a trader.
@@ -1168,8 +1191,8 @@ def compute_safety_margin(
 
 
 def compute_saleable_value(
-    tickets_held: List[Any],
-    dealers: Dict[str, Any],
+    tickets_held: list[Any],
+    dealers: dict[str, Any],
 ) -> Decimal:
     """
     Compute total saleable value of tickets at dealer bid prices.
@@ -1196,6 +1219,7 @@ def compute_saleable_value(
 # Liability Tracking (Plan 023 - Default-Aware Instrumentation)
 # =============================================================================
 
+
 @dataclass
 class LiabilityInfo:
     """
@@ -1204,15 +1228,16 @@ class LiabilityInfo:
     Used by build_liability_map() to track all created payables
     and their settlement status.
     """
-    trader_id: str          # Debtor agent ID
-    liability_id: str       # Payable ID (e.g., "PAY_xyz789")
-    maturity_day: int       # Due day of the liability
-    face_value: Decimal     # Amount owed
-    settled: bool = False   # Whether it was settled
-    settled_day: Optional[int] = None  # Day it was settled (if settled)
+
+    trader_id: str  # Debtor agent ID
+    liability_id: str  # Payable ID (e.g., "PAY_xyz789")
+    maturity_day: int  # Due day of the liability
+    face_value: Decimal  # Amount owed
+    settled: bool = False  # Whether it was settled
+    settled_day: int | None = None  # Day it was settled (if settled)
 
 
-def build_liability_map(events: List[Dict[str, Any]]) -> tuple[Dict[str, LiabilityInfo], int]:
+def build_liability_map(events: list[dict[str, Any]]) -> tuple[dict[str, LiabilityInfo], int]:
     """
     Build a map of all liabilities and their settlement status.
 
@@ -1231,7 +1256,7 @@ def build_liability_map(events: List[Dict[str, Any]]) -> tuple[Dict[str, Liabili
         - liabilities_map: {liability_id -> LiabilityInfo}
         - final_day: Last day seen in events
     """
-    liabilities: Dict[str, LiabilityInfo] = {}
+    liabilities: dict[str, LiabilityInfo] = {}
     final_day = 0
 
     for event in events:
@@ -1258,9 +1283,7 @@ def build_liability_map(events: List[Dict[str, Any]]) -> tuple[Dict[str, Liabili
     return liabilities, final_day
 
 
-def compute_trading_stats_by_trader(
-    trades: List[TradeRecord]
-) -> Dict[str, List[Dict[str, Any]]]:
+def compute_trading_stats_by_trader(trades: list[TradeRecord]) -> dict[str, list[dict[str, Any]]]:
     """
     Group trades by trader_id with trade details.
 
@@ -1270,25 +1293,24 @@ def compute_trading_stats_by_trader(
     Returns:
         {trader_id: [{"day": d, "side": s, "price": p}, ...]}
     """
-    by_trader: Dict[str, List[Dict[str, Any]]] = {}
+    by_trader: dict[str, list[dict[str, Any]]] = {}
 
     for trade in trades:
         trader_id = trade.trader_id
         if trader_id not in by_trader:
             by_trader[trader_id] = []
-        by_trader[trader_id].append({
-            "day": trade.day,
-            "side": trade.side,
-            "price": trade.price,
-        })
+        by_trader[trader_id].append(
+            {
+                "day": trade.day,
+                "side": trade.side,
+                "price": trade.price,
+            }
+        )
 
     return by_trader
 
 
-def get_trades_before_day(
-    trader_trades: List[Dict[str, Any]],
-    maturity_day: int
-) -> Dict[str, Any]:
+def get_trades_before_day(trader_trades: list[dict[str, Any]], maturity_day: int) -> dict[str, Any]:
     """
     Compute trading stats for trades BEFORE a given maturity day.
 
@@ -1323,12 +1345,13 @@ def get_trades_before_day(
 # Repayment Event Builder (Plan 022 - Phase 2, enhanced by Plan 023)
 # =============================================================================
 
+
 def build_repayment_events(
-    event_log: List[Dict[str, Any]],
-    trades: List[TradeRecord],
+    event_log: list[dict[str, Any]],
+    trades: list[TradeRecord],
     run_id: str = "",
     regime: str = "",
-) -> List[RepaymentEvent]:
+) -> list[RepaymentEvent]:
     """
     Build RepaymentEvent objects for ALL liabilities that matured.
 
@@ -1358,7 +1381,7 @@ def build_repayment_events(
     # Build trading stats indexed by trader
     trading_stats = compute_trading_stats_by_trader(trades)
 
-    repayment_events: List[RepaymentEvent] = []
+    repayment_events: list[RepaymentEvent] = []
 
     for lid, info in liabilities.items():
         # Only include liabilities that have matured by the final simulation day

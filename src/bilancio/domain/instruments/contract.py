@@ -1,4 +1,3 @@
-from abc import ABC
 from typing import Any, Protocol
 
 from ..agent import Agent
@@ -23,7 +22,7 @@ class Contract(Protocol):
         ...
 
 
-class BaseContract(ABC):
+class BaseContract:
     """Abstract base class implementing the Contract protocol."""
 
     def __init__(self, id: str, parties: list[Agent], terms: dict[str, Any]):

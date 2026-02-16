@@ -6,26 +6,26 @@ trading enabled. Each test builds a complete ring scenario, runs the
 simulation, and inspects the trade records produced by the dealer subsystem.
 """
 
-import pytest
 from decimal import Decimal
-from typing import List, Tuple
 
+import pytest
+
+from bilancio.config.apply import apply_to_system
 from bilancio.config.models import (
     RingExplorerGeneratorConfig,
     ScenarioConfig,
 )
-from bilancio.config.apply import apply_to_system
-from bilancio.engines.system import System
-from bilancio.engines.simulation import run_day
+from bilancio.dealer.metrics import TradeRecord
 from bilancio.engines.dealer_integration import DealerSubsystem
 from bilancio.engines.dealer_sync import _update_vbt_credit_mids
-from bilancio.dealer.metrics import TradeRecord
+from bilancio.engines.simulation import run_day
+from bilancio.engines.system import System
 from bilancio.scenarios import compile_ring_explorer_balanced
-
 
 # ---------------------------------------------------------------------------
 # Helper: build and run an active balanced scenario
 # ---------------------------------------------------------------------------
+
 
 def _run_active_scenario(
     kappa: Decimal = Decimal("0.3"),
@@ -33,7 +33,7 @@ def _run_active_scenario(
     maturity_days: int = 10,
     seed: int = 100,
     max_days: int | None = None,
-) -> Tuple[System, DealerSubsystem, List[TradeRecord]]:
+) -> tuple[System, DealerSubsystem, list[TradeRecord]]:
     """Build a balanced scenario with dealer trading, run it, return trade data.
 
     This follows the same code path as the balanced comparison sweep
@@ -149,6 +149,7 @@ def _run_active_scenario(
 # Module-scoped fixture: shared scenario for tests 1-4
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def active_scenario():
     """Run a single active scenario shared by all trading-dynamics tests.
@@ -172,6 +173,7 @@ def active_scenario():
 # Test 1: Trading happens on multiple days
 # ---------------------------------------------------------------------------
 
+
 def test_trading_happens_on_multiple_days(active_scenario):
     """Trades should occur on at least 3 different days, not a single burst."""
     _, _, trades = active_scenario
@@ -180,14 +182,14 @@ def test_trading_happens_on_multiple_days(active_scenario):
 
     unique_days = {t.day for t in trades}
     assert len(unique_days) >= 3, (
-        f"Trades should span at least 3 different days, "
-        f"but only found days {sorted(unique_days)}"
+        f"Trades should span at least 3 different days, but only found days {sorted(unique_days)}"
     )
 
 
 # ---------------------------------------------------------------------------
 # Test 2: Both buy and sell trades occur
 # ---------------------------------------------------------------------------
+
 
 def test_both_buy_and_sell_trades_occur(active_scenario):
     """The dealer market should produce both BUY and SELL trades."""
@@ -206,6 +208,7 @@ def test_both_buy_and_sell_trades_occur(active_scenario):
 # ---------------------------------------------------------------------------
 # Test 3: Dealer is not always passthrough
 # ---------------------------------------------------------------------------
+
 
 def test_dealer_not_always_passthrough(active_scenario):
     """At least some trades should be interior (dealer market-making)."""
@@ -227,6 +230,7 @@ def test_dealer_not_always_passthrough(active_scenario):
 # Test 4: Trades span multiple maturity buckets
 # ---------------------------------------------------------------------------
 
+
 def test_trades_span_multiple_buckets(active_scenario):
     """Trades should span at least 2 different maturity buckets."""
     _, _, trades = active_scenario
@@ -235,14 +239,14 @@ def test_trades_span_multiple_buckets(active_scenario):
 
     unique_buckets = {t.bucket for t in trades}
     assert len(unique_buckets) >= 2, (
-        f"Trades should span at least 2 maturity buckets, "
-        f"but only found buckets: {unique_buckets}"
+        f"Trades should span at least 2 maturity buckets, but only found buckets: {unique_buckets}"
     )
 
 
 # ---------------------------------------------------------------------------
 # Test 5: VBT mid updates with credit risk
 # ---------------------------------------------------------------------------
+
 
 def test_vbt_mid_updates_with_credit_risk():
     """VBT M should change when the risk assessor learns from settlement history.
@@ -306,8 +310,7 @@ def test_vbt_mid_updates_with_credit_risk():
     # Verify initial M < 1.0 (credit-adjusted with default prior)
     for bucket_id, m in initial_mids.items():
         assert m < Decimal("1.0"), (
-            f"Initial VBT M for '{bucket_id}' should be < 1.0 (credit-adjusted), "
-            f"got {m}"
+            f"Initial VBT M for '{bucket_id}' should be < 1.0 (credit-adjusted), got {m}"
         )
 
     # Simulate several successful settlements (no defaults)

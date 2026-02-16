@@ -5,29 +5,27 @@ This module tests the bridge between the main bilancio system (Payables)
 and the dealer module (Tickets) through the DealerSubsystem wrapper.
 """
 
-import pytest
 from decimal import Decimal
 
+from bilancio.dealer.simulation import DealerRingConfig
+from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.domain.agents.household import Household
+from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.dealer_integration import (
-    DealerSubsystem,
     initialize_dealer_subsystem,
     run_dealer_trading_phase,
     sync_dealer_to_system,
 )
 from bilancio.engines.system import System
-from bilancio.domain.agents.central_bank import CentralBank
-from bilancio.domain.agents.household import Household
-from bilancio.domain.instruments.credit import Payable
-from bilancio.dealer.simulation import DealerRingConfig
 
 
 def test_dealer_subsystem_initialization():
     """Test that dealer subsystem initializes correctly from system state."""
     # Setup system with payables
     system = System()
-    cb = CentralBank(id='CB', name='Central Bank', kind='central_bank')
-    hh1 = Household(id='HH1', name='Household 1', kind='household')
-    hh2 = Household(id='HH2', name='Household 2', kind='household')
+    cb = CentralBank(id="CB", name="Central Bank", kind="central_bank")
+    hh1 = Household(id="HH1", name="Household 1", kind="household")
+    hh2 = Household(id="HH2", name="Household 2", kind="household")
 
     system.add_agent(cb)
     system.add_agent(hh1)
@@ -35,22 +33,29 @@ def test_dealer_subsystem_initialization():
 
     # Create payables
     p1 = Payable(
-        id='P1', kind='payable', amount=100, denom='USD',
-        asset_holder_id='HH1', liability_issuer_id='HH2', due_day=5
+        id="P1",
+        kind="payable",
+        amount=100,
+        denom="USD",
+        asset_holder_id="HH1",
+        liability_issuer_id="HH2",
+        due_day=5,
     )
     p2 = Payable(
-        id='P2', kind='payable', amount=200, denom='USD',
-        asset_holder_id='HH2', liability_issuer_id='HH1', due_day=10
+        id="P2",
+        kind="payable",
+        amount=200,
+        denom="USD",
+        asset_holder_id="HH2",
+        liability_issuer_id="HH1",
+        due_day=10,
     )
     system.add_contract(p1)
     system.add_contract(p2)
 
     # Initialize dealer subsystem
     config = DealerRingConfig(
-        ticket_size=Decimal(1),
-        dealer_share=Decimal('0.25'),
-        vbt_share=Decimal('0.50'),
-        seed=42
+        ticket_size=Decimal(1), dealer_share=Decimal("0.25"), vbt_share=Decimal("0.50"), seed=42
     )
     subsystem = initialize_dealer_subsystem(system, config, current_day=0)
 
@@ -63,22 +68,22 @@ def test_dealer_subsystem_initialization():
     # Verify ticket-payable mapping
     assert len(subsystem.ticket_to_payable) == 2
     assert len(subsystem.payable_to_ticket) == 2
-    assert 'P1' in subsystem.payable_to_ticket
-    assert 'P2' in subsystem.payable_to_ticket
+    assert "P1" in subsystem.payable_to_ticket
+    assert "P2" in subsystem.payable_to_ticket
 
     # Verify ticket properties
     for ticket in subsystem.tickets.values():
         assert ticket.face > 0
-        assert ticket.bucket_id in ['short', 'mid', 'long']
+        assert ticket.bucket_id in ["short", "mid", "long"]
         assert ticket.remaining_tau >= 0
 
 
 def test_ticket_bucket_assignment():
     """Test that tickets are assigned to correct maturity buckets."""
     system = System()
-    cb = CentralBank(id='CB', name='CB', kind='central_bank')
-    hh1 = Household(id='HH1', name='HH1', kind='household')
-    hh2 = Household(id='HH2', name='HH2', kind='household')
+    cb = CentralBank(id="CB", name="CB", kind="central_bank")
+    hh1 = Household(id="HH1", name="HH1", kind="household")
+    hh2 = Household(id="HH2", name="HH2", kind="household")
 
     system.add_agent(cb)
     system.add_agent(hh1)
@@ -89,15 +94,20 @@ def test_ticket_bucket_assignment():
     # mid: tau in {4,...,8}
     # long: tau >= 9
     payables = [
-        ('P1', 2, 'short'),   # tau=2 -> short
-        ('P2', 5, 'mid'),     # tau=5 -> mid
-        ('P3', 10, 'long'),   # tau=10 -> long
+        ("P1", 2, "short"),  # tau=2 -> short
+        ("P2", 5, "mid"),  # tau=5 -> mid
+        ("P3", 10, "long"),  # tau=10 -> long
     ]
 
-    for pid, due_day, expected_bucket in payables:
+    for pid, due_day, _expected_bucket in payables:
         p = Payable(
-            id=pid, kind='payable', amount=100, denom='USD',
-            asset_holder_id='HH1', liability_issuer_id='HH2', due_day=due_day
+            id=pid,
+            kind="payable",
+            amount=100,
+            denom="USD",
+            asset_holder_id="HH1",
+            liability_issuer_id="HH2",
+            due_day=due_day,
         )
         system.add_contract(p)
 
@@ -109,16 +119,17 @@ def test_ticket_bucket_assignment():
     for pid, due_day, expected_bucket in payables:
         ticket_id = subsystem.payable_to_ticket[pid]
         ticket = subsystem.tickets[ticket_id]
-        assert ticket.bucket_id == expected_bucket, \
+        assert ticket.bucket_id == expected_bucket, (
             f"Payable {pid} with due_day={due_day} should be in {expected_bucket} bucket"
+        )
 
 
 def test_run_dealer_trading_phase():
     """Test that trading phase executes without errors."""
     system = System()
-    cb = CentralBank(id='CB', name='CB', kind='central_bank')
-    hh1 = Household(id='HH1', name='HH1', kind='household')
-    hh2 = Household(id='HH2', name='HH2', kind='household')
+    cb = CentralBank(id="CB", name="CB", kind="central_bank")
+    hh1 = Household(id="HH1", name="HH1", kind="household")
+    hh2 = Household(id="HH2", name="HH2", kind="household")
 
     system.add_agent(cb)
     system.add_agent(hh1)
@@ -126,8 +137,13 @@ def test_run_dealer_trading_phase():
 
     # Create payables
     p1 = Payable(
-        id='P1', kind='payable', amount=100, denom='USD',
-        asset_holder_id='HH1', liability_issuer_id='HH2', due_day=5
+        id="P1",
+        kind="payable",
+        amount=100,
+        denom="USD",
+        asset_holder_id="HH1",
+        liability_issuer_id="HH2",
+        due_day=5,
     )
     system.add_contract(p1)
 
@@ -141,18 +157,18 @@ def test_run_dealer_trading_phase():
     # Should execute without errors (may have 0 events if no eligible traders)
     assert isinstance(events, list)
     for event in events:
-        assert 'kind' in event
-        assert event['kind'] == 'dealer_trade'
-        assert 'trader' in event
-        assert 'side' in event
-        assert 'price' in event
+        assert "kind" in event
+        assert event["kind"] == "dealer_trade"
+        assert "trader" in event
+        assert "side" in event
+        assert "price" in event
 
 
 def test_subsystem_enabled_flag():
     """Test that subsystem respects enabled flag."""
     system = System()
-    cb = CentralBank(id='CB', name='CB', kind='central_bank')
-    hh1 = Household(id='HH1', name='HH1', kind='household')
+    cb = CentralBank(id="CB", name="CB", kind="central_bank")
+    hh1 = Household(id="HH1", name="HH1", kind="household")
 
     system.add_agent(cb)
     system.add_agent(hh1)
@@ -178,9 +194,9 @@ def test_subsystem_enabled_flag():
 def test_sync_dealer_to_system():
     """Test that sync_dealer_to_system updates payable ownership."""
     system = System()
-    cb = CentralBank(id='CB', name='CB', kind='central_bank')
-    hh1 = Household(id='HH1', name='HH1', kind='household')
-    hh2 = Household(id='HH2', name='HH2', kind='household')
+    cb = CentralBank(id="CB", name="CB", kind="central_bank")
+    hh1 = Household(id="HH1", name="HH1", kind="household")
+    hh2 = Household(id="HH2", name="HH2", kind="household")
 
     system.add_agent(cb)
     system.add_agent(hh1)
@@ -188,8 +204,13 @@ def test_sync_dealer_to_system():
 
     # Create payable
     p1 = Payable(
-        id='P1', kind='payable', amount=100, denom='USD',
-        asset_holder_id='HH1', liability_issuer_id='HH2', due_day=5
+        id="P1",
+        kind="payable",
+        amount=100,
+        denom="USD",
+        asset_holder_id="HH1",
+        liability_issuer_id="HH2",
+        due_day=5,
     )
     system.add_contract(p1)
 
@@ -198,25 +219,24 @@ def test_sync_dealer_to_system():
     subsystem = initialize_dealer_subsystem(system, config, current_day=0)
 
     # Manually simulate a trade (change ticket ownership)
-    ticket_id = subsystem.payable_to_ticket['P1']
+    ticket_id = subsystem.payable_to_ticket["P1"]
     ticket = subsystem.tickets[ticket_id]
-    original_owner = ticket.owner_id
-    ticket.owner_id = 'HH2'  # Simulate transfer
+    ticket.owner_id = "HH2"  # Simulate transfer
 
     # Sync back to system
     sync_dealer_to_system(subsystem, system)
 
     # Verify payable holder updated
-    payable = system.state.contracts['P1']
-    assert payable.holder_id == 'HH2', "Payable holder should be updated after sync"
+    payable = system.state.contracts["P1"]
+    assert payable.holder_id == "HH2", "Payable holder should be updated after sync"
 
 
 def test_multiple_trading_phases():
     """Test running multiple trading phases in sequence."""
     system = System()
-    cb = CentralBank(id='CB', name='CB', kind='central_bank')
-    hh1 = Household(id='HH1', name='HH1', kind='household')
-    hh2 = Household(id='HH2', name='HH2', kind='household')
+    cb = CentralBank(id="CB", name="CB", kind="central_bank")
+    hh1 = Household(id="HH1", name="HH1", kind="household")
+    hh2 = Household(id="HH2", name="HH2", kind="household")
 
     system.add_agent(cb)
     system.add_agent(hh1)
@@ -224,12 +244,22 @@ def test_multiple_trading_phases():
 
     # Create payables at different maturities
     p1 = Payable(
-        id='P1', kind='payable', amount=100, denom='USD',
-        asset_holder_id='HH1', liability_issuer_id='HH2', due_day=5
+        id="P1",
+        kind="payable",
+        amount=100,
+        denom="USD",
+        asset_holder_id="HH1",
+        liability_issuer_id="HH2",
+        due_day=5,
     )
     p2 = Payable(
-        id='P2', kind='payable', amount=200, denom='USD',
-        asset_holder_id='HH2', liability_issuer_id='HH1', due_day=10
+        id="P2",
+        kind="payable",
+        amount=200,
+        denom="USD",
+        asset_holder_id="HH2",
+        liability_issuer_id="HH1",
+        due_day=10,
     )
     system.add_contract(p1)
     system.add_contract(p2)

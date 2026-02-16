@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Iterator
 from decimal import Decimal
-from typing import Iterator, List, Tuple
 
 
 def generate_lhs_params(
     count: int,
     *,
-    kappa_range: Tuple[Decimal, Decimal],
-    concentration_range: Tuple[Decimal, Decimal],
-    mu_range: Tuple[Decimal, Decimal],
-    monotonicity_range: Tuple[Decimal, Decimal],
+    kappa_range: tuple[Decimal, Decimal],
+    concentration_range: tuple[Decimal, Decimal],
+    mu_range: tuple[Decimal, Decimal],
+    monotonicity_range: tuple[Decimal, Decimal],
     seed: int,
-) -> Iterator[Tuple[Decimal, Decimal, Decimal, Decimal]]:
+) -> Iterator[tuple[Decimal, Decimal, Decimal, Decimal]]:
     """
     Generate parameter combinations using Latin Hypercube Sampling.
 
@@ -56,7 +56,7 @@ def generate_lhs_params(
         yield (kappas[idx], concentrations[idx], mus[idx], monotonicities[idx])
 
 
-def _lhs_axis(count: int, bounds: Tuple[Decimal, Decimal], rng: random.Random) -> List[Decimal]:
+def _lhs_axis(count: int, bounds: tuple[Decimal, Decimal], rng: random.Random) -> list[Decimal]:
     """
     Sample a single parameter dimension using Latin Hypercube Sampling.
 
@@ -72,7 +72,7 @@ def _lhs_axis(count: int, bounds: Tuple[Decimal, Decimal], rng: random.Random) -
         List of sampled values (shuffled)
     """
     low, high = bounds
-    samples: List[Decimal] = []
+    samples: list[Decimal] = []
 
     for stratum in range(count):
         # Define stratum boundaries as fractions [0,1]

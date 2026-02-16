@@ -32,6 +32,7 @@ class BucketConfig:
         tau_min: Minimum remaining maturity (inclusive)
         tau_max: Maximum remaining maturity (inclusive), None for unbounded
     """
+
     name: str
     tau_min: int
     tau_max: int | None
@@ -39,9 +40,9 @@ class BucketConfig:
 
 # Default three-bucket configuration
 DEFAULT_BUCKETS = [
-    BucketConfig("short", 1, 3),      # τ ∈ {1, 2, 3}
-    BucketConfig("mid", 4, 8),        # τ ∈ {4, ..., 8}
-    BucketConfig("long", 9, None),    # τ ≥ 9
+    BucketConfig("short", 1, 3),  # τ ∈ {1, 2, 3}
+    BucketConfig("mid", 4, 8),  # τ ∈ {4, ..., 8}
+    BucketConfig("long", 9, None),  # τ ≥ 9
 ]
 
 
@@ -63,6 +64,7 @@ class Ticket:
         bucket_id: Maturity bucket assignment ("short" | "mid" | "long")
         serial: Serial number for deterministic tie-breaking
     """
+
     id: TicketId
     issuer_id: AgentId
     owner_id: AgentId
@@ -107,6 +109,7 @@ class DealerState:
         is_pinned_bid: True if bid == B (at outside bid)
         is_pinned_ask: True if ask == A (at outside ask)
     """
+
     bucket_id: str
     agent_id: AgentId = ""
     inventory: list[Ticket] = field(default_factory=list)
@@ -120,7 +123,7 @@ class DealerState:
     X_star: Decimal = Decimal(0)
     N: int = 1
     lambda_: Decimal = Decimal(1)
-    I: Decimal = Decimal(0)
+    I: Decimal = Decimal(0)  # noqa: E741
 
     # Quotes
     bid: Decimal = Decimal(0)
@@ -178,12 +181,13 @@ class VBTState:
         inventory: List of tickets held
         cash: Cash holdings
     """
+
     bucket_id: str
     agent_id: AgentId = ""
 
     # Anchors
     M: Decimal = Decimal(1)
-    O: Decimal = Decimal("0.30")
+    O: Decimal = Decimal("0.30")  # noqa: E741
 
     # Derived outside quotes
     A: Decimal = Decimal(0)
@@ -268,6 +272,7 @@ class TraderState:
         asset_issuer_id: Issuer assigned via ring topology (payables / rollover only)
         defaulted: True if agent has defaulted
     """
+
     agent_id: AgentId
     cash: Decimal = Decimal(0)
     tickets_owned: list[Ticket] = field(default_factory=list)
@@ -286,9 +291,7 @@ class TraderState:
             Total face value of tickets maturing on this day
         """
         return sum(
-            (ticket.face
-            for ticket in self.obligations
-            if ticket.maturity_day == day),
+            (ticket.face for ticket in self.obligations if ticket.maturity_day == day),
             Decimal(0),
         )
 
@@ -328,8 +331,6 @@ class TraderState:
             Earliest maturity day > after_day, or None if no future liabilities
         """
         future_days = [
-            ticket.maturity_day
-            for ticket in self.obligations
-            if ticket.maturity_day > after_day
+            ticket.maturity_day for ticket in self.obligations if ticket.maturity_day > after_day
         ]
         return min(future_days) if future_days else None

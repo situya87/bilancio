@@ -5,7 +5,6 @@ from __future__ import annotations
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 
 class ModalVolumeArtifactLoader:
@@ -27,7 +26,7 @@ class ModalVolumeArtifactLoader:
         self,
         volume_name: str = "bilancio-results",
         base_path: str = "",
-        cache_dir: Optional[Path] = None,
+        cache_dir: Path | None = None,
     ):
         """Initialize loader.
 
@@ -40,7 +39,7 @@ class ModalVolumeArtifactLoader:
         self.volume_name = volume_name
         self.base_path = base_path
         self._cache_dir = cache_dir
-        self._temp_dir: Optional[tempfile.TemporaryDirectory[str]] = None
+        self._temp_dir: tempfile.TemporaryDirectory[str] | None = None
 
     @property
     def cache_dir(self) -> Path:

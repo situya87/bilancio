@@ -11,13 +11,14 @@ Usage:
     import bilancio.cloud.proxy_patch  # Apply patch before importing modal
     import modal
 """
+
 from __future__ import annotations
 
 import asyncio
-import os
-import ssl
 import base64
+import os
 import socket
+import ssl
 from typing import Any
 from urllib.parse import urlparse
 
@@ -28,12 +29,12 @@ _original_create_connection = grpclib.client.Channel._create_connection
 _original_http_client_with_tls = None  # Set lazily when modal is imported
 
 # Custom CA certificate path for TLS inspection proxy
-PROXY_CA_CERT = '/usr/local/share/ca-certificates/swp-ca-production.crt'
+PROXY_CA_CERT = "/usr/local/share/ca-certificates/swp-ca-production.crt"
 
 
 def _should_use_proxy() -> bool:
     """Check if proxy should be used."""
-    proxy_url = os.environ.get('https_proxy', '') or os.environ.get('HTTPS_PROXY', '')
+    proxy_url = os.environ.get("https_proxy", "") or os.environ.get("HTTPS_PROXY", "")
     return bool(proxy_url) and os.path.exists(PROXY_CA_CERT)
 
 
@@ -48,13 +49,14 @@ def _create_proxy_ssl_context() -> ssl.SSLContext:
 # grpclib patch for Modal API (gRPC)
 # =============================================================================
 
+
 async def _proxied_create_connection(self: Any) -> Any:
     """Create connection through HTTP CONNECT proxy if proxy is configured."""
     if not _should_use_proxy():
         # No proxy configured or no custom CA - use original method
         return await _original_create_connection(self)
 
-    proxy_url = os.environ.get('https_proxy', '') or os.environ.get('HTTPS_PROXY', '')
+    proxy_url = os.environ.get("https_proxy", "") or os.environ.get("HTTPS_PROXY", "")
     parsed = urlparse(proxy_url)
 
     # Create raw socket to proxy
@@ -104,6 +106,7 @@ async def _proxied_create_connection(self: Any) -> Any:
 # Modal HTTP client patch for file downloads (aiohttp)
 # =============================================================================
 
+
 def _patched_http_client_with_tls(timeout: Any) -> Any:
     """Create HTTP client with custom CA for TLS inspection proxy."""
     from aiohttp import ClientSession, ClientTimeout, TCPConnector
@@ -143,6 +146,7 @@ def _patch_modal_http_client() -> None:
 # =============================================================================
 # Patch application
 # =============================================================================
+
 
 def apply_proxy_patch() -> None:
     """Apply all proxy patches."""

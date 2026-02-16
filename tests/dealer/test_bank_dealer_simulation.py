@@ -9,21 +9,17 @@ These tests verify the complete integrated system combining:
 - Default waterfall
 """
 
-import pytest
 from decimal import Decimal
+
+import pytest
 
 from bilancio.dealer.bank_dealer_simulation import (
     BankDealerSimulation,
-    BankDealerDaySnapshot,
 )
 from bilancio.dealer.bank_integration import (
     BankDealerRingConfig,
-    BankAwareTraderState,
-    IntegratedBankState,
 )
 from bilancio.dealer.models import Ticket
-from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
-
 
 # =============================================================================
 # Fixtures
@@ -258,10 +254,7 @@ class TestDayLoop:
         sim.run_day()
 
         # Check settlement events
-        settlement_events = [
-            e for e in sim.events.events
-            if e.get("kind") == "settlement"
-        ]
+        settlement_events = [e for e in sim.events.events if e.get("kind") == "settlement"]
         assert len(settlement_events) > 0
 
     def test_captures_snapshot_each_day(self, basic_config, simple_tickets):
@@ -319,10 +312,7 @@ class TestInterestAccrual:
         sim.run(max_days=3)
 
         # Check for interest accrual events
-        interest_events = [
-            e for e in sim.events.events
-            if e.get("kind") == "interest_accrual"
-        ]
+        interest_events = [e for e in sim.events.events if e.get("kind") == "interest_accrual"]
         # Should have some interest events after day 2
         assert any(e.get("day") >= 2 for e in interest_events)
 
@@ -376,9 +366,7 @@ class TestInterbankSettlement:
         sim.run(max_days=5)
 
         # Check that positions are cleared (ledger should be empty or near-zero)
-        total_positions = sum(
-            pos.amount for pos in sim.interbank_ledger.positions.values()
-        )
+        sum(pos.amount for pos in sim.interbank_ledger.positions.values())
         # After settlement, positions should be minimal
         # (may have some from current day's trading not yet settled)
 
@@ -476,10 +464,7 @@ class TestLoans:
         sim.run(max_days=3)
 
         # Check for loan events
-        loan_events = [
-            e for e in sim.events.events
-            if e.get("kind") == "loan_issued"
-        ]
+        [e for e in sim.events.events if e.get("kind") == "loan_issued"]
         # May or may not have loans depending on trading dynamics
 
     def test_loan_tracked_by_bank(self, basic_config, simple_tickets):
@@ -672,8 +657,5 @@ class TestFullIntegration:
         sim.run(max_days=10)
 
         # Should have settlement events on different days
-        settlement_days = set(
-            e.get("day") for e in sim.events.events
-            if e.get("kind") == "settlement"
-        )
+        settlement_days = {e.get("day") for e in sim.events.events if e.get("kind") == "settlement"}
         assert len(settlement_days) >= 1

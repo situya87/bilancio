@@ -16,6 +16,7 @@ from bilancio.dealer.priors import kappa_informed_prior
 @dataclass
 class ViabilityReport:
     """Result of a pre-simulation trade viability check."""
+
     sell_viable: bool
     buy_viable: bool
     diagnostics: dict[str, Any] = field(default_factory=dict)
@@ -92,10 +93,12 @@ def check_trade_viability(
 
     diagnostics["K_star"] = K_star
     diagnostics["X_star"] = float(X_star)
-    diagnostics["dealer_inventory_ratio"] = float(Decimal(n_dealer_tickets) / max(1, K_star)) if K_star > 0 else 0.0
+    diagnostics["dealer_inventory_ratio"] = (
+        float(Decimal(n_dealer_tickets) / max(1, K_star)) if K_star > 0 else 0.0
+    )
 
     # VBT outside spread (per-bucket: short=0.04, mid=0.08, long=0.12)
-    O = base_spread
+    outside_spread = base_spread
 
     # --- Sell viability ---
     # Compute dealer bid at current inventory
@@ -104,18 +107,18 @@ def check_trade_viability(
         lambda_ = S / (X_star + S)
     else:
         lambda_ = Decimal(1)
-    I = lambda_ * O
+    inside_width = lambda_ * outside_spread
 
     # Midline: p(x) = M - O/(X*+2S) * (x - X*/2)
     if X_star + 2 * S > 0:
-        slope = O / (X_star + 2 * S)
+        slope = outside_spread / (X_star + 2 * S)
         midline = M - slope * (dealer_x - X_star / 2)
     else:
         midline = M
 
-    bid = midline - I / 2
+    bid = midline - inside_width / 2
     # VBT bid B = M - O/2
-    B = M - O / 2
+    B = M - outside_spread / 2
     bid = max(B, bid)
 
     diagnostics["dealer_bid"] = float(bid)
@@ -133,14 +136,14 @@ def check_trade_viability(
 
         # Midline at target inventory
         if X_star + 2 * S > 0:
-            slope_buy = O / (X_star + 2 * S)
+            slope_buy = outside_spread / (X_star + 2 * S)
             midline_buy = M - slope_buy * (target_x - X_star / 2)
         else:
             midline_buy = M
 
-        ask_at_threshold = midline_buy + I / 2
+        ask_at_threshold = midline_buy + inside_width / 2
         # VBT ask A = M + O/2
-        A = M + O / 2
+        A = M + outside_spread / 2
         ask = min(A, ask_at_threshold)
 
         diagnostics["ask_at_threshold"] = float(ask)

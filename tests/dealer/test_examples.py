@@ -18,30 +18,28 @@ References:
 - Specification Section 8 (L1 Kernel)
 """
 
-import pytest
-from decimal import Decimal
 from copy import deepcopy
+from decimal import Decimal
 
+import pytest
+
+from bilancio.core.ids import new_id
 from bilancio.dealer import (
-    Ticket,
+    M_MIN,
     DealerState,
-    VBTState,
-    TraderState,
     KernelParams,
-    recompute_dealer_state,
+    Ticket,
+    TradeExecutor,
+    VBTState,
+    assert_c1_double_entry,
     can_interior_buy,
     can_interior_sell,
-    TradeExecutor,
-    EventLog,
+    recompute_dealer_state,
     run_all_assertions,
-    assert_c1_double_entry,
-    assert_c4_passthrough_invariant,
-    M_MIN,
 )
-from bilancio.core.ids import new_id
-
 
 # Helper functions for test setup
+
 
 def create_ticket(
     issuer_id: str,
@@ -69,7 +67,7 @@ def setup_dealer_vbt_params(
     dealer_tickets: int = 2,
     dealer_cash: Decimal = Decimal(2),
     M: Decimal = Decimal("1.0"),
-    O: Decimal = Decimal("0.30"),
+    O: Decimal = Decimal("0.30"),  # noqa: E741
     S: Decimal = Decimal(1),
 ) -> tuple[DealerState, VBTState, KernelParams]:
     """
@@ -225,10 +223,7 @@ class TestExample5DealerEarns:
         executor = TradeExecutor(params)
 
         # After each trade, verify invariants
-        trades = [
-            create_ticket(f"customer{i}", f"customer{i}")
-            for i in range(3)
-        ]
+        trades = [create_ticket(f"customer{i}", f"customer{i}") for i in range(3)]
 
         # Trade 1: SELL
         executor.execute_customer_sell(dealer, vbt, trades[0])
@@ -636,19 +631,11 @@ class TestPartialRecovery:
         recovery_rate = Decimal("0.6")
 
         # Create maturing tickets for each claimant type
-        dealer_tickets = [
-            create_ticket("issuer_I", "dealer", serial=i)
-            for i in range(2)
-        ]
+        dealer_tickets = [create_ticket("issuer_I", "dealer", serial=i) for i in range(2)]
 
-        vbt_tickets = [
-            create_ticket("issuer_I", "vbt", serial=i+2)
-            for i in range(2)
-        ]
+        vbt_tickets = [create_ticket("issuer_I", "vbt", serial=i + 2) for i in range(2)]
 
-        trader_tickets = [
-            create_ticket("issuer_I", "trader", serial=4)
-        ]
+        trader_tickets = [create_ticket("issuer_I", "trader", serial=4)]
 
         # Calculate payouts
         dealer_payout = len(dealer_tickets) * recovery_rate
@@ -681,8 +668,7 @@ class TestQuoteBounds:
         for x in range(int(dealer.X_star) + 1):
             # Adjust dealer inventory to x
             dealer.inventory = [
-                create_ticket(f"issuer_{i}", dealer.agent_id, serial=i)
-                for i in range(x)
+                create_ticket(f"issuer_{i}", dealer.agent_id, serial=i) for i in range(x)
             ]
             recompute_dealer_state(dealer, vbt, params)
 
@@ -808,9 +794,7 @@ class TestDoubleEntry:
 
         # Add VBT inventory
         for i in range(5):
-            vbt.inventory.append(
-                create_ticket(f"vbt_issuer_{i}", vbt.agent_id, serial=i)
-            )
+            vbt.inventory.append(create_ticket(f"vbt_issuer_{i}", vbt.agent_id, serial=i))
 
         executor = TradeExecutor(params)
 

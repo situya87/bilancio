@@ -11,11 +11,10 @@ References:
 - "Banks-as-Dealers with deposits on demand" specification Section 5
 """
 
-import pytest
 from decimal import Decimal
 
 from bilancio.banking.state import BankDealerState, CentralBankParams
-from bilancio.banking.types import DepositCohort, LoanCohort, CBBorrowingCohort
+from bilancio.banking.types import DepositCohort
 
 
 class TestBankDealerStateInitialization:
@@ -348,7 +347,7 @@ class TestScheduledLegs:
         legs = state.get_scheduled_legs(from_day=1, to_day=20)
 
         assert len(legs) == 3
-        assert legs[0].day == 2   # CB repay
+        assert legs[0].day == 2  # CB repay
         assert legs[1].day == 10  # Loan 1
         assert legs[2].day == 15  # Loan 2
 

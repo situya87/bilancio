@@ -41,7 +41,9 @@ class EVHoldValuer:
     def value(self, ticket: Any, day: int) -> Estimate:
         """Full path: Estimate with provenance."""
         return self.risk_assessor.expected_value_detail(
-            ticket, day, estimator_id=self.estimator_id,
+            ticket,
+            day,
+            estimator_id=self.estimator_id,
         )
 
 
@@ -99,7 +101,6 @@ class CoverageRatioValuer:
                 "issuer_id": str(ticket.issuer_id),
             },
         )
-
 
 
 # ── CreditAdjustedVBTPricing ─────────────────────────────────────

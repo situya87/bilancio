@@ -35,6 +35,9 @@ from bilancio.domain.goods import StockLot
 # ── Instruments layer ────────────────────────────────────────────────────
 from bilancio.domain.instruments.base import Instrument, InstrumentKind
 from bilancio.domain.instruments.cb_loan import CBLoan
+
+# ── Contract & Policy layer ──────────────────────────────────────────────
+from bilancio.domain.instruments.contract import BaseContract
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.delivery import DeliveryObligation
 from bilancio.domain.instruments.means_of_payment import (
@@ -42,24 +45,29 @@ from bilancio.domain.instruments.means_of_payment import (
     Cash,
     ReserveDeposit,
 )
-
-# ── Contract & Policy layer ──────────────────────────────────────────────
-from bilancio.domain.instruments.contract import BaseContract, Contract
-from bilancio.domain.instruments.policy import BasePolicy, Policy
-
+from bilancio.domain.instruments.policy import BasePolicy
 
 # =========================================================================
 # AgentKind enum
 # =========================================================================
+
 
 class TestAgentKind:
     """Tests for the AgentKind str-enum."""
 
     def test_all_members_exist(self) -> None:
         expected = {
-            "CENTRAL_BANK", "BANK", "HOUSEHOLD", "TREASURY",
-            "FIRM", "INVESTMENT_FUND", "INSURANCE_COMPANY",
-            "DEALER", "VBT", "NON_BANK_LENDER", "RATING_AGENCY",
+            "CENTRAL_BANK",
+            "BANK",
+            "HOUSEHOLD",
+            "TREASURY",
+            "FIRM",
+            "INVESTMENT_FUND",
+            "INSURANCE_COMPANY",
+            "DEALER",
+            "VBT",
+            "NON_BANK_LENDER",
+            "RATING_AGENCY",
         }
         assert set(AgentKind.__members__.keys()) == expected
 
@@ -86,6 +94,7 @@ class TestAgentKind:
 
     def test_json_serializable(self) -> None:
         import json
+
         result = json.dumps({"kind": AgentKind.TREASURY})
         assert '"treasury"' in result
 
@@ -93,6 +102,7 @@ class TestAgentKind:
 # =========================================================================
 # Agent dataclass
 # =========================================================================
+
 
 class TestAgent:
     """Tests for the base Agent dataclass."""
@@ -139,6 +149,7 @@ class TestAgent:
 # Firm
 # =========================================================================
 
+
 class TestFirm:
     def test_kind_is_forced(self) -> None:
         f = Firm(id="f1", name="Acme", kind="wrong")
@@ -162,6 +173,7 @@ class TestFirm:
 # Bank
 # =========================================================================
 
+
 class TestBank:
     def test_kind_is_forced_to_bank(self) -> None:
         b = Bank(id="b1", name="BigBank", kind="wrong")
@@ -177,6 +189,7 @@ class TestBank:
 # Household
 # =========================================================================
 
+
 class TestHousehold:
     def test_kind_is_forced_to_household(self) -> None:
         h = Household(id="h1", name="Smith Family", kind="wrong")
@@ -191,6 +204,7 @@ class TestHousehold:
 # Treasury
 # =========================================================================
 
+
 class TestTreasury:
     def test_kind_is_forced_to_treasury(self) -> None:
         t = Treasury(id="t1", name="US Treasury", kind="wrong")
@@ -204,6 +218,7 @@ class TestTreasury:
 # =========================================================================
 # CentralBank
 # =========================================================================
+
 
 class TestCentralBank:
     def test_default_construction(self) -> None:
@@ -295,6 +310,7 @@ class TestCentralBank:
 # Dealer
 # =========================================================================
 
+
 class TestDealer:
     def test_kind_forced_to_dealer(self) -> None:
         d = Dealer(id="d1", name="Dealer A")
@@ -319,6 +335,7 @@ class TestDealer:
 # StockLot
 # =========================================================================
 
+
 class TestStockLot:
     def test_basic_construction(self) -> None:
         lot = StockLot(
@@ -339,29 +356,44 @@ class TestStockLot:
 
     def test_kind_always_stock_lot(self) -> None:
         lot = StockLot(
-            id="s2", kind="not_stock", sku="OIL",
-            quantity=10, unit_price=Decimal("100"), owner_id="f2",
+            id="s2",
+            kind="not_stock",
+            sku="OIL",
+            quantity=10,
+            unit_price=Decimal("100"),
+            owner_id="f2",
         )
         assert lot.kind == "stock_lot"
 
     def test_value_property(self) -> None:
         lot = StockLot(
-            id="s3", kind="stock_lot", sku="CORN",
-            quantity=50, unit_price=Decimal("3.00"), owner_id="f3",
+            id="s3",
+            kind="stock_lot",
+            sku="CORN",
+            quantity=50,
+            unit_price=Decimal("3.00"),
+            owner_id="f3",
         )
         assert lot.value == Decimal("150.00")
 
     def test_value_zero_quantity(self) -> None:
         lot = StockLot(
-            id="s4", kind="stock_lot", sku="X",
-            quantity=0, unit_price=Decimal("10"), owner_id="f4",
+            id="s4",
+            kind="stock_lot",
+            sku="X",
+            quantity=0,
+            unit_price=Decimal("10"),
+            owner_id="f4",
         )
         assert lot.value == Decimal("0")
 
     def test_unit_price_coerced_from_float(self) -> None:
         lot = StockLot(
-            id="s5", kind="stock_lot", sku="RICE",
-            quantity=10, unit_price=2.5,  # type: ignore[arg-type]
+            id="s5",
+            kind="stock_lot",
+            sku="RICE",
+            quantity=10,
+            unit_price=2.5,  # type: ignore[arg-type]
             owner_id="f5",
         )
         assert isinstance(lot.unit_price, Decimal)
@@ -369,8 +401,11 @@ class TestStockLot:
 
     def test_unit_price_coerced_from_int(self) -> None:
         lot = StockLot(
-            id="s6", kind="stock_lot", sku="BEANS",
-            quantity=5, unit_price=10,  # type: ignore[arg-type]
+            id="s6",
+            kind="stock_lot",
+            sku="BEANS",
+            quantity=5,
+            unit_price=10,  # type: ignore[arg-type]
             owner_id="f6",
         )
         assert isinstance(lot.unit_price, Decimal)
@@ -378,8 +413,12 @@ class TestStockLot:
 
     def test_divisible_default_and_override(self) -> None:
         lot = StockLot(
-            id="s7", kind="stock_lot", sku="GOLD",
-            quantity=1, unit_price=Decimal("1000"), owner_id="f7",
+            id="s7",
+            kind="stock_lot",
+            sku="GOLD",
+            quantity=1,
+            unit_price=Decimal("1000"),
+            owner_id="f7",
             divisible=False,
         )
         assert lot.divisible is False
@@ -389,11 +428,17 @@ class TestStockLot:
 # InstrumentKind enum
 # =========================================================================
 
+
 class TestInstrumentKind:
     def test_all_members_exist(self) -> None:
         expected = {
-            "CASH", "BANK_DEPOSIT", "RESERVE_DEPOSIT",
-            "PAYABLE", "CB_LOAN", "NON_BANK_LOAN", "DELIVERY_OBLIGATION",
+            "CASH",
+            "BANK_DEPOSIT",
+            "RESERVE_DEPOSIT",
+            "PAYABLE",
+            "CB_LOAN",
+            "NON_BANK_LOAN",
+            "DELIVERY_OBLIGATION",
         }
         assert set(InstrumentKind.__members__.keys()) == expected
 
@@ -416,16 +461,17 @@ class TestInstrumentKind:
 # Instrument (base)
 # =========================================================================
 
+
 class TestInstrument:
     def _make(self, **kwargs: Any) -> Instrument:
-        defaults = dict(
-            id="i1",
-            kind=InstrumentKind.CASH,
-            amount=1000,
-            denom="EUR",
-            asset_holder_id="agent_a",
-            liability_issuer_id="agent_b",
-        )
+        defaults = {
+            "id": "i1",
+            "kind": InstrumentKind.CASH,
+            "amount": 1000,
+            "denom": "EUR",
+            "asset_holder_id": "agent_a",
+            "liability_issuer_id": "agent_b",
+        }
         defaults.update(kwargs)
         return Instrument(**defaults)
 
@@ -468,28 +514,38 @@ class TestInstrument:
 # Cash
 # =========================================================================
 
+
 class TestCash:
     def test_kind_is_cash(self) -> None:
         c = Cash(
-            id="c1", kind=InstrumentKind.PAYABLE,  # will be overridden
-            amount=500, denom="EUR",
-            asset_holder_id="firm1", liability_issuer_id="cb1",
+            id="c1",
+            kind=InstrumentKind.PAYABLE,  # will be overridden
+            amount=500,
+            denom="EUR",
+            asset_holder_id="firm1",
+            liability_issuer_id="cb1",
         )
         assert c.kind == InstrumentKind.CASH
 
     def test_is_financial(self) -> None:
         c = Cash(
-            id="c2", kind=InstrumentKind.CASH,
-            amount=100, denom="USD",
-            asset_holder_id="h1", liability_issuer_id="cb1",
+            id="c2",
+            kind=InstrumentKind.CASH,
+            amount=100,
+            denom="USD",
+            asset_holder_id="h1",
+            liability_issuer_id="cb1",
         )
         assert c.is_financial() is True
 
     def test_inherits_instrument(self) -> None:
         c = Cash(
-            id="c3", kind=InstrumentKind.CASH,
-            amount=200, denom="GBP",
-            asset_holder_id="b1", liability_issuer_id="cb1",
+            id="c3",
+            kind=InstrumentKind.CASH,
+            amount=200,
+            denom="GBP",
+            asset_holder_id="b1",
+            liability_issuer_id="cb1",
         )
         assert isinstance(c, Instrument)
 
@@ -498,20 +554,27 @@ class TestCash:
 # BankDeposit
 # =========================================================================
 
+
 class TestBankDeposit:
     def test_kind_is_bank_deposit(self) -> None:
         bd = BankDeposit(
-            id="bd1", kind=InstrumentKind.CASH,  # overridden
-            amount=2000, denom="EUR",
-            asset_holder_id="h1", liability_issuer_id="b1",
+            id="bd1",
+            kind=InstrumentKind.CASH,  # overridden
+            amount=2000,
+            denom="EUR",
+            asset_holder_id="h1",
+            liability_issuer_id="b1",
         )
         assert bd.kind == InstrumentKind.BANK_DEPOSIT
 
     def test_is_financial(self) -> None:
         bd = BankDeposit(
-            id="bd2", kind=InstrumentKind.BANK_DEPOSIT,
-            amount=500, denom="USD",
-            asset_holder_id="f1", liability_issuer_id="b1",
+            id="bd2",
+            kind=InstrumentKind.BANK_DEPOSIT,
+            amount=500,
+            denom="USD",
+            asset_holder_id="f1",
+            liability_issuer_id="b1",
         )
         assert bd.is_financial() is True
 
@@ -520,16 +583,17 @@ class TestBankDeposit:
 # ReserveDeposit
 # =========================================================================
 
+
 class TestReserveDeposit:
     def _make(self, **kwargs: Any) -> ReserveDeposit:
-        defaults = dict(
-            id="rd1",
-            kind=InstrumentKind.CASH,  # overridden in __post_init__
-            amount=10000,
-            denom="EUR",
-            asset_holder_id="bank1",
-            liability_issuer_id="cb1",
-        )
+        defaults = {
+            "id": "rd1",
+            "kind": InstrumentKind.CASH,  # overridden in __post_init__
+            "amount": 10000,
+            "denom": "EUR",
+            "asset_holder_id": "bank1",
+            "liability_issuer_id": "cb1",
+        }
         defaults.update(kwargs)
         return ReserveDeposit(**defaults)
 
@@ -617,17 +681,18 @@ class TestReserveDeposit:
 # Payable
 # =========================================================================
 
+
 class TestPayable:
     def _make(self, **kwargs: Any) -> Payable:
-        defaults = dict(
-            id="p1",
-            kind=InstrumentKind.CASH,  # overridden
-            amount=5000,
-            denom="EUR",
-            asset_holder_id="creditor",
-            liability_issuer_id="debtor",
-            due_day=10,
-        )
+        defaults = {
+            "id": "p1",
+            "kind": InstrumentKind.CASH,  # overridden
+            "amount": 5000,
+            "denom": "EUR",
+            "asset_holder_id": "creditor",
+            "liability_issuer_id": "debtor",
+            "due_day": 10,
+        }
         defaults.update(kwargs)
         return Payable(**defaults)
 
@@ -694,18 +759,19 @@ class TestPayable:
 # CBLoan
 # =========================================================================
 
+
 class TestCBLoan:
     def _make(self, **kwargs: Any) -> CBLoan:
-        defaults = dict(
-            id="cbl1",
-            kind=InstrumentKind.CASH,  # overridden
-            amount=50000,
-            denom="EUR",
-            asset_holder_id="cb1",
-            liability_issuer_id="bank1",
-            cb_rate=Decimal("0.03"),
-            issuance_day=5,
-        )
+        defaults = {
+            "id": "cbl1",
+            "kind": InstrumentKind.CASH,  # overridden
+            "amount": 50000,
+            "denom": "EUR",
+            "asset_holder_id": "cb1",
+            "liability_issuer_id": "bank1",
+            "cb_rate": Decimal("0.03"),
+            "issuance_day": 5,
+        }
         defaults.update(kwargs)
         return CBLoan(**defaults)
 
@@ -782,19 +848,20 @@ class TestCBLoan:
 # DeliveryObligation
 # =========================================================================
 
+
 class TestDeliveryObligation:
     def _make(self, **kwargs: Any) -> DeliveryObligation:
-        defaults = dict(
-            id="do1",
-            kind=InstrumentKind.CASH,  # overridden
-            amount=100,  # quantity
-            denom="units",
-            asset_holder_id="buyer",
-            liability_issuer_id="seller",
-            sku="WHEAT",
-            unit_price=Decimal("5.00"),
-            due_day=3,
-        )
+        defaults = {
+            "id": "do1",
+            "kind": InstrumentKind.CASH,  # overridden
+            "amount": 100,  # quantity
+            "denom": "units",
+            "asset_holder_id": "buyer",
+            "liability_issuer_id": "seller",
+            "sku": "WHEAT",
+            "unit_price": Decimal("5.00"),
+            "due_day": 3,
+        }
         defaults.update(kwargs)
         return DeliveryObligation(**defaults)
 
@@ -870,6 +937,7 @@ class TestDeliveryObligation:
 # Contract protocol and BaseContract
 # =========================================================================
 
+
 class TestContract:
     """Tests for the Contract protocol and BaseContract ABC."""
 
@@ -910,6 +978,7 @@ class TestContract:
 # =========================================================================
 # Policy protocol and BasePolicy
 # =========================================================================
+
 
 class TestPolicy:
     """Tests for the Policy protocol and BasePolicy ABC."""
@@ -956,6 +1025,7 @@ class TestPolicy:
 # =========================================================================
 # Cross-cutting / integration-style tests
 # =========================================================================
+
 
 class TestCrossCutting:
     """Tests that span multiple domain modules."""
@@ -1047,8 +1117,12 @@ class TestCrossCutting:
     def test_delivery_obligation_with_stock_lot(self) -> None:
         """A delivery obligation should match the value of a stock lot."""
         lot = StockLot(
-            id="s1", kind="stock_lot", sku="WHEAT",
-            quantity=100, unit_price=Decimal("5.00"), owner_id="seller",
+            id="s1",
+            kind="stock_lot",
+            sku="WHEAT",
+            quantity=100,
+            unit_price=Decimal("5.00"),
+            owner_id="seller",
         )
         obligation = DeliveryObligation(
             id="do1",
@@ -1080,29 +1154,56 @@ class TestCrossCutting:
         """Every instrument subclass should be an instance of Instrument."""
         instruments = [
             Cash(
-                id="c", kind=InstrumentKind.CASH, amount=100, denom="EUR",
-                asset_holder_id="a", liability_issuer_id="b",
+                id="c",
+                kind=InstrumentKind.CASH,
+                amount=100,
+                denom="EUR",
+                asset_holder_id="a",
+                liability_issuer_id="b",
             ),
             BankDeposit(
-                id="bd", kind=InstrumentKind.BANK_DEPOSIT, amount=200, denom="EUR",
-                asset_holder_id="a", liability_issuer_id="b",
+                id="bd",
+                kind=InstrumentKind.BANK_DEPOSIT,
+                amount=200,
+                denom="EUR",
+                asset_holder_id="a",
+                liability_issuer_id="b",
             ),
             ReserveDeposit(
-                id="rd", kind=InstrumentKind.RESERVE_DEPOSIT, amount=300, denom="EUR",
-                asset_holder_id="a", liability_issuer_id="b",
+                id="rd",
+                kind=InstrumentKind.RESERVE_DEPOSIT,
+                amount=300,
+                denom="EUR",
+                asset_holder_id="a",
+                liability_issuer_id="b",
             ),
             Payable(
-                id="p", kind=InstrumentKind.PAYABLE, amount=400, denom="EUR",
-                asset_holder_id="a", liability_issuer_id="b", due_day=5,
+                id="p",
+                kind=InstrumentKind.PAYABLE,
+                amount=400,
+                denom="EUR",
+                asset_holder_id="a",
+                liability_issuer_id="b",
+                due_day=5,
             ),
             CBLoan(
-                id="cbl", kind=InstrumentKind.CB_LOAN, amount=500, denom="EUR",
-                asset_holder_id="a", liability_issuer_id="b",
+                id="cbl",
+                kind=InstrumentKind.CB_LOAN,
+                amount=500,
+                denom="EUR",
+                asset_holder_id="a",
+                liability_issuer_id="b",
             ),
             DeliveryObligation(
-                id="do", kind=InstrumentKind.DELIVERY_OBLIGATION, amount=10, denom="u",
-                asset_holder_id="a", liability_issuer_id="b",
-                sku="X", unit_price=Decimal("1"), due_day=1,
+                id="do",
+                kind=InstrumentKind.DELIVERY_OBLIGATION,
+                amount=10,
+                denom="u",
+                asset_holder_id="a",
+                liability_issuer_id="b",
+                sku="X",
+                unit_price=Decimal("1"),
+                due_day=1,
             ),
         ]
         for inst in instruments:

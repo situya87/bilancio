@@ -1,20 +1,22 @@
 """Pydantic models for Bilancio scenario configuration."""
 
-from typing import Literal, Optional, Union, List, Dict, Any, Annotated, Self
 from decimal import Decimal
+from typing import Annotated, Any, Literal, Self
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class PolicyOverrides(BaseModel):
     """Policy configuration overrides."""
-    mop_rank: Optional[Dict[str, List[str]]] = Field(
-        None,
-        description="Override default settlement order per agent kind"
+
+    mop_rank: dict[str, list[str]] | None = Field(
+        None, description="Override default settlement order per agent kind"
     )
 
 
 class BankingRulesConfig(BaseModel):
     """Banking rules configuration for a jurisdiction."""
+
     reserve_requirement_ratio: Decimal = Field(
         Decimal("0"), description="Reserve requirement ratio (0-1)"
     )
@@ -38,15 +40,12 @@ class BankingRulesConfig(BaseModel):
 
 class CapitalControlRuleConfig(BaseModel):
     """A single capital control rule."""
+
     purpose: Literal["TRADE", "PORTFOLIO", "FDI", "INTERBANK", "REMITTANCE", "OTHER"] = Field(
         ..., description="Capital flow purpose"
     )
-    direction: Literal["inflow", "outflow", "both"] = Field(
-        ..., description="Flow direction"
-    )
-    action: Literal["ALLOW", "BLOCK", "TAX"] = Field(
-        ..., description="Action to take"
-    )
+    direction: Literal["inflow", "outflow", "both"] = Field(..., description="Flow direction")
+    action: Literal["ALLOW", "BLOCK", "TAX"] = Field(..., description="Action to take")
     tax_rate: Decimal = Field(Decimal("0"), description="Tax rate (for TAX action)")
     description: str = Field("", description="Human-readable description")
 
@@ -60,7 +59,8 @@ class CapitalControlRuleConfig(BaseModel):
 
 class CapitalControlsConfig(BaseModel):
     """Capital controls configuration for a jurisdiction."""
-    rules: List[CapitalControlRuleConfig] = Field(
+
+    rules: list[CapitalControlRuleConfig] = Field(
         default_factory=list, description="Ordered list of capital control rules"
     )
     default_action: Literal["ALLOW", "BLOCK", "TAX"] = Field(
@@ -70,6 +70,7 @@ class CapitalControlsConfig(BaseModel):
 
 class ExchangeRatePairConfig(BaseModel):
     """Configuration for an exchange rate pair."""
+
     base_currency: str = Field(..., description="Base currency code")
     quote_currency: str = Field(..., description="Quote currency code")
     rate: Decimal = Field(..., description="Exchange rate (units of quote per unit of base)")
@@ -98,43 +99,45 @@ class ExchangeRatePairConfig(BaseModel):
 
 class JurisdictionConfig(BaseModel):
     """Configuration for a jurisdiction."""
+
     id: str = Field(..., description="Unique jurisdiction identifier")
     name: str = Field(..., description="Human-readable name")
     domestic_currency: str = Field(..., description="Domestic currency code")
-    institutional_agents: List[str] = Field(
+    institutional_agents: list[str] = Field(
         default_factory=list,
-        description="Agent IDs of institutional agents (CB, Treasury) in this jurisdiction"
+        description="Agent IDs of institutional agents (CB, Treasury) in this jurisdiction",
     )
     banking_rules: BankingRulesConfig = Field(
         default_factory=BankingRulesConfig,  # type: ignore[arg-type]
-        description="Banking regulations"
+        description="Banking regulations",
     )
     capital_controls: CapitalControlsConfig = Field(
         default_factory=CapitalControlsConfig,  # type: ignore[arg-type]
-        description="Capital control rules"
+        description="Capital control rules",
     )
 
 
 class AgentSpec(BaseModel):
     """Specification for an agent in the scenario."""
+
     id: str = Field(..., description="Unique identifier for the agent")
-    kind: Literal["central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency"] = Field(
-        ..., description="Type of agent"
-    )
+    kind: Literal[
+        "central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency"
+    ] = Field(..., description="Type of agent")
     name: str = Field(..., description="Human-readable name for the agent")
-    jurisdiction: Optional[str] = Field(None, description="Jurisdiction this agent belongs to")
+    jurisdiction: str | None = Field(None, description="Jurisdiction this agent belongs to")
 
 
 class MintReserves(BaseModel):
     """Action to mint reserves to a bank."""
+
     action: Literal["mint_reserves"] = "mint_reserves"
     to: str = Field(..., description="Target bank ID")
     amount: Decimal = Field(..., description="Amount to mint")
-    alias: Optional[str] = Field(
-        None,
-        description="Optional alias to reference the created reserve_deposit contract later"
+    alias: str | None = Field(
+        None, description="Optional alias to reference the created reserve_deposit contract later"
     )
-    
+
     @field_validator("amount")
     @classmethod
     def amount_positive(cls, v: Decimal) -> Decimal:
@@ -145,12 +148,12 @@ class MintReserves(BaseModel):
 
 class MintCash(BaseModel):
     """Action to mint cash to an agent."""
+
     action: Literal["mint_cash"] = "mint_cash"
     to: str = Field(..., description="Target agent ID")
     amount: Decimal = Field(..., description="Amount to mint")
-    alias: Optional[str] = Field(
-        None,
-        description="Optional alias to reference the created cash contract later"
+    alias: str | None = Field(
+        None, description="Optional alias to reference the created cash contract later"
     )
 
     @field_validator("amount")
@@ -163,6 +166,7 @@ class MintCash(BaseModel):
 
 class TransferReserves(BaseModel):
     """Action to transfer reserves between banks."""
+
     action: Literal["transfer_reserves"] = "transfer_reserves"
     from_bank: str = Field(..., description="Source bank ID")
     to_bank: str = Field(..., description="Target bank ID")
@@ -178,6 +182,7 @@ class TransferReserves(BaseModel):
 
 class TransferCash(BaseModel):
     """Action to transfer cash between agents."""
+
     action: Literal["transfer_cash"] = "transfer_cash"
     from_agent: str = Field(..., description="Source agent ID")
     to_agent: str = Field(..., description="Target agent ID")
@@ -193,6 +198,7 @@ class TransferCash(BaseModel):
 
 class DepositCash(BaseModel):
     """Action to deposit cash at a bank."""
+
     action: Literal["deposit_cash"] = "deposit_cash"
     customer: str = Field(..., description="Customer agent ID")
     bank: str = Field(..., description="Bank ID")
@@ -208,6 +214,7 @@ class DepositCash(BaseModel):
 
 class WithdrawCash(BaseModel):
     """Action to withdraw cash from a bank."""
+
     action: Literal["withdraw_cash"] = "withdraw_cash"
     customer: str = Field(..., description="Customer agent ID")
     bank: str = Field(..., description="Bank ID")
@@ -223,6 +230,7 @@ class WithdrawCash(BaseModel):
 
 class ClientPayment(BaseModel):
     """Action for client payment between bank accounts."""
+
     action: Literal["client_payment"] = "client_payment"
     payer: str = Field(..., description="Payer agent ID")
     payee: str = Field(..., description="Payee agent ID")
@@ -238,12 +246,13 @@ class ClientPayment(BaseModel):
 
 class CreateStock(BaseModel):
     """Action to create stock inventory."""
+
     action: Literal["create_stock"] = "create_stock"
     owner: str = Field(..., description="Owner agent ID")
     sku: str = Field(..., description="Stock keeping unit identifier")
     quantity: int = Field(..., description="Quantity of items")
     unit_price: Decimal = Field(..., description="Price per unit")
-    
+
     @field_validator("quantity")
     @classmethod
     def quantity_positive(cls, v: int) -> int:
@@ -261,6 +270,7 @@ class CreateStock(BaseModel):
 
 class TransferStock(BaseModel):
     """Action to transfer stock between agents."""
+
     action: Literal["transfer_stock"] = "transfer_stock"
     from_agent: str = Field(..., description="Source agent ID")
     to_agent: str = Field(..., description="Target agent ID")
@@ -277,6 +287,7 @@ class TransferStock(BaseModel):
 
 class CreateDeliveryObligation(BaseModel):
     """Action to create a delivery obligation."""
+
     action: Literal["create_delivery_obligation"] = "create_delivery_obligation"
     from_agent: str = Field(..., description="Delivering agent ID", alias="from")
     to_agent: str = Field(..., description="Receiving agent ID", alias="to")
@@ -284,11 +295,10 @@ class CreateDeliveryObligation(BaseModel):
     quantity: int = Field(..., description="Quantity to deliver")
     unit_price: Decimal = Field(..., description="Price per unit")
     due_day: int = Field(..., description="Day when delivery is due")
-    alias: Optional[str] = Field(
-        None,
-        description="Optional alias to reference the created delivery obligation later"
+    alias: str | None = Field(
+        None, description="Optional alias to reference the created delivery obligation later"
     )
-    
+
     @field_validator("quantity")
     @classmethod
     def quantity_positive(cls, v: int) -> int:
@@ -313,18 +323,18 @@ class CreateDeliveryObligation(BaseModel):
 
 class CreatePayable(BaseModel):
     """Action to create a payable obligation."""
+
     action: Literal["create_payable"] = "create_payable"
     from_agent: str = Field(..., description="Debtor agent ID", alias="from")
     to_agent: str = Field(..., description="Creditor agent ID", alias="to")
     amount: Decimal = Field(..., description="Amount to pay")
     due_day: int = Field(..., description="Day when payment is due")
-    alias: Optional[str] = Field(
-        None,
-        description="Optional alias to reference the created payable later"
+    alias: str | None = Field(
+        None, description="Optional alias to reference the created payable later"
     )
-    maturity_distance: Optional[int] = Field(
+    maturity_distance: int | None = Field(
         None,
-        description="Original maturity distance (ΔT) for rollover. If not set, defaults to due_day."
+        description="Original maturity distance (ΔT) for rollover. If not set, defaults to due_day.",
     )
 
     @field_validator("amount")
@@ -349,9 +359,10 @@ class TransferClaim(BaseModel):
     References a specific contract by alias or by ID. Both may be provided, but
     if both are present they must refer to the same contract.
     """
+
     action: Literal["transfer_claim"] = "transfer_claim"
-    contract_alias: Optional[str] = Field(None, description="Alias of the contract to transfer")
-    contract_id: Optional[str] = Field(None, description="Explicit contract ID to transfer")
+    contract_alias: str | None = Field(None, description="Alias of the contract to transfer")
+    contract_id: str | None = Field(None, description="Explicit contract ID to transfer")
     to_agent: str = Field(..., description="New creditor (asset holder) agent ID")
 
     @field_validator("to_agent")
@@ -370,8 +381,11 @@ class TransferClaim(BaseModel):
 
 class ScheduledAction(BaseModel):
     """A user-scheduled action to run at a specific day (Phase B1)."""
+
     day: int = Field(..., description="Day index (>= 1) to execute this action")
-    action: Dict[str, Any] = Field(..., description="Single action dictionary to execute on that day")
+    action: dict[str, Any] = Field(
+        ..., description="Single action dictionary to execute on that day"
+    )
 
     @field_validator("day")
     @classmethod
@@ -381,65 +395,53 @@ class ScheduledAction(BaseModel):
         return v
 
 
-Action = Union[
-    MintReserves,
-    MintCash,
-    TransferReserves,
-    TransferCash,
-    DepositCash,
-    WithdrawCash,
-    ClientPayment,
-    CreateStock,
-    TransferStock,
-    CreateDeliveryObligation,
-    CreatePayable,
-    TransferClaim,
-]
+Action = (
+    MintReserves
+    | MintCash
+    | TransferReserves
+    | TransferCash
+    | DepositCash
+    | WithdrawCash
+    | ClientPayment
+    | CreateStock
+    | TransferStock
+    | CreateDeliveryObligation
+    | CreatePayable
+    | TransferClaim
+)
 
 
 class ShowConfig(BaseModel):
     """Display configuration for the run."""
-    balances: Optional[List[str]] = Field(
-        None,
-        description="Agent IDs to show balances for"
-    )
+
+    balances: list[str] | None = Field(None, description="Agent IDs to show balances for")
     events: Literal["summary", "detailed", "table"] = Field(
-        "detailed",
-        description="Event display mode"
+        "detailed", description="Event display mode"
     )
 
 
 class ExportConfig(BaseModel):
     """Export configuration for simulation results."""
-    balances_csv: Optional[str] = Field(
-        None,
-        description="Path to export balances CSV"
-    )
-    events_jsonl: Optional[str] = Field(
-        None,
-        description="Path to export events JSONL"
-    )
+
+    balances_csv: str | None = Field(None, description="Path to export balances CSV")
+    events_jsonl: str | None = Field(None, description="Path to export events JSONL")
 
 
 class RunConfig(BaseModel):
     """Run configuration for the simulation."""
-    mode: Literal["step", "until_stable"] = Field(
-        "until_stable",
-        description="Simulation run mode"
-    )
+
+    mode: Literal["step", "until_stable"] = Field("until_stable", description="Simulation run mode")
     max_days: int = Field(90, description="Maximum days to simulate")
     quiet_days: int = Field(2, description="Required quiet days for stable state")
     default_handling: Literal["fail-fast", "expel-agent"] = Field(
-        "fail-fast",
-        description="How the engine reacts when an agent defaults"
+        "fail-fast", description="How the engine reacts when an agent defaults"
     )
     rollover_enabled: bool = Field(
-        False,
-        description="Enable continuous rollover of settled payables (Plan 024)"
+        False, description="Enable continuous rollover of settled payables (Plan 024)"
     )
     estimate_logging: bool = Field(
         False,
-        description="Enable logging of Estimate objects (rating, dealer risk) to system estimate_log"
+        description="Enable logging of Estimate objects (rating, dealer risk) to system estimate_log",
     )
     show: ShowConfig = Field(default_factory=ShowConfig)  # type: ignore[arg-type]
     export: ExportConfig = Field(default_factory=ExportConfig)  # type: ignore[arg-type]
@@ -461,10 +463,13 @@ class RunConfig(BaseModel):
 
 class DealerBucketConfig(BaseModel):
     """Configuration for a dealer ring bucket."""
+
     tau_min: int = Field(..., description="Minimum remaining maturity (inclusive)")
-    tau_max: int = Field(..., description="Maximum remaining maturity (inclusive), use 999 for unbounded")
+    tau_max: int = Field(
+        ..., description="Maximum remaining maturity (inclusive), use 999 for unbounded"
+    )
     M: Decimal = Field(Decimal("1.0"), description="Mid anchor price")
-    O: Decimal = Field(Decimal("0.30"), description="Spread")
+    O: Decimal = Field(Decimal("0.30"), description="Spread")  # noqa: E741
 
     @field_validator("tau_min", "tau_max")
     @classmethod
@@ -496,6 +501,7 @@ class DealerBucketConfig(BaseModel):
 
 class DealerOrderFlowConfig(BaseModel):
     """Configuration for dealer order flow arrival process."""
+
     pi_sell: Decimal = Field(Decimal("0.5"), description="Probability of SELL vs BUY (0-1)")
     N_max: int = Field(3, description="Max trades per arrival")
 
@@ -516,6 +522,7 @@ class DealerOrderFlowConfig(BaseModel):
 
 class DealerTraderPolicyConfig(BaseModel):
     """Configuration for dealer trader policy parameters."""
+
     horizon_H: int = Field(3, description="Trading horizon (days ahead to consider shortfall)")
     buffer_B: Decimal = Field(Decimal("1.0"), description="Liquidity buffer multiplier")
 
@@ -536,13 +543,26 @@ class DealerTraderPolicyConfig(BaseModel):
 
 class RiskAssessmentConfig(BaseModel):
     """Configuration for trader risk assessment in dealer subsystem."""
-    enabled: bool = Field(True, description="Whether risk assessment is active for trader decisions")
-    lookback_window: int = Field(5, description="Days of history to consider for default probability")
+
+    enabled: bool = Field(
+        True, description="Whether risk assessment is active for trader decisions"
+    )
+    lookback_window: int = Field(
+        5, description="Days of history to consider for default probability"
+    )
     smoothing_alpha: Decimal = Field(Decimal("1.0"), description="Laplace smoothing parameter")
-    base_risk_premium: Decimal = Field(Decimal("0.02"), description="Base risk premium (threshold for trading)")
-    urgency_sensitivity: Decimal = Field(Decimal("0.10"), description="How much liquidity urgency reduces threshold")
-    use_issuer_specific: bool = Field(False, description="Use per-issuer vs system-wide default rates")
-    buy_premium_multiplier: Decimal = Field(Decimal("1.0"), description="Multiplier for buy threshold (same premium as sellers)")
+    base_risk_premium: Decimal = Field(
+        Decimal("0.02"), description="Base risk premium (threshold for trading)"
+    )
+    urgency_sensitivity: Decimal = Field(
+        Decimal("0.10"), description="How much liquidity urgency reduces threshold"
+    )
+    use_issuer_specific: bool = Field(
+        False, description="Use per-issuer vs system-wide default rates"
+    )
+    buy_premium_multiplier: Decimal = Field(
+        Decimal("1.0"), description="Multiplier for buy threshold (same premium as sellers)"
+    )
 
     @field_validator("lookback_window")
     @classmethod
@@ -575,25 +595,27 @@ class RiskAssessmentConfig(BaseModel):
 
 class DealerConfig(BaseModel):
     """Configuration for dealer subsystem."""
+
     enabled: bool = Field(False, description="Whether dealer subsystem is active")
     ticket_size: Decimal = Field(Decimal("1"), description="Face value of tickets")
-    buckets: Optional[Dict[str, DealerBucketConfig]] = Field(
-        None,
-        description="Bucket configurations by name (short, mid, long)"
+    buckets: dict[str, DealerBucketConfig] | None = Field(
+        None, description="Bucket configurations by name (short, mid, long)"
     )
-    dealer_share: Decimal = Field(Decimal("0.25"), description="Fraction of system value for dealer capital")
+    dealer_share: Decimal = Field(
+        Decimal("0.25"), description="Fraction of system value for dealer capital"
+    )
     vbt_share: Decimal = Field(Decimal("0.50"), description="Fraction for VBT capital")
     order_flow: DealerOrderFlowConfig = Field(
         default_factory=DealerOrderFlowConfig,  # type: ignore[arg-type]
-        description="Order flow arrival configuration"
+        description="Order flow arrival configuration",
     )
     trader_policy: DealerTraderPolicyConfig = Field(
         default_factory=DealerTraderPolicyConfig,  # type: ignore[arg-type]
-        description="Trader policy configuration"
+        description="Trader policy configuration",
     )
     risk_assessment: RiskAssessmentConfig = Field(
         default_factory=RiskAssessmentConfig,  # type: ignore[arg-type]
-        description="Risk assessment configuration for trader decisions"
+        description="Risk assessment configuration for trader decisions",
     )
 
     @field_validator("ticket_size")
@@ -615,22 +637,13 @@ class DealerConfig(BaseModel):
         if self.buckets is None:
             self.buckets = {
                 "short": DealerBucketConfig(
-                    tau_min=1,
-                    tau_max=3,
-                    M=Decimal("1.0"),
-                    O=Decimal("0.20")
+                    tau_min=1, tau_max=3, M=Decimal("1.0"), O=Decimal("0.20")
                 ),
                 "mid": DealerBucketConfig(
-                    tau_min=4,
-                    tau_max=8,
-                    M=Decimal("1.0"),
-                    O=Decimal("0.30")
+                    tau_min=4, tau_max=8, M=Decimal("1.0"), O=Decimal("0.30")
                 ),
                 "long": DealerBucketConfig(
-                    tau_min=9,
-                    tau_max=999,
-                    M=Decimal("1.0"),
-                    O=Decimal("0.40")
+                    tau_min=9, tau_max=999, M=Decimal("1.0"), O=Decimal("0.40")
                 ),
             }
         return self
@@ -656,48 +669,44 @@ class BalancedDealerConfig(BaseModel):
 
     enabled: bool = Field(default=False, description="Whether balanced mode is active")
     face_value: Decimal = Field(
-        default=Decimal("20"),
-        description="Face value S - cashflow at maturity"
+        default=Decimal("20"), description="Face value S - cashflow at maturity"
     )
     outside_mid_ratio: Decimal = Field(
         default=Decimal("0.75"),
-        description="M/S ratio - outside mid as fraction of face value (0.5 to 1.0)"
+        description="M/S ratio - outside mid as fraction of face value (0.5 to 1.0)",
     )
     big_entity_share: Decimal = Field(
         default=Decimal("0.25"),
-        description="Fraction of trader debt allocated to big entities (β) - DEPRECATED, use vbt/dealer shares"
+        description="Fraction of trader debt allocated to big entities (β) - DEPRECATED, use vbt/dealer shares",
     )
     vbt_share_per_bucket: Decimal = Field(
-        default=Decimal("0.20"),
-        description="VBT holds 20% of claims per maturity bucket"
+        default=Decimal("0.20"), description="VBT holds 20% of claims per maturity bucket"
     )
     dealer_share_per_bucket: Decimal = Field(
-        default=Decimal("0.05"),
-        description="Dealer holds 5% of claims per maturity bucket"
+        default=Decimal("0.05"), description="Dealer holds 5% of claims per maturity bucket"
     )
     rollover_enabled: bool = Field(
-        default=True,
-        description="Enable continuous rollover of matured claims"
+        default=True, description="Enable continuous rollover of matured claims"
     )
     mode: Literal["passive", "active", "lender", "nbfi", "nbfi_dealer"] = Field(
         default="active",
-        description="passive = C (mimics), active = D (dealers), lender/nbfi/nbfi_dealer = with NBFI lending"
+        description="passive = C (mimics), active = D (dealers), lender/nbfi/nbfi_dealer = with NBFI lending",
     )
     alpha_vbt: Decimal = Field(
         default=Decimal("0"),
         ge=Decimal("0"),
         le=Decimal("1"),
-        description="VBT informedness: 0=naive prior, 1=fully kappa-informed pricing"
+        description="VBT informedness: 0=naive prior, 1=fully kappa-informed pricing",
     )
     alpha_trader: Decimal = Field(
         default=Decimal("0"),
         ge=Decimal("0"),
         le=Decimal("1"),
-        description="Trader informedness: 0=naive prior, 1=fully kappa-informed pricing"
+        description="Trader informedness: 0=naive prior, 1=fully kappa-informed pricing",
     )
-    kappa: Optional[Decimal] = Field(
+    kappa: Decimal | None = Field(
         default=None,
-        description="Kappa (injected from run parameters for informedness computation)"
+        description="Kappa (injected from run parameters for informedness computation)",
     )
 
     # Decision module parameters
@@ -794,20 +803,36 @@ class BalancedDealerConfig(BaseModel):
 
 class LenderScenarioConfig(BaseModel):
     """Lender configuration within a scenario."""
+
     enabled: bool = Field(default=False, description="Enable non-bank lender")
     base_rate: Decimal = Field(default=Decimal("0.05"), description="Base interest rate")
-    risk_premium_scale: Decimal = Field(default=Decimal("0.20"), description="Risk premium multiplier")
-    max_single_exposure: Decimal = Field(default=Decimal("0.15"), description="Max exposure to single borrower")
-    max_total_exposure: Decimal = Field(default=Decimal("0.80"), description="Max total lending exposure")
+    risk_premium_scale: Decimal = Field(
+        default=Decimal("0.20"), description="Risk premium multiplier"
+    )
+    max_single_exposure: Decimal = Field(
+        default=Decimal("0.15"), description="Max exposure to single borrower"
+    )
+    max_total_exposure: Decimal = Field(
+        default=Decimal("0.80"), description="Max total lending exposure"
+    )
     maturity_days: int = Field(default=2, description="Loan maturity in days")
     horizon: int = Field(default=3, description="Look-ahead horizon for obligations")
 
     # LenderProfile behavioral parameters
-    kappa: Optional[Decimal] = Field(default=None, description="System liquidity ratio for default estimation (if None, uses system kappa)")
-    risk_aversion: Decimal = Field(default=Decimal("0.3"), description="Lender risk aversion (0=aggressive, 1=conservative)")
+    kappa: Decimal | None = Field(
+        default=None,
+        description="System liquidity ratio for default estimation (if None, uses system kappa)",
+    )
+    risk_aversion: Decimal = Field(
+        default=Decimal("0.3"), description="Lender risk aversion (0=aggressive, 1=conservative)"
+    )
     planning_horizon: int = Field(default=5, description="Days to look ahead for coverage analysis")
-    profit_target: Decimal = Field(default=Decimal("0.05"), description="Target return rate on loans")
-    max_loan_maturity: Optional[int] = Field(default=None, description="Max loan maturity (None = use ring maturity)")
+    profit_target: Decimal = Field(
+        default=Decimal("0.05"), description="Target return rate on loans"
+    )
+    max_loan_maturity: int | None = Field(
+        default=None, description="Max loan maturity (None = use ring maturity)"
+    )
 
     # Information access configuration
     info_cash_visibility: Literal["none", "noisy", "perfect"] = Field(
@@ -815,7 +840,7 @@ class LenderScenarioConfig(BaseModel):
     )
     info_cash_noise: Decimal = Field(
         default=Decimal("0.10"),
-        description="Estimation error fraction for counterparty cash (when noisy)"
+        description="Estimation error fraction for counterparty cash (when noisy)",
     )
     info_liabilities_visibility: Literal["none", "noisy", "perfect"] = Field(
         default="perfect", description="Lender visibility of counterparty liabilities"
@@ -824,8 +849,7 @@ class LenderScenarioConfig(BaseModel):
         default="perfect", description="Lender visibility of counterparty default history"
     )
     info_history_sample_rate: Decimal = Field(
-        default=Decimal("0.7"),
-        description="Sample rate for history observation (when noisy)"
+        default=Decimal("0.7"), description="Sample rate for history observation (when noisy)"
     )
     info_network_visibility: Literal["none", "noisy", "perfect"] = Field(
         default="none", description="Lender visibility of network topology"
@@ -837,12 +861,21 @@ class LenderScenarioConfig(BaseModel):
 
 class RatingAgencyScenarioConfig(BaseModel):
     """Rating agency configuration within a scenario."""
+
     enabled: bool = Field(default=False, description="Enable rating agency")
     lookback_window: int = Field(default=5, description="Days of history to consider")
-    balance_sheet_weight: Decimal = Field(default=Decimal("0.4"), description="Weight for balance sheet component")
-    history_weight: Decimal = Field(default=Decimal("0.6"), description="Weight for history component")
-    conservatism_bias: Decimal = Field(default=Decimal("0.02"), description="Additive conservatism bias")
-    coverage_fraction: Decimal = Field(default=Decimal("0.8"), description="Fraction of agents to rate each day")
+    balance_sheet_weight: Decimal = Field(
+        default=Decimal("0.4"), description="Weight for balance sheet component"
+    )
+    history_weight: Decimal = Field(
+        default=Decimal("0.6"), description="Weight for history component"
+    )
+    conservatism_bias: Decimal = Field(
+        default=Decimal("0.02"), description="Additive conservatism bias"
+    )
+    coverage_fraction: Decimal = Field(
+        default=Decimal("0.8"), description="Fraction of agents to rate each day"
+    )
     info_profile: Literal["omniscient", "realistic"] = Field(
         default="realistic", description="Information profile for the agency"
     )
@@ -850,45 +883,31 @@ class RatingAgencyScenarioConfig(BaseModel):
 
 class ScenarioConfig(BaseModel):
     """Complete scenario configuration."""
+
     version: int = Field(1, description="Configuration version")
     name: str = Field(..., description="Scenario name")
-    description: Optional[str] = Field(None, description="Scenario description")
-    policy_overrides: Optional[PolicyOverrides] = Field(
-        None,
-        description="Policy engine overrides"
+    description: str | None = Field(None, description="Scenario description")
+    policy_overrides: PolicyOverrides | None = Field(None, description="Policy engine overrides")
+    dealer: DealerConfig | None = Field(None, description="Dealer subsystem configuration")
+    balanced_dealer: BalancedDealerConfig | None = Field(
+        None, description="Balanced dealer/mimic configuration for C vs D comparison"
     )
-    dealer: Optional[DealerConfig] = Field(
-        None,
-        description="Dealer subsystem configuration"
+    lender: LenderScenarioConfig | None = Field(None, description="Non-bank lender configuration")
+    rating_agency: RatingAgencyScenarioConfig | None = Field(
+        None, description="Rating agency configuration"
     )
-    balanced_dealer: Optional[BalancedDealerConfig] = Field(
-        None,
-        description="Balanced dealer/mimic configuration for C vs D comparison"
+    jurisdictions: list[JurisdictionConfig] | None = Field(
+        None, description="Jurisdiction definitions for multi-currency scenarios"
     )
-    lender: Optional[LenderScenarioConfig] = Field(
-        None,
-        description="Non-bank lender configuration"
+    fx_rates: list[ExchangeRatePairConfig] | None = Field(
+        None, description="Exchange rate pairs for FX market"
     )
-    rating_agency: Optional[RatingAgencyScenarioConfig] = Field(
-        None,
-        description="Rating agency configuration"
+    agents: list[AgentSpec] = Field(..., description="Agents in the scenario")
+    initial_actions: list[dict[str, Any]] = Field(
+        default_factory=list, description="Actions to execute during setup"
     )
-    jurisdictions: Optional[List[JurisdictionConfig]] = Field(
-        None,
-        description="Jurisdiction definitions for multi-currency scenarios"
-    )
-    fx_rates: Optional[List[ExchangeRatePairConfig]] = Field(
-        None,
-        description="Exchange rate pairs for FX market"
-    )
-    agents: List[AgentSpec] = Field(..., description="Agents in the scenario")
-    initial_actions: List[Dict[str, Any]] = Field(
-        default_factory=list,
-        description="Actions to execute during setup"
-    )
-    scheduled_actions: List[ScheduledAction] = Field(
-        default_factory=list,
-        description="Actions to execute during simulation (Phase B1) by day"
+    scheduled_actions: list[ScheduledAction] = Field(
+        default_factory=list, description="Actions to execute during simulation (Phase B1) by day"
     )
     run: RunConfig = Field(default_factory=RunConfig)  # type: ignore[arg-type]
 
@@ -901,7 +920,7 @@ class ScenarioConfig(BaseModel):
 
     @field_validator("agents")
     @classmethod
-    def agents_unique_ids(cls, v: List[AgentSpec]) -> List[AgentSpec]:
+    def agents_unique_ids(cls, v: list[AgentSpec]) -> list[AgentSpec]:
         ids = [agent.id for agent in v]
         if len(ids) != len(set(ids)):
             raise ValueError("Agent IDs must be unique")
@@ -938,16 +957,11 @@ class RingExplorerLiquidityAllocation(BaseModel):
     """Liquidity seeding strategy for ring explorer generator."""
 
     mode: Literal["single_at", "uniform", "vector"] = Field(
-        "uniform",
-        description="Distribution mode for initial liquidity"
+        "uniform", description="Distribution mode for initial liquidity"
     )
-    agent: Optional[str] = Field(
-        None,
-        description="Target agent for single_at mode"
-    )
-    vector: Optional[List[Decimal]] = Field(
-        None,
-        description="Explicit per-agent liquidity shares (length = n_agents)"
+    agent: str | None = Field(None, description="Target agent for single_at mode")
+    vector: list[Decimal] | None = Field(
+        None, description="Explicit per-agent liquidity shares (length = n_agents)"
     )
 
     @model_validator(mode="after")
@@ -965,7 +979,7 @@ class RingExplorerLiquidityAllocation(BaseModel):
 class RingExplorerLiquidityConfig(BaseModel):
     """Liquidity configuration for ring explorer generator."""
 
-    total: Optional[Decimal] = Field(
+    total: Decimal | None = Field(
         None,
         description="Total initial liquidity to seed",
     )
@@ -976,7 +990,7 @@ class RingExplorerLiquidityConfig(BaseModel):
 
     @field_validator("total")
     @classmethod
-    def total_positive(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+    def total_positive(cls, v: Decimal | None) -> Decimal | None:
         if v is not None and v <= 0:
             raise ValueError("liquidity.total must be positive when provided")
         return v
@@ -986,18 +1000,16 @@ class RingExplorerInequalityConfig(BaseModel):
     """Dirichlet-based inequality controls."""
 
     scheme: Literal["dirichlet"] = Field(
-        "dirichlet",
-        description="Payable size distribution scheme"
+        "dirichlet", description="Payable size distribution scheme"
     )
     concentration: Decimal = Field(
-        Decimal("1"),
-        description="Dirichlet concentration parameter (c > 0)"
+        Decimal("1"), description="Dirichlet concentration parameter (c > 0)"
     )
     monotonicity: Decimal = Field(
         Decimal("0"),
         ge=Decimal("-1"),
         le=Decimal("1"),
-        description="Ordering control (-1 asc, 0 random, 1 desc)"
+        description="Ordering control (-1 asc, 0 random, 1 desc)",
     )
 
     @field_validator("concentration")
@@ -1011,20 +1023,13 @@ class RingExplorerInequalityConfig(BaseModel):
 class RingExplorerMaturityConfig(BaseModel):
     """Maturity misalignment controls."""
 
-    days: int = Field(
-        1,
-        ge=1,
-        description="Horizon of due days (max due_day)"
-    )
-    mode: Literal["lead_lag"] = Field(
-        "lead_lag",
-        description="Maturity offset mode"
-    )
+    days: int = Field(1, ge=1, description="Horizon of due days (max due_day)")
+    mode: Literal["lead_lag"] = Field("lead_lag", description="Maturity offset mode")
     mu: Decimal = Field(
         Decimal("0"),
         ge=Decimal("0"),
         le=Decimal("1"),
-        description="Normalized lead-lag misalignment (0 <= mu <= 1)"
+        description="Normalized lead-lag misalignment (0 <= mu <= 1)",
     )
 
 
@@ -1036,38 +1041,31 @@ class RingExplorerParamsModel(BaseModel):
     kappa: Decimal = Field(..., gt=0, description="Debt-to-liquidity ratio target")
     liquidity: RingExplorerLiquidityConfig = Field(
         default_factory=RingExplorerLiquidityConfig,  # type: ignore[arg-type]
-        description="Liquidity seeding controls"
+        description="Liquidity seeding controls",
     )
     inequality: RingExplorerInequalityConfig = Field(
         default_factory=RingExplorerInequalityConfig,  # type: ignore[arg-type]
-        description="Payable distribution controls"
+        description="Payable distribution controls",
     )
     maturity: RingExplorerMaturityConfig = Field(
         default_factory=RingExplorerMaturityConfig,  # type: ignore[arg-type]
-        description="Maturity misalignment controls"
+        description="Maturity misalignment controls",
     )
     currency: str = Field("USD", description="Currency label for descriptions")
-    Q_total: Optional[Decimal] = Field(
+    Q_total: Decimal | None = Field(
         None,
-        description="Total dues on day 1 (S1). Overrides derivation from liquidity when provided"
+        description="Total dues on day 1 (S1). Overrides derivation from liquidity when provided",
     )
-    policy_overrides: Optional[PolicyOverrides] = Field(
-        None,
-        description="Policy overrides to apply to generated scenario"
+    policy_overrides: PolicyOverrides | None = Field(
+        None, description="Policy overrides to apply to generated scenario"
     )
 
 
 class GeneratorCompileConfig(BaseModel):
     """Common compile-time options for generators."""
 
-    out_dir: Optional[str] = Field(
-        None,
-        description="Directory to emit compiled scenarios"
-    )
-    emit_yaml: bool = Field(
-        True,
-        description="Whether to write the compiled scenario to disk"
-    )
+    out_dir: str | None = Field(None, description="Directory to emit compiled scenarios")
+    emit_yaml: bool = Field(True, description="Whether to write the compiled scenario to disk")
 
 
 class RingExplorerGeneratorConfig(BaseModel):
@@ -1075,14 +1073,13 @@ class RingExplorerGeneratorConfig(BaseModel):
 
     version: int = Field(1, description="Configuration version")
     generator: Literal["ring_explorer_v1"] = Field(
-        "ring_explorer_v1",
-        description="Generator identifier"
+        "ring_explorer_v1", description="Generator identifier"
     )
     name_prefix: str = Field(..., description="Human-readable prefix for scenario names")
     params: RingExplorerParamsModel = Field(..., description="Generator parameters")
     compile: GeneratorCompileConfig = Field(
         default_factory=GeneratorCompileConfig,  # type: ignore[arg-type]
-        description="Compiler output controls"
+        description="Compiler output controls",
     )
 
     @field_validator("version")
@@ -1093,9 +1090,4 @@ class RingExplorerGeneratorConfig(BaseModel):
         return v
 
 
-GeneratorConfig = Annotated[
-    Union[
-        RingExplorerGeneratorConfig,
-    ],
-    Field(discriminator="generator")
-]
+GeneratorConfig = Annotated[RingExplorerGeneratorConfig, Field(discriminator="generator")]

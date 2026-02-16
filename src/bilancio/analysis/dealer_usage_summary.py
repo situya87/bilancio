@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -50,7 +50,7 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
     comp = pd.read_csv(comp_path)
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     for _, row in comp.iterrows():
         run_id = row.get("active_run_id", "")
@@ -65,7 +65,7 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
             continue
 
         # Initialize row with run parameters
-        row_out: Dict[str, Any] = {
+        row_out: dict[str, Any] = {
             "run_id": run_id,
             "kappa": row.get("kappa", ""),
             "concentration": row.get("concentration", ""),
@@ -83,7 +83,13 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
             try:
                 trades = pd.read_csv(trades_path)
                 row_out.update(_compute_trade_metrics(trades))
-            except (ValueError, KeyError, FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+            except (
+                ValueError,
+                KeyError,
+                FileNotFoundError,
+                pd.errors.EmptyDataError,
+                pd.errors.ParserError,
+            ) as e:
                 logger.warning("Failed to read trades.csv for %s: %s", run_id, e)
                 row_out.update(_empty_trade_metrics())
         else:
@@ -95,7 +101,13 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
             try:
                 inv = pd.read_csv(inv_path)
                 row_out.update(_compute_inventory_metrics(inv))
-            except (ValueError, KeyError, FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+            except (
+                ValueError,
+                KeyError,
+                FileNotFoundError,
+                pd.errors.EmptyDataError,
+                pd.errors.ParserError,
+            ) as e:
                 logger.warning("Failed to read inventory_timeseries.csv for %s: %s", run_id, e)
                 row_out.update(_empty_inventory_metrics())
         else:
@@ -107,7 +119,13 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
             try:
                 sys_ts = pd.read_csv(sys_path)
                 row_out.update(_compute_system_state_metrics(sys_ts))
-            except (ValueError, KeyError, FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+            except (
+                ValueError,
+                KeyError,
+                FileNotFoundError,
+                pd.errors.EmptyDataError,
+                pd.errors.ParserError,
+            ) as e:
                 logger.warning("Failed to read system_state_timeseries.csv for %s: %s", run_id, e)
                 row_out.update(_empty_system_state_metrics())
         else:
@@ -119,7 +137,13 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
             try:
                 rep = pd.read_csv(rep_path)
                 row_out.update(_compute_repayment_metrics(rep))
-            except (ValueError, KeyError, FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+            except (
+                ValueError,
+                KeyError,
+                FileNotFoundError,
+                pd.errors.EmptyDataError,
+                pd.errors.ParserError,
+            ) as e:
                 logger.warning("Failed to read repayment_events.csv for %s: %s", run_id, e)
                 row_out.update(_empty_repayment_metrics())
         else:
@@ -130,7 +154,7 @@ def build_dealer_usage_by_run(experiment_root: Path) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _compute_trade_metrics(trades: pd.DataFrame) -> Dict[str, Any]:
+def _compute_trade_metrics(trades: pd.DataFrame) -> dict[str, Any]:
     """Compute trade metrics from trades.csv."""
     if trades.empty:
         return _empty_trade_metrics()
@@ -170,7 +194,7 @@ def _compute_trade_metrics(trades: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def _empty_trade_metrics() -> Dict[str, Any]:
+def _empty_trade_metrics() -> dict[str, Any]:
     """Return empty trade metrics."""
     return {
         "dealer_trade_count": 0,
@@ -181,7 +205,7 @@ def _empty_trade_metrics() -> Dict[str, Any]:
     }
 
 
-def _compute_inventory_metrics(inv: pd.DataFrame) -> Dict[str, Any]:
+def _compute_inventory_metrics(inv: pd.DataFrame) -> dict[str, Any]:
     """Compute inventory metrics from inventory_timeseries.csv."""
     if inv.empty:
         return _empty_inventory_metrics()
@@ -233,7 +257,7 @@ def _compute_inventory_metrics(inv: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def _empty_inventory_metrics() -> Dict[str, Any]:
+def _empty_inventory_metrics() -> dict[str, Any]:
     """Return empty inventory metrics."""
     return {
         "dealer_active_fraction": None,
@@ -242,7 +266,7 @@ def _empty_inventory_metrics() -> Dict[str, Any]:
     }
 
 
-def _compute_system_state_metrics(sys_ts: pd.DataFrame) -> Dict[str, Any]:
+def _compute_system_state_metrics(sys_ts: pd.DataFrame) -> dict[str, Any]:
     """Compute system state metrics from system_state_timeseries.csv."""
     if sys_ts.empty:
         return _empty_system_state_metrics()
@@ -271,7 +295,7 @@ def _compute_system_state_metrics(sys_ts: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def _empty_system_state_metrics() -> Dict[str, Any]:
+def _empty_system_state_metrics() -> dict[str, Any]:
     """Return empty system state metrics."""
     return {
         "mean_debt_to_money": None,
@@ -280,7 +304,7 @@ def _empty_system_state_metrics() -> Dict[str, Any]:
     }
 
 
-def _compute_repayment_metrics(rep: pd.DataFrame) -> Dict[str, Any]:
+def _compute_repayment_metrics(rep: pd.DataFrame) -> dict[str, Any]:
     """Compute repayment metrics from repayment_events.csv."""
     if rep.empty:
         return _empty_repayment_metrics()
@@ -300,7 +324,7 @@ def _compute_repayment_metrics(rep: pd.DataFrame) -> Dict[str, Any]:
     # Mark rows where trader used dealer
     rep["used_dealer"] = (rep["buy_count"] + rep["sell_count"]) > 0
 
-    def frac_used(outcome: str) -> Optional[float]:
+    def frac_used(outcome: str) -> float | None:
         """Compute fraction of face value that traded with dealer for given outcome."""
         sub = rep[rep["outcome"] == outcome]
         if sub.empty:
@@ -320,7 +344,7 @@ def _compute_repayment_metrics(rep: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-def _empty_repayment_metrics() -> Dict[str, Any]:
+def _empty_repayment_metrics() -> dict[str, Any]:
     """Return empty repayment metrics."""
     return {
         "frac_defaulted_that_traded": None,

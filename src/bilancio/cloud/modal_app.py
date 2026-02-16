@@ -10,9 +10,21 @@ to Supabase, eliminating the need to download artifacts.
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any
 
 import modal
+
+EXTERNAL_OPERATION_ERRORS = (
+    FileNotFoundError,
+    ImportError,
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RuntimeError,
+)
 
 # Define the Modal app
 app = modal.App("bilancio-simulations")
@@ -66,7 +78,6 @@ def compute_metrics_from_events(events_path: str) -> dict[str, Any]:
     """
     import json
     from decimal import Decimal
-    from pathlib import Path
 
     def to_serializable(val: Any) -> Any:
         """Convert Decimal to float for JSON serialization."""
@@ -153,7 +164,7 @@ def save_run_to_supabase(
         SupabaseCredentialsError: If Supabase credentials are not configured.
     """
     import os
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     try:
         from supabase import create_client
@@ -173,7 +184,7 @@ def save_run_to_supabase(
             )
 
         client = create_client(url, key)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Build runs table row
         runs_row: dict[str, Any] = {
@@ -197,7 +208,9 @@ def save_run_to_supabase(
                 elif param == "regime":
                     runs_row[param] = value
                 else:
-                    runs_row[param] = float(value) if isinstance(value, (int, float, str)) else value
+                    runs_row[param] = (
+                        float(value) if isinstance(value, int | float | str) else value
+                    )
 
         # Upsert run
         client.table("runs").upsert(runs_row, on_conflict="run_id").execute()
@@ -208,16 +221,18 @@ def save_run_to_supabase(
             # Build raw_metrics with all global metrics from summarize_day_metrics
             raw_metrics = metrics.get("raw_metrics", {})
             # Ensure all metrics are in raw_metrics even if they came from top-level
-            raw_metrics.update({
-                "delta_total": metrics.get("delta_total"),
-                "phi_total": metrics.get("phi_total"),
-                "time_to_stability": metrics.get("time_to_stability"),
-                "max_G_t": metrics.get("max_G_t"),
-                "alpha_1": metrics.get("alpha_1"),
-                "Mpeak_1": metrics.get("Mpeak_1"),
-                "v_1": metrics.get("v_1"),
-                "HHIplus_1": metrics.get("HHIplus_1"),
-            })
+            raw_metrics.update(
+                {
+                    "delta_total": metrics.get("delta_total"),
+                    "phi_total": metrics.get("phi_total"),
+                    "time_to_stability": metrics.get("time_to_stability"),
+                    "max_G_t": metrics.get("max_G_t"),
+                    "alpha_1": metrics.get("alpha_1"),
+                    "Mpeak_1": metrics.get("Mpeak_1"),
+                    "v_1": metrics.get("v_1"),
+                    "HHIplus_1": metrics.get("HHIplus_1"),
+                }
+            )
 
             metrics_row = {
                 "run_id": run_id,
@@ -236,7 +251,9 @@ def save_run_to_supabase(
             else:
                 client.table("metrics").insert(metrics_row).execute()
 
-            print(f"Saved metrics for {run_id}: δ={metrics.get('delta_total')}, φ={metrics.get('phi_total')}")
+            print(
+                f"Saved metrics for {run_id}: δ={metrics.get('delta_total')}, φ={metrics.get('phi_total')}"
+            )
 
         return True
 
@@ -244,7 +261,7 @@ def save_run_to_supabase(
         # Log but don't fail - Supabase is optional
         print(f"Supabase not configured, skipping save for run {run_id}")
         return False
-    except Exception as e:  # Intentionally broad: cloud execution wrapper
+    except EXTERNAL_OPERATION_ERRORS as e:
         # Log other errors but don't fail the run - Supabase save is secondary
         print(f"WARNING: Failed to save to Supabase: {e}")
         print(f"Run {run_id} completed but metrics not persisted to Supabase!")
@@ -286,9 +303,10 @@ def run_simulation(
 
     # Log job info prominently at the start (visible in Modal logs)
     import sys
+
     modal_call_id = modal.current_function_call_id()
     print("=" * 60, flush=True)
-    print(f"BILANCIO SIMULATION", flush=True)
+    print("BILANCIO SIMULATION", flush=True)
     print(f"  Job ID:      {job_id or 'N/A'}", flush=True)
     print(f"  Run ID:      {run_id}", flush=True)
     print(f"  Experiment:  {experiment_id}", flush=True)
@@ -351,7 +369,9 @@ def run_simulation(
         if events_path.exists():
             print("Computing metrics from events...", flush=True)
             metrics = compute_metrics_from_events(str(events_path))
-            print(f"Metrics: δ={metrics.get('delta_total')}, φ={metrics.get('phi_total')}", flush=True)
+            print(
+                f"Metrics: δ={metrics.get('delta_total')}, φ={metrics.get('phi_total')}", flush=True
+            )
 
         # Build artifact paths (relative to run directory within volume)
         artifacts = {
@@ -387,7 +407,7 @@ def run_simulation(
             "metrics": metrics,  # Include computed metrics in return
         }
 
-    except Exception as e:  # Intentionally broad: cloud execution wrapper
+    except EXTERNAL_OPERATION_ERRORS as e:
         execution_time_ms = int((time.time() - start_time) * 1000)
 
         # Still commit to preserve any partial output
@@ -467,9 +487,13 @@ def compute_aggregate_metrics(
         client = create_client(url, key)
 
         # Fetch all runs with metrics for this job
-        result = client.table("runs").select(
-            "run_id, kappa, concentration, mu, outside_mid_ratio, seed, regime, metrics(*)"
-        ).eq("job_id", job_id).in_("run_id", run_ids).execute()
+        result = (
+            client.table("runs")
+            .select("run_id, kappa, concentration, mu, outside_mid_ratio, seed, regime, metrics(*)")
+            .eq("job_id", job_id)
+            .in_("run_id", run_ids)
+            .execute()
+        )
 
         if not result.data:
             return {"status": "error", "error": "No runs found"}
@@ -502,9 +526,17 @@ def compute_aggregate_metrics(
                 phi = metrics_entry.get("phi_total")
 
                 if "passive" in regime or regime == "":
-                    grouped[param_key]["passive"] = {"delta": delta, "phi": phi, "run_id": row_dict["run_id"]}
+                    grouped[param_key]["passive"] = {
+                        "delta": delta,
+                        "phi": phi,
+                        "run_id": row_dict["run_id"],
+                    }
                 elif "active" in regime:
-                    grouped[param_key]["active"] = {"delta": delta, "phi": phi, "run_id": row_dict["run_id"]}
+                    grouped[param_key]["active"] = {
+                        "delta": delta,
+                        "phi": phi,
+                        "run_id": row_dict["run_id"],
+                    }
 
         # Compute trading effects
         comparisons: list[dict[str, Any]] = []
@@ -516,31 +548,41 @@ def compute_aggregate_metrics(
                 if d_passive is not None and d_active is not None:
                     trading_effect = d_passive - d_active
 
-                    comparisons.append({
-                        "kappa": params[0],
-                        "concentration": params[1],
-                        "mu": params[2],
-                        "outside_mid_ratio": params[3],
-                        "seed": params[4],
-                        "delta_passive": d_passive,
-                        "delta_active": d_active,
-                        "phi_passive": runs["passive"].get("phi"),
-                        "phi_active": runs["active"].get("phi"),
-                        "trading_effect": trading_effect,
-                        "passive_run_id": runs["passive"]["run_id"],
-                        "active_run_id": runs["active"]["run_id"],
-                    })
+                    comparisons.append(
+                        {
+                            "kappa": params[0],
+                            "concentration": params[1],
+                            "mu": params[2],
+                            "outside_mid_ratio": params[3],
+                            "seed": params[4],
+                            "delta_passive": d_passive,
+                            "delta_active": d_active,
+                            "phi_passive": runs["passive"].get("phi"),
+                            "phi_active": runs["active"].get("phi"),
+                            "trading_effect": trading_effect,
+                            "passive_run_id": runs["passive"]["run_id"],
+                            "active_run_id": runs["active"]["run_id"],
+                        }
+                    )
 
         # Compute summary statistics
-        from datetime import datetime, timezone
         import statistics
+        from datetime import datetime
 
         if comparisons:
             effects = [c["trading_effect"] for c in comparisons]
-            deltas_passive = [c["delta_passive"] for c in comparisons if c["delta_passive"] is not None]
-            deltas_active = [c["delta_active"] for c in comparisons if c["delta_active"] is not None]
-            phis_passive: list[float] = [c["phi_passive"] for c in comparisons if c.get("phi_passive") is not None]
-            phis_active: list[float] = [c["phi_active"] for c in comparisons if c.get("phi_active") is not None]
+            deltas_passive = [
+                c["delta_passive"] for c in comparisons if c["delta_passive"] is not None
+            ]
+            deltas_active = [
+                c["delta_active"] for c in comparisons if c["delta_active"] is not None
+            ]
+            phis_passive: list[float] = [
+                c["phi_passive"] for c in comparisons if c.get("phi_passive") is not None
+            ]
+            phis_active: list[float] = [
+                c["phi_active"] for c in comparisons if c.get("phi_active") is not None
+            ]
 
             # Compute standard deviation if we have enough data
             std_effect = statistics.stdev(effects) if len(effects) > 1 else 0.0
@@ -555,8 +597,12 @@ def compute_aggregate_metrics(
                 "positive_effects": sum(1 for e in effects if e > 0.001),  # dealers help
                 "negative_effects": sum(1 for e in effects if e < -0.001),  # dealers hurt
                 "neutral_effects": sum(1 for e in effects if -0.001 <= e <= 0.001),
-                "mean_delta_passive": sum(deltas_passive) / len(deltas_passive) if deltas_passive else None,
-                "mean_delta_active": sum(deltas_active) / len(deltas_active) if deltas_active else None,
+                "mean_delta_passive": sum(deltas_passive) / len(deltas_passive)
+                if deltas_passive
+                else None,
+                "mean_delta_active": sum(deltas_active) / len(deltas_active)
+                if deltas_active
+                else None,
                 "mean_phi_passive": sum(phis_passive) / len(phis_passive) if phis_passive else None,
                 "mean_phi_active": sum(phis_active) / len(phis_active) if phis_active else None,
             }
@@ -590,19 +636,27 @@ def compute_aggregate_metrics(
             else:
                 client.table("job_metrics").insert(job_metrics_row).execute()
             print(f"Saved job_metrics for {job_id}")
-        except Exception as e:  # Intentionally broad: external service call
+        except EXTERNAL_OPERATION_ERRORS as e:
             print(f"Warning: Failed to save job_metrics: {e}")
 
         # Update job status
-        client.table("jobs").update({
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-            "status": "completed",
-        }).eq("job_id", job_id).execute()
+        client.table("jobs").update(
+            {
+                "completed_at": datetime.now(UTC).isoformat(),
+                "status": "completed",
+            }
+        ).eq("job_id", job_id).execute()
 
         print(f"Aggregate metrics for job {job_id}:")
         print(f"  Comparisons: {summary.get('n_comparisons', 0)}")
-        print(f"  Mean trading effect: {summary.get('mean_trading_effect', 'N/A'):.4f}" if summary.get('mean_trading_effect') else "  Mean trading effect: N/A")
-        print(f"  Positive effects: {summary.get('positive_effects', 0)} | Negative: {summary.get('negative_effects', 0)}")
+        print(
+            f"  Mean trading effect: {summary.get('mean_trading_effect', 'N/A'):.4f}"
+            if summary.get("mean_trading_effect")
+            else "  Mean trading effect: N/A"
+        )
+        print(
+            f"  Positive effects: {summary.get('positive_effects', 0)} | Negative: {summary.get('negative_effects', 0)}"
+        )
 
         return {
             "status": "completed",
@@ -611,7 +665,7 @@ def compute_aggregate_metrics(
             "comparisons": comparisons,
         }
 
-    except Exception as e:  # Intentionally broad: cloud execution wrapper
+    except EXTERNAL_OPERATION_ERRORS as e:
         print(f"Failed to compute aggregate metrics: {e}")
         return {"status": "error", "error": str(e)}
 

@@ -6,44 +6,40 @@ Tests cover:
 - Build helper functions (build_t_account_rows, etc.)
 """
 
-from io import StringIO
 from decimal import Decimal
-import sys as python_sys
 
 import pytest
 
-from bilancio.engines.system import System
-from bilancio.engines.simulation import run_day
-from bilancio.domain.agents import CentralBank, Bank, Household, Firm
-from bilancio.domain.instruments.base import InstrumentKind
-from bilancio.domain.instruments.credit import Payable
-from bilancio.ops.banking import deposit_cash, client_payment
 from bilancio.analysis.balances import agent_balance
-
 from bilancio.analysis.visualization import (
-    # Balance functions
-    display_agent_balance_table,
-    display_agent_balance_from_balance,
-    display_multiple_agent_balances,
-    build_t_account_rows,
-    display_agent_balance_table_renderable,
-    display_multiple_agent_balances_renderable,
-    # Event functions
-    display_events,
-    display_events_table,
-    display_events_table_renderable,
-    display_events_for_day,
-    display_events_renderable,
-    display_events_for_day_renderable,
-    # Phase functions
-    display_events_tables_by_phase_renderables,
     # Common utilities
     RICH_AVAILABLE,
     BalanceRow,
     TAccount,
+    build_t_account_rows,
+    display_agent_balance_from_balance,
+    # Balance functions
+    display_agent_balance_table,
+    display_agent_balance_table_renderable,
+    # Event functions
+    display_events,
+    display_events_for_day,
+    display_events_for_day_renderable,
+    display_events_renderable,
+    display_events_table,
+    display_events_table_renderable,
+    # Phase functions
+    display_events_tables_by_phase_renderables,
+    display_multiple_agent_balances,
+    display_multiple_agent_balances_renderable,
     parse_day_from_maturity,
 )
-
+from bilancio.domain.agents import Bank, CentralBank, Household
+from bilancio.domain.instruments.base import InstrumentKind
+from bilancio.domain.instruments.credit import Payable
+from bilancio.engines.simulation import run_day
+from bilancio.engines.system import System
+from bilancio.ops.banking import client_payment, deposit_cash
 
 # ============================================================================
 # Fixtures
@@ -155,7 +151,7 @@ def system_with_events():
         denom="X",
         asset_holder_id="HH02",
         liability_issuer_id="HH01",
-        due_day=system.state.day
+        due_day=system.state.day,
     )
     system.add_contract(payable)
 
@@ -181,14 +177,14 @@ class TestDisplayAgentBalanceTable:
         if not RICH_AVAILABLE:
             pytest.skip("Rich library not available")
 
-        display_agent_balance_table(simple_system, "HH01", format='rich')
+        display_agent_balance_table(simple_system, "HH01", format="rich")
         # Just verify it runs - output goes to console
-        captured = capsys.readouterr()
+        capsys.readouterr()
         # Rich output may or may not be captured depending on console setup
 
     def test_display_simple_format(self, simple_system, capsys):
         """Test that simple format produces text output."""
-        display_agent_balance_table(simple_system, "HH01", format='simple')
+        display_agent_balance_table(simple_system, "HH01", format="simple")
         captured = capsys.readouterr()
 
         # Verify key elements are in output
@@ -199,14 +195,14 @@ class TestDisplayAgentBalanceTable:
     def test_display_with_custom_title(self, simple_system, capsys):
         """Test display with custom title."""
         custom_title = "Custom Balance Title"
-        display_agent_balance_table(simple_system, "HH01", format='simple', title=custom_title)
+        display_agent_balance_table(simple_system, "HH01", format="simple", title=custom_title)
         captured = capsys.readouterr()
 
         assert custom_title in captured.out
 
     def test_display_bank_balance(self, simple_system, capsys):
         """Test displaying bank balance (has both assets and liabilities)."""
-        display_agent_balance_table(simple_system, "BK01", format='simple')
+        display_agent_balance_table(simple_system, "BK01", format="simple")
         captured = capsys.readouterr()
 
         # Bank should have reserves as assets and deposits as liabilities
@@ -220,7 +216,7 @@ class TestDisplayAgentBalanceFromBalance:
     def test_display_from_balance_object(self, simple_system, capsys):
         """Test displaying from a pre-computed AgentBalance object."""
         balance = agent_balance(simple_system, "HH01")
-        display_agent_balance_from_balance(balance, format='simple')
+        display_agent_balance_from_balance(balance, format="simple")
         captured = capsys.readouterr()
 
         assert "ASSETS" in captured.out
@@ -229,7 +225,7 @@ class TestDisplayAgentBalanceFromBalance:
     def test_display_from_balance_with_title(self, simple_system, capsys):
         """Test displaying from balance with custom title."""
         balance = agent_balance(simple_system, "BK01")
-        display_agent_balance_from_balance(balance, format='simple', title="Bank Balance Sheet")
+        display_agent_balance_from_balance(balance, format="simple", title="Bank Balance Sheet")
         captured = capsys.readouterr()
 
         assert "Bank Balance Sheet" in captured.out
@@ -240,11 +236,7 @@ class TestDisplayMultipleAgentBalances:
 
     def test_display_multiple_by_id(self, multi_agent_system, capsys):
         """Test displaying multiple agents by ID."""
-        display_multiple_agent_balances(
-            multi_agent_system,
-            ["HH01", "HH02"],
-            format='simple'
-        )
+        display_multiple_agent_balances(multi_agent_system, ["HH01", "HH02"], format="simple")
         captured = capsys.readouterr()
 
         # Both agents should appear in output
@@ -255,9 +247,9 @@ class TestDisplayMultipleAgentBalances:
         """Test displaying multiple agents using AgentBalance objects."""
         balances = [
             agent_balance(multi_agent_system, "BK01"),
-            agent_balance(multi_agent_system, "BK02")
+            agent_balance(multi_agent_system, "BK02"),
         ]
-        display_multiple_agent_balances(multi_agent_system, balances, format='simple')
+        display_multiple_agent_balances(multi_agent_system, balances, format="simple")
         captured = capsys.readouterr()
 
         # Both banks should appear
@@ -267,11 +259,7 @@ class TestDisplayMultipleAgentBalances:
     def test_display_mixed_items(self, multi_agent_system, capsys):
         """Test displaying with mix of IDs and balance objects."""
         balance_hh1 = agent_balance(multi_agent_system, "HH01")
-        display_multiple_agent_balances(
-            multi_agent_system,
-            [balance_hh1, "HH02"],
-            format='simple'
-        )
+        display_multiple_agent_balances(multi_agent_system, [balance_hh1, "HH02"], format="simple")
         captured = capsys.readouterr()
 
         # Both should appear
@@ -291,28 +279,22 @@ class TestBalanceRenderables:
         if not RICH_AVAILABLE:
             pytest.skip("Rich library not available")
 
-        result = display_agent_balance_table_renderable(
-            simple_system, "HH01", format='rich'
-        )
+        result = display_agent_balance_table_renderable(simple_system, "HH01", format="rich")
         # Should return a Rich Table
         assert result is not None
         # Rich Table has specific attributes
-        assert hasattr(result, 'columns') or isinstance(result, str)
+        assert hasattr(result, "columns") or isinstance(result, str)
 
     def test_balance_table_renderable_simple(self, simple_system):
         """Test that renderable returns string for simple format."""
-        result = display_agent_balance_table_renderable(
-            simple_system, "HH01", format='simple'
-        )
+        result = display_agent_balance_table_renderable(simple_system, "HH01", format="simple")
         assert isinstance(result, str)
         assert "ASSETS" in result
 
     def test_multiple_balances_renderable_simple(self, multi_agent_system):
         """Test multiple balances renderable in simple format."""
         result = display_multiple_agent_balances_renderable(
-            multi_agent_system,
-            ["HH01", "HH02"],
-            format='simple'
+            multi_agent_system, ["HH01", "HH02"], format="simple"
         )
         assert isinstance(result, str)
         assert "HH01" in result or "Household One" in result
@@ -377,33 +359,25 @@ class TestBuildTAccountRows:
         """Test that delivery obligations appear as receivables on asset side."""
         # Add delivery obligation
         simple_system.create_delivery_obligation(
-            "BK01", "HH01", sku="GOODS", quantity=10,
-            unit_price=Decimal("5"), due_day=1
+            "BK01", "HH01", sku="GOODS", quantity=10, unit_price=Decimal("5"), due_day=1
         )
 
         taccount = build_t_account_rows(simple_system, "HH01")
 
         # HH01 should now have a receivable (right to receive goods)
-        receivable_found = any(
-            "receivable" in row.name.lower()
-            for row in taccount.assets
-        )
+        receivable_found = any("receivable" in row.name.lower() for row in taccount.assets)
         assert receivable_found, "Should have receivable for delivery obligation"
 
     def test_delivery_obligations_as_liabilities(self, simple_system):
         """Test that delivery obligations appear on liability side for issuer."""
         simple_system.create_delivery_obligation(
-            "HH01", "BK01", sku="WIDGETS", quantity=5,
-            unit_price=Decimal("10"), due_day=2
+            "HH01", "BK01", sku="WIDGETS", quantity=5, unit_price=Decimal("10"), due_day=2
         )
 
         taccount = build_t_account_rows(simple_system, "HH01")
 
         # HH01 should have an obligation liability
-        obligation_found = any(
-            "obligation" in row.name.lower()
-            for row in taccount.liabilities
-        )
+        obligation_found = any("obligation" in row.name.lower() for row in taccount.liabilities)
         assert obligation_found, "Should have obligation liability"
 
 
@@ -437,7 +411,7 @@ class TestDisplayEvents:
 
     def test_display_empty_events(self, capsys):
         """Test displaying empty event list."""
-        display_events([], format='detailed')
+        display_events([], format="detailed")
         captured = capsys.readouterr()
 
         assert "No events" in captured.out
@@ -445,7 +419,7 @@ class TestDisplayEvents:
     def test_display_detailed_format(self, system_with_events, capsys):
         """Test detailed format includes phase information."""
         events = system_with_events.state.events
-        display_events(events, format='detailed')
+        display_events(events, format="detailed")
         captured = capsys.readouterr()
 
         # Should include phase labels
@@ -454,7 +428,7 @@ class TestDisplayEvents:
     def test_display_summary_format(self, system_with_events, capsys):
         """Test summary format shows condensed events."""
         events = system_with_events.state.events
-        display_events(events, format='summary')
+        display_events(events, format="summary")
         # Should run without error - summary format may produce less output
 
 
@@ -489,7 +463,7 @@ class TestDisplayEventsTableRenderable:
         assert result is not None
         if RICH_AVAILABLE:
             # Should be a Rich Table with columns
-            assert hasattr(result, 'columns') or isinstance(result, str)
+            assert hasattr(result, "columns") or isinstance(result, str)
         else:
             assert isinstance(result, str)
 
@@ -520,7 +494,7 @@ class TestDisplayEventsRenderable:
     def test_renderable_returns_list(self, system_with_events):
         """Test that renderable returns list of renderables."""
         events = system_with_events.state.events
-        result = display_events_renderable(events, format='detailed')
+        result = display_events_renderable(events, format="detailed")
 
         assert isinstance(result, list)
 
@@ -596,7 +570,7 @@ class TestCommonTypes:
             quantity=None,
             value_minor=1000,
             counterparty_name="CB01",
-            maturity="on-demand"
+            maturity="on-demand",
         )
 
         assert row.name == "cash"
@@ -610,7 +584,7 @@ class TestCommonTypes:
             quantity=50,
             value_minor=5000,
             counterparty_name="Firm A",
-            maturity="Day 5"
+            maturity="Day 5",
         )
 
         assert row.quantity == 50
@@ -618,12 +592,8 @@ class TestCommonTypes:
 
     def test_taccount_dataclass(self):
         """Test TAccount dataclass creation."""
-        assets = [
-            BalanceRow("cash", None, 1000, "CB", "on-demand")
-        ]
-        liabilities = [
-            BalanceRow("deposit", None, 500, "HH01", "on-demand")
-        ]
+        assets = [BalanceRow("cash", None, 1000, "CB", "on-demand")]
+        liabilities = [BalanceRow("deposit", None, 500, "HH01", "on-demand")]
 
         taccount = TAccount(assets=assets, liabilities=liabilities)
 
@@ -648,9 +618,7 @@ class TestVisualizationIntegration:
         """Test a complete visualization workflow."""
         # Display balances for all households
         display_multiple_agent_balances(
-            system_with_events,
-            ["HH01", "HH02", "HH03"],
-            format='simple'
+            system_with_events, ["HH01", "HH02", "HH03"], format="simple"
         )
 
         # Display events for day 0
@@ -668,7 +636,7 @@ class TestVisualizationIntegration:
     def test_display_before_and_after_adding_obligation(self, simple_system, capsys):
         """Test displaying state before and after adding delivery obligation."""
         # Display initial state
-        display_agent_balance_table(simple_system, "HH01", format='simple')
+        display_agent_balance_table(simple_system, "HH01", format="simple")
         initial_output = capsys.readouterr().out
 
         # Add a delivery obligation (doesn't require complex settlement)
@@ -678,11 +646,11 @@ class TestVisualizationIntegration:
             sku="WIDGETS",
             quantity=10,
             unit_price=Decimal("5"),
-            due_day=1
+            due_day=1,
         )
 
         # Display after state
-        display_agent_balance_table(simple_system, "HH01", format='simple')
+        display_agent_balance_table(simple_system, "HH01", format="simple")
         after_output = capsys.readouterr().out
 
         # Verify both outputs were generated

@@ -8,27 +8,26 @@ a single client ticket: either a payment-credit, loan, or withdrawal.
 """
 
 from dataclasses import dataclass
-from decimal import Decimal
-from typing import Optional, List, Tuple
 
-from bilancio.banking.types import Ticket, TicketType, Quote
-from bilancio.banking.state import BankDealerState, CentralBankParams
 from bilancio.banking.pricing_kernel import (
     PricingParams,
-    compute_quotes,
     compute_inventory,
+    compute_quotes,
     simple_risk_index,
 )
 from bilancio.banking.reserve_projection import (
-    project_reserves,
-    compute_cash_tightness,
     ReserveProjection,
+    compute_cash_tightness,
+    project_reserves,
 )
+from bilancio.banking.state import BankDealerState, CentralBankParams
+from bilancio.banking.types import Quote, Ticket, TicketType
 
 
 @dataclass
 class TicketResult:
     """Result of processing a single ticket."""
+
     ticket: Ticket
     success: bool
     message: str
@@ -39,7 +38,7 @@ class TicketResult:
     loan_delta: int = 0
 
     # Updated quotes (after ticket)
-    new_quote: Optional[Quote] = None
+    new_quote: Quote | None = None
 
     # For inter-bank: the counterparty bank's reserve change
     counterparty_reserve_delta: int = 0
@@ -53,12 +52,13 @@ class TicketProcessor:
     Maintains references to the bank state and pricing parameters,
     and handles the ticket-by-ticket processing loop.
     """
+
     state: BankDealerState
     cb_params: CentralBankParams
     pricing_params: PricingParams
 
     # Current projection (updated after each ticket)
-    _projection: Optional[ReserveProjection] = None
+    _projection: ReserveProjection | None = None
 
     def refresh_projection(self) -> ReserveProjection:
         """Rebuild the 10-day reserve projection."""
@@ -250,7 +250,6 @@ class TicketProcessor:
         to CB borrowing at end of day.
         """
         amount = ticket.amount
-        day = self.state.current_day
 
         # Withdraw from deposits (FIFO by default)
         withdrawn = self.state.withdraw_from_deposits(
@@ -321,12 +320,13 @@ class InterBankSettlement:
     2. Bank 2 processes payment-credit ticket
     3. Reserves flow from Bank 1 to Bank 2
     """
+
     payer_bank_id: str
     payee_bank_id: str
     amount: int
 
-    payer_result: Optional[TicketResult] = None
-    payee_result: Optional[TicketResult] = None
+    payer_result: TicketResult | None = None
+    payee_result: TicketResult | None = None
 
     @property
     def success(self) -> bool:
@@ -415,7 +415,7 @@ def process_intra_bank_payment(
     payer_client_id: str,
     payee_client_id: str,
     amount: int,
-) -> Tuple[TicketResult, TicketResult]:
+) -> tuple[TicketResult, TicketResult]:
     """
     Process a payment between two clients at the same bank.
 

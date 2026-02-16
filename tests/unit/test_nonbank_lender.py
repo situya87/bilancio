@@ -23,13 +23,12 @@ from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.firm import Firm
 from bilancio.domain.agents.household import Household
 from bilancio.domain.agents.non_bank_lender import NonBankLender
-from bilancio.domain.instruments.base import Instrument, InstrumentKind
+from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.non_bank_loan import NonBankLoan
 from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.lending import LendingConfig, run_lending_phase, run_loan_repayments
 from bilancio.engines.system import System
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -406,9 +405,7 @@ class TestNonbankLendCash:
             maturity_days=2,
         )
 
-        loan_events = [
-            e for e in system.state.events if e.get("kind") == "NonBankLoanCreated"
-        ]
+        loan_events = [e for e in system.state.events if e.get("kind") == "NonBankLoanCreated"]
         assert len(loan_events) == 1
         evt = loan_events[0]
         assert evt["lender_id"] == "NBL01"
@@ -425,12 +422,18 @@ class TestNonbankLendCash:
         system.add_agent(firm3)
 
         loan1 = system.nonbank_lend_cash(
-            lender_id="NBL01", borrower_id="F01",
-            amount=2000, rate=Decimal("0.05"), day=0,
+            lender_id="NBL01",
+            borrower_id="F01",
+            amount=2000,
+            rate=Decimal("0.05"),
+            day=0,
         )
         loan2 = system.nonbank_lend_cash(
-            lender_id="NBL01", borrower_id="F03",
-            amount=3000, rate=Decimal("0.08"), day=0,
+            lender_id="NBL01",
+            borrower_id="F03",
+            amount=3000,
+            rate=Decimal("0.08"),
+            day=0,
         )
 
         assert _agent_cash(system, "NBL01") == 5000
@@ -497,9 +500,7 @@ class TestNonbankRepayLoan:
         assert loan_id not in system.state.contracts
 
         # Default event logged
-        default_events = [
-            e for e in system.state.events if e.get("kind") == "NonBankLoanDefaulted"
-        ]
+        default_events = [e for e in system.state.events if e.get("kind") == "NonBankLoanDefaulted"]
         assert len(default_events) == 1
 
     def test_repayment_events_logged(self):
@@ -516,9 +517,7 @@ class TestNonbankRepayLoan:
 
         system.nonbank_repay_loan(loan_id, "F01")
 
-        repaid_events = [
-            e for e in system.state.events if e.get("kind") == "NonBankLoanRepaid"
-        ]
+        repaid_events = [e for e in system.state.events if e.get("kind") == "NonBankLoanRepaid"]
         assert len(repaid_events) == 1
         evt = repaid_events[0]
         assert evt["loan_id"] == loan_id
@@ -594,12 +593,20 @@ class TestGetNonbankLoansDue:
         system = _build_lending_system(lender_cash=10000, firm_cash=0)
 
         loan_short = system.nonbank_lend_cash(
-            lender_id="NBL01", borrower_id="F01",
-            amount=1000, rate=Decimal("0.05"), day=0, maturity_days=2,
+            lender_id="NBL01",
+            borrower_id="F01",
+            amount=1000,
+            rate=Decimal("0.05"),
+            day=0,
+            maturity_days=2,
         )
         loan_long = system.nonbank_lend_cash(
-            lender_id="NBL01", borrower_id="F01",
-            amount=1000, rate=Decimal("0.05"), day=0, maturity_days=5,
+            lender_id="NBL01",
+            borrower_id="F01",
+            amount=1000,
+            rate=Decimal("0.05"),
+            day=0,
+            maturity_days=5,
         )
 
         due_day2 = system.get_nonbank_loans_due(2)
@@ -677,7 +684,7 @@ class TestRunLendingPhase:
         """If borrowers have enough cash, no loans are made."""
         system = _build_lending_system(
             lender_cash=10000,
-            firm_cash=5000,       # Way more than the payable
+            firm_cash=5000,  # Way more than the payable
             firm_payable_amount=100,
             payable_due_day=2,
         )
@@ -845,15 +852,11 @@ class TestSimulationIntegration:
         run_day(system, enable_lender=True)
 
         # Check that SubphaseB_Lending was logged
-        lending_phases = [
-            e for e in system.state.events if e.get("kind") == "SubphaseB_Lending"
-        ]
+        lending_phases = [e for e in system.state.events if e.get("kind") == "SubphaseB_Lending"]
         assert len(lending_phases) == 1
 
         # Should have lending events in the event list
-        loan_events = [
-            e for e in system.state.events if e.get("kind") == "NonBankLoanCreated"
-        ]
+        loan_events = [e for e in system.state.events if e.get("kind") == "NonBankLoanCreated"]
         assert len(loan_events) >= 1
 
     def test_run_day_without_lender_skips_lending(self):
@@ -870,9 +873,7 @@ class TestSimulationIntegration:
 
         run_day(system, enable_lender=False)
 
-        lending_phases = [
-            e for e in system.state.events if e.get("kind") == "SubphaseB_Lending"
-        ]
+        lending_phases = [e for e in system.state.events if e.get("kind") == "SubphaseB_Lending"]
         assert len(lending_phases) == 0
 
     def test_run_day_with_lender_true_but_no_config_skips(self):
@@ -884,9 +885,7 @@ class TestSimulationIntegration:
 
         run_day(system, enable_lender=True)
 
-        lending_phases = [
-            e for e in system.state.events if e.get("kind") == "SubphaseB_Lending"
-        ]
+        lending_phases = [e for e in system.state.events if e.get("kind") == "SubphaseB_Lending"]
         assert len(lending_phases) == 0
 
     def test_run_day_processes_loan_repayments(self):
@@ -924,9 +923,7 @@ class TestSimulationIntegration:
         run_day(system, enable_lender=False)
         assert system.state.day == 3
 
-        repaid_events = [
-            e for e in system.state.events if e.get("kind") == "NonBankLoanRepaid"
-        ]
+        repaid_events = [e for e in system.state.events if e.get("kind") == "NonBankLoanRepaid"]
         assert len(repaid_events) == 1
 
 
@@ -938,12 +935,12 @@ class TestSimulationIntegration:
 class TestScenarioGenerationLender:
     """Tests for compile_ring_explorer_balanced with mode='lender'."""
 
-    def _make_config(self) -> "RingExplorerGeneratorConfig":
+    def _make_config(self):
         from bilancio.config.models import (
-            RingExplorerGeneratorConfig,
-            RingExplorerParamsModel,
             GeneratorCompileConfig,
+            RingExplorerGeneratorConfig,
             RingExplorerLiquidityConfig,
+            RingExplorerParamsModel,
         )
 
         params = RingExplorerParamsModel(
@@ -981,11 +978,14 @@ class TestScenarioGenerationLender:
 
         config = self._make_config()
         scenario = compile_ring_explorer_balanced(
-            config, mode="lender", lender_share=Decimal("0.10"),
+            config,
+            mode="lender",
+            lender_share=Decimal("0.10"),
         )
 
         mint_actions = [
-            a for a in scenario["initial_actions"]
+            a
+            for a in scenario["initial_actions"]
             if "mint_cash" in a and a["mint_cash"].get("to") == "lender"
         ]
         assert len(mint_actions) == 1
@@ -1007,7 +1007,9 @@ class TestScenarioGenerationLender:
 
         config = self._make_config()
         scenario = compile_ring_explorer_balanced(
-            config, mode="lender", lender_share=Decimal("0.15"),
+            config,
+            mode="lender",
+            lender_share=Decimal("0.15"),
         )
 
         balanced_cfg = scenario.get("_balanced_config", {})

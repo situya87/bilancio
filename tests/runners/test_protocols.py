@@ -8,13 +8,11 @@ This module tests:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any
 
-import pytest
-
-from bilancio.runners.protocols import SimulationExecutor, JobExecutor
 from bilancio.runners.local_executor import LocalExecutor
-from bilancio.runners.models import RunOptions, ExecutionResult
+from bilancio.runners.models import ExecutionResult, RunOptions
+from bilancio.runners.protocols import JobExecutor, SimulationExecutor
 from bilancio.storage.models import RunResult, RunStatus
 
 
@@ -37,7 +35,7 @@ class TestSimulationExecutorProtocol:
         class CustomExecutor:
             def execute(
                 self,
-                scenario_config: Dict[str, Any],
+                scenario_config: dict[str, Any],
                 run_id: str,
                 output_dir: Path,
                 options: RunOptions,
@@ -91,13 +89,13 @@ class TestJobExecutorProtocol:
         """A custom class with all required methods should satisfy the protocol."""
 
         class CustomJobExecutor:
-            def submit(self, scenario_config: Dict[str, Any], run_id: str) -> str:
+            def submit(self, scenario_config: dict[str, Any], run_id: str) -> str:
                 return "job_123"
 
             def status(self, job_id: str) -> RunStatus:
                 return RunStatus.RUNNING
 
-            def result(self, job_id: str) -> Optional[RunResult]:
+            def result(self, job_id: str) -> RunResult | None:
                 return None
 
             def cancel(self, job_id: str) -> bool:
@@ -110,7 +108,7 @@ class TestJobExecutorProtocol:
         """A class missing any required method should not satisfy the protocol."""
 
         class IncompleteJobExecutor:
-            def submit(self, scenario_config: Dict[str, Any], run_id: str) -> str:
+            def submit(self, scenario_config: dict[str, Any], run_id: str) -> str:
                 return "job_123"
 
             # Missing: status, result, cancel

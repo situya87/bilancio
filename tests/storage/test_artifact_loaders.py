@@ -1,7 +1,8 @@
 """Tests for artifact loader implementations."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from bilancio.storage.artifact_loaders import ArtifactLoader, LocalArtifactLoader
 

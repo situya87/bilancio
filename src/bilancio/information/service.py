@@ -15,9 +15,7 @@ from __future__ import annotations
 import logging
 import random
 from decimal import Decimal
-
-logger = logging.getLogger(__name__)
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from bilancio.information.levels import AccessLevel
 from bilancio.information.noise import (
@@ -30,13 +28,15 @@ from bilancio.information.noise import (
 )
 from bilancio.information.profile import CategoryAccess, InformationProfile
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from bilancio.engines.system import System
     from bilancio.information.estimates import Estimate
     from bilancio.information.views import (
-        SystemView,
         CounterpartyView,
         InstrumentView,
+        SystemView,
         TransactionView,
     )
 
@@ -59,10 +59,10 @@ class InformationService:
 
     def __init__(
         self,
-        system: "System",
+        system: System,
         profile: InformationProfile,
         observer_id: str,
-        rng: Optional[random.Random] = None,
+        rng: random.Random | None = None,
     ) -> None:
         self._system = system
         self._profile = profile
@@ -71,17 +71,13 @@ class InformationService:
 
     # ── Public query methods ──────────────────────────────────────────
 
-    def get_counterparty_cash(
-        self, agent_id: str, day: int
-    ) -> Optional[int]:
+    def get_counterparty_cash(self, agent_id: str, day: int) -> int | None:
         """Get cash holdings for a counterparty.
 
         Returns None if access is NONE, noisy value if NOISY, exact if PERFECT.
         Self-queries always return exact value.
         """
-        access = self._resolve_access(
-            self._profile.counterparty_cash, agent_id
-        )
+        access = self._resolve_access(self._profile.counterparty_cash, agent_id)
         if access.level == AccessLevel.NONE:
             return None
         raw = self._raw_agent_cash(agent_id)
@@ -89,16 +85,12 @@ class InformationService:
             return raw
         return self._apply_numeric_noise(raw, access.noise, day)
 
-    def get_counterparty_obligations(
-        self, agent_id: str, day: int, horizon: int
-    ) -> Optional[int]:
+    def get_counterparty_obligations(self, agent_id: str, day: int, horizon: int) -> int | None:
         """Get total upcoming obligations for a counterparty within horizon.
 
         Uses counterparty_liabilities access level.
         """
-        access = self._resolve_access(
-            self._profile.counterparty_liabilities, agent_id
-        )
+        access = self._resolve_access(self._profile.counterparty_liabilities, agent_id)
         if access.level == AccessLevel.NONE:
             return None
         raw = self._raw_upcoming_obligations(agent_id, day, horizon)
@@ -106,16 +98,12 @@ class InformationService:
             return raw
         return self._apply_numeric_noise(raw, access.noise, day)
 
-    def get_default_probability(
-        self, agent_id: str, day: int
-    ) -> Optional[Decimal]:
+    def get_default_probability(self, agent_id: str, day: int) -> Decimal | None:
         """Get estimated default probability for a counterparty.
 
         Combines counterparty_default_history access with risk estimation.
         """
-        access = self._resolve_access(
-            self._profile.counterparty_default_history, agent_id
-        )
+        access = self._resolve_access(self._profile.counterparty_default_history, agent_id)
         if access.level == AccessLevel.NONE:
             return None
         raw_probs = self._raw_default_probs(day)
@@ -127,17 +115,17 @@ class InformationService:
         return max(Decimal("0"), min(Decimal("1"), noisy))
 
     def get_default_probability_detail(
-        self, agent_id: str, day: int,
-    ) -> "Optional[Estimate]":
+        self,
+        agent_id: str,
+        day: int,
+    ) -> Estimate | None:
         """Return an Estimate wrapping get_default_probability() with provenance.
 
         Returns None when access is NONE (same as get_default_probability).
         """
         from bilancio.information.estimates import Estimate
 
-        access = self._resolve_access(
-            self._profile.counterparty_default_history, agent_id
-        )
+        access = self._resolve_access(self._profile.counterparty_default_history, agent_id)
         if access.level == AccessLevel.NONE:
             return None
 
@@ -164,7 +152,7 @@ class InformationService:
             },
         )
 
-    def get_system_default_rate(self, day: int) -> Optional[Decimal]:
+    def get_system_default_rate(self, day: int) -> Decimal | None:
         """Get the aggregate system-wide default rate.
 
         Uses aggregate_default_rate access level.
@@ -189,22 +177,16 @@ class InformationService:
         """
         return self._raw_loan_exposure(lender_id)
 
-    def get_borrower_exposure(
-        self, lender_id: str, borrower_id: str
-    ) -> int:
+    def get_borrower_exposure(self, lender_id: str, borrower_id: str) -> int:
         """Get existing loan exposure from lender to a specific borrower.
 
         Always returns perfect data (own data).
         """
         return self._raw_borrower_exposure(lender_id, borrower_id)
 
-    def get_counterparty_net_worth(
-        self, agent_id: str, day: int
-    ) -> Optional[int]:
+    def get_counterparty_net_worth(self, agent_id: str, day: int) -> int | None:
         """Get net worth (assets - liabilities) for a counterparty."""
-        access = self._resolve_access(
-            self._profile.counterparty_net_worth, agent_id
-        )
+        access = self._resolve_access(self._profile.counterparty_net_worth, agent_id)
         if access.level == AccessLevel.NONE:
             return None
         raw = self._raw_net_worth(agent_id)
@@ -212,7 +194,7 @@ class InformationService:
             return raw
         return self._apply_numeric_noise(raw, access.noise, day, allow_negative=True)
 
-    def get_system_liquidity(self, day: int) -> Optional[int]:
+    def get_system_liquidity(self, day: int) -> int | None:
         """Get total cash in the system."""
         access_cfg = self._profile.system_liquidity
         if access_cfg.level == AccessLevel.NONE:
@@ -224,7 +206,7 @@ class InformationService:
 
     # ── Contextual view queries ────────────────────────────────────────
 
-    def system_view(self, day: int) -> "SystemView":
+    def system_view(self, day: int) -> SystemView:
         """Build a SystemView snapshot using configured access levels."""
         from bilancio.information.views import SystemView
 
@@ -234,9 +216,7 @@ class InformationService:
             system_liquidity=self.get_system_liquidity(day),
         )
 
-    def counterparty_view(
-        self, agent_id: str, day: int, horizon: int = 5
-    ) -> "CounterpartyView":
+    def counterparty_view(self, agent_id: str, day: int, horizon: int = 5) -> CounterpartyView:
         """Build a CounterpartyView snapshot for a single counterparty."""
         from bilancio.information.views import CounterpartyView
 
@@ -249,32 +229,26 @@ class InformationService:
             default_probability=self.get_default_probability(agent_id, day),
         )
 
-    def instrument_view(self, day: int) -> "InstrumentView":
+    def instrument_view(self, day: int) -> InstrumentView:
         """Build an InstrumentView snapshot (sparse in Phase 1)."""
         from bilancio.information.views import InstrumentView
 
         return InstrumentView(day=day)
 
-    def transaction_view(
-        self, agent_id: str, day: int
-    ) -> "TransactionView":
+    def transaction_view(self, agent_id: str, day: int) -> TransactionView:
         """Build a TransactionView for a counterparty."""
         from bilancio.information.views import TransactionView
 
         return TransactionView(
             agent_id=agent_id,
             day=day,
-            bilateral_exposure=self.get_borrower_exposure(
-                self._observer_id, agent_id
-            ),
+            bilateral_exposure=self.get_borrower_exposure(self._observer_id, agent_id),
             total_exposure=self.get_loan_exposure(self._observer_id),
         )
 
     # ── Access resolution ─────────────────────────────────────────────
 
-    def _resolve_access(
-        self, category: CategoryAccess, agent_id: str
-    ) -> CategoryAccess:
+    def _resolve_access(self, category: CategoryAccess, agent_id: str) -> CategoryAccess:
         """Resolve access level, upgrading to PERFECT for self-queries."""
         if agent_id == self._observer_id:
             return CategoryAccess(level=AccessLevel.PERFECT)
@@ -283,8 +257,12 @@ class InformationService:
     # ── Noise application ─────────────────────────────────────────────
 
     def _apply_numeric_noise(
-        self, value: int, noise: Optional[NoiseConfig], day: int,
-        *, allow_negative: bool = False,
+        self,
+        value: int,
+        noise: NoiseConfig | None,
+        day: int,
+        *,
+        allow_negative: bool = False,
     ) -> int:
         """Apply noise to an integer value.
 
@@ -325,9 +303,7 @@ class InformationService:
             return value
         return value  # type: ignore[unreachable]
 
-    def _apply_decimal_noise(
-        self, value: Decimal, noise: Optional[NoiseConfig], day: int
-    ) -> Decimal:
+    def _apply_decimal_noise(self, value: Decimal, noise: NoiseConfig | None, day: int) -> Decimal:
         """Apply noise to a Decimal value.
 
         The *day* parameter is reserved for future lag-based historical
@@ -347,7 +323,7 @@ class InformationService:
             rate = float(noise.sample_rate)
             adjusted = float(value) * rate
             return Decimal(str(round(adjusted, 6)))
-        if isinstance(noise, (AggregateOnlyNoise, BilateralOnlyNoise)):
+        if isinstance(noise, AggregateOnlyNoise | BilateralOnlyNoise):
             return value
         return value  # type: ignore[unreachable]
 
@@ -367,9 +343,7 @@ class InformationService:
                 total += contract.amount
         return total
 
-    def _raw_upcoming_obligations(
-        self, agent_id: str, current_day: int, horizon: int
-    ) -> int:
+    def _raw_upcoming_obligations(self, agent_id: str, current_day: int, horizon: int) -> int:
         """Get raw upcoming obligations within horizon."""
         from bilancio.domain.instruments.base import InstrumentKind
         from bilancio.domain.instruments.non_bank_loan import NonBankLoan
@@ -395,17 +369,14 @@ class InformationService:
                     total += contract.repayment_amount
         return total
 
-    def _raw_default_probs(self, current_day: int) -> Dict[str, Decimal]:
+    def _raw_default_probs(self, current_day: int) -> dict[str, Decimal]:
         """Get raw default probability estimates.
 
         When the profile declares channel bindings for ``"default_prob"``,
         sources are tried in binding priority order.  Otherwise the legacy
         waterfall (dealer -> registry -> heuristic) is used.
         """
-        bindings = [
-            b for b in self._profile.channel_bindings
-            if b.category == "default_prob"
-        ]
+        bindings = [b for b in self._profile.channel_bindings if b.category == "default_prob"]
         if bindings:
             for binding in sorted(bindings, key=lambda b: b.priority):
                 result = self._try_default_prob_source(binding.source, current_day)
@@ -424,8 +395,10 @@ class InformationService:
     # ── Default-prob source methods ────────────────────────────────────
 
     def _try_default_prob_source(
-        self, source: str, current_day: int,
-    ) -> Optional[Dict[str, Decimal]]:
+        self,
+        source: str,
+        current_day: int,
+    ) -> dict[str, Decimal] | None:
         """Dispatch to a named default-prob source. Returns None if unavailable."""
         if source == "dealer_risk_assessor":
             return self._default_prob_from_dealer(current_day)
@@ -437,8 +410,9 @@ class InformationService:
         return None
 
     def _default_prob_from_dealer(
-        self, current_day: int,
-    ) -> Optional[Dict[str, Decimal]]:
+        self,
+        current_day: int,
+    ) -> dict[str, Decimal] | None:
         """Use the dealer subsystem's RiskAssessor for default probs."""
         dealer_sub = self._system.state.dealer_subsystem
         if (
@@ -447,7 +421,7 @@ class InformationService:
             or dealer_sub.risk_assessor is None
         ):
             return None
-        probs: Dict[str, Decimal] = {}
+        probs: dict[str, Decimal] = {}
         assessor = dealer_sub.risk_assessor
         for agent_id in self._system.state.agents:
             agent = self._system.state.agents[agent_id]
@@ -455,19 +429,18 @@ class InformationService:
                 probs[agent_id] = Decimal("1.0")
                 continue
             p = assessor.estimate_default_prob(agent_id, current_day)
-            probs[agent_id] = (
-                Decimal(str(p)) if p is not None else Decimal("0.15")
-            )
+            probs[agent_id] = Decimal(str(p)) if p is not None else Decimal("0.15")
         return probs
 
     def _default_prob_from_registry(
-        self, current_day: int,
-    ) -> Optional[Dict[str, Decimal]]:
+        self,
+        current_day: int,
+    ) -> dict[str, Decimal] | None:
         """Use the rating registry for default probs."""
         rating_registry = getattr(self._system.state, "rating_registry", None)
         if not rating_registry:
             return None
-        probs: Dict[str, Decimal] = {}
+        probs: dict[str, Decimal] = {}
         for agent_id, agent in self._system.state.agents.items():
             if agent.defaulted:
                 probs[agent_id] = Decimal("1.0")
@@ -478,15 +451,14 @@ class InformationService:
         return probs
 
     def _default_prob_heuristic(
-        self, current_day: int,
-    ) -> Dict[str, Decimal]:
+        self,
+        current_day: int,
+    ) -> dict[str, Decimal]:
         """System-wide heuristic: base_rate + margin."""
-        probs: Dict[str, Decimal] = {}
+        probs: dict[str, Decimal] = {}
         n_agents = len(self._system.state.agents)
         n_defaulted = len(self._system.state.defaulted_agent_ids)
-        base_rate = (
-            Decimal(str(n_defaulted / n_agents)) if n_agents > 0 else Decimal("0")
-        )
+        base_rate = Decimal(str(n_defaulted / n_agents)) if n_agents > 0 else Decimal("0")
         for agent_id, agent in self._system.state.agents.items():
             if agent.defaulted:
                 probs[agent_id] = Decimal("1.0")
@@ -499,10 +471,7 @@ class InformationService:
 
     def _active_default_prob_source(self) -> str:
         """Determine which source is active for provenance tracking."""
-        bindings = [
-            b for b in self._profile.channel_bindings
-            if b.category == "default_prob"
-        ]
+        bindings = [b for b in self._profile.channel_bindings if b.category == "default_prob"]
         if bindings:
             for binding in sorted(bindings, key=lambda b: b.priority):
                 if self._source_available(binding.source):
@@ -519,11 +488,7 @@ class InformationService:
         """Check whether a named source is available in the current system."""
         if source == "dealer_risk_assessor":
             ds = self._system.state.dealer_subsystem
-            return (
-                ds is not None
-                and hasattr(ds, "risk_assessor")
-                and ds.risk_assessor is not None
-            )
+            return ds is not None and hasattr(ds, "risk_assessor") and ds.risk_assessor is not None
         if source == "rating_registry":
             return bool(getattr(self._system.state, "rating_registry", None))
         if source == "system_heuristic":
@@ -540,16 +505,11 @@ class InformationService:
             return 0
         for cid in agent.asset_ids:
             contract = self._system.state.contracts.get(cid)
-            if (
-                contract is not None
-                and contract.kind == InstrumentKind.NON_BANK_LOAN
-            ):
+            if contract is not None and contract.kind == InstrumentKind.NON_BANK_LOAN:
                 total += contract.amount
         return total
 
-    def _raw_borrower_exposure(
-        self, lender_id: str, borrower_id: str
-    ) -> int:
+    def _raw_borrower_exposure(self, lender_id: str, borrower_id: str) -> int:
         """Get raw loan exposure to a specific borrower."""
         from bilancio.domain.instruments.base import InstrumentKind
 

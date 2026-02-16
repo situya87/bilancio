@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from bilancio.config.models import (
     GeneratorConfig,
@@ -19,8 +19,8 @@ from .ring_explorer import (
 def compile_generator(
     config: GeneratorConfig,
     *,
-    source_path: Optional[Path] = None,
-) -> Dict[str, Any]:
+    source_path: Path | None = None,
+) -> dict[str, Any]:
     """Compile a generator specification into a scenario dictionary."""
     if isinstance(config, RingExplorerGeneratorConfig):
         return compile_ring_explorer(config, source_path=source_path)

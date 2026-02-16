@@ -24,8 +24,6 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
-import pytest
-
 from bilancio.analysis.report import (
     _decimal_or_none,
     _fmt_num,
@@ -45,7 +43,6 @@ from bilancio.analysis.report import (
     write_intraday_csv,
     write_metrics_html,
 )
-
 
 # ===========================================================================
 # _to_json
@@ -347,8 +344,21 @@ class TestComputeDayMetrics:
     def test_with_events_infers_days(self):
         """Events with PayableCreated infer day list."""
         events = [
-            {"kind": "PayableCreated", "due_day": 1, "debtor": "A1", "creditor": "A2", "amount": 100},
-            {"kind": "PayableSettled", "day": 1, "debtor": "A1", "creditor": "A2", "amount": 100, "pid": "P1"},
+            {
+                "kind": "PayableCreated",
+                "due_day": 1,
+                "debtor": "A1",
+                "creditor": "A2",
+                "amount": 100,
+            },
+            {
+                "kind": "PayableSettled",
+                "day": 1,
+                "debtor": "A1",
+                "creditor": "A2",
+                "amount": 100,
+                "pid": "P1",
+            },
         ]
         result = compute_day_metrics(events)
         assert 1 in result["days"]
@@ -357,7 +367,13 @@ class TestComputeDayMetrics:
     def test_with_balances_rows(self):
         """Balance rows are used to compute M_t and G_t."""
         events = [
-            {"kind": "PayableCreated", "due_day": 1, "debtor": "A1", "creditor": "A2", "amount": 100},
+            {
+                "kind": "PayableCreated",
+                "due_day": 1,
+                "debtor": "A1",
+                "creditor": "A2",
+                "amount": 100,
+            },
         ]
         balance_rows = [
             {"day": 1, "agent": "A1", "cash": "50", "deposit": "50", "reserves": "0"},
@@ -389,11 +405,24 @@ class TestSummarizeDayMetrics:
 
     def test_basic_aggregation(self):
         metrics = [
-            {"day": 1, "S_t": Decimal("100"), "phi_t": Decimal("1"), "delta_t": Decimal("0"),
-             "G_t": Decimal("5"), "alpha_t": Decimal("0.5"), "Mpeak_t": Decimal("50"),
-             "v_t": Decimal("2"), "HHIplus_t": Decimal("0.3")},
-            {"day": 2, "S_t": Decimal("200"), "phi_t": Decimal("0.5"), "delta_t": Decimal("0.5"),
-             "G_t": Decimal("10")},
+            {
+                "day": 1,
+                "S_t": Decimal("100"),
+                "phi_t": Decimal("1"),
+                "delta_t": Decimal("0"),
+                "G_t": Decimal("5"),
+                "alpha_t": Decimal("0.5"),
+                "Mpeak_t": Decimal("50"),
+                "v_t": Decimal("2"),
+                "HHIplus_t": Decimal("0.3"),
+            },
+            {
+                "day": 2,
+                "S_t": Decimal("200"),
+                "phi_t": Decimal("0.5"),
+                "delta_t": Decimal("0.5"),
+                "G_t": Decimal("10"),
+            },
         ]
         result = summarize_day_metrics(metrics)
         assert result["phi_total"] is not None
@@ -407,9 +436,17 @@ class TestSummarizeDayMetrics:
     def test_string_values_converted(self):
         """String representations of numbers are converted to Decimal."""
         metrics = [
-            {"day": 1, "S_t": "100", "phi_t": "1", "delta_t": "0",
-             "G_t": "5", "alpha_t": "0.5", "Mpeak_t": "50",
-             "v_t": "2", "HHIplus_t": "0.3"},
+            {
+                "day": 1,
+                "S_t": "100",
+                "phi_t": "1",
+                "delta_t": "0",
+                "G_t": "5",
+                "alpha_t": "0.5",
+                "Mpeak_t": "50",
+                "v_t": "2",
+                "HHIplus_t": "0.3",
+            },
         ]
         result = summarize_day_metrics(metrics)
         assert result["phi_total"] is not None
@@ -443,12 +480,23 @@ class TestWriteMetricsHtml:
         """Renders a complete HTML report."""
         path = tmp_path / "report.html"
         day_metrics = [
-            {"day": 1, "S_t": Decimal("100"), "Mbar_t": Decimal("50"),
-             "M_t": None, "G_t": None, "alpha_t": Decimal("0.5"),
-             "Mpeak_t": Decimal("40"), "gross_settled_t": Decimal("80"),
-             "v_t": Decimal("2"), "phi_t": Decimal("1"), "delta_t": Decimal("0"),
-             "n_debtors": 2, "n_creditors": 2, "HHIplus_t": Decimal("0.3"),
-             "notes": ""},
+            {
+                "day": 1,
+                "S_t": Decimal("100"),
+                "Mbar_t": Decimal("50"),
+                "M_t": None,
+                "G_t": None,
+                "alpha_t": Decimal("0.5"),
+                "Mpeak_t": Decimal("40"),
+                "gross_settled_t": Decimal("80"),
+                "v_t": Decimal("2"),
+                "phi_t": Decimal("1"),
+                "delta_t": Decimal("0"),
+                "n_debtors": 2,
+                "n_creditors": 2,
+                "HHIplus_t": Decimal("0.3"),
+                "notes": "",
+            },
         ]
         debtor_shares = [
             {"day": 1, "agent": "A1", "DS_t": Decimal("0.6")},
@@ -458,8 +506,14 @@ class TestWriteMetricsHtml:
             {"day": 1, "step": 1, "P_prefix": Decimal("10")},
             {"day": 1, "step": 2, "P_prefix": Decimal("30")},
         ]
-        write_metrics_html(path, day_metrics, debtor_shares, intraday,
-                          title="Test Report", subtitle="Test Subtitle")
+        write_metrics_html(
+            path,
+            day_metrics,
+            debtor_shares,
+            intraday,
+            title="Test Report",
+            subtitle="Test Subtitle",
+        )
         content = path.read_text()
         assert "Test Report" in content
         assert "Test Subtitle" in content
@@ -485,7 +539,10 @@ class TestWriteMetricsHtml:
         """run_level_metrics are included in summary cards."""
         path = tmp_path / "report.html"
         write_metrics_html(
-            path, [], [], [],
+            path,
+            [],
+            [],
+            [],
             run_level_metrics={"n_defaults": 3, "cascade_fraction": Decimal("0.5")},
         )
         content = path.read_text()
@@ -632,8 +689,7 @@ class TestAggregateRuns:
         results = base / "results.csv"
         metrics = base / "metrics.csv"
         metrics.write_text(
-            "day,S_t,phi_t,delta_t,G_t,alpha_t,Mpeak_t,v_t,HHIplus_t\n"
-            "1,100,1,0,0,0.4,50,2,0.5\n"
+            "day,S_t,phi_t,delta_t,G_t,alpha_t,Mpeak_t,v_t,HHIplus_t\n1,100,1,0,0,0.4,50,2,0.5\n"
         )
         registry.write_text(
             "run_id,phase,seed,n_agents,kappa,concentration,mu,monotonicity,Q_total,S1,L0,"
@@ -662,11 +718,7 @@ class TestAggregateRuns:
         registry = base / "registry.csv"
         results = base / "results.csv"
         metrics = base / "metrics.csv"
-        metrics.write_text(
-            "day,S_t,phi_t,delta_t\n"
-            "1,100,1,0\n"
-            "2,50,0.5,0.5\n"
-        )
+        metrics.write_text("day,S_t,phi_t,delta_t\n1,100,1,0\n2,50,0.5,0.5\n")
         registry.write_text(
             "run_id,phase,seed,n_agents,kappa,concentration,mu,monotonicity,Q_total,S1,L0,"
             "scenario_yaml,events_jsonl,balances_csv,metrics_csv,metrics_html,run_html,"

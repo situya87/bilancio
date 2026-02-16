@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from decimal import Decimal
-from typing import Callable, List, Optional, Sequence, Tuple
 
 
 def generate_frontier_params(
@@ -15,7 +15,7 @@ def generate_frontier_params(
     kappa_high: Decimal,
     tolerance: Decimal,
     max_iterations: int,
-    execute_fn: Callable[[str, Decimal, Decimal, Decimal, Decimal], Optional[Decimal]],
+    execute_fn: Callable[[str, Decimal, Decimal, Decimal, Decimal], Decimal | None],
 ) -> None:
     """
     Execute frontier/binary search parameter combinations.
@@ -67,7 +67,7 @@ def _run_frontier_cell(
     kappa_high: Decimal,
     tolerance: Decimal,
     max_iterations: int,
-    execute_fn: Callable[[str, Decimal, Decimal, Decimal, Decimal], Optional[Decimal]],
+    execute_fn: Callable[[str, Decimal, Decimal, Decimal, Decimal], Decimal | None],
 ) -> None:
     """
     Binary search for frontier kappa for a single parameter cell.

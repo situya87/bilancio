@@ -10,8 +10,6 @@ Covers:
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.decision.protocols import (
     CounterpartyScreener,
     FixedMaturitySelector,
@@ -23,7 +21,6 @@ from bilancio.decision.protocols import (
     TransactionPricer,
 )
 from bilancio.engines.lending import LendingConfig, _resolve_protocols, run_lending_phase
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 1. Default Protocol Implementation Tests
@@ -285,9 +282,11 @@ class TestProtocolCompliance:
 
     def test_custom_portfolio_satisfies_protocol(self):
         """A custom class with the right methods satisfies PortfolioStrategy."""
+
         class MyPortfolio:
             def max_exposure(self, total_assets: int) -> int:
                 return total_assets  # 100% exposure
+
             def target_return(self) -> Decimal:
                 return Decimal("0.15")
 
@@ -295,6 +294,7 @@ class TestProtocolCompliance:
 
     def test_custom_screener_satisfies_protocol(self):
         """A custom class with is_eligible satisfies CounterpartyScreener."""
+
         class MyScreener:
             def is_eligible(self, default_probability: Decimal) -> bool:
                 return True  # Accept everyone
@@ -303,6 +303,7 @@ class TestProtocolCompliance:
 
     def test_custom_pricer_satisfies_protocol(self):
         """A custom class with price satisfies TransactionPricer."""
+
         class MyPricer:
             def price(self, base_rate: Decimal, default_probability: Decimal) -> Decimal:
                 return base_rate * 2  # Double the base rate
@@ -333,7 +334,13 @@ class TestBehavioralEquivalence:
         cfg = LendingConfig()
         _, screener, _, _ = _resolve_protocols(cfg)
 
-        test_probs = [Decimal("0"), Decimal("0.25"), Decimal("0.50"), Decimal("0.51"), Decimal("0.99")]
+        test_probs = [
+            Decimal("0"),
+            Decimal("0.25"),
+            Decimal("0.50"),
+            Decimal("0.51"),
+            Decimal("0.99"),
+        ]
         for p in test_probs:
             old_passes = p <= cfg.max_default_prob
             new_passes = screener.is_eligible(p)
@@ -418,8 +425,10 @@ class TestCustomProtocolInjection:
     def test_custom_pricer_changes_rates(self):
         """Injecting a custom pricer changes loan rates."""
         system = _build_lending_system(
-            lender_cash=10000, firm_cash=200,
-            firm_payable_amount=1000, payable_due_day=2,
+            lender_cash=10000,
+            firm_cash=200,
+            firm_payable_amount=1000,
+            payable_due_day=2,
         )
 
         # Default config
@@ -428,14 +437,17 @@ class TestCustomProtocolInjection:
 
         # Rebuild same system
         system2 = _build_lending_system(
-            lender_cash=10000, firm_cash=200,
-            firm_payable_amount=1000, payable_due_day=2,
+            lender_cash=10000,
+            firm_cash=200,
+            firm_payable_amount=1000,
+            payable_due_day=2,
         )
 
         # Custom pricer with much higher scale
         custom_pricer = LinearPricer(risk_premium_scale=Decimal("2.0"))
         custom_cfg = LendingConfig(
-            horizon=3, min_shortfall=1,
+            horizon=3,
+            min_shortfall=1,
             transaction_pricer=custom_pricer,
         )
         custom_events = run_lending_phase(system2, current_day=0, lending_config=custom_cfg)
@@ -449,13 +461,16 @@ class TestCustomProtocolInjection:
     def test_strict_screener_rejects_all(self):
         """A very strict screener rejects all borrowers."""
         system = _build_lending_system(
-            lender_cash=10000, firm_cash=200,
-            firm_payable_amount=1000, payable_due_day=2,
+            lender_cash=10000,
+            firm_cash=200,
+            firm_payable_amount=1000,
+            payable_due_day=2,
         )
 
         strict_screener = ThresholdScreener(max_default_prob=Decimal("0.001"))
         cfg = LendingConfig(
-            horizon=3, min_shortfall=1,
+            horizon=3,
+            min_shortfall=1,
             counterparty_screener=strict_screener,
         )
         events = run_lending_phase(system, current_day=0, lending_config=cfg)
@@ -464,13 +479,16 @@ class TestCustomProtocolInjection:
     def test_custom_maturity_used_in_loan(self):
         """Custom maturity selector changes loan maturity."""
         system = _build_lending_system(
-            lender_cash=10000, firm_cash=200,
-            firm_payable_amount=1000, payable_due_day=2,
+            lender_cash=10000,
+            firm_cash=200,
+            firm_payable_amount=1000,
+            payable_due_day=2,
         )
 
         custom_selector = FixedMaturitySelector(maturity_days=15)
         cfg = LendingConfig(
-            horizon=3, min_shortfall=1,
+            horizon=3,
+            min_shortfall=1,
             instrument_selector=custom_selector,
         )
         events = run_lending_phase(system, current_day=0, lending_config=cfg)
@@ -483,8 +501,10 @@ class TestCustomProtocolInjection:
     def test_custom_portfolio_limits_exposure(self):
         """Custom portfolio with low exposure fraction limits lending."""
         system = _build_lending_system(
-            lender_cash=10000, firm_cash=0,
-            firm_payable_amount=5000, payable_due_day=2,
+            lender_cash=10000,
+            firm_cash=0,
+            firm_payable_amount=5000,
+            payable_due_day=2,
         )
 
         # Very restrictive: only 10% exposure
@@ -493,7 +513,8 @@ class TestCustomProtocolInjection:
             base_return=Decimal("0.05"),
         )
         cfg = LendingConfig(
-            horizon=3, min_shortfall=1,
+            horizon=3,
+            min_shortfall=1,
             portfolio_strategy=custom_portfolio,
         )
         events = run_lending_phase(system, current_day=0, lending_config=cfg)

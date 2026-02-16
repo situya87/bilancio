@@ -11,23 +11,22 @@ amounts of any asset. This covers three root causes that were fixed:
    an agent actually held
 """
 
-import pytest
 from decimal import Decimal
 
-from bilancio.config.models import ScenarioConfig
+import pytest
+
 from bilancio.config.apply import apply_to_system
-from bilancio.engines.system import System
-from bilancio.engines.simulation import run_day
+from bilancio.config.models import ScenarioConfig
 from bilancio.engines.dealer_integration import (
     _get_agent_cash,
-    run_dealer_trading_phase,
-    sync_dealer_to_system,
 )
-
+from bilancio.engines.simulation import run_day
+from bilancio.engines.system import System
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _balanced_scenario_config(
     *,
@@ -68,15 +67,17 @@ def _balanced_scenario_config(
     for i in range(1, n_traders + 1):
         to_agent = f"H{i % n_traders + 1}"
         due_day = due_days_cycle[(i - 1) % 3]
-        initial_actions.append({
-            "create_payable": {
-                "from": f"H{i}",
-                "to": to_agent,
-                "amount": fv,
-                "due_day": due_day,
-                "maturity_distance": due_day,
+        initial_actions.append(
+            {
+                "create_payable": {
+                    "from": f"H{i}",
+                    "to": to_agent,
+                    "amount": fv,
+                    "due_day": due_day,
+                    "maturity_distance": due_day,
+                }
             }
-        })
+        )
 
     # Create payables from some traders to VBT/Dealer (simulating balanced setup)
     bucket_map = {2: "short", 5: "mid", 10: "long"}
@@ -84,25 +85,29 @@ def _balanced_scenario_config(
         due_day = due_days_cycle[(i - 1) % 3]
         bucket = bucket_map[due_day]
         # Payable to VBT
-        initial_actions.append({
-            "create_payable": {
-                "from": f"H{i}",
-                "to": f"vbt_{bucket}",
-                "amount": round(fv * Decimal("0.25")),
-                "due_day": due_day,
-                "maturity_distance": due_day,
+        initial_actions.append(
+            {
+                "create_payable": {
+                    "from": f"H{i}",
+                    "to": f"vbt_{bucket}",
+                    "amount": round(fv * Decimal("0.25")),
+                    "due_day": due_day,
+                    "maturity_distance": due_day,
+                }
             }
-        })
+        )
         # Payable to Dealer
-        initial_actions.append({
-            "create_payable": {
-                "from": f"H{i}",
-                "to": f"dealer_{bucket}",
-                "amount": round(fv * Decimal("0.125")),
-                "due_day": due_day,
-                "maturity_distance": due_day,
+        initial_actions.append(
+            {
+                "create_payable": {
+                    "from": f"H{i}",
+                    "to": f"dealer_{bucket}",
+                    "amount": round(fv * Decimal("0.125")),
+                    "due_day": due_day,
+                    "maturity_distance": due_day,
+                }
             }
-        })
+        )
 
     # Mint cash to VBT and Dealer (market value of holdings)
     omr = Decimal(outside_mid_ratio)
@@ -110,7 +115,9 @@ def _balanced_scenario_config(
         vbt_cash = round(fv * Decimal("0.25") * 2 * omr)  # ~2 claims per bucket
         dealer_cash = round(fv * Decimal("0.125") * 2 * omr)
         initial_actions.append({"mint_cash": {"to": f"vbt_{bucket}", "amount": max(1, vbt_cash)}})
-        initial_actions.append({"mint_cash": {"to": f"dealer_{bucket}", "amount": max(1, dealer_cash)}})
+        initial_actions.append(
+            {"mint_cash": {"to": f"dealer_{bucket}", "amount": max(1, dealer_cash)}}
+        )
 
     return {
         "name": "negative-cash-test",
@@ -160,9 +167,7 @@ def _assert_no_negative_dealer_cash(system: System, context: str = ""):
         )
 
     for bucket_id, vbt in subsystem.vbts.items():
-        assert vbt.cash >= 0, (
-            f"Negative VBT cash: vbt_{bucket_id} cash={vbt.cash} [{context}]"
-        )
+        assert vbt.cash >= 0, f"Negative VBT cash: vbt_{bucket_id} cash={vbt.cash} [{context}]"
 
     for trader_id, trader in subsystem.traders.items():
         assert trader.cash >= 0, (
@@ -174,14 +179,13 @@ def _assert_no_negative_agent_cash(system: System, context: str = ""):
     """Assert that no agent has negative total cash via _get_agent_cash."""
     for agent_id in system.state.agents:
         cash = _get_agent_cash(system, agent_id)
-        assert cash >= 0, (
-            f"Negative agent cash: {agent_id} cash={cash} [{context}]"
-        )
+        assert cash >= 0, f"Negative agent cash: {agent_id} cash={cash} [{context}]"
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestNoNegativeCashDuringTrading:
     """Verify that dealer trading never produces negative cash positions."""
@@ -194,7 +198,7 @@ class TestNoNegativeCashDuringTrading:
         system.state.rollover_enabled = True
         apply_to_system(config, system)
 
-        for day in range(15):
+        for _day in range(15):
             ctx = f"day={system.state.day}"
             run_day(system, enable_dealer=True)
 
@@ -210,7 +214,7 @@ class TestNoNegativeCashDuringTrading:
         system.state.rollover_enabled = True
         apply_to_system(config, system)
 
-        for day in range(15):
+        for _day in range(15):
             ctx = f"day={system.state.day}"
             run_day(system, enable_dealer=True)
 
@@ -220,15 +224,13 @@ class TestNoNegativeCashDuringTrading:
 
     def test_high_face_value_no_negative_cash(self):
         """Large face values amplify the price*face scaling bug."""
-        data = _balanced_scenario_config(
-            n_traders=8, face_value="100", kappa="0.5", mode="active"
-        )
+        data = _balanced_scenario_config(n_traders=8, face_value="100", kappa="0.5", mode="active")
         config = ScenarioConfig(**data)
         system = System(default_mode="expel-agent")
         system.state.rollover_enabled = True
         apply_to_system(config, system)
 
-        for day in range(15):
+        for _day in range(15):
             ctx = f"day={system.state.day}"
             run_day(system, enable_dealer=True)
 
@@ -246,7 +248,7 @@ class TestNoNegativeCashDuringTrading:
         system.state.rollover_enabled = True
         apply_to_system(config, system)
 
-        for day in range(15):
+        for _day in range(15):
             ctx = f"day={system.state.day}"
             run_day(system, enable_dealer=True)
 
@@ -271,7 +273,7 @@ class TestSyncDoesNotCreateNegatives:
             pytest.skip("No dealer subsystem attached")
 
         # Run a few trading phases to build up trades
-        for day in range(5):
+        for _day in range(5):
             run_day(system, enable_dealer=True)
 
         # After sync, no agent should have negative cash
@@ -302,7 +304,7 @@ class TestBuyTradeReversalCorrectness:
             initial_cash[f"vbt_{bucket_id}"] = vbt.cash
 
         # Run trading for several days
-        for day in range(10):
+        for _day in range(10):
             ctx = f"day={system.state.day}"
             run_day(system, enable_dealer=True)
 
@@ -329,7 +331,7 @@ class TestSystemInvariantsHoldWithDealer:
         system.state.rollover_enabled = True
         apply_to_system(config, system)
 
-        for day in range(12):
+        for _day in range(12):
             run_day(system, enable_dealer=True)
             system.assert_invariants()
 
@@ -341,7 +343,7 @@ class TestSystemInvariantsHoldWithDealer:
         system.state.rollover_enabled = True
         apply_to_system(config, system)
 
-        for day in range(12):
+        for _day in range(12):
             ctx = f"day={system.state.day}"
             run_day(system, enable_dealer=True)
 

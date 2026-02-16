@@ -12,9 +12,8 @@ Plan 023: Default-Aware Instrumentation
 from __future__ import annotations
 
 import logging
-from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -48,7 +47,7 @@ def build_strategy_outcomes_by_run(experiment_root: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
     comp = pd.read_csv(comp_path)
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     for _, row in comp.iterrows():
         run_id = row.get("active_run_id", "")
@@ -64,7 +63,13 @@ def build_strategy_outcomes_by_run(experiment_root: Path) -> pd.DataFrame:
 
         try:
             rep = pd.read_csv(rep_path)
-        except (ValueError, KeyError, FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+        except (
+            ValueError,
+            KeyError,
+            FileNotFoundError,
+            pd.errors.EmptyDataError,
+            pd.errors.ParserError,
+        ) as e:
             logger.warning("Failed to read %s: %s", rep_path, e)
             continue
 
@@ -81,7 +86,7 @@ def build_strategy_outcomes_by_run(experiment_root: Path) -> pd.DataFrame:
         default_count_total = (rep["outcome"] == "defaulted").sum()
 
         # Compute per-strategy metrics
-        strat_metrics: Dict[str, Any] = {}
+        strat_metrics: dict[str, Any] = {}
         for strat in STRATEGIES:
             strat_rows = rep[rep["strategy"] == strat]
             face_strat = strat_rows["face_value"].sum()
@@ -121,7 +126,7 @@ def build_strategy_outcomes_by_run(experiment_root: Path) -> pd.DataFrame:
 
 def build_strategy_outcomes_overall(
     by_run_df: pd.DataFrame,
-    group_cols: Optional[List[str]] = None,
+    group_cols: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Aggregate strategy outcomes across runs.
@@ -152,14 +157,14 @@ def build_strategy_outcomes_overall(
         logger.warning("No group columns found in DataFrame")
         return pd.DataFrame()
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     for combo, group in by_run_df.groupby(available_cols, dropna=False):
         # Handle single column case
         if len(available_cols) == 1:
             combo = (combo,)
 
-        combo_dict = dict(zip(available_cols, combo))
+        combo_dict = dict(zip(available_cols, combo, strict=False))
 
         for strat in STRATEGIES:
             face_col = f"face_{strat}"
@@ -176,7 +181,9 @@ def build_strategy_outcomes_overall(
             # Get mean trading effect for runs that used this strategy
             if count_col in group.columns and "trading_effect" in group.columns:
                 used_mask = group[count_col] > 0
-                trading_effects = pd.to_numeric(group.loc[used_mask, "trading_effect"], errors="coerce")
+                trading_effects = pd.to_numeric(
+                    group.loc[used_mask, "trading_effect"], errors="coerce"
+                )
                 mean_effect = trading_effects.mean() if not trading_effects.empty else 0.0
             else:
                 mean_effect = 0.0

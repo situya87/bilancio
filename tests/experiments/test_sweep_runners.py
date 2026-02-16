@@ -10,17 +10,15 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
 from bilancio.experiments.sampling import (
+    generate_frontier_params,
     generate_grid_params,
     generate_lhs_params,
-    generate_frontier_params,
 )
-
 
 # =============================================================================
 # Tests for generate_grid_params
@@ -112,27 +110,31 @@ class TestGenerateLHSParams:
     def test_count_matches_request(self):
         """LHS generates exactly the requested number of samples."""
         count = 10
-        result = list(generate_lhs_params(
-            count,
-            kappa_range=(Decimal("0.5"), Decimal("4")),
-            concentration_range=(Decimal("0.1"), Decimal("5")),
-            mu_range=(Decimal("0"), Decimal("1")),
-            monotonicity_range=(Decimal("0"), Decimal("0.5")),
-            seed=42,
-        ))
+        result = list(
+            generate_lhs_params(
+                count,
+                kappa_range=(Decimal("0.5"), Decimal("4")),
+                concentration_range=(Decimal("0.1"), Decimal("5")),
+                mu_range=(Decimal("0"), Decimal("1")),
+                monotonicity_range=(Decimal("0"), Decimal("0.5")),
+                seed=42,
+            )
+        )
 
         assert len(result) == count
 
     def test_zero_count_returns_empty(self):
         """LHS with count=0 returns empty iterator."""
-        result = list(generate_lhs_params(
-            0,
-            kappa_range=(Decimal("0.5"), Decimal("4")),
-            concentration_range=(Decimal("0.1"), Decimal("5")),
-            mu_range=(Decimal("0"), Decimal("1")),
-            monotonicity_range=(Decimal("0"), Decimal("0.5")),
-            seed=42,
-        ))
+        result = list(
+            generate_lhs_params(
+                0,
+                kappa_range=(Decimal("0.5"), Decimal("4")),
+                concentration_range=(Decimal("0.1"), Decimal("5")),
+                mu_range=(Decimal("0"), Decimal("1")),
+                monotonicity_range=(Decimal("0"), Decimal("0.5")),
+                seed=42,
+            )
+        )
 
         assert len(result) == 0
 
@@ -144,14 +146,16 @@ class TestGenerateLHSParams:
         mu_range = (Decimal("0"), Decimal("1"))
         monotonicity_range = (Decimal("-0.5"), Decimal("0.5"))
 
-        result = list(generate_lhs_params(
-            count,
-            kappa_range=kappa_range,
-            concentration_range=concentration_range,
-            mu_range=mu_range,
-            monotonicity_range=monotonicity_range,
-            seed=42,
-        ))
+        result = list(
+            generate_lhs_params(
+                count,
+                kappa_range=kappa_range,
+                concentration_range=concentration_range,
+                mu_range=mu_range,
+                monotonicity_range=monotonicity_range,
+                seed=42,
+            )
+        )
 
         for kappa, concentration, mu, monotonicity in result:
             assert kappa_range[0] <= kappa <= kappa_range[1]
@@ -161,14 +165,14 @@ class TestGenerateLHSParams:
 
     def test_reproducibility_with_same_seed(self):
         """Same seed produces identical samples."""
-        kwargs = dict(
-            count=5,
-            kappa_range=(Decimal("0.5"), Decimal("4")),
-            concentration_range=(Decimal("0.1"), Decimal("5")),
-            mu_range=(Decimal("0"), Decimal("1")),
-            monotonicity_range=(Decimal("0"), Decimal("0.5")),
-            seed=12345,
-        )
+        kwargs = {
+            "count": 5,
+            "kappa_range": (Decimal("0.5"), Decimal("4")),
+            "concentration_range": (Decimal("0.1"), Decimal("5")),
+            "mu_range": (Decimal("0"), Decimal("1")),
+            "monotonicity_range": (Decimal("0"), Decimal("0.5")),
+            "seed": 12345,
+        }
 
         result1 = list(generate_lhs_params(**kwargs))
         result2 = list(generate_lhs_params(**kwargs))
@@ -177,13 +181,13 @@ class TestGenerateLHSParams:
 
     def test_different_seeds_produce_different_samples(self):
         """Different seeds produce different samples."""
-        base_kwargs = dict(
-            count=5,
-            kappa_range=(Decimal("0.5"), Decimal("4")),
-            concentration_range=(Decimal("0.1"), Decimal("5")),
-            mu_range=(Decimal("0"), Decimal("1")),
-            monotonicity_range=(Decimal("0"), Decimal("0.5")),
-        )
+        base_kwargs = {
+            "count": 5,
+            "kappa_range": (Decimal("0.5"), Decimal("4")),
+            "concentration_range": (Decimal("0.1"), Decimal("5")),
+            "mu_range": (Decimal("0"), Decimal("1")),
+            "monotonicity_range": (Decimal("0"), Decimal("0.5")),
+        }
 
         result1 = list(generate_lhs_params(**base_kwargs, seed=42))
         result2 = list(generate_lhs_params(**base_kwargs, seed=43))
@@ -192,14 +196,16 @@ class TestGenerateLHSParams:
 
     def test_returns_decimal_tuples(self):
         """All returned values are Decimal tuples."""
-        result = list(generate_lhs_params(
-            1,
-            kappa_range=(Decimal("1"), Decimal("2")),
-            concentration_range=(Decimal("0.5"), Decimal("1")),
-            mu_range=(Decimal("0"), Decimal("1")),
-            monotonicity_range=(Decimal("0"), Decimal("0")),
-            seed=42,
-        ))
+        result = list(
+            generate_lhs_params(
+                1,
+                kappa_range=(Decimal("1"), Decimal("2")),
+                concentration_range=(Decimal("0.5"), Decimal("1")),
+                mu_range=(Decimal("0"), Decimal("1")),
+                monotonicity_range=(Decimal("0"), Decimal("0")),
+                seed=42,
+            )
+        )
 
         assert len(result) == 1
         kappa, concentration, mu, monotonicity = result[0]
@@ -221,7 +227,9 @@ class TestGenerateFrontierParams:
         """Frontier sampling calls execute_fn for each test."""
         calls = []
 
-        def mock_execute(label: str, kappa: Decimal, concentration: Decimal, mu: Decimal, monotonicity: Decimal) -> Optional[Decimal]:
+        def mock_execute(
+            label: str, kappa: Decimal, concentration: Decimal, mu: Decimal, monotonicity: Decimal
+        ) -> Decimal | None:
             calls.append((label, kappa, concentration, mu, monotonicity))
             # Return stable for high kappa, unstable for low
             if kappa >= Decimal("2"):
@@ -248,7 +256,9 @@ class TestGenerateFrontierParams:
         """Frontier stops immediately if kappa_low is already stable."""
         calls = []
 
-        def mock_execute(label: str, kappa: Decimal, concentration: Decimal, mu: Decimal, monotonicity: Decimal) -> Optional[Decimal]:
+        def mock_execute(
+            label: str, kappa: Decimal, concentration: Decimal, mu: Decimal, monotonicity: Decimal
+        ) -> Decimal | None:
             calls.append((label, kappa, concentration, mu, monotonicity))
             # Always stable
             return Decimal("0.01")
@@ -272,7 +282,9 @@ class TestGenerateFrontierParams:
         """Frontier iterates over all (concentration, mu, monotonicity) combinations."""
         cells_visited = set()
 
-        def mock_execute(label: str, kappa: Decimal, concentration: Decimal, mu: Decimal, monotonicity: Decimal) -> Optional[Decimal]:
+        def mock_execute(
+            label: str, kappa: Decimal, concentration: Decimal, mu: Decimal, monotonicity: Decimal
+        ) -> Decimal | None:
             cells_visited.add((concentration, mu, monotonicity))
             return Decimal("0.01")  # Always stable
 
@@ -300,7 +312,9 @@ class TestGenerateFrontierParams:
         """Frontier continues when execute_fn returns None (failed run)."""
         calls = []
 
-        def mock_execute(label: str, kappa: Decimal, concentration: Decimal, mu: Decimal, monotonicity: Decimal) -> Optional[Decimal]:
+        def mock_execute(
+            label: str, kappa: Decimal, concentration: Decimal, mu: Decimal, monotonicity: Decimal
+        ) -> Decimal | None:
             calls.append(label)
             # Return None for low (failed), stable for high
             if kappa < Decimal("2"):
@@ -335,7 +349,7 @@ class TestRingSweepRunnerSetup:
         """RingSweepRunner creates registry, runs, and aggregate directories."""
         from bilancio.experiments.ring import RingSweepRunner
 
-        runner = RingSweepRunner(
+        RingSweepRunner(
             out_dir=tmp_path,
             name_prefix="Test",
             n_agents=2,
@@ -354,7 +368,7 @@ class TestRingSweepRunnerSetup:
         """RingSweepRunner creates registry CSV with headers."""
         from bilancio.experiments.ring import RingSweepRunner
 
-        runner = RingSweepRunner(
+        RingSweepRunner(
             out_dir=tmp_path,
             name_prefix="Test",
             n_agents=2,
@@ -399,7 +413,7 @@ class TestRingSweepRunnerGridMocked:
 
     def test_run_grid_calls_execute_for_each_combination(self, tmp_path: Path):
         """run_grid calls _execute_run for each parameter combination."""
-        from bilancio.experiments.ring import RingSweepRunner, RingRunSummary
+        from bilancio.experiments.ring import RingRunSummary, RingSweepRunner
 
         runner = RingSweepRunner(
             out_dir=tmp_path,
@@ -443,7 +457,7 @@ class TestRingSweepRunnerGridMocked:
 
     def test_run_grid_returns_summaries(self, tmp_path: Path):
         """run_grid returns list of RingRunSummary objects."""
-        from bilancio.experiments.ring import RingSweepRunner, RingRunSummary
+        from bilancio.experiments.ring import RingRunSummary, RingSweepRunner
 
         runner = RingSweepRunner(
             out_dir=tmp_path,
@@ -487,7 +501,7 @@ class TestRingSweepRunnerLHSMocked:
 
     def test_run_lhs_generates_requested_count(self, tmp_path: Path):
         """run_lhs generates exactly the requested number of samples."""
-        from bilancio.experiments.ring import RingSweepRunner, RingRunSummary
+        from bilancio.experiments.ring import RingRunSummary, RingSweepRunner
 
         runner = RingSweepRunner(
             out_dir=tmp_path,
@@ -629,7 +643,7 @@ class TestComparisonSweepRunnerSetup:
 
     def test_creates_output_directories(self, tmp_path: Path):
         """ComparisonSweepRunner creates control, treatment, and aggregate directories."""
-        from bilancio.experiments.comparison import ComparisonSweepRunner, ComparisonSweepConfig
+        from bilancio.experiments.comparison import ComparisonSweepConfig, ComparisonSweepRunner
 
         config = ComparisonSweepConfig(
             n_agents=5,
@@ -639,7 +653,7 @@ class TestComparisonSweepRunnerSetup:
             mus=[Decimal("0")],
         )
 
-        runner = ComparisonSweepRunner(config, tmp_path)
+        ComparisonSweepRunner(config, tmp_path)
 
         assert (tmp_path / "control").exists()
         assert (tmp_path / "treatment").exists()
@@ -656,7 +670,10 @@ class TestBalancedComparisonRunnerSetup:
 
     def test_creates_output_directories(self, tmp_path: Path):
         """BalancedComparisonRunner creates passive, active, and aggregate directories."""
-        from bilancio.experiments.balanced_comparison import BalancedComparisonRunner, BalancedComparisonConfig
+        from bilancio.experiments.balanced_comparison import (
+            BalancedComparisonConfig,
+            BalancedComparisonRunner,
+        )
 
         config = BalancedComparisonConfig(
             n_agents=5,
@@ -667,7 +684,7 @@ class TestBalancedComparisonRunnerSetup:
             outside_mid_ratios=[Decimal("0.75")],
         )
 
-        runner = BalancedComparisonRunner(config, tmp_path)
+        BalancedComparisonRunner(config, tmp_path)
 
         assert (tmp_path / "passive").exists()
         assert (tmp_path / "active").exists()

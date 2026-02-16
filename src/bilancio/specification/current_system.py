@@ -11,17 +11,17 @@ Run validation with:
 """
 
 from .models import (
-    AgentSpec,
-    InstrumentSpec,
-    InstrumentRelation,
     AgentRelation,
-    DecisionSpec,
-    LifecycleSpec,
+    AgentSpec,
     BalanceSheetPosition,
+    DecisionSpec,
     InstrumentInteraction,
+    InstrumentRelation,
+    InstrumentSpec,
+    LifecycleSpec,
 )
 from .registry import SpecificationRegistry
-from .validators import validate_all_relationships, ValidationResult
+from .validators import ValidationResult, validate_all_relationships
 
 
 def create_trader_spec() -> AgentSpec:

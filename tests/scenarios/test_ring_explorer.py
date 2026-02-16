@@ -1,6 +1,5 @@
 import json
 from decimal import Decimal
-from pathlib import Path
 
 from bilancio.config.loaders import load_yaml
 from bilancio.config.models import RingExplorerGeneratorConfig
@@ -52,7 +51,11 @@ def test_compile_ring_explorer_basic(tmp_path):
     assert S1 == Decimal("400")
     assert L0 == Decimal("800")  # kappa = L0 / S1 -> 2
 
-    due_days = [action["create_payable"]["due_day"] for action in scenario["initial_actions"] if "create_payable" in action]
+    due_days = [
+        action["create_payable"]["due_day"]
+        for action in scenario["initial_actions"]
+        if "create_payable" in action
+    ]
     assert set(due_days) == {1}
 
 
@@ -80,7 +83,9 @@ def test_compile_ring_explorer_vector_allocation(tmp_path):
 
     scenario = compile_ring_explorer(generator, source_path=None)
 
-    cash_actions = [action["mint_cash"] for action in scenario["initial_actions"] if "mint_cash" in action]
+    cash_actions = [
+        action["mint_cash"] for action in scenario["initial_actions"] if "mint_cash" in action
+    ]
     amounts = [Decimal(str(entry["amount"])) for entry in cash_actions]
     assert len(amounts) == 3
     # Expect ratios 1:2:3 scaled to 120
@@ -159,8 +164,12 @@ def test_monotonicity_extremes():
         }
     )
 
-    descending_amounts = _payable_amounts(compile_ring_explorer(descending, source_path=None)["initial_actions"])
-    ascending_amounts = _payable_amounts(compile_ring_explorer(asc, source_path=None)["initial_actions"])
+    descending_amounts = _payable_amounts(
+        compile_ring_explorer(descending, source_path=None)["initial_actions"]
+    )
+    ascending_amounts = _payable_amounts(
+        compile_ring_explorer(asc, source_path=None)["initial_actions"]
+    )
 
     assert descending_amounts == sorted(descending_amounts, reverse=True)
     assert ascending_amounts == sorted(ascending_amounts, reverse=False)

@@ -14,8 +14,8 @@ from bilancio.domain.instruments.base import Instrument, InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.delivery import DeliveryObligation
 from bilancio.domain.instruments.non_bank_loan import NonBankLoan
-from bilancio.ops.banking import client_payment
 from bilancio.ops.aliases import get_alias_for_id
+from bilancio.ops.banking import client_payment
 
 if TYPE_CHECKING:
     from bilancio.engines.system import System
@@ -77,7 +77,9 @@ def due_delivery_obligations(system: System, day: int) -> Generator[Instrument, 
 
 def _pay_with_deposits(system: System, debtor_id: str, creditor_id: str, amount: int) -> int:
     """Pay using bank deposits. Returns amount actually paid."""
-    logger.debug("_pay_with_deposits: debtor=%s creditor=%s amount=%d", debtor_id, creditor_id, amount)
+    logger.debug(
+        "_pay_with_deposits: debtor=%s creditor=%s amount=%d", debtor_id, creditor_id, amount
+    )
     debtor_deposit_ids = []
     for cid in system.state.agents[debtor_id].asset_ids:
         contract = system.state.contracts.get(cid)
@@ -151,9 +153,16 @@ def _pay_with_cash(system: System, debtor_id: str, creditor_id: str, amount: int
         return 0
 
 
-def _pay_bank_to_bank_with_reserves(system: System, debtor_bank_id: str, creditor_bank_id: str, amount: int) -> int:
+def _pay_bank_to_bank_with_reserves(
+    system: System, debtor_bank_id: str, creditor_bank_id: str, amount: int
+) -> int:
     """Pay using reserves between banks. Returns amount actually paid."""
-    logger.debug("_pay_bank_to_bank_with_reserves: debtor=%s creditor=%s amount=%d", debtor_bank_id, creditor_bank_id, amount)
+    logger.debug(
+        "_pay_bank_to_bank_with_reserves: debtor=%s creditor=%s amount=%d",
+        debtor_bank_id,
+        creditor_bank_id,
+        amount,
+    )
     if debtor_bank_id == creditor_bank_id:
         return 0
 
@@ -181,7 +190,9 @@ def _pay_bank_to_bank_with_reserves(system: System, debtor_bank_id: str, credito
         return 0
 
 
-def _deliver_stock(system: System, debtor_id: str, creditor_id: str, sku: str, required_quantity: int) -> int:
+def _deliver_stock(
+    system: System, debtor_id: str, creditor_id: str, sku: str, required_quantity: int
+) -> int:
     """Transfer stock lots from debtor to creditor by SKU using FIFO allocation."""
     available_stocks = []
     for stock_id in system.state.agents[debtor_id].stock_ids:
@@ -238,7 +249,9 @@ def _remove_contract(system: System, contract_id: str) -> None:
 
     # For secondary market transfers (e.g., payables sold to dealers),
     # remove from the effective holder, not the original asset_holder_id
-    effective_holder_id = contract.effective_creditor if isinstance(contract, Payable) else contract.asset_holder_id
+    effective_holder_id = (
+        contract.effective_creditor if isinstance(contract, Payable) else contract.asset_holder_id
+    )
     effective_holder = system.state.agents.get(effective_holder_id)
     if effective_holder and contract_id in effective_holder.asset_ids:
         effective_holder.asset_ids.remove(contract_id)
@@ -270,7 +283,7 @@ def _action_references_agent(action_dict: object, agent_id: str) -> bool:
     if not isinstance(payload, dict):
         return False
 
-    for field in _ACTION_AGENT_FIELDS.get(action_name, ()): 
+    for field in _ACTION_AGENT_FIELDS.get(action_name, ()):
         value = payload.get(field)
         if isinstance(value, str) and value == agent_id:
             return True
@@ -295,8 +308,14 @@ def _cancel_scheduled_actions_for_agent(
     for day, actions in list(system.state.scheduled_actions_by_day.items()):
         remaining = []
         for action_dict in actions:
-            if _action_references_agent(action_dict, agent_id) or _action_references_contract(action_dict, cancelled_contract_ids, cancelled_aliases):
-                action_name = next(iter(action_dict.keys()), "unknown") if isinstance(action_dict, dict) else "unknown"
+            if _action_references_agent(action_dict, agent_id) or _action_references_contract(
+                action_dict, cancelled_contract_ids, cancelled_aliases
+            ):
+                action_name = (
+                    next(iter(action_dict.keys()), "unknown")
+                    if isinstance(action_dict, dict)
+                    else "unknown"
+                )
                 system.log(
                     EventKind.SCHEDULED_ACTION_CANCELLED,
                     agent=agent_id,
@@ -312,7 +331,9 @@ def _cancel_scheduled_actions_for_agent(
             del system.state.scheduled_actions_by_day[day]
 
 
-def _action_references_contract(action_dict: object, contract_ids: set[str], aliases: set[str]) -> bool:
+def _action_references_contract(
+    action_dict: object, contract_ids: set[str], aliases: set[str]
+) -> bool:
     if not isinstance(action_dict, dict) or len(action_dict) != 1:
         return False
     if not contract_ids and not aliases:
@@ -322,7 +343,9 @@ def _action_references_contract(action_dict: object, contract_ids: set[str], ali
     if not isinstance(payload, dict):
         return False
 
-    for field in _ACTION_CONTRACT_FIELDS.get(action_name, ("contract_id", "contract_alias", "alias")):
+    for field in _ACTION_CONTRACT_FIELDS.get(
+        action_name, ("contract_id", "contract_alias", "alias")
+    ):
         value = payload.get(field)
         if isinstance(value, str) and (value in contract_ids or value in aliases):
             return True
@@ -336,7 +359,9 @@ def _action_references_contract(action_dict: object, contract_ids: set[str], ali
     return False
 
 
-def _reconnect_ring(system: System, defaulted_agent_id: str, successor_id: str, day: int) -> dict[str, object] | None:
+def _reconnect_ring(
+    system: System, defaulted_agent_id: str, successor_id: str, day: int
+) -> dict[str, object] | None:
     """Reconnect the ring after an agent defaults.
 
     When agent X defaults, find the predecessor P (who owed X) and create a new
@@ -359,11 +384,13 @@ def _reconnect_ring(system: System, defaulted_agent_id: str, successor_id: str, 
     # reconnection must still link the original predecessor to the successor.
     predecessor_payable: Payable | None = None
     for c in list(system.state.contracts.values()):
-        if (c.kind == InstrumentKind.PAYABLE
+        if (
+            c.kind == InstrumentKind.PAYABLE
             and isinstance(c, Payable)
             and c.asset_holder_id == defaulted_agent_id
             and c.liability_issuer_id != defaulted_agent_id
-            and c.liability_issuer_id not in system.state.defaulted_agent_ids):
+            and c.liability_issuer_id not in system.state.defaulted_agent_ids
+        ):
             predecessor_payable = c
             break
 
@@ -438,7 +465,9 @@ def _reconnect_ring(system: System, defaulted_agent_id: str, successor_id: str, 
         reason="ring_reconnection",
     )
 
-    logger.info("ring reconnected: %s -> %s (was %s)", predecessor_id, successor_id, defaulted_agent_id)
+    logger.info(
+        "ring reconnected: %s -> %s (was %s)", predecessor_id, successor_id, defaulted_agent_id
+    )
     return {
         "predecessor": predecessor_id,
         "successor": successor_id,
@@ -501,15 +530,19 @@ def _distribute_pro_rata_recovery(system: System, agent_id: str) -> None:
         try:
             system.transfer_cash(from_agent_id=agent_id, to_agent_id=creditor_id, amount=share)
             total_distributed += share
-            recovery_details.append({
-                "creditor": creditor_id,
-                "claim": claim_amount,
-                "recovery": share,
-            })
-        except (ValidationError, Exception):
+            recovery_details.append(
+                {
+                    "creditor": creditor_id,
+                    "claim": claim_amount,
+                    "recovery": share,
+                }
+            )
+        except (ValidationError, OSError, RuntimeError, ValueError, TypeError, KeyError):
             logger.debug(
                 "pro-rata transfer failed: agent=%s creditor=%s share=%d",
-                agent_id, creditor_id, share,
+                agent_id,
+                creditor_id,
+                share,
             )
 
     if total_distributed > 0:
@@ -524,7 +557,10 @@ def _distribute_pro_rata_recovery(system: System, agent_id: str) -> None:
         )
         logger.info(
             "pro-rata recovery: agent=%s distributed=%d/%d to %d creditors",
-            agent_id, total_distributed, total_cash, len(recovery_details),
+            agent_id,
+            total_distributed,
+            total_cash,
+            len(recovery_details),
         )
 
 
@@ -617,14 +653,20 @@ def _expel_agent(
             system.state.aliases.pop(contract_alias, None)
 
     _cancel_scheduled_actions_for_agent(system, agent_id, cancelled_contract_ids, cancelled_aliases)
-    logger.warning("agent %s expelled: cancelled %d contracts, %d aliases", agent_id, len(cancelled_contract_ids), len(cancelled_aliases))
+    logger.warning(
+        "agent %s expelled: cancelled %d contracts, %d aliases",
+        agent_id,
+        len(cancelled_contract_ids),
+        len(cancelled_aliases),
+    )
 
     # If every non-central-bank agent has defaulted, halt the simulation with a DefaultError.
     if all(
-        (ag.kind == AgentKind.CENTRAL_BANK) or ag.defaulted
-        for ag in system.state.agents.values()
+        (ag.kind == AgentKind.CENTRAL_BANK) or ag.defaulted for ag in system.state.agents.values()
     ):
-        raise SimulationHalt("All non-central-bank agents have defaulted", halt_kind="system_collapse")
+        raise SimulationHalt(
+            "All non-central-bank agents have defaulted", halt_kind="system_collapse"
+        )
 
 
 def settle_due_delivery_obligations(system: System, day: int) -> None:
@@ -646,7 +688,9 @@ def settle_due_delivery_obligations(system: System, day: int) -> None:
         required_quantity = obligation.amount
 
         with atomic(system):
-            delivered_quantity = _deliver_stock(system, debtor.id, creditor.id, required_sku, required_quantity)
+            delivered_quantity = _deliver_stock(
+                system, debtor.id, creditor.id, required_sku, required_quantity
+            )
 
             if delivered_quantity != required_quantity:
                 shortage = required_quantity - delivered_quantity
@@ -741,7 +785,14 @@ def _settle_single_payable(
     creditor_id = payable.effective_creditor
     creditor = system.state.agents[creditor_id]
     order = system.policy.settlement_order(debtor)
-    logger.debug("_settle_single_payable: payable=%s debtor=%s creditor=%s amount=%d order=%s", payable.id, debtor.id, creditor_id, payable.amount, [str(m) for m in order])
+    logger.debug(
+        "_settle_single_payable: payable=%s debtor=%s creditor=%s amount=%d order=%s",
+        payable.id,
+        debtor.id,
+        creditor_id,
+        payable.amount,
+        [str(m) for m in order],
+    )
 
     remaining = payable.amount
     payments_summary: list[dict[str, object]] = []
@@ -758,7 +809,9 @@ def _settle_single_payable(
             elif method == InstrumentKind.CASH:
                 paid_now = _pay_with_cash(system, debtor.id, creditor.id, remaining)
             elif method == InstrumentKind.RESERVE_DEPOSIT:
-                paid_now = _pay_bank_to_bank_with_reserves(system, debtor.id, creditor.id, remaining)
+                paid_now = _pay_bank_to_bank_with_reserves(
+                    system, debtor.id, creditor.id, remaining
+                )
             else:
                 raise ValidationError(f"unknown payment method {method}")
             remaining -= paid_now
@@ -767,7 +820,11 @@ def _settle_single_payable(
 
         if remaining != 0:
             return _handle_payable_default(
-                system, payable, debtor, creditor, day,
+                system,
+                payable,
+                debtor,
+                creditor,
+                day,
                 remaining=remaining,
                 payments_summary=payments_summary,
                 risk_assessor=risk_assessor,
@@ -776,7 +833,13 @@ def _settle_single_payable(
 
         _remove_contract(system, payable.id)
         alias = get_alias_for_id(system, payable.id)
-        logger.debug("payable settled: %s, debtor=%s, creditor=%s, amount=%d", payable.id, debtor.id, creditor.id, payable_amount)
+        logger.debug(
+            "payable settled: %s, debtor=%s, creditor=%s, amount=%d",
+            payable.id,
+            debtor.id,
+            creditor.id,
+            payable_amount,
+        )
         system.log(
             EventKind.PAYABLE_SETTLED,
             pid=payable.id,
@@ -791,7 +854,12 @@ def _settle_single_payable(
 
         rollover_info = None
         if rollover_enabled and payable_maturity_distance is not None:
-            rollover_info = (debtor.id, original_creditor, payable_amount, payable_maturity_distance)
+            rollover_info = (
+                debtor.id,
+                original_creditor,
+                payable_amount,
+                payable_maturity_distance,
+            )
         return True, rollover_info
 
 
@@ -823,7 +891,9 @@ def _handle_payable_default(
     """
     logger.warning("payable default: %s, debtor=%s, shortfall=%d", payable.id, debtor.id, remaining)
     if _get_default_mode(system) == DEFAULT_MODE_FAIL_FAST:
-        raise DefaultError(f"Insufficient funds to settle payable {payable.id}: {remaining} still owed")
+        raise DefaultError(
+            f"Insufficient funds to settle payable {payable.id}: {remaining} still owed"
+        )
 
     alias = get_alias_for_id(system, payable.id)
     cancelled_contract_ids = {payable.id}
@@ -877,7 +947,9 @@ def _handle_payable_default(
     return False
 
 
-def settle_due(system: System, day: int, *, rollover_enabled: bool = False) -> list[tuple[str, str, int, int]]:
+def settle_due(
+    system: System, day: int, *, rollover_enabled: bool = False
+) -> list[tuple[str, str, int, int]]:
     """Settle all obligations due today (payables and delivery obligations).
 
     Args:
@@ -898,7 +970,9 @@ def settle_due(system: System, day: int, *, rollover_enabled: bool = False) -> l
             continue
         assert isinstance(payable_instr, Payable)
         settled, rollover_info = _settle_single_payable(
-            system, payable_instr, day,
+            system,
+            payable_instr,
+            day,
             risk_assessor=risk_assessor,
             rollover_enabled=rollover_enabled,
         )
@@ -978,7 +1052,12 @@ def _rollover_single_payable(
     return new_payable.id
 
 
-def rollover_settled_payables(system: System, day: int, settled_payables: list[tuple[str, str, int, int]], dealer_active: bool = False) -> list[str]:
+def rollover_settled_payables(
+    system: System,
+    day: int,
+    settled_payables: list[tuple[str, str, int, int]],
+    dealer_active: bool = False,
+) -> list[str]:
     """Create new payables for successfully settled ones (continuous issuance via rollover).
 
     Per PDF specification (Plan 024):
@@ -1007,13 +1086,23 @@ def rollover_settled_payables(system: System, day: int, settled_payables: list[t
             if c.due_day is not None and c.due_day > max_due_day:
                 max_due_day = c.due_day
 
-    logger.debug("rollover: day %d, %d payable(s) to roll, max_due_day=%d", day, len(settled_payables), max_due_day)
+    logger.debug(
+        "rollover: day %d, %d payable(s) to roll, max_due_day=%d",
+        day,
+        len(settled_payables),
+        max_due_day,
+    )
     new_payable_ids: list[str] = []
     for debtor_id, creditor_id, amount, maturity_distance in settled_payables:
         new_due_day = max_due_day + maturity_distance
         pid = _rollover_single_payable(
-            system, debtor_id, creditor_id, amount, maturity_distance,
-            new_due_day, dealer_active,
+            system,
+            debtor_id,
+            creditor_id,
+            amount,
+            maturity_distance,
+            new_due_day,
+            dealer_active,
         )
         if pid is not None:
             new_payable_ids.append(pid)

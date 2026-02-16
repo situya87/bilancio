@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 
 
 class InterbankSettlementMode(str, Enum):
     """How interbank settlement is conducted within a jurisdiction."""
+
     RTGS = "RTGS"
     DNS = "DNS"
     HYBRID = "HYBRID"
@@ -19,6 +20,7 @@ class InterbankSettlementMode(str, Enum):
 
 class CapitalFlowPurpose(str, Enum):
     """Purpose classification for cross-border capital flows."""
+
     TRADE = "TRADE"
     PORTFOLIO = "PORTFOLIO"
     FDI = "FDI"
@@ -32,6 +34,7 @@ class CapitalFlowPurpose(str, Enum):
 
 class CapitalControlAction(str, Enum):
     """Action to take when a capital flow matches a control rule."""
+
     ALLOW = "ALLOW"
     BLOCK = "BLOCK"
     TAX = "TAX"
@@ -43,6 +46,7 @@ class CapitalControlAction(str, Enum):
 @dataclass
 class CapitalControlRule:
     """A single capital control rule evaluated against cross-border flows."""
+
     purpose: CapitalFlowPurpose
     direction: str  # "inflow", "outflow", or "both"
     action: CapitalControlAction
@@ -57,6 +61,7 @@ class CapitalControls:
     Rules are evaluated in order (first-match-wins). If no rule matches,
     ``default_action`` is used.
     """
+
     rules: list[CapitalControlRule] = field(default_factory=list)
     default_action: CapitalControlAction = CapitalControlAction.ALLOW
 
@@ -82,6 +87,7 @@ class CapitalControls:
 @dataclass
 class BankingRules:
     """Banking regulations within a jurisdiction."""
+
     reserve_requirement_ratio: Decimal = Decimal("0")
     interbank_settlement_mode: InterbankSettlementMode = InterbankSettlementMode.RTGS
     deposit_convertibility: bool = True
@@ -96,6 +102,7 @@ class ExchangeRatePair:
     expressed in ``quote_currency`` (e.g., EUR/USD = 1.10 means
     1 EUR = 1.10 USD).
     """
+
     base_currency: str
     quote_currency: str
     rate: Decimal
@@ -151,6 +158,7 @@ class FXMarket:
     Supports automatic rate inversion: if only EUR/USD is registered,
     querying USD/EUR will return the inverse rate.
     """
+
     _rates: dict[tuple[str, str], ExchangeRatePair] = field(default_factory=dict)
 
     def add_rate(self, pair: ExchangeRatePair) -> None:
@@ -183,7 +191,7 @@ class FXMarket:
         inverse = self._rates.get((quote, base))
         if inverse is not None:
             inv_rate = Decimal("1") / inverse.rate
-            inv_spread = inverse.spread / (inverse.rate ** 2) if inverse.rate else Decimal("0")
+            inv_spread = inverse.spread / (inverse.rate**2) if inverse.rate else Decimal("0")
             return ExchangeRatePair(
                 base_currency=base,
                 quote_currency=quote,
@@ -215,6 +223,7 @@ class Jurisdiction:
 
     Groups agents under a common currency and set of banking rules.
     """
+
     id: str
     name: str
     domestic_currency: str

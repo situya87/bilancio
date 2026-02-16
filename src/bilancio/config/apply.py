@@ -8,33 +8,40 @@ at runtime; the directive below silences mypy for this single error code.
 # mypy: disable-error-code="union-attr"
 
 import logging
-from typing import Any, Dict
-from decimal import Decimal
+from typing import Any
 
-from bilancio.engines.system import System
-from bilancio.domain.agent import AgentKind
-from bilancio.domain.agents import Bank, Household, Firm, CentralBank, Treasury, NonBankLender, RatingAgency
-from bilancio.ops.banking import deposit_cash, withdraw_cash, client_payment
-from bilancio.domain.instruments.credit import Payable
-from bilancio.domain.instruments.base import InstrumentKind
-from bilancio.core.errors import ConfigurationError, ValidationError
 from bilancio.core.atomic_tx import atomic
+from bilancio.core.errors import ConfigurationError, ValidationError
+from bilancio.domain.agent import AgentKind
+from bilancio.domain.agents import (
+    Bank,
+    CentralBank,
+    Firm,
+    Household,
+    NonBankLender,
+    RatingAgency,
+    Treasury,
+)
+from bilancio.domain.instruments.base import InstrumentKind
+from bilancio.domain.instruments.credit import Payable
+from bilancio.engines.system import System
+from bilancio.ops.banking import client_payment, deposit_cash, withdraw_cash
 
-from .models import ScenarioConfig, AgentSpec
 from .loaders import parse_action
+from .models import AgentSpec, ScenarioConfig
 
 logger = logging.getLogger(__name__)
 
 
 def create_agent(spec: AgentSpec) -> Any:
     """Create an agent from specification.
-    
+
     Args:
         spec: Agent specification
-        
+
     Returns:
         Created agent instance
-        
+
     Raises:
         ValueError: If agent kind is unknown
     """
@@ -47,11 +54,11 @@ def create_agent(spec: AgentSpec) -> Any:
         "non_bank_lender": NonBankLender,
         "rating_agency": RatingAgency,
     }
-    
+
     agent_class = agent_classes.get(spec.kind)
     if not agent_class:
         raise ConfigurationError(f"Unknown agent kind: {spec.kind}")
-    
+
     # Create agent with id, name, and kind
     # Note: Some agent classes (NonBankLender, RatingAgency) set kind via
     # field(default=..., init=False), so we try with kind first, then without.
@@ -66,30 +73,30 @@ def create_agent(spec: AgentSpec) -> Any:
     return agent
 
 
-def apply_policy_overrides(system: System, overrides: Dict[str, Any]) -> None:
+def apply_policy_overrides(system: System, overrides: dict[str, Any]) -> None:
     """Apply policy overrides to the system.
-    
+
     Args:
         system: System instance
         overrides: Policy override configuration
     """
     if not overrides:
         return
-    
+
     # Apply MOP rank overrides
     if "mop_rank" in overrides and overrides["mop_rank"]:
         for agent_kind, mop_list in overrides["mop_rank"].items():
             system.policy.mop_rank[agent_kind] = mop_list
 
 
-def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, Any]) -> None:
+def apply_action(system: System, action_dict: dict[str, Any], agents: dict[str, Any]) -> None:
     """Apply a single action to the system.
-    
+
     Args:
         system: System instance
         action_dict: Action dictionary from config
         agents: Dictionary of agent_id -> agent instance
-        
+
     Raises:
         ValueError: If action cannot be applied
         ValidationError: If action violates system invariants
@@ -102,9 +109,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
     try:
         if action_type == "mint_reserves":
             instr_id = system.mint_reserves(
-                to_bank_id=action.to,
-                amount=int(action.amount),
-                alias=action.alias
+                to_bank_id=action.to, amount=int(action.amount), alias=action.alias
             )
             # optional alias capture
             _alias: str | None = action.alias
@@ -115,9 +120,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
 
         elif action_type == "mint_cash":
             instr_id = system.mint_cash(
-                to_agent_id=action.to,
-                amount=int(action.amount),
-                alias=action.alias
+                to_agent_id=action.to, amount=int(action.amount), alias=action.alias
             )
             _alias = action.alias
             if _alias is not None:
@@ -127,93 +130,98 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
 
         elif action_type == "transfer_reserves":
             system.transfer_reserves(
-                from_bank_id=action.from_bank,
-                to_bank_id=action.to_bank,
-                amount=int(action.amount)
+                from_bank_id=action.from_bank, to_bank_id=action.to_bank, amount=int(action.amount)
             )
-            
+
         elif action_type == "transfer_cash":
             system.transfer_cash(
                 from_agent_id=action.from_agent,
                 to_agent_id=action.to_agent,
-                amount=int(action.amount)
+                amount=int(action.amount),
             )
-            
+
         elif action_type == "deposit_cash":
             deposit_cash(
                 system=system,
                 customer_id=action.customer,
                 bank_id=action.bank,
-                amount=int(action.amount)
+                amount=int(action.amount),
             )
-            
+
         elif action_type == "withdraw_cash":
             withdraw_cash(
                 system=system,
                 customer_id=action.customer,
                 bank_id=action.bank,
-                amount=int(action.amount)
+                amount=int(action.amount),
             )
-            
+
         elif action_type == "client_payment":
             # Need to determine banks for payer and payee
             payer = agents.get(action.payer)
             payee = agents.get(action.payee)
-            
+
             if not payer or not payee:
-                raise ValueError(f"Unknown agent in client_payment: {action.payer} or {action.payee}")
-            
+                raise ValueError(
+                    f"Unknown agent in client_payment: {action.payer} or {action.payee}"
+                )
+
             # Find bank relationships (simplified - assumes first deposit)
             payer_bank = None
             payee_bank = None
-            
+
             # Check for existing deposits to determine banks
             for bank_id in [a.id for a in agents.values() if a.kind == AgentKind.BANK]:
                 if system.deposit_ids(action.payer, bank_id):
                     payer_bank = bank_id
                 if system.deposit_ids(action.payee, bank_id):
                     payee_bank = bank_id
-            
+
             if not payer_bank or not payee_bank:
-                raise ValueError(f"Cannot determine banks for client_payment from {action.payer} to {action.payee}")
-            
+                raise ValueError(
+                    f"Cannot determine banks for client_payment from {action.payer} to {action.payee}"
+                )
+
             client_payment(
                 system=system,
                 payer_id=action.payer,
                 payer_bank=payer_bank,
                 payee_id=action.payee,
                 payee_bank=payee_bank,
-                amount=int(action.amount)
+                amount=int(action.amount),
             )
-            
+
         elif action_type == "create_stock":
             system.create_stock(
                 owner_id=action.owner,
                 sku=action.sku,
                 quantity=action.quantity,
-                unit_price=action.unit_price
+                unit_price=action.unit_price,
             )
-            
+
         elif action_type == "transfer_stock":
             # Find stock with matching SKU owned by from_agent
-            stocks = [s for s in system.state.stocks.values() 
-                     if s.owner_id == action.from_agent and s.sku == action.sku]
-            
+            stocks = [
+                s
+                for s in system.state.stocks.values()
+                if s.owner_id == action.from_agent and s.sku == action.sku
+            ]
+
             if not stocks:
                 raise ValueError(f"No stock with SKU {action.sku} owned by {action.from_agent}")
-            
+
             # Transfer from first matching stock
             stock = stocks[0]
             if stock.quantity < action.quantity:
                 raise ValueError(f"Insufficient stock: {stock.quantity} < {action.quantity}")
-            
+
             system.transfer_stock(
                 stock_id=stock.id,
                 from_owner=action.from_agent,
                 to_owner=action.to_agent,
-                quantity=action.quantity if action.quantity < stock.quantity else None
+                quantity=action.quantity if action.quantity < stock.quantity else None,
             )
-            
+
         elif action_type == "create_delivery_obligation":
             instr_id = system.create_delivery_obligation(
                 from_agent=action.from_agent,
@@ -222,7 +230,7 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 quantity=action.quantity,
                 unit_price=action.unit_price,
                 due_day=action.due_day,
-                alias=action.alias
+                alias=action.alias,
             )
             _alias = action.alias
             if _alias is not None:
@@ -261,14 +269,15 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 system.state.aliases[_alias] = payable.id
 
             # Log the event
-            system.log("PayableCreated",
+            system.log(
+                "PayableCreated",
                 debtor=action.from_agent,
                 creditor=action.to_agent,
                 amount=int(action.amount),
                 due_day=action.due_day,
                 maturity_distance=maturity_distance,
                 payable_id=payable.id,
-                alias=action.alias
+                alias=action.alias,
             )
 
         elif action_type == "transfer_claim":
@@ -282,10 +291,14 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 if id_from_alias is None:
                     raise ValueError(f"Unknown alias: {alias}")
             if alias is not None and explicit_id is not None and id_from_alias != explicit_id:
-                raise ValueError(f"Alias {alias} and contract_id {explicit_id} refer to different contracts")
+                raise ValueError(
+                    f"Alias {alias} and contract_id {explicit_id} refer to different contracts"
+                )
             resolved_id = explicit_id or id_from_alias
             if not resolved_id:
-                raise ValueError("transfer_claim requires contract_alias or contract_id to resolve a contract")
+                raise ValueError(
+                    "transfer_claim requires contract_alias or contract_id to resolve a contract"
+                )
 
             instr = system.state.contracts.get(resolved_id)
             if instr is None:
@@ -303,23 +316,25 @@ def apply_action(system: System, action_dict: Dict[str, Any], agents: Dict[str, 
                 old_holder.asset_ids.remove(resolved_id)
                 new_holder.asset_ids.append(resolved_id)
                 instr.asset_holder_id = new_holder_id
-                system.log("ClaimTransferred",
-                           contract_id=resolved_id,
-                           frm=old_holder_id,
-                           to=new_holder_id,
-                           contract_kind=instr.kind,
-                           amount=getattr(instr, 'amount', None),
-                           due_day=getattr(instr, 'due_day', None),
-                           sku=getattr(instr, 'sku', None),
-                           alias=alias)
-            
+                system.log(
+                    "ClaimTransferred",
+                    contract_id=resolved_id,
+                    frm=old_holder_id,
+                    to=new_holder_id,
+                    contract_kind=instr.kind,
+                    amount=getattr(instr, "amount", None),
+                    due_day=getattr(instr, "due_day", None),
+                    sku=getattr(instr, "sku", None),
+                    alias=alias,
+                )
+
             # Log the event
         else:
             raise ConfigurationError(f"Unknown action type: {action_type}")
-            
+
     except (ValueError, TypeError, KeyError, ValidationError) as e:
         # Add context to the error
-        raise ValueError(f"Failed to apply {action_type}: {e}")
+        raise ValueError(f"Failed to apply {action_type}: {e}") from e
 
 
 def _build_lender_info_profile(lender_cfg: Any) -> Any:
@@ -386,7 +401,7 @@ def _build_lender_info_profile(lender_cfg: Any) -> Any:
 
 
 def _collect_alias_from_action(action_model: object) -> str | None:
-    return getattr(action_model, 'alias', None)
+    return getattr(action_model, "alias", None)
 
 
 def validate_scheduled_aliases(config: ScenarioConfig) -> None:
@@ -410,7 +425,7 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
             alias_set.add(alias)
 
     # 2) Group scheduled by day preserving order
-    by_day: dict[int, list[Dict[str, Any]]] = {}
+    by_day: dict[int, list[dict[str, Any]]] = {}
     for sa in config.scheduled_actions:
         by_day.setdefault(sa.day, []).append(sa.action)
 
@@ -422,7 +437,7 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
             except (ValueError, TypeError, KeyError):
                 continue
             action_type = m.action
-            if action_type == 'transfer_claim':
+            if action_type == "transfer_claim":
                 alias = m.contract_alias
                 if alias and alias not in alias_set:
                     raise ValueError(
@@ -434,7 +449,9 @@ def validate_scheduled_aliases(config: ScenarioConfig) -> None:
                 new_alias = _collect_alias_from_action(m)
                 if new_alias:
                     if new_alias in alias_set:
-                        raise ValueError(f"Duplicate alias detected: '{new_alias}' already defined before day {day}")
+                        raise ValueError(
+                            f"Duplicate alias detected: '{new_alias}' already defined before day {day}"
+                        )
                     alias_set.add(new_alias)
 
 
@@ -457,7 +474,11 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
         ValidationError: If system invariants are violated
     """
     agents = {}
-    logger.info("applying scenario: %d agents, %d initial actions", len(config.agents), len(config.initial_actions))
+    logger.info(
+        "applying scenario: %d agents, %d initial actions",
+        len(config.agents),
+        len(config.initial_actions),
+    )
 
     # Use setup context for all initialization
     with system.setup():
@@ -487,9 +508,9 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
     if config.jurisdictions:
         from bilancio.domain.jurisdiction import (
             BankingRules,
+            CapitalControlAction,
             CapitalControlRule,
             CapitalControls,
-            CapitalControlAction,
             CapitalFlowPurpose,
             ExchangeRatePair,
             FXMarket,
@@ -546,19 +567,21 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
 
     # Initialize dealer subsystem if configured
     if config.dealer and config.dealer.enabled:
-        from bilancio.engines.dealer_integration import initialize_dealer_subsystem
-        from bilancio.dealer.simulation import DealerRingConfig
         from bilancio.dealer.models import BucketConfig
         from bilancio.dealer.risk_assessment import RiskAssessmentParams
+        from bilancio.dealer.simulation import DealerRingConfig
+        from bilancio.engines.dealer_integration import initialize_dealer_subsystem
 
         # Convert DealerConfig (YAML model) to DealerRingConfig (internal model)
         bucket_configs = []
         for name, bc in config.dealer.buckets.items():
-            bucket_configs.append(BucketConfig(
-                name=name,
-                tau_min=bc.tau_min,
-                tau_max=bc.tau_max if bc.tau_max is not None else 999,
-            ))
+            bucket_configs.append(
+                BucketConfig(
+                    name=name,
+                    tau_min=bc.tau_min,
+                    tau_max=bc.tau_max if bc.tau_max is not None else 999,
+                )
+            )
         # Sort by tau_min to ensure proper ordering
         bucket_configs.sort(key=lambda b: b.tau_min)
 
@@ -589,8 +612,8 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
             )
 
         if config.balanced_dealer and config.balanced_dealer.enabled:
-            from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
             from bilancio.decision import TraderProfile, VBTProfile
+            from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
 
             trader_profile = TraderProfile(
                 risk_aversion=config.balanced_dealer.risk_aversion,
@@ -628,8 +651,9 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
 
     # Set up lender config if present in scenario
     if config.lender and config.lender.enabled:
-        from bilancio.engines.lending import LendingConfig
         from bilancio.decision.profiles import LenderProfile
+        from bilancio.engines.lending import LendingConfig
+
         info_profile = _build_lender_info_profile(config.lender)
 
         # Build LenderProfile if kappa-aware lending is configured
@@ -646,6 +670,7 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
         # Compute max_ring_maturity from existing payables and scheduled actions
         max_ring_maturity: int | None = None
         from bilancio.domain.instruments.base import InstrumentKind
+
         for contract in system.state.contracts.values():
             if contract.kind == InstrumentKind.PAYABLE and contract.due_day is not None:
                 if max_ring_maturity is None or contract.due_day > max_ring_maturity:
@@ -655,7 +680,9 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
                 cp = action.get("create_payable")
                 if isinstance(cp, dict):
                     dd = cp.get("due_day")
-                    if isinstance(dd, int) and (max_ring_maturity is None or dd > max_ring_maturity):
+                    if isinstance(dd, int) and (
+                        max_ring_maturity is None or dd > max_ring_maturity
+                    ):
                         max_ring_maturity = dd
 
         system.state.lender_config = LendingConfig(
@@ -672,8 +699,8 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
 
     # Set up rating agency config if present in scenario
     if config.rating_agency and config.rating_agency.enabled:
-        from bilancio.engines.rating import RatingConfig
         from bilancio.decision.profiles import RatingProfile
+        from bilancio.engines.rating import RatingConfig
 
         rating_profile = RatingProfile(
             lookback_window=config.rating_agency.lookback_window,
@@ -686,6 +713,7 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
         ra_info_profile = None
         if config.rating_agency.info_profile == "realistic":
             from bilancio.information.presets import RATING_AGENCY_REALISTIC
+
             ra_info_profile = RATING_AGENCY_REALISTIC
 
         system.state.rating_config = RatingConfig(

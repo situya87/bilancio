@@ -11,12 +11,10 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from bilancio.engines.system import System
     from bilancio.domain.jurisdiction import (
-        CapitalControlAction,
-        FXMarket,
         Jurisdiction,
     )
+    from bilancio.engines.system import System
 
 
 def get_jurisdiction_for_agent(system: System, agent_id: str) -> Jurisdiction | None:
@@ -104,9 +102,7 @@ def check_capital_controls(
     return str(action), tax_rate
 
 
-def check_reserve_requirement(
-    system: System, bank_id: str
-) -> tuple[bool, int, int]:
+def check_reserve_requirement(system: System, bank_id: str) -> tuple[bool, int, int]:
     """Check whether a bank meets its reserve requirement.
 
     Args:

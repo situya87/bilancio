@@ -15,6 +15,7 @@ from bilancio.information.channels import (
     category_from_channel,
     derive_noise,
 )
+from bilancio.information.estimates import Estimate
 from bilancio.information.hierarchy import (
     CounterpartyAccess,
     InstrumentAccess,
@@ -30,7 +31,6 @@ from bilancio.information.noise import (
     NoiseConfig,
     SampleNoise,
 )
-from bilancio.information.profile import CategoryAccess, InformationProfile
 from bilancio.information.presets import (
     DEALER_MARKET_OBSERVER,
     LENDER_CHANNEL_BASED,
@@ -40,8 +40,8 @@ from bilancio.information.presets import (
     OMNISCIENT,
     TRADER_BASIC,
 )
+from bilancio.information.profile import CategoryAccess, InformationProfile
 from bilancio.information.service import InformationService
-from bilancio.information.estimates import Estimate
 from bilancio.information.views import (
     CounterpartyView,
     InstrumentView,

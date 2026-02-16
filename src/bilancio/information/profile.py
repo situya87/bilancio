@@ -8,8 +8,8 @@ experiments.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from bilancio.information.levels import AccessLevel
 from bilancio.information.noise import NoiseConfig
@@ -17,9 +17,9 @@ from bilancio.information.noise import NoiseConfig
 if TYPE_CHECKING:
     from bilancio.information.channels import ChannelBinding
     from bilancio.information.hierarchy import (
-        SystemAccess,
         CounterpartyAccess,
         InstrumentAccess,
+        SystemAccess,
         TransactionAccess,
     )
 
@@ -34,17 +34,13 @@ class CategoryAccess:
     """
 
     level: AccessLevel = AccessLevel.PERFECT
-    noise: Optional[NoiseConfig] = None
+    noise: NoiseConfig | None = None
 
     def __post_init__(self) -> None:
         if self.level == AccessLevel.NOISY and self.noise is None:
-            raise ValueError(
-                "noise config is required when level is NOISY"
-            )
+            raise ValueError("noise config is required when level is NOISY")
         if self.level != AccessLevel.NOISY and self.noise is not None:
-            raise ValueError(
-                f"noise config must be None when level is {self.level.value}"
-            )
+            raise ValueError(f"noise config must be None when level is {self.level.value}")
 
 
 #: Default field value for InformationProfile — PERFECT access with no noise.
@@ -120,7 +116,7 @@ class InformationProfile:
     # ── Hierarchical sub-profile properties ──────────────────────────
 
     @property
-    def system(self) -> "SystemAccess":
+    def system(self) -> SystemAccess:
         """Level 1: System-wide information access."""
         from bilancio.information.hierarchy import SystemAccess
 
@@ -134,7 +130,7 @@ class InformationProfile:
         )
 
     @property
-    def counterparty(self) -> "CounterpartyAccess":
+    def counterparty(self) -> CounterpartyAccess:
         """Level 2: Counterparty-specific information access."""
         from bilancio.information.hierarchy import CounterpartyAccess
 
@@ -153,7 +149,7 @@ class InformationProfile:
         )
 
     @property
-    def instrument(self) -> "InstrumentAccess":
+    def instrument(self) -> InstrumentAccess:
         """Level 3: Instrument/market information access."""
         from bilancio.information.hierarchy import InstrumentAccess
 
@@ -165,7 +161,7 @@ class InformationProfile:
         )
 
     @property
-    def transaction(self) -> "TransactionAccess":
+    def transaction(self) -> TransactionAccess:
         """Level 4: Counterparty x Instrument specific access."""
         from bilancio.information.hierarchy import TransactionAccess
 
@@ -182,12 +178,12 @@ class InformationProfile:
     @classmethod
     def from_hierarchy(
         cls,
-        system: Optional["SystemAccess"] = None,
-        counterparty: Optional["CounterpartyAccess"] = None,
-        instrument: Optional["InstrumentAccess"] = None,
-        transaction: Optional["TransactionAccess"] = None,
+        system: SystemAccess | None = None,
+        counterparty: CounterpartyAccess | None = None,
+        instrument: InstrumentAccess | None = None,
+        transaction: TransactionAccess | None = None,
         channel_bindings: tuple[ChannelBinding, ...] = (),
-    ) -> "InformationProfile":
+    ) -> InformationProfile:
         """Construct an InformationProfile from hierarchical sub-profiles.
 
         Any sub-profile that is ``None`` defaults to all-PERFECT access.

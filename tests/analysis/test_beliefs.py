@@ -9,23 +9,18 @@ Covers:
 6. Config wiring — estimate_logging flag
 """
 
-from decimal import Decimal
 import json
+from decimal import Decimal
 from pathlib import Path
 
-import pytest
-
-from bilancio.information.estimates import Estimate
 from bilancio.analysis.beliefs import (
-    BeliefPoint,
     CalibrationBucket,
-    EstimateSummary,
     belief_trajectory,
     belief_vs_reality,
     estimate_summary,
     export_estimates_jsonl,
 )
-
+from bilancio.information.estimates import Estimate
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
@@ -149,12 +144,20 @@ class TestBeliefVsReality:
     def test_basic_calibration(self):
         estimates = [
             Estimate(
-                value=Decimal("0.10"), estimator_id="e", target_id="a1",
-                target_type="agent", estimation_day=1, method="m",
+                value=Decimal("0.10"),
+                estimator_id="e",
+                target_id="a1",
+                target_type="agent",
+                estimation_day=1,
+                method="m",
             ),
             Estimate(
-                value=Decimal("0.90"), estimator_id="e", target_id="a2",
-                target_type="agent", estimation_day=1, method="m",
+                value=Decimal("0.90"),
+                estimator_id="e",
+                target_id="a2",
+                target_type="agent",
+                estimation_day=1,
+                method="m",
             ),
         ]
         defaulted = {"a2"}
@@ -172,12 +175,20 @@ class TestBeliefVsReality:
     def test_takes_latest_estimate(self):
         estimates = [
             Estimate(
-                value=Decimal("0.90"), estimator_id="e", target_id="a1",
-                target_type="agent", estimation_day=1, method="m",
+                value=Decimal("0.90"),
+                estimator_id="e",
+                target_id="a1",
+                target_type="agent",
+                estimation_day=1,
+                method="m",
             ),
             Estimate(
-                value=Decimal("0.10"), estimator_id="e", target_id="a1",
-                target_type="agent", estimation_day=5, method="m",
+                value=Decimal("0.10"),
+                estimator_id="e",
+                target_id="a1",
+                target_type="agent",
+                estimation_day=5,
+                method="m",
             ),
         ]
         buckets = belief_vs_reality(estimates, set(), n_buckets=5)
@@ -188,8 +199,12 @@ class TestBeliefVsReality:
     def test_ignores_non_agent_targets(self):
         estimates = [
             Estimate(
-                value=Decimal("0.50"), estimator_id="e", target_id="sys",
-                target_type="system", estimation_day=1, method="m",
+                value=Decimal("0.50"),
+                estimator_id="e",
+                target_id="sys",
+                target_type="system",
+                estimation_day=1,
+                method="m",
             ),
         ]
         buckets = belief_vs_reality(estimates, set())
@@ -363,10 +378,10 @@ class TestLogRatingEstimates:
 
 class TestLogDealerEstimates:
     def _build_system_with_dealer(self):
-        from bilancio.engines.system import System
-        from bilancio.engines.dealer_integration import DealerSubsystem
-        from bilancio.dealer.risk_assessment import RiskAssessor, RiskAssessmentParams
+        from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
         from bilancio.domain.agents.firm import Firm
+        from bilancio.engines.dealer_integration import DealerSubsystem
+        from bilancio.engines.system import System
 
         system = System()
         system.state.estimate_logging_enabled = True
@@ -379,9 +394,11 @@ class TestLogDealerEstimates:
 
         # Attach dealer subsystem with risk assessor
         subsystem = DealerSubsystem()
-        subsystem.risk_assessor = RiskAssessor(RiskAssessmentParams(
-            initial_prior=Decimal("0.15"),
-        ))
+        subsystem.risk_assessor = RiskAssessor(
+            RiskAssessmentParams(
+                initial_prior=Decimal("0.15"),
+            )
+        )
         system.state.dealer_subsystem = subsystem
 
         return system
@@ -419,9 +436,9 @@ class TestLogDealerEstimates:
         assert len(system.state.estimate_log) == 0
 
     def test_skips_without_risk_assessor(self):
+        from bilancio.engines.dealer_integration import DealerSubsystem
         from bilancio.engines.simulation import _log_dealer_estimates
         from bilancio.engines.system import System
-        from bilancio.engines.dealer_integration import DealerSubsystem
 
         system = System()
         system.state.estimate_logging_enabled = True
@@ -439,11 +456,13 @@ class TestLogDealerEstimates:
 class TestEstimateLoggingConfig:
     def test_default_disabled(self):
         from bilancio.config.models import RunConfig
+
         config = RunConfig()
         assert config.estimate_logging is False
 
     def test_enabled_via_config(self):
         from bilancio.config.models import RunConfig
+
         config = RunConfig(estimate_logging=True)
         assert config.estimate_logging is True
 
@@ -455,13 +474,12 @@ class TestPackageImports:
     def test_beliefs_importable_from_analysis(self):
         from bilancio.analysis import (
             BeliefPoint,
-            CalibrationBucket,
-            EstimateSummary,
             belief_trajectory,
             belief_vs_reality,
             estimate_summary,
             export_estimates_jsonl,
         )
+
         assert BeliefPoint is not None
         assert callable(belief_trajectory)
         assert callable(belief_vs_reality)

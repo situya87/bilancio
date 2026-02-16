@@ -7,20 +7,22 @@ to traders who need liquidity to settle upcoming obligations.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from bilancio.core.errors import ValidationError
 
 if TYPE_CHECKING:
-    from bilancio.engines.system import System
-    from bilancio.information.profile import InformationProfile
     from bilancio.decision.profiles import LenderProfile
     from bilancio.decision.protocols import (
-        PortfolioStrategy, CounterpartyScreener,
-        InstrumentSelector, TransactionPricer,
+        CounterpartyScreener,
+        InstrumentSelector,
+        PortfolioStrategy,
+        TransactionPricer,
     )
+    from bilancio.engines.system import System
+    from bilancio.information.profile import InformationProfile
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class LendingConfig:
     """Configuration for the non-bank lending strategy."""
+
     base_rate: Decimal = Decimal("0.05")
     risk_premium_scale: Decimal = Decimal("0.20")
     max_single_exposure: Decimal = Decimal("0.15")
@@ -36,24 +39,27 @@ class LendingConfig:
     horizon: int = 3
     min_shortfall: int = 1
     max_default_prob: Decimal = Decimal("0.50")
-    information_profile: Optional["InformationProfile"] = None
-    lender_profile: Optional["LenderProfile"] = None
-    max_ring_maturity: Optional[int] = None  # computed at ring creation time
+    information_profile: InformationProfile | None = None
+    lender_profile: LenderProfile | None = None
+    max_ring_maturity: int | None = None  # computed at ring creation time
     # Decision protocol overrides (None = auto-construct from scalar params)
-    portfolio_strategy: Optional["PortfolioStrategy"] = None
-    counterparty_screener: Optional["CounterpartyScreener"] = None
-    instrument_selector: Optional["InstrumentSelector"] = None
-    transaction_pricer: Optional["TransactionPricer"] = None
+    portfolio_strategy: PortfolioStrategy | None = None
+    counterparty_screener: CounterpartyScreener | None = None
+    instrument_selector: InstrumentSelector | None = None
+    transaction_pricer: TransactionPricer | None = None
 
 
 def _resolve_protocols(
     config: LendingConfig,
-) -> tuple["PortfolioStrategy", "CounterpartyScreener", "InstrumentSelector", "TransactionPricer"]:
+) -> tuple[PortfolioStrategy, CounterpartyScreener, InstrumentSelector, TransactionPricer]:
     """Build effective protocols: explicit overrides or defaults from scalar params."""
     from bilancio.decision.protocols import (
-        FixedPortfolioStrategy, ThresholdScreener,
-        FixedMaturitySelector, LinearPricer,
+        FixedMaturitySelector,
+        FixedPortfolioStrategy,
+        LinearPricer,
+        ThresholdScreener,
     )
+
     portfolio = config.portfolio_strategy or FixedPortfolioStrategy(
         max_exposure_fraction=config.max_total_exposure,
         base_return=config.base_rate,
@@ -71,10 +77,10 @@ def _resolve_protocols(
 
 
 def run_lending_phase(
-    system: "System",
+    system: System,
     current_day: int,
-    lending_config: Optional[LendingConfig] = None,
-) -> List[Dict[str, Any]]:
+    lending_config: LendingConfig | None = None,
+) -> list[dict[str, Any]]:
     """Run the non-bank lending phase.
 
     For each eligible borrower with a shortfall, the lender offers a loan
@@ -96,13 +102,11 @@ def run_lending_phase(
         List of lending event dicts for aggregation
     """
     from bilancio.domain.agent import AgentKind
-    from bilancio.domain.instruments.base import InstrumentKind
-    from bilancio.domain.instruments.non_bank_loan import NonBankLoan
 
     config = lending_config or LendingConfig()
     profile = config.lender_profile
     portfolio, screener, selector, pricer = _resolve_protocols(config)
-    events: List[Dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
 
     # Find the lender
     lender_id = None
@@ -118,14 +122,18 @@ def run_lending_phase(
     info = None
     if config.information_profile is not None:
         from bilancio.information.service import InformationService
+
         info = InformationService(
-            system, config.information_profile, observer_id=lender_id,
+            system,
+            config.information_profile,
+            observer_id=lender_id,
         )
 
     # Calculate lender's available capital (own data — always perfect)
     lender_cash = _get_agent_cash(system, lender_id)
     existing_loan_exposure = (
-        info.get_loan_exposure(lender_id) if info is not None
+        info.get_loan_exposure(lender_id)
+        if info is not None
         else _get_loan_exposure(system, lender_id)
     )
     initial_capital = lender_cash + existing_loan_exposure
@@ -142,7 +150,7 @@ def run_lending_phase(
     default_probs = None if info is not None else _estimate_default_probs(system, current_day)
 
     # Identify borrowers with shortfalls
-    opportunities: List[Dict[str, Any]] = []
+    opportunities: list[dict[str, Any]] = []
     for agent_id, agent in system.state.agents.items():
         if agent.defaulted:
             continue
@@ -180,11 +188,15 @@ def run_lending_phase(
         # If LenderProfile available, use kappa-aware pricing
         if profile is not None:
             # Compute coverage ratio: (cash + receivables) / upcoming_obligations
-            receivables = _get_receivables_due_within(system, agent_id, current_day, profile.planning_horizon)
+            receivables = _get_receivables_due_within(
+                system, agent_id, current_day, profile.planning_horizon
+            )
             total_resources = max(agent_cash + receivables, 0)
             coverage = Decimal(str(total_resources)) / Decimal(str(max(upcoming_due, 1)))
             # Blend kappa-based prior with coverage ratio
-            p_default = profile.base_default_estimate * (Decimal("1") / max(coverage, Decimal("0.01")))
+            p_default = profile.base_default_estimate * (
+                Decimal("1") / max(coverage, Decimal("0.01"))
+            )
             p_default = max(Decimal("0.01"), min(Decimal("0.95"), p_default))
 
         # Price the loan
@@ -215,14 +227,16 @@ def run_lending_phase(
         # Expected profit for ranking
         expected_profit = float(rate) * (1.0 - float(p_default))
 
-        opportunities.append({
-            "borrower_id": agent_id,
-            "amount": loan_amount,
-            "rate": rate,
-            "p_default": p_default,
-            "expected_profit": expected_profit,
-            "shortfall": shortfall,
-        })
+        opportunities.append(
+            {
+                "borrower_id": agent_id,
+                "amount": loan_amount,
+                "rate": rate,
+                "p_default": p_default,
+                "expected_profit": expected_profit,
+                "shortfall": shortfall,
+            }
+        )
 
     # Rank by expected profit descending
     opportunities.sort(key=lambda x: x["expected_profit"], reverse=True)
@@ -250,19 +264,24 @@ def run_lending_phase(
                 maturity_days=effective_maturity,
             )
             remaining_capital -= loan_amount
-            events.append({
-                "kind": "NonBankLoanCreated",
-                "day": current_day,
-                "lender_id": lender_id,
-                "borrower_id": opp["borrower_id"],
-                "amount": loan_amount,
-                "rate": str(opp["rate"]),
-                "loan_id": loan_id,
-                "p_default": str(opp["p_default"]),
-            })
+            events.append(
+                {
+                    "kind": "NonBankLoanCreated",
+                    "day": current_day,
+                    "lender_id": lender_id,
+                    "borrower_id": opp["borrower_id"],
+                    "amount": loan_amount,
+                    "rate": str(opp["rate"]),
+                    "loan_id": loan_id,
+                    "p_default": str(opp["p_default"]),
+                }
+            )
             logger.debug(
                 "Loan created: %s -> %s, amount=%d, rate=%s",
-                lender_id, opp["borrower_id"], loan_amount, opp["rate"],
+                lender_id,
+                opp["borrower_id"],
+                loan_amount,
+                opp["rate"],
             )
         except (ValidationError, ValueError, KeyError) as e:
             logger.warning("Failed to create loan to %s: %s", opp["borrower_id"], e)
@@ -271,7 +290,7 @@ def run_lending_phase(
     return events
 
 
-def run_loan_repayments(system: "System", current_day: int) -> List[Dict[str, Any]]:
+def run_loan_repayments(system: System, current_day: int) -> list[dict[str, Any]]:
     """Process repayments for all non-bank loans due today.
 
     Args:
@@ -281,7 +300,7 @@ def run_loan_repayments(system: "System", current_day: int) -> List[Dict[str, An
     Returns:
         List of repayment event dicts
     """
-    events: List[Dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
 
     due_loans = system.get_nonbank_loans_due(current_day)
     for loan_id in due_loans:
@@ -292,13 +311,15 @@ def run_loan_repayments(system: "System", current_day: int) -> List[Dict[str, An
         borrower_id = loan.liability_issuer_id
         try:
             repaid = system.nonbank_repay_loan(loan_id, borrower_id)
-            events.append({
-                "kind": "NonBankLoanRepaid" if repaid else "NonBankLoanDefaulted",
-                "day": current_day,
-                "loan_id": loan_id,
-                "borrower_id": borrower_id,
-                "repaid": repaid,
-            })
+            events.append(
+                {
+                    "kind": "NonBankLoanRepaid" if repaid else "NonBankLoanDefaulted",
+                    "day": current_day,
+                    "loan_id": loan_id,
+                    "borrower_id": borrower_id,
+                    "repaid": repaid,
+                }
+            )
         except (ValidationError, ValueError, KeyError) as e:
             logger.warning("Loan repayment failed for %s: %s", loan_id, e)
 
@@ -307,7 +328,8 @@ def run_loan_repayments(system: "System", current_day: int) -> List[Dict[str, An
 
 # ── Helper functions ─────────────────────────────────────────────────
 
-def _get_agent_cash(system: "System", agent_id: str) -> int:
+
+def _get_agent_cash(system: System, agent_id: str) -> int:
     """Get total cash held by an agent."""
     from bilancio.domain.instruments.base import InstrumentKind
 
@@ -322,7 +344,7 @@ def _get_agent_cash(system: "System", agent_id: str) -> int:
     return total
 
 
-def _get_loan_exposure(system: "System", lender_id: str) -> int:
+def _get_loan_exposure(system: System, lender_id: str) -> int:
     """Get total outstanding loan principal for a lender."""
     from bilancio.domain.instruments.base import InstrumentKind
 
@@ -337,7 +359,7 @@ def _get_loan_exposure(system: "System", lender_id: str) -> int:
     return total
 
 
-def _get_borrower_exposure(system: "System", lender_id: str, borrower_id: str) -> int:
+def _get_borrower_exposure(system: System, lender_id: str, borrower_id: str) -> int:
     """Get existing loan exposure from lender to a specific borrower."""
     from bilancio.domain.instruments.base import InstrumentKind
 
@@ -347,16 +369,16 @@ def _get_borrower_exposure(system: "System", lender_id: str, borrower_id: str) -
         return 0
     for cid in agent.asset_ids:
         contract = system.state.contracts.get(cid)
-        if (contract is not None
-                and contract.kind == InstrumentKind.NON_BANK_LOAN
-                and contract.liability_issuer_id == borrower_id):
+        if (
+            contract is not None
+            and contract.kind == InstrumentKind.NON_BANK_LOAN
+            and contract.liability_issuer_id == borrower_id
+        ):
             total += contract.amount
     return total
 
 
-def _get_upcoming_obligations(
-    system: "System", agent_id: str, current_day: int, horizon: int
-) -> int:
+def _get_upcoming_obligations(system: System, agent_id: str, current_day: int, horizon: int) -> int:
     """Get total obligations due within horizon days for an agent."""
     from bilancio.domain.instruments.base import InstrumentKind
     from bilancio.domain.instruments.non_bank_loan import NonBankLoan
@@ -384,7 +406,7 @@ def _get_upcoming_obligations(
     return total
 
 
-def _expected_selling_cost(system: "System", agent_id: str, current_day: int) -> Optional[Decimal]:
+def _expected_selling_cost(system: System, agent_id: str, current_day: int) -> Decimal | None:
     """Estimate the haircut from selling a claim on the secondary market.
 
     Returns the expected cost as a fraction (e.g., 0.15 = 15% haircut),
@@ -396,11 +418,12 @@ def _expected_selling_cost(system: "System", agent_id: str, current_day: int) ->
 
     # Find the agent's cheapest-to-sell payable (receivable = asset payable)
     from bilancio.domain.instruments.base import InstrumentKind
+
     agent = system.state.agents.get(agent_id)
     if agent is None:
         return None
 
-    best_haircut: Optional[Decimal] = None
+    best_haircut: Decimal | None = None
     for cid in agent.asset_ids:
         contract = system.state.contracts.get(cid)
         if contract is None or contract.kind != InstrumentKind.PAYABLE:
@@ -409,7 +432,7 @@ def _expected_selling_cost(system: "System", agent_id: str, current_day: int) ->
             continue
         # Get dealer bid price for this claim
         debtor_id = contract.liability_issuer_id
-        if not hasattr(dealer_sub, 'risk_assessor') or dealer_sub.risk_assessor is None:
+        if not hasattr(dealer_sub, "risk_assessor") or dealer_sub.risk_assessor is None:
             continue
         p_default = dealer_sub.risk_assessor.estimate_default_prob(debtor_id, current_day)
         if p_default is None:
@@ -429,10 +452,11 @@ def _expected_selling_cost(system: "System", agent_id: str, current_day: int) ->
 
 
 def _get_receivables_due_within(
-    system: "System", agent_id: str, current_day: int, horizon: int
+    system: System, agent_id: str, current_day: int, horizon: int
 ) -> int:
     """Get total receivables (asset payables) due within horizon days."""
     from bilancio.domain.instruments.base import InstrumentKind
+
     total = 0
     agent = system.state.agents.get(agent_id)
     if agent is None:
@@ -448,11 +472,11 @@ def _get_receivables_due_within(
 
 
 def _estimate_default_probs(
-    system: "System",
+    system: System,
     current_day: int,
     log_estimates: bool = False,
-    channel_bindings: "tuple[Any, ...]" = (),
-) -> Dict[str, Decimal]:
+    channel_bindings: tuple[Any, ...] = (),
+) -> dict[str, Decimal]:
     """Estimate default probability per agent.
 
     When *channel_bindings* are provided, sources are tried in priority
@@ -469,7 +493,10 @@ def _estimate_default_probs(
         )
         for binding in bindings:
             result = _try_default_prob_source(
-                system, current_day, binding.source, log_estimates,
+                system,
+                current_day,
+                binding.source,
+                log_estimates,
             )
             if result is not None:
                 return result
@@ -485,11 +512,11 @@ def _estimate_default_probs(
 
 
 def _try_default_prob_source(
-    system: "System",
+    system: System,
     current_day: int,
     source: str,
     log_estimates: bool = False,
-) -> Optional[Dict[str, Decimal]]:
+) -> dict[str, Decimal] | None:
     """Dispatch to a named default-prob source."""
     if source == "dealer_risk_assessor":
         return _default_prob_from_dealer(system, current_day, log_estimates)
@@ -501,10 +528,10 @@ def _try_default_prob_source(
 
 
 def _default_prob_from_dealer(
-    system: "System",
+    system: System,
     current_day: int,
     log_estimates: bool = False,
-) -> Optional[Dict[str, Decimal]]:
+) -> dict[str, Decimal] | None:
     """Use the dealer subsystem's RiskAssessor for default probs."""
     dealer_sub = system.state.dealer_subsystem
     if (
@@ -513,7 +540,7 @@ def _default_prob_from_dealer(
         or dealer_sub.risk_assessor is None
     ):
         return None
-    probs: Dict[str, Decimal] = {}
+    probs: dict[str, Decimal] = {}
     assessor = dealer_sub.risk_assessor
     for agent_id in system.state.agents:
         agent = system.state.agents[agent_id]
@@ -522,7 +549,9 @@ def _default_prob_from_dealer(
             continue
         if log_estimates and hasattr(assessor, "estimate_default_prob_detail"):
             est = assessor.estimate_default_prob_detail(
-                agent_id, current_day, estimator_id="lender",
+                agent_id,
+                current_day,
+                estimator_id="lender",
             )
             system.log_estimate(est)
             probs[agent_id] = est.value
@@ -533,13 +562,14 @@ def _default_prob_from_dealer(
 
 
 def _default_prob_from_registry(
-    system: "System", current_day: int,
-) -> Optional[Dict[str, Decimal]]:
+    system: System,
+    current_day: int,
+) -> dict[str, Decimal] | None:
     """Use the rating registry for default probs."""
     rating_registry = getattr(system.state, "rating_registry", None)
     if not rating_registry:
         return None
-    probs: Dict[str, Decimal] = {}
+    probs: dict[str, Decimal] = {}
     for agent_id, agent in system.state.agents.items():
         if agent.defaulted:
             probs[agent_id] = Decimal("1.0")
@@ -551,10 +581,11 @@ def _default_prob_from_registry(
 
 
 def _default_prob_heuristic(
-    system: "System", current_day: int,
-) -> Dict[str, Decimal]:
+    system: System,
+    current_day: int,
+) -> dict[str, Decimal]:
     """System-wide heuristic: base_rate + margin."""
-    probs: Dict[str, Decimal] = {}
+    probs: dict[str, Decimal] = {}
     n_agents = len(system.state.agents)
     n_defaulted = len(system.state.defaulted_agent_ids)
     base_rate = Decimal(str(n_defaulted / max(n_agents, 1)))

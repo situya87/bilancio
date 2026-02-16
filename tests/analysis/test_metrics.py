@@ -5,25 +5,25 @@ financial placeholder functions (NPV/IRR).
 """
 
 from decimal import Decimal
-from typing import Dict, List
+
 import pytest
 
 from bilancio.analysis.metrics import (
-    calculate_npv,
+    alpha,
     calculate_irr,
-    dues_for_day,
-    net_vectors,
-    raw_minimum_liquidity,
-    size_and_bunching,
-    phi_delta,
-    replay_intraday_peak,
-    velocity,
+    calculate_npv,
     creditor_hhi_plus,
     debtor_shortfall_shares,
-    start_of_day_money,
+    dues_for_day,
     liquidity_gap,
-    alpha,
     microstructure_gain_lower_bound,
+    net_vectors,
+    phi_delta,
+    raw_minimum_liquidity,
+    replay_intraday_peak,
+    size_and_bunching,
+    start_of_day_money,
+    velocity,
 )
 
 
@@ -75,9 +75,27 @@ class TestDuesForDay:
     def test_multiple_dues_same_day(self):
         """Multiple PayableCreated events due on same day."""
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
-            {"kind": "PayableCreated", "debtor": "B", "creditor": "C", "amount": "200", "due_day": 1},
-            {"kind": "PayableCreated", "debtor": "C", "creditor": "A", "amount": "300", "due_day": 2},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
+            {
+                "kind": "PayableCreated",
+                "debtor": "B",
+                "creditor": "C",
+                "amount": "200",
+                "due_day": 1,
+            },
+            {
+                "kind": "PayableCreated",
+                "debtor": "C",
+                "creditor": "A",
+                "amount": "300",
+                "due_day": 2,
+            },
         ]
         result = dues_for_day(events, 1)
         assert len(result) == 2
@@ -87,8 +105,20 @@ class TestDuesForDay:
     def test_filters_by_due_day(self):
         """Only returns dues matching the specified day."""
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
-            {"kind": "PayableCreated", "debtor": "B", "creditor": "C", "amount": "200", "due_day": 2},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
+            {
+                "kind": "PayableCreated",
+                "debtor": "B",
+                "creditor": "C",
+                "amount": "200",
+                "due_day": 2,
+            },
         ]
         result = dues_for_day(events, 2)
         assert len(result) == 1
@@ -97,7 +127,13 @@ class TestDuesForDay:
     def test_ignores_non_payable_created_events(self):
         """Ignores events that are not PayableCreated."""
         events = [
-            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "100", "due_day": 1},
+            {
+                "kind": "PayableCreated",
+                "debtor": "A",
+                "creditor": "B",
+                "amount": "100",
+                "due_day": 1,
+            },
             {"kind": "PayableSettled", "debtor": "A", "creditor": "B", "amount": "100", "day": 1},
         ]
         result = dues_for_day(events, 1)
@@ -145,9 +181,7 @@ class TestNetVectors:
 
     def test_single_obligation(self):
         """Single obligation between two agents."""
-        dues = [
-            {"debtor": "A", "creditor": "B", "amount": "100"}
-        ]
+        dues = [{"debtor": "A", "creditor": "B", "amount": "100"}]
         result = net_vectors(dues)
 
         assert "A" in result
@@ -170,7 +204,7 @@ class TestNetVectors:
 
         assert result["A"]["F"] == Decimal("150")  # 100 + 50
         assert result["A"]["I"] == Decimal("200")
-        assert result["A"]["n"] == Decimal("50")   # 200 - 150
+        assert result["A"]["n"] == Decimal("50")  # 200 - 150
 
     def test_circular_obligations(self):
         """Circular obligations: A->B->C->A."""
@@ -188,9 +222,7 @@ class TestNetVectors:
 
     def test_fallback_to_from_to_fields(self):
         """Falls back to 'from' and 'to' fields."""
-        dues = [
-            {"from": "A", "to": "B", "amount": "100"}
-        ]
+        dues = [{"from": "A", "to": "B", "amount": "100"}]
         result = net_vectors(dues)
 
         assert result["A"]["F"] == Decimal("100")
@@ -273,7 +305,10 @@ class TestSizeAndBunching:
             {"amount": "200", "bucket": "A"},
             {"amount": "100", "bucket": "B"},
         ]
-        bin_fn = lambda d: d["bucket"]
+
+        def bin_fn(d):
+            return d["bucket"]
+
         S_t, BI_t = size_and_bunching(dues, bin_fn)
 
         assert S_t == Decimal("400")
@@ -287,7 +322,10 @@ class TestSizeAndBunching:
             {"amount": "100", "bucket": "A"},
             {"amount": "200", "bucket": "A"},
         ]
-        bin_fn = lambda d: d["bucket"]
+
+        def bin_fn(d):
+            return d["bucket"]
+
         S_t, BI_t = size_and_bunching(dues, bin_fn)
 
         assert S_t == Decimal("300")
@@ -299,7 +337,10 @@ class TestSizeAndBunching:
             {"amount": "0", "bucket": "A"},
             {"amount": "0", "bucket": "B"},
         ]
-        bin_fn = lambda d: d["bucket"]
+
+        def bin_fn(d):
+            return d["bucket"]
+
         S_t, BI_t = size_and_bunching(dues, bin_fn)
 
         assert S_t == Decimal("0")

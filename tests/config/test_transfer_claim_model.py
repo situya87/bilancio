@@ -24,4 +24,3 @@ def test_transfer_claim_alias_and_id_model_allows_both():
     m = TransferClaim(contract_alias="ALIASX", contract_id="C_YYY", to_agent="F3")
     assert m.contract_alias == "ALIASX"
     assert m.contract_id == "C_YYY"
-

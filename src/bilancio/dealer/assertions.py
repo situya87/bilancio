@@ -16,8 +16,8 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .models import DealerState, VBTState
     from .kernel import KernelParams
+    from .models import DealerState, VBTState
 
 
 # Tolerance constants for floating-point and integer comparisons
@@ -108,7 +108,7 @@ def assert_c2_quote_bounds(dealer: "DealerState", vbt: "VBTState") -> None:
     )
 
     # Check pin detection consistency (ask)
-    ask_at_outside = (dealer.ask == vbt.A)
+    ask_at_outside = dealer.ask == vbt.A
     assert ask_at_outside == dealer.is_pinned_ask, (
         f"C2 VIOLATION: Ask pin detection inconsistent. "
         f"Dealer ask {dealer.ask} == VBT ask {vbt.A}: {ask_at_outside}, "
@@ -117,7 +117,7 @@ def assert_c2_quote_bounds(dealer: "DealerState", vbt: "VBTState") -> None:
     )
 
     # Check pin detection consistency (bid)
-    bid_at_outside = (dealer.bid == vbt.B)
+    bid_at_outside = dealer.bid == vbt.B
     assert bid_at_outside == dealer.is_pinned_bid, (
         f"C2 VIOLATION: Bid pin detection inconsistent. "
         f"Dealer bid {dealer.bid} == VBT bid {vbt.B}: {bid_at_outside}, "
