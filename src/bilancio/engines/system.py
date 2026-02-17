@@ -676,32 +676,113 @@ class System:
             self.add_contract(new_cash)
 
             # 3. Create the NonBankLoan (lender's asset, borrower's liability)
-            loan_id = self.new_contract_id("NBL")
-            loan = NonBankLoan(
-                id=loan_id,
-                kind=InstrumentKind.NON_BANK_LOAN,
-                amount=amount,
-                denom=denom,
-                asset_holder_id=lender_id,
-                liability_issuer_id=borrower_id,
-                rate=rate,
-                issuance_day=day,
-                maturity_days=maturity_days,
-            )
-            self.add_contract(loan)
-
-            self.log(
-                "NonBankLoanCreated",
-                lender_id=lender_id,
-                borrower_id=borrower_id,
-                amount=amount,
-                loan_id=loan_id,
-                cash_id=cash_id,
-                rate=str(rate),
-                maturity_day=day + maturity_days,
+            loan_id = self._create_nonbank_loan(
+                lender_id, borrower_id, amount, rate, day, maturity_days, denom
             )
 
         return loan_id
+
+    def _create_nonbank_loan(
+        self,
+        lender_id: str,
+        borrower_id: str,
+        amount: int,
+        rate: Decimal,
+        day: int,
+        maturity_days: int = 2,
+        denom: str = "X",
+    ) -> str:
+        """Create a NonBankLoan instrument (lender's asset, borrower's liability).
+
+        This is the shared loan-creation logic used by both ``nonbank_lend_cash``
+        (cash-based) and ``nonbank_lend`` (deposit-aware).  It must be called
+        inside an existing ``atomic`` block — it does NOT wrap itself.
+
+        Returns:
+            The NonBankLoan instrument ID
+        """
+        loan_id = self.new_contract_id("NBL")
+        loan = NonBankLoan(
+            id=loan_id,
+            kind=InstrumentKind.NON_BANK_LOAN,
+            amount=amount,
+            denom=denom,
+            asset_holder_id=lender_id,
+            liability_issuer_id=borrower_id,
+            rate=rate,
+            issuance_day=day,
+            maturity_days=maturity_days,
+        )
+        self.add_contract(loan)
+
+        self.log(
+            "NonBankLoanCreated",
+            lender_id=lender_id,
+            borrower_id=borrower_id,
+            amount=amount,
+            loan_id=loan_id,
+            rate=str(rate),
+            maturity_day=day + maturity_days,
+        )
+
+        return loan_id
+
+    def nonbank_lend(
+        self,
+        lender_id: str,
+        borrower_id: str,
+        amount: int,
+        rate: Decimal,
+        day: int,
+        maturity_days: int = 2,
+        denom: str = "X",
+    ) -> str:
+        """Lend using available liquid funds (deposits or cash).
+
+        If the lender holds bank deposits, the loan proceeds are transferred
+        via ``client_payment`` (deposit transfer).  Otherwise falls back to
+        the existing cash-based ``nonbank_lend_cash``.
+
+        Args:
+            lender_id: The lending agent
+            borrower_id: The borrowing agent
+            amount: Loan principal
+            rate: Interest rate
+            day: Current day (for maturity calculation)
+            maturity_days: Days until maturity
+            denom: Currency denomination
+
+        Returns:
+            The NonBankLoan instrument ID
+        """
+        lender = self.state.agents[lender_id]
+        # Check if lender has deposits
+        deposit_ids = [
+            cid
+            for cid in lender.asset_ids
+            if self.state.contracts.get(cid)
+            and self.state.contracts[cid].kind == InstrumentKind.BANK_DEPOSIT
+        ]
+
+        if deposit_ids:
+            # Banking mode: transfer via client_payment, then create loan
+            dep = self.state.contracts[deposit_ids[0]]
+            lender_bank = dep.liability_issuer_id
+            borrower_bank = self._find_agent_bank(borrower_id) or lender_bank
+            with atomic(self):
+                from bilancio.ops.banking import client_payment
+
+                client_payment(self, lender_id, lender_bank, borrower_id, borrower_bank, amount)
+                # Create the loan instrument
+                loan_id = self._create_nonbank_loan(
+                    lender_id, borrower_id, amount, rate, day, maturity_days, denom
+                )
+            return loan_id
+        else:
+            # Cash mode: existing implementation
+            return self.nonbank_lend_cash(
+                lender_id, borrower_id, amount, rate, day, maturity_days, denom
+            )
 
     def nonbank_repay_loan(self, loan_id: str, borrower_id: str) -> bool:
         """Borrower repays a non-bank loan with interest.
@@ -730,14 +811,15 @@ class System:
         lender_id = loan_instr.asset_holder_id
         principal = loan_instr.principal
 
-        # Check if borrower has enough cash
-        borrower_cash = sum(
+        # Check if borrower has enough liquid funds (cash + deposits)
+        borrower_liquid = sum(
             c.amount
             for cid in self.state.agents[borrower_id].asset_ids
-            if (c := self.state.contracts.get(cid)) is not None and c.kind == InstrumentKind.CASH
+            if (c := self.state.contracts.get(cid)) is not None
+            and c.kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT)
         )
 
-        if borrower_cash < repayment_amount:
+        if borrower_liquid < repayment_amount:
             # Default: write off the loan
             self._remove_loan(loan_id, lender_id, borrower_id)
             self.log(
@@ -746,44 +828,53 @@ class System:
                 borrower_id=borrower_id,
                 lender_id=lender_id,
                 amount_owed=repayment_amount,
-                cash_available=borrower_cash,
+                cash_available=borrower_liquid,
             )
             return False
 
-        cb_id = self._central_bank_id()
-
         with atomic(self):
-            # 1. Consume cash from borrower
-            remaining = repayment_amount
-            cash_ids = [
-                cid
-                for cid in self.state.agents[borrower_id].asset_ids
-                if cid in self.state.contracts
-                and self.state.contracts[cid].kind == InstrumentKind.CASH
-            ]
-            for cid in list(cash_ids):
-                instr = self.state.contracts.get(cid)
-                if instr is None:
-                    continue
-                take = min(instr.amount, remaining)
-                consume(self, cid, take)
-                remaining -= take
-                if remaining == 0:
-                    break
+            # 1. Transfer repayment: try deposit-based payment first, fall back to cash
+            lender_bank = self._find_agent_bank(lender_id)
+            borrower_bank = self._find_agent_bank(borrower_id)
+            if lender_bank and borrower_bank:
+                from bilancio.ops.banking import client_payment
 
-            # 2. Create cash for lender (the repayment)
-            cash_id = self.new_contract_id("C")
-            new_cash = Cash(
-                id=cash_id,
-                kind=InstrumentKind.CASH,
-                amount=repayment_amount,
-                denom=loan_instr.denom,
-                asset_holder_id=lender_id,
-                liability_issuer_id=cb_id,
-            )
-            self.add_contract(new_cash)
+                client_payment(
+                    self, borrower_id, borrower_bank, lender_id, lender_bank, repayment_amount
+                )
+            else:
+                # Cash-based repayment (original path)
+                cb_id = self._central_bank_id()
+                remaining = repayment_amount
+                cash_ids = [
+                    cid
+                    for cid in self.state.agents[borrower_id].asset_ids
+                    if cid in self.state.contracts
+                    and self.state.contracts[cid].kind == InstrumentKind.CASH
+                ]
+                for cid in list(cash_ids):
+                    instr = self.state.contracts.get(cid)
+                    if instr is None:
+                        continue
+                    take = min(instr.amount, remaining)
+                    consume(self, cid, take)
+                    remaining -= take
+                    if remaining == 0:
+                        break
 
-            # 3. Remove the loan
+                # Create cash for lender (the repayment)
+                cash_id = self.new_contract_id("C")
+                new_cash = Cash(
+                    id=cash_id,
+                    kind=InstrumentKind.CASH,
+                    amount=repayment_amount,
+                    denom=loan_instr.denom,
+                    asset_holder_id=lender_id,
+                    liability_issuer_id=cb_id,
+                )
+                self.add_contract(new_cash)
+
+            # 2. Remove the loan
             self._remove_loan(loan_id, lender_id, borrower_id)
 
             self.log(
@@ -957,6 +1048,17 @@ class System:
         return instr_id
 
     # ---- deposit helpers
+    def _find_agent_bank(self, agent_id: str) -> str | None:
+        """Find the bank where an agent holds deposits."""
+        agent = self.state.agents.get(agent_id)
+        if agent is None:
+            return None
+        for cid in agent.asset_ids:
+            c = self.state.contracts.get(cid)
+            if c and c.kind == InstrumentKind.BANK_DEPOSIT:
+                return c.liability_issuer_id
+        return None
+
     def deposit_ids(self, customer_id: str, bank_id: str) -> list[str]:
         """Filter customer assets for bank_deposit issued by bank_id"""
         out = []

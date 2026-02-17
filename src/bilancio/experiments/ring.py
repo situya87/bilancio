@@ -281,6 +281,8 @@ class RingSweepRunner:
         lender_mode: bool = False,
         lender_share: Decimal = Decimal("0.10"),
         balanced_mode_override: str | None = None,
+        n_banks: int = 0,
+        reserve_multiplier: float = 10.0,
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -319,6 +321,8 @@ class RingSweepRunner:
         self.lender_mode = lender_mode
         self.lender_share = lender_share
         self.balanced_mode_override = balanced_mode_override
+        self.n_banks = n_banks
+        self.reserve_multiplier = reserve_multiplier
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -635,6 +639,8 @@ class RingSweepRunner:
                 lender_share=self.lender_share,
                 rollover_enabled=self.rollover_enabled,
                 kappa=kappa,
+                n_banks=self.n_banks,
+                reserve_multiplier=self.reserve_multiplier,
                 source_path=None,
             )
         else:
@@ -959,6 +965,8 @@ class RingSweepRunner:
                 lender_share=self.lender_share,
                 rollover_enabled=self.rollover_enabled,
                 kappa=kappa,
+                n_banks=self.n_banks,
+                reserve_multiplier=self.reserve_multiplier,
                 source_path=None,
             )
         else:

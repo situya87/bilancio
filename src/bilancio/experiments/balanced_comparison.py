@@ -321,6 +321,12 @@ class BalancedComparisonConfig(BaseModel):
         default="liquidity_then_earning", description="Trading motivation mode"
     )
 
+    # Bank parameters (Plan 038)
+    n_banks: int = Field(default=0, description="Number of banks to add (0 = no banks)")
+    reserve_multiplier: float = Field(
+        default=10.0, description="Bank reserves = reserve_multiplier * face_value"
+    )
+
     # Non-bank lender parameters
     enable_lender: bool = Field(
         default=False, description="Enable third comparison arm with non-bank lender"
@@ -589,6 +595,8 @@ class BalancedComparisonRunner:
             vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
             vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
             trading_motive=self.config.trading_motive,
+            n_banks=self.config.n_banks,
+            reserve_multiplier=self.config.reserve_multiplier,
         )
 
     def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -635,6 +643,8 @@ class BalancedComparisonRunner:
             vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
             vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
             trading_motive=self.config.trading_motive,
+            n_banks=self.config.n_banks,
+            reserve_multiplier=self.config.reserve_multiplier,
         )
 
     def _get_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -678,6 +688,8 @@ class BalancedComparisonRunner:
             lender_mode=True,
             lender_share=self.config.lender_share,
             balanced_mode_override="lender",
+            n_banks=self.config.n_banks,
+            reserve_multiplier=self.config.reserve_multiplier,
         )
 
     def _get_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -726,6 +738,8 @@ class BalancedComparisonRunner:
             lender_mode=True,
             lender_share=self.config.lender_share,
             balanced_mode_override="nbfi",
+            n_banks=self.config.n_banks,
+            reserve_multiplier=self.config.reserve_multiplier,
         )
 
     def _get_dealer_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -779,6 +793,8 @@ class BalancedComparisonRunner:
             lender_mode=True,
             lender_share=self.config.lender_share,
             balanced_mode_override="nbfi_dealer",  # 50/50 cash split
+            n_banks=self.config.n_banks,
+            reserve_multiplier=self.config.reserve_multiplier,
         )
 
     def run_all(self) -> list[BalancedComparisonResult]:

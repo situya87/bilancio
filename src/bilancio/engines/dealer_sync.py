@@ -461,26 +461,60 @@ def _sync_trader_cash_to_system(
 ) -> None:
     """Sync trader cash balances from dealer subsystem back to main system.
 
-    Compares trader.cash in the dealer subsystem to the actual cash in the
-    main system and applies the delta as minting (if trader gained cash)
-    or retiring (if trader spent cash).
+    Compares trader.cash in the dealer subsystem to the actual liquidity
+    (CASH + BANK_DEPOSIT) in the main system and applies the delta.
 
-    Uses ``system.mint_cash`` / ``system.retire_cash`` to maintain the CB
-    cash invariant (cb_cash_outstanding == total system cash).
+    In banking mode (agent holds deposits), adjusts the first deposit's
+    amount rather than minting/retiring CB cash. This preserves the
+    deposit-based money hierarchy.
+
+    Falls back to ``system.mint_cash`` / ``system.retire_cash`` when the
+    agent has no deposits (pure cash mode).
     """
+    import logging
+
+    from bilancio.domain.instruments.base import InstrumentKind
     from bilancio.engines.dealer_integration import _get_agent_cash
+
+    logger = logging.getLogger(__name__)
 
     for trader_id, trader in subsystem.traders.items():
         main_system_cash = _get_agent_cash(system, trader_id)
         dealer_cash = trader.cash
         delta = dealer_cash - main_system_cash
 
-        if delta > 0:
-            system.mint_cash(to_agent_id=trader_id, amount=round(delta))
-        elif delta < 0:
-            burn_amount = round(min(abs(delta), main_system_cash))
-            if burn_amount > 0:
-                system.retire_cash(from_agent_id=trader_id, amount=burn_amount)
+        if delta == 0:
+            continue
+
+        # Check if agent has any BANK_DEPOSIT instruments
+        agent = system.state.agents.get(trader_id)
+        deposit_contract = None
+        if agent:
+            for contract_id in agent.asset_ids:
+                contract = system.state.contracts.get(contract_id)
+                if contract and contract.kind == InstrumentKind.BANK_DEPOSIT:
+                    deposit_contract = contract
+                    break
+
+        if deposit_contract is not None:
+            # Banking mode: adjust deposit balance
+            new_amount = deposit_contract.amount + round(delta)
+            if new_amount < 0:
+                logger.warning(
+                    "Deposit for %s would go negative (%d) during trader sync; "
+                    "proceeding but this indicates a bug",
+                    trader_id,
+                    new_amount,
+                )
+            deposit_contract.amount = new_amount
+        else:
+            # Pure cash mode: mint or retire CB cash
+            if delta > 0:
+                system.mint_cash(to_agent_id=trader_id, amount=round(delta))
+            elif delta < 0:
+                burn_amount = round(min(abs(delta), main_system_cash))
+                if burn_amount > 0:
+                    system.retire_cash(from_agent_id=trader_id, amount=burn_amount)
 
 
 def _sync_dealer_vbt_cash_from_system(
@@ -513,16 +547,25 @@ def _sync_dealer_vbt_cash_to_system(
     """Sync dealer and VBT cash from subsystem back to the main system.
 
     The VBT credit facility and normal trading modify dealer/VBT cash within
-    the subsystem. These changes must be reflected in the main system to
-    maintain the CB cash invariant (total system cash == cb_cash_outstanding).
+    the subsystem. These changes must be reflected in the main system.
 
-    Uses ``system.mint_cash`` / ``system.retire_cash`` to keep
-    ``cb_cash_outstanding`` consistent with actual system cash.
+    In banking mode (agent holds deposits), adjusts the first deposit's
+    amount rather than minting/retiring CB cash. This preserves the
+    deposit-based money hierarchy.
+
+    Falls back to ``system.mint_cash`` / ``system.retire_cash`` when the
+    agent has no deposits (pure cash mode), keeping ``cb_cash_outstanding``
+    consistent with actual system cash.
 
     Only syncs for agents that exist in the main system (balanced mode).
     Basic-mode dealer/VBT agents live only in the subsystem.
     """
+    import logging
+
+    from bilancio.domain.instruments.base import InstrumentKind
     from bilancio.engines.dealer_integration import _get_agent_cash
+
+    logger = logging.getLogger(__name__)
 
     for entities in (subsystem.dealers, subsystem.vbts):
         for _bucket_id, entity in entities.items():
@@ -534,12 +577,36 @@ def _sync_dealer_vbt_cash_to_system(
             subsystem_cash = entity.cash
             delta = subsystem_cash - main_cash
 
-            if delta > 0:
-                system.mint_cash(to_agent_id=agent_id, amount=round(delta))
-            elif delta < 0:
-                burn_amount = round(min(abs(delta), main_cash))
-                if burn_amount > 0:
-                    system.retire_cash(from_agent_id=agent_id, amount=burn_amount)
+            if delta == 0:
+                continue
+
+            # Check if agent has any BANK_DEPOSIT instruments
+            deposit_contract = None
+            for contract_id in agent.asset_ids:
+                contract = system.state.contracts.get(contract_id)
+                if contract and contract.kind == InstrumentKind.BANK_DEPOSIT:
+                    deposit_contract = contract
+                    break
+
+            if deposit_contract is not None:
+                # Banking mode: adjust deposit balance
+                new_amount = deposit_contract.amount + round(delta)
+                if new_amount < 0:
+                    logger.warning(
+                        "Deposit for %s would go negative (%d) during "
+                        "dealer/VBT sync; proceeding but this indicates a bug",
+                        agent_id,
+                        new_amount,
+                    )
+                deposit_contract.amount = new_amount
+            else:
+                # Pure cash mode: mint or retire CB cash
+                if delta > 0:
+                    system.mint_cash(to_agent_id=agent_id, amount=round(delta))
+                elif delta < 0:
+                    burn_amount = round(min(abs(delta), main_cash))
+                    if burn_amount > 0:
+                        system.retire_cash(from_agent_id=agent_id, amount=burn_amount)
 
 
 def _capture_dealer_snapshots(subsystem: DealerSubsystem, current_day: int) -> None:

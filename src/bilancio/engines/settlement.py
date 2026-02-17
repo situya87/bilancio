@@ -480,28 +480,29 @@ def _reconnect_ring(
 
 
 def _distribute_pro_rata_recovery(system: System, agent_id: str) -> None:
-    """Distribute a defaulting agent's remaining cash to creditors proportionally.
+    """Distribute a defaulting agent's remaining liquid assets to creditors proportionally.
 
-    Before liabilities are written off, any cash the agent still holds is
-    divided among all creditors (payable holders and non-bank loan lenders)
-    in proportion to each creditor's outstanding claim.
+    Before liabilities are written off, any cash and bank deposits the agent
+    still holds are divided among all creditors (payable holders and non-bank
+    loan lenders) in proportion to each creditor's outstanding claim.
+    Deposits are used first, then cash for the remainder.
 
     Args:
         system: The System instance
-        agent_id: ID of the defaulting agent whose cash will be distributed
+        agent_id: ID of the defaulting agent whose liquid assets will be distributed
     """
     agent = system.state.agents.get(agent_id)
     if agent is None:
         return
 
-    # Sum all CASH instruments held by the defaulting agent
-    total_cash = 0
+    # Sum all CASH and BANK_DEPOSIT instruments held by the defaulting agent
+    total_liquid = 0
     for cid in agent.asset_ids:
         contract = system.state.contracts.get(cid)
-        if contract is not None and contract.kind == InstrumentKind.CASH:
-            total_cash += contract.amount
+        if contract is not None and contract.kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT):
+            total_liquid += contract.amount
 
-    if total_cash <= 0:
+    if total_liquid <= 0:
         return
 
     # Collect all outstanding liabilities (payables + NonBankLoans)
@@ -520,36 +521,37 @@ def _distribute_pro_rata_recovery(system: System, agent_id: str) -> None:
     if total_claims <= 0:
         return
 
-    # Distribute cash pro-rata to each creditor (round to avoid truncation loss)
+    # Distribute liquid assets pro-rata to each creditor (round to avoid truncation loss)
     recovery_details: list[dict[str, object]] = []
     total_distributed = 0
     for creditor_id, claim_amount in claims:
-        share = round((claim_amount / total_claims) * total_cash)
+        share = round((claim_amount / total_claims) * total_liquid)
         if share <= 0:
             continue
-        try:
-            system.transfer_cash(from_agent_id=agent_id, to_agent_id=creditor_id, amount=share)
-            total_distributed += share
+        transferred = _pay_with_deposits(system, agent_id, creditor_id, share)
+        if transferred < share:
+            try:
+                system.transfer_cash(
+                    from_agent_id=agent_id, to_agent_id=creditor_id, amount=share - transferred
+                )
+                transferred = share
+            except ValidationError:
+                pass  # agent may not have enough cash either
+        if transferred > 0:
+            total_distributed += transferred
             recovery_details.append(
                 {
                     "creditor": creditor_id,
                     "claim": claim_amount,
-                    "recovery": share,
+                    "recovery": transferred,
                 }
-            )
-        except (ValidationError, OSError, RuntimeError, ValueError, TypeError, KeyError):
-            logger.debug(
-                "pro-rata transfer failed: agent=%s creditor=%s share=%d",
-                agent_id,
-                creditor_id,
-                share,
             )
 
     if total_distributed > 0:
         system.log(
             EventKind.PRO_RATA_RECOVERY,
             agent=agent_id,
-            total_cash=total_cash,
+            total_liquid=total_liquid,
             total_claims=total_claims,
             total_distributed=total_distributed,
             num_creditors=len(recovery_details),
@@ -559,7 +561,7 @@ def _distribute_pro_rata_recovery(system: System, agent_id: str) -> None:
             "pro-rata recovery: agent=%s distributed=%d/%d to %d creditors",
             agent_id,
             total_distributed,
-            total_cash,
+            total_liquid,
             len(recovery_details),
         )
 
@@ -1022,7 +1024,11 @@ def _rollover_single_payable(
 
         is_financial_creditor = creditor_id.startswith("vbt_") or creditor_id.startswith("dealer_")
         if not dealer_active or is_financial_creditor:
-            cash_transferred = _pay_with_cash(system, creditor_id, debtor_id, amount)
+            cash_transferred = _pay_with_deposits(system, creditor_id, debtor_id, amount)
+            if cash_transferred < amount:
+                cash_transferred += _pay_with_cash(
+                    system, creditor_id, debtor_id, amount - cash_transferred
+                )
         else:
             cash_transferred = 0
 

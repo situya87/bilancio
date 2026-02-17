@@ -204,6 +204,8 @@ def compile_ring_explorer_balanced(
     rollover_enabled: bool = True,
     lender_share: Decimal = Decimal("0.10"),
     kappa: Decimal | None = None,
+    n_banks: int = 0,
+    reserve_multiplier: float = 10.0,
     *,
     source_path: Path | None = None,
 ) -> dict[str, Any]:
@@ -492,6 +494,53 @@ def compile_ring_explorer_balanced(
                 }
             )
 
+    # --- Banking infrastructure (Plan 038, Step 6) ---
+    bank_assignments: dict[str, str] = {}
+    if n_banks > 0:
+        # 1. Create Bank agents
+        for bank_idx in range(1, n_banks + 1):
+            agents.append({
+                "id": f"bank_{bank_idx}",
+                "kind": "bank",
+                "name": f"Bank {bank_idx}",
+            })
+
+        # 2. Assign all non-bank, non-CB agents to banks (round-robin)
+        non_bank_ids = [
+            a["id"] for a in agents
+            if a["kind"] not in ("central_bank", "bank")
+        ]
+        for idx, agent_id in enumerate(non_bank_ids):
+            bank_assignments[agent_id] = f"bank_{(idx % n_banks) + 1}"
+
+        # 3. After every mint_cash action, add a deposit_cash action
+        deposit_actions: list[dict[str, Any]] = []
+        total_deposited = Decimal(0)
+        for action in initial_actions:
+            if "mint_cash" in action:
+                agent_id = action["mint_cash"]["to"]
+                amount = action["mint_cash"]["amount"]
+                if agent_id in bank_assignments:
+                    deposit_actions.append({
+                        "deposit_cash": {
+                            "customer": agent_id,
+                            "bank": bank_assignments[agent_id],
+                            "amount": amount,
+                        }
+                    })
+                    total_deposited += Decimal(str(amount))
+        initial_actions.extend(deposit_actions)
+
+        # 4. Mint ample reserves to each bank
+        reserves_per_bank = int(reserve_multiplier * float(total_deposited) / n_banks)
+        for bank_idx in range(1, n_banks + 1):
+            initial_actions.append({
+                "mint_reserves": {
+                    "to": f"bank_{bank_idx}",
+                    "amount": reserves_per_bank,
+                }
+            })
+
     scenario_name = _render_scenario_name(config.name_prefix, params)
     scenario_name = f"{scenario_name} [Balanced {mode}]"
     description = _render_description(params)
@@ -533,8 +582,30 @@ def compile_ring_explorer_balanced(
             "mode": mode,
             "rollover_enabled": rollover_enabled,
             "lender_share": float(lender_share),
+            "n_banks": n_banks,
+            "bank_assignments": bank_assignments,
+            "reserve_multiplier": reserve_multiplier,
         },
     }
+
+    if n_banks > 0:
+        # Merge banking mop_rank into existing policy_overrides (don't replace)
+        existing = scenario.get("policy_overrides") or {}
+        if isinstance(existing, dict):
+            existing["mop_rank"] = {
+                "household": ["bank_deposit"],
+                "firm": ["bank_deposit"],
+                "non_bank_lender": ["bank_deposit"],
+            }
+            scenario["policy_overrides"] = existing
+        else:
+            scenario["policy_overrides"] = {
+                "mop_rank": {
+                    "household": ["bank_deposit"],
+                    "firm": ["bank_deposit"],
+                    "non_bank_lender": ["bank_deposit"],
+                }
+            }
 
     if config.compile.emit_yaml:
         _emit_yaml(

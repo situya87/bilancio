@@ -698,6 +698,18 @@ def sweep_comparison(
     default=False,
     help="Enable fourth arm: dealer trading + non-bank lending combined (default: disabled)",
 )
+@click.option(
+    "--n-banks",
+    type=int,
+    default=0,
+    help="Number of banks to add (0 = no banks, default: 0)",
+)
+@click.option(
+    "--reserve-multiplier",
+    type=float,
+    default=10.0,
+    help="Bank reserves = reserve_multiplier * face_value (default: 10.0)",
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -731,6 +743,8 @@ def sweep_balanced(
     enable_lender: bool,
     lender_share: Decimal,
     enable_dealer_lender: bool,
+    n_banks: int,
+    reserve_multiplier: float,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -844,6 +858,8 @@ def sweep_balanced(
         enable_lender=enable_lender,
         lender_share=lender_share,
         enable_dealer_lender=enable_dealer_lender,
+        n_banks=n_banks,
+        reserve_multiplier=reserve_multiplier,
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)
