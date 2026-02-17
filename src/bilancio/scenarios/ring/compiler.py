@@ -428,11 +428,13 @@ def compile_ring_explorer_balanced(
         total_vbt_dealer_liquidity += actual_vbt_face[bucket] * cash_ratio
         total_vbt_dealer_liquidity += actual_dealer_face[bucket] * cash_ratio
 
-    # Cash scaling factor for VBT/Dealer (reduced in nbfi/nbfi_dealer modes)
-    if mode == "nbfi":
-        vbt_dealer_cash_scale = Decimal("0")  # NBFI gets everything
-    elif mode == "nbfi_dealer":
+    # Cash scaling factor for VBT/Dealer (reduced in nbfi/nbfi_dealer/banking modes)
+    if mode in ("nbfi", "banking"):
+        vbt_dealer_cash_scale = Decimal("0")  # NBFI or banks get everything
+    elif mode in ("nbfi_dealer", "bank_dealer"):
         vbt_dealer_cash_scale = Decimal("0.5")  # 50/50 split
+    elif mode == "bank_dealer_nbfi":
+        vbt_dealer_cash_scale = Decimal("1") / Decimal("3")  # Three-way split
     else:
         vbt_dealer_cash_scale = Decimal("1")  # Normal modes
 
@@ -466,8 +468,8 @@ def compile_ring_explorer_balanced(
                 }
             )
 
-    # Add non-bank lender agent and cash (lender/nbfi/nbfi_dealer modes)
-    if mode in ("lender", "nbfi", "nbfi_dealer"):
+    # Add non-bank lender agent and cash (lender/nbfi/nbfi_dealer/bank_dealer_nbfi modes)
+    if mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi"):
         agents.append(
             {
                 "id": "lender",
@@ -481,6 +483,8 @@ def compile_ring_explorer_balanced(
             lender_cash = total_vbt_dealer_liquidity  # 100% of VBT+dealer cash
         elif mode == "nbfi_dealer":
             lender_cash = total_vbt_dealer_liquidity * Decimal("0.5")  # 50% of VBT+dealer cash
+        elif mode == "bank_dealer_nbfi":
+            lender_cash = total_vbt_dealer_liquidity / Decimal("3")  # 33% three-way split
         else:
             lender_cash = Decimal(0)
         if lender_cash > 0:
