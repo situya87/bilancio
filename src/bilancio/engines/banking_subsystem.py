@@ -89,11 +89,11 @@ class BankTreynorState:
         inventory = compute_inventory(reserves, reserve_target)
 
         # Simple cash-tightness: how far below target are we?
+        # Guard: reserve_target is always >= 1 (set in initialize_banking_subsystem)
+        # so the denominator is always positive.
         cash_tightness = Decimal("0")
-        if deposits > 0 and reserves < reserve_target:
-            cash_tightness = Decimal(reserve_target - reserves) / Decimal(
-                max(1, reserve_target)
-            )
+        if reserve_target > 0 and reserves < reserve_target:
+            cash_tightness = Decimal(reserve_target - reserves) / Decimal(reserve_target)
 
         # Compute quote from Treynor kernel
         self.current_quote = compute_quotes(

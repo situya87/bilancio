@@ -18,7 +18,7 @@ from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
 
 if TYPE_CHECKING:
-    from bilancio.engines.banking_subsystem import BankingSubsystem
+    from bilancio.engines.banking_subsystem import BankLoanRecord, BankingSubsystem, BankTreynorState
     from bilancio.engines.system import System
 
 logger = logging.getLogger(__name__)
@@ -257,7 +257,7 @@ def _get_agent_liquidity(system: System, agent_id: str) -> int:
     return total
 
 
-def _bank_can_lend(system: System, bank_state: object, amount: int) -> bool:
+def _bank_can_lend(system: System, bank_state: BankTreynorState, amount: int) -> bool:
     """Check if bank has capacity to lend this amount.
 
     A bank can lend if its projected reserves after the loan
@@ -267,9 +267,8 @@ def _bank_can_lend(system: System, bank_state: object, amount: int) -> bool:
     """
     from bilancio.engines.banking_subsystem import _get_bank_deposits_total, _get_bank_reserves
 
-    bank_id = bank_state.bank_id  # type: ignore[attr-defined]
-    reserves = _get_bank_reserves(system, bank_id)
-    deposits = _get_bank_deposits_total(system, bank_id)
+    reserves = _get_bank_reserves(system, bank_state.bank_id)
+    deposits = _get_bank_deposits_total(system, bank_state.bank_id)
 
     # After loan: deposits increase by amount (new deposit created)
     # Reserves unchanged (no reserve movement in money creation)
@@ -277,8 +276,7 @@ def _bank_can_lend(system: System, bank_state: object, amount: int) -> bool:
     reserve_ratio = Decimal(reserves) / Decimal(max(1, new_deposits))
 
     # Minimum reserve ratio: half the target ratio
-    params = bank_state.pricing_params  # type: ignore[attr-defined]
-    min_ratio = Decimal(params.reserve_target) / Decimal(max(1, new_deposits)) / 2
+    min_ratio = Decimal(bank_state.pricing_params.reserve_target) / Decimal(max(1, new_deposits)) / 2
 
     return reserve_ratio > min_ratio
 
@@ -293,6 +291,11 @@ def _prefer_selling(
 ) -> bool:
     """Compare cost of borrowing vs cost of selling to dealer.
 
+    Borrow cost = shortfall * r_L (interest paid at maturity).
+    Sell cost   = shortfall * (1 - avg_bid) (haircut from face value).
+
+    The average bid is computed from actual dealer quotes when available.
+
     Returns True if selling to dealer is cheaper than borrowing.
     """
     borrow_cost = int(Decimal(shortfall) * r_L)
@@ -302,13 +305,21 @@ def _prefer_selling(
     if dealer_sub is None:
         return False  # No dealer available, must borrow
 
-    # Simple estimate: selling cost = shortfall * (1 - average_bid)
-    # where average_bid is the average dealer bid price
-    avg_bid = Decimal("0.85")  # Conservative estimate
+    # Compute average bid from all dealers that have a current bid price.
+    # Falls back to the outside_mid_ratio from the subsystem config when
+    # no dealer has quoted (day-0 edge case).
+    bid_sum = Decimal("0")
+    bid_count = 0
     for dealer in dealer_sub.dealers.values():
         if hasattr(dealer, "bid") and dealer.bid is not None:
-            avg_bid = dealer.bid
-            break
+            bid_sum += dealer.bid
+            bid_count += 1
+
+    if bid_count > 0:
+        avg_bid = bid_sum / bid_count
+    else:
+        # Use outside_mid_ratio from subsystem config as a reasonable proxy
+        avg_bid = Decimal(str(getattr(dealer_sub, "outside_mid_ratio", "0.85")))
 
     sell_cost = int(Decimal(shortfall) * (Decimal("1") - avg_bid))
 
@@ -318,7 +329,7 @@ def _prefer_selling(
 def _execute_bank_loan(
     system: System,
     banking: BankingSubsystem,
-    bank_state: object,
+    bank_state: BankTreynorState,
     borrower_id: str,
     amount: int,
     rate: Decimal,
@@ -334,9 +345,9 @@ def _execute_bank_loan(
     - No reserve movement.
     """
     from bilancio.domain.instruments.bank_loan import BankLoan as BankLoanInstr
-    from bilancio.engines.banking_subsystem import BankLoanRecord, _get_deposit_at_bank
+    from bilancio.engines.banking_subsystem import BankLoanRecord
 
-    bid = bank_state.bank_id  # type: ignore[attr-defined]
+    bid = bank_state.bank_id
 
     # 1. Create BankLoan instrument
     loan_id = system.new_contract_id(prefix="BL")
@@ -358,8 +369,12 @@ def _execute_bank_loan(
     borrower_agent = system.state.agents.get(borrower_id)
     if bank_agent:
         bank_agent.asset_ids.append(loan_id)
+    else:
+        logger.warning("Bank agent %s not found when issuing loan %s", bid, loan_id)
     if borrower_agent:
         borrower_agent.liability_ids.append(loan_id)
+    else:
+        logger.warning("Borrower agent %s not found when issuing loan %s", borrower_id, loan_id)
 
     # 2. Credit borrower's deposit at the lending bank (money creation)
     _increase_deposit(system, borrower_id, bid, amount)
@@ -374,11 +389,11 @@ def _execute_bank_loan(
         issuance_day=current_day,
         maturity_day=current_day + maturity,
     )
-    bank_state.outstanding_loans[loan_id] = record  # type: ignore[attr-defined]
-    bank_state.total_loan_principal += amount  # type: ignore[attr-defined]
+    bank_state.outstanding_loans[loan_id] = record
+    bank_state.total_loan_principal += amount
 
     # 4. Refresh bank's quote (lending changes balance sheet)
-    bank_state.refresh_quote(system, current_day)  # type: ignore[attr-defined]
+    bank_state.refresh_quote(system, current_day)
 
     system.log(
         "BankLoanIssued",
@@ -459,15 +474,15 @@ def _decrease_deposit(system: System, agent_id: str, bank_id: str, amount: int) 
 def _repay_loan(
     system: System,
     banking: BankingSubsystem,
-    loan: object,
+    loan: BankLoanRecord,
     amount: int,
 ) -> None:
     """Repay a bank loan by debiting borrower deposits.
 
     Tries the lending bank first, then other banks (lowest r_D first).
     """
-    borrower_id = loan.borrower_id  # type: ignore[attr-defined]
-    bank_id = loan.bank_id  # type: ignore[attr-defined]
+    borrower_id = loan.borrower_id
+    bank_id = loan.bank_id
 
     remaining = amount
 
