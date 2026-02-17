@@ -201,7 +201,7 @@ def _get_agent_cash(system: System, agent_id: str) -> Decimal:
     total_cash = Decimal(0)
     for contract_id in agent.asset_ids:
         contract = system.state.contracts.get(contract_id)
-        if contract and contract.kind == InstrumentKind.CASH:
+        if contract and contract.kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT):
             total_cash += Decimal(contract.amount)
 
     return total_cash

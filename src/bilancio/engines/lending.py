@@ -255,7 +255,7 @@ def run_lending_phase(
             effective_maturity = selector.select_maturity()
             if profile is not None and config.max_ring_maturity is not None:
                 effective_maturity = min(profile.max_loan_maturity, config.max_ring_maturity)
-            loan_id = system.nonbank_lend_cash(
+            loan_id = system.nonbank_lend(
                 lender_id=lender_id,
                 borrower_id=opp["borrower_id"],
                 amount=loan_amount,
@@ -339,7 +339,7 @@ def _get_agent_cash(system: System, agent_id: str) -> int:
         return 0
     for cid in agent.asset_ids:
         contract = system.state.contracts.get(cid)
-        if contract is not None and contract.kind == InstrumentKind.CASH:
+        if contract is not None and contract.kind in (InstrumentKind.CASH, InstrumentKind.BANK_DEPOSIT):
             total += contract.amount
     return total
 

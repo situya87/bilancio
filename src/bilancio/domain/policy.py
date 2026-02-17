@@ -48,6 +48,7 @@ class PolicyEngine:
                     Firm,
                     Treasury,
                     Bank,
+                    NonBankLender,
                 ),  # banks may hold but not for interbank settlement
                 ReserveDeposit: (Bank, Treasury),
                 CBLoan: (CentralBank,),  # CB holds loans as assets
