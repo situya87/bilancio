@@ -280,6 +280,48 @@ def apply_action(system: System, action_dict: dict[str, Any], agents: dict[str, 
                 alias=action.alias,
             )
 
+        elif action_type == "create_cb_loan":
+            from bilancio.domain.instruments.cb_loan import CBLoan
+
+            # Find central bank agent
+            cb_id = None
+            for aid, ag in agents.items():
+                if ag.kind == AgentKind.CENTRAL_BANK:
+                    cb_id = aid
+                    break
+            if cb_id is None:
+                raise ValueError("No central bank found for create_cb_loan")
+
+            loan = CBLoan(
+                id=system.new_contract_id("CBL"),
+                kind=InstrumentKind.CB_LOAN,
+                amount=int(action.amount),
+                denom="X",
+                asset_holder_id=cb_id,
+                liability_issuer_id=action.bank,
+                cb_rate=action.rate,
+                issuance_day=action.issuance_day,
+            )
+            system.add_contract(loan)
+
+            # Optional alias capture
+            _alias = action.alias
+            if _alias is not None:
+                if _alias in system.state.aliases:
+                    raise ValueError(f"Alias already exists: {_alias}")
+                system.state.aliases[_alias] = loan.id
+
+            # Log the event
+            system.log(
+                "CBLoanCreated",
+                bank=action.bank,
+                amount=int(action.amount),
+                rate=str(action.rate),
+                issuance_day=action.issuance_day,
+                loan_id=loan.id,
+                alias=action.alias,
+            )
+
         elif action_type == "transfer_claim":
             # Transfer claim (reassign asset holder) by alias or id (order-independent validation)
             data = action

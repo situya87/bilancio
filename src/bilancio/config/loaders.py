@@ -83,6 +83,11 @@ def parse_action(action_dict: dict[str, Any]) -> Action:
         data = action_dict["create_payable"]
         # The model handles aliases automatically via pydantic
         return CreatePayable(**data)
+    elif "create_cb_loan" in action_dict:
+        data = action_dict["create_cb_loan"]
+        from .models import CreateCBLoan
+
+        return CreateCBLoan(**data)
     elif "transfer_claim" in action_dict:
         data = action_dict["transfer_claim"]
         from .models import TransferClaim

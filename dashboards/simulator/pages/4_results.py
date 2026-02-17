@@ -72,6 +72,8 @@ def _build_export_yaml(state) -> dict:
         "run": {
             "max_days": state.sim_config.get("max_days", 30),
             "quiet_days": 2,
+            "default_handling": state.sim_config.get("default_handling", "expel-agent"),
+            "rollover": state.sim_config.get("rollover", False),
         },
     }
 
@@ -110,9 +112,8 @@ if st.button("▶️ Run Simulation", type="primary", use_container_width=True):
     progress = st.progress(0, text="Running simulation...")
 
     for day in range(max_days):
-        # Track contracts before to detect settlements
-        contracts_before = set(system.state.contracts.keys())
-        defaulted_before = set(already_defaulted)
+        # system.state.day == day at this point (both start at 0)
+        sim_day = system.state.day
 
         try:
             run_day(
@@ -128,18 +129,21 @@ if st.button("▶️ Run Simulation", type="primary", use_container_width=True):
         # Capture snapshot after the day
         snapshots.append(capture_snapshot(system))
 
-        # Detect what changed (simple event tracking)
-        contracts_after = set(system.state.contracts.keys())
-        settled = contracts_before - contracts_after
+        # Collect events from the simulation's event log for this day
         day_events = []
-        for cid in sorted(settled):
-            day_events.append({"type": "settled", "instrument": cid})
-
-        # [P1 fix] Only report NEW defaults (agents that weren't already defaulted)
-        for aid, agent in system.state.agents.items():
-            if getattr(agent, "defaulted", False) and aid not in already_defaulted:
-                day_events.append({"type": "default", "agent": aid})
-                already_defaulted.add(aid)
+        for evt in system.state.events_by_day.get(sim_day, []):
+            kind = evt.get("kind", "")
+            if kind == "PayableSettled":
+                cid = evt.get("contract_id", "")
+                day_events.append({"type": "settled", "instrument": cid})
+            elif kind == "ObligationWrittenOff":
+                cid = evt.get("contract_id", "")
+                day_events.append({"type": "written_off", "instrument": cid})
+            elif kind == "AgentDefaulted":
+                aid = evt.get("agent", "")
+                if aid and aid not in already_defaulted:
+                    day_events.append({"type": "default", "agent": aid})
+                    already_defaulted.add(aid)
 
         events_by_day[day + 1] = day_events
         defaults_by_day[day + 1] = len(already_defaulted)
@@ -206,6 +210,8 @@ if day > 0:
             for evt in events:
                 if evt["type"] == "settled":
                     st.markdown(f"- ✅ Settled: `{evt['instrument']}`")
+                elif evt["type"] == "written_off":
+                    st.markdown(f"- ⚠️ Written off: `{evt['instrument']}`")
                 elif evt["type"] == "default":
                     st.markdown(f"- ❌ Default: **{evt['agent']}**")
                 else:

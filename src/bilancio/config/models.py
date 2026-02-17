@@ -352,7 +352,24 @@ class CreatePayable(BaseModel):
         return v
 
 
-# Union type for all actions
+class CreateCBLoan(BaseModel):
+    """Action to create a central bank loan to a bank."""
+
+    action: Literal["create_cb_loan"] = "create_cb_loan"
+    bank: str = Field(..., description="Bank ID (borrower)")
+    amount: Decimal = Field(..., description="Loan amount")
+    rate: Decimal = Field(default=Decimal("0.03"), description="Interest rate")
+    issuance_day: int = Field(default=0, description="Day of issuance")
+    alias: str | None = Field(None, description="Optional alias")
+
+    @field_validator("amount")
+    @classmethod
+    def amount_positive(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("Amount must be positive")
+        return v
+
+
 class TransferClaim(BaseModel):
     """Action to transfer (assign) a claim to a new creditor.
 
@@ -407,6 +424,7 @@ Action = (
     | TransferStock
     | CreateDeliveryObligation
     | CreatePayable
+    | CreateCBLoan
     | TransferClaim
 )
 
