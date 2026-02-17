@@ -25,6 +25,35 @@ from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.domain.agent import AgentKind
 
 
+def _compute_corridor_spreads(
+    banking_sub: object,
+    bucket_configs: list,
+) -> dict[str, Decimal]:
+    """Derive VBT base spreads from corridor width when banking is active.
+
+    O_bucket = Omega * tau_avg_bucket
+
+    Falls back to hardcoded spreads if banking subsystem is not available.
+    """
+    from decimal import Decimal as D
+
+    try:
+        omega = banking_sub.bank_profile.corridor_width(banking_sub.kappa)  # type: ignore[attr-defined]
+    except (AttributeError, TypeError):
+        return {}
+
+    spreads = {}
+    for bc in bucket_configs:
+        # Estimate average tau for this bucket
+        tau_min = bc.get("tau_min", 1) if isinstance(bc, dict) else getattr(bc, "tau_min", 1)
+        tau_max = bc.get("tau_max", tau_min) if isinstance(bc, dict) else getattr(bc, "tau_max", tau_min)
+        tau_avg = D(str((tau_min + tau_max) / 2))
+        bucket_id = bc.get("bucket_id", "") if isinstance(bc, dict) else getattr(bc, "bucket_id", "")
+        spreads[bucket_id] = omega * tau_avg
+
+    return spreads
+
+
 def _ensure_dealer_vbt_agents(system: System, bucket_configs: list[BucketConfig]) -> None:
     """Create dealer and VBT agents in the main system if they don't exist.
 
@@ -342,6 +371,21 @@ def _initialize_balanced_market_makers(
         "mid": Decimal("0.08"),
         "long": Decimal("0.12"),
     }
+
+    # Override with corridor-derived spreads if banking subsystem is active
+    banking_sub = getattr(system.state, "banking_subsystem", None)
+    if banking_sub is not None:
+        try:
+            omega = banking_sub.bank_profile.corridor_width(banking_sub.kappa)
+            # Derive: O_bucket = omega * tau_avg_bucket
+            BUCKET_TAU_AVG = {"short": Decimal("2"), "mid": Decimal("6"), "long": Decimal("12")}
+            for bucket_name, tau_avg in BUCKET_TAU_AVG.items():
+                if bucket_name in BASE_SPREAD_BY_BUCKET:
+                    derived = omega * tau_avg
+                    if derived > Decimal("0"):
+                        BASE_SPREAD_BY_BUCKET[bucket_name] = derived
+        except (AttributeError, TypeError):
+            pass  # Fall back to hardcoded spreads
 
     # VBT mid = pure credit discount: M = 1 - P_prior
     credit_adjusted_mid = Decimal(1) - shared_prior

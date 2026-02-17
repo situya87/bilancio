@@ -2,6 +2,7 @@
 
 import sys
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -212,6 +213,52 @@ def run_scenario(
     enable_rating = (
         hasattr(system.state, "rating_config") and system.state.rating_config is not None
     )
+    enable_banking = (
+        hasattr(system.state, "banking_subsystem") and system.state.banking_subsystem is not None
+    )
+
+    # Initialize banking subsystem if banks exist but subsystem not yet initialized
+    if not enable_banking:
+        import yaml as _yaml
+
+        with open(path) as _f:
+            raw_scenario = _yaml.safe_load(_f)
+        _balanced_cfg = raw_scenario.get("_balanced_config", {}) if raw_scenario else {}
+        _n_banks = _balanced_cfg.get("n_banks", 0)
+        _run_cfg = raw_scenario.get("run", {}) if raw_scenario else {}
+        _enable_banking_flag = _run_cfg.get("enable_banking", False)
+
+        if (_enable_banking_flag or _n_banks > 0) and _n_banks > 0:
+            from bilancio.decision.profiles import BankProfile
+            from bilancio.engines.banking_subsystem import initialize_banking_subsystem
+
+            bank_profile = BankProfile()  # Use defaults
+            # Get kappa from balanced_dealer config or _balanced_config
+            _kappa_str = (
+                raw_scenario.get("balanced_dealer", {}).get("kappa")
+                or _balanced_cfg.get("kappa")
+                or "1"
+            )
+            _kappa_val = Decimal(str(_kappa_str))
+            _maturity_days = raw_scenario.get("run", {}).get("max_days", 10)
+            # Use maturity from the scenario params if available
+            if "params" in raw_scenario:
+                _maturity_days = raw_scenario["params"].get("maturity", {}).get(
+                    "days", _maturity_days
+                )
+            _trader_banks = _balanced_cfg.get("trader_bank_assignments", {})
+            _infra_banks = _balanced_cfg.get("infra_bank_assignments", {})
+
+            banking_sub = initialize_banking_subsystem(
+                system,
+                bank_profile,
+                _kappa_val,
+                _maturity_days,
+                trader_banks=_trader_banks,
+                infra_banks=_infra_banks,
+            )
+            system.state.banking_subsystem = banking_sub
+            enable_banking = True
 
     if mode == "step":
         days_data = run_step_mode(
@@ -225,6 +272,7 @@ def run_scenario(
             enable_dealer=enable_dealer,
             enable_lender=enable_lender,
             enable_rating=enable_rating,
+            enable_banking=enable_banking,
         )
     else:
         days_data = run_until_stable_mode(
@@ -239,6 +287,7 @@ def run_scenario(
             enable_dealer=enable_dealer,
             enable_lender=enable_lender,
             enable_rating=enable_rating,
+            enable_banking=enable_banking,
             progress_callback=progress_callback,
         )
 
@@ -370,6 +419,7 @@ def run_step_mode(
     enable_dealer: bool = False,
     enable_lender: bool = False,
     enable_rating: bool = False,
+    enable_banking: bool = False,
 ) -> list[dict[str, Any]]:
     """Run simulation in step-by-step mode.
 
@@ -383,6 +433,7 @@ def run_step_mode(
         enable_dealer: If True, run dealer trading phase each day
         enable_lender: If True, run lender phase each day
         enable_rating: If True, run rating agency phase each day
+        enable_banking: If True, run banking subphases each day
 
     Returns:
         List of day data dictionaries
@@ -406,6 +457,7 @@ def run_step_mode(
                 enable_dealer=enable_dealer,
                 enable_lender=enable_lender,
                 enable_rating=enable_rating,
+                enable_banking=enable_banking,
             )
             from bilancio.engines.simulation import (
                 DayReport,
@@ -559,6 +611,7 @@ def run_until_stable_mode(
     enable_dealer: bool = False,
     enable_lender: bool = False,
     enable_rating: bool = False,
+    enable_banking: bool = False,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Run simulation until stable state is reached.
@@ -574,6 +627,7 @@ def run_until_stable_mode(
         enable_dealer: If True, run dealer trading phase each day
         enable_lender: If True, run lender phase each day
         enable_rating: If True, run rating agency phase each day
+        enable_banking: If True, run banking subphases each day
         progress_callback: Optional callback(current_day, max_days) for progress tracking
 
     Returns:
@@ -607,6 +661,7 @@ def run_until_stable_mode(
                 enable_dealer=enable_dealer,
                 enable_lender=enable_lender,
                 enable_rating=enable_rating,
+                enable_banking=enable_banking,
             )
             impacted = _impacted_today(system, day_before)
             defaults = _defaults_today(system, day_before)

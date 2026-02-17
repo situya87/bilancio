@@ -158,3 +158,82 @@ class LenderProfile:
     def risk_premium_scale(self) -> Decimal:
         """Higher risk aversion -> higher premium: 0.1 + 0.4 * risk_aversion."""
         return Decimal("0.1") + self.risk_aversion * Decimal("0.4")
+
+
+@dataclass(frozen=True)
+class BankProfile:
+    """Treynor pricing parameters for active banks in the Kalecki ring.
+
+    The CB corridor is derived from kappa (system liquidity ratio).
+    Banks price inside this corridor using the Treynor pricing kernel.
+
+    Attributes:
+        r_base: Base corridor midpoint when kappa >= 1 (no stress)
+        r_stress: Stress sensitivity — how much mid rises as kappa falls
+        omega_base: Base corridor width when kappa >= 1
+        omega_stress: Stress sensitivity for corridor width
+        reserve_target_ratio: Target reserves as fraction of total deposits
+        symmetric_capacity_ratio: X* as multiple of reserve target
+        alpha: Sensitivity of midline to cash-tightness L*
+        gamma: Sensitivity of midline to risk index rho
+        loan_maturity_fraction: Bank loan maturity = maturity_days * this
+        interest_period: Days per deposit interest accrual period
+    """
+
+    # CB corridor base parameters
+    r_base: Decimal = Decimal("0.01")
+    r_stress: Decimal = Decimal("0.04")
+    omega_base: Decimal = Decimal("0.01")
+    omega_stress: Decimal = Decimal("0.02")
+
+    # Treynor kernel parameters
+    reserve_target_ratio: Decimal = Decimal("0.10")
+    symmetric_capacity_ratio: Decimal = Decimal("2.0")
+    alpha: Decimal = Decimal("0.005")
+    gamma: Decimal = Decimal("0.002")
+
+    # Loan and interest parameters
+    loan_maturity_fraction: Decimal = Decimal("0.5")
+    interest_period: int = 2
+
+    def __post_init__(self) -> None:
+        if self.r_base < Decimal("0"):
+            raise ValueError("r_base must be non-negative")
+        if self.r_stress < Decimal("0"):
+            raise ValueError("r_stress must be non-negative")
+        if self.omega_base < Decimal("0"):
+            raise ValueError("omega_base must be non-negative")
+        if self.omega_stress < Decimal("0"):
+            raise ValueError("omega_stress must be non-negative")
+        if not (Decimal("0") < self.reserve_target_ratio <= Decimal("1")):
+            raise ValueError("reserve_target_ratio must be in (0, 1]")
+        if self.symmetric_capacity_ratio <= Decimal("0"):
+            raise ValueError("symmetric_capacity_ratio must be positive")
+        if not (1 <= self.interest_period <= 10):
+            raise ValueError("interest_period must be between 1 and 10")
+        if not (Decimal("0") < self.loan_maturity_fraction <= Decimal("1")):
+            raise ValueError("loan_maturity_fraction must be in (0, 1]")
+
+    def _stress_factor(self, kappa: Decimal) -> Decimal:
+        """Common stress factor: max(0, 1-kappa) / (1+kappa)."""
+        return max(Decimal("0"), Decimal("1") - kappa) / (Decimal("1") + kappa)
+
+    def corridor_mid(self, kappa: Decimal) -> Decimal:
+        """r_mid = r_base + r_stress * max(0, 1-kappa) / (1+kappa)."""
+        return self.r_base + self.r_stress * self._stress_factor(kappa)
+
+    def corridor_width(self, kappa: Decimal) -> Decimal:
+        """Omega = omega_base + omega_stress * max(0, 1-kappa) / (1+kappa)."""
+        return self.omega_base + self.omega_stress * self._stress_factor(kappa)
+
+    def r_floor(self, kappa: Decimal) -> Decimal:
+        """Reserve remuneration rate (CB floor)."""
+        return self.corridor_mid(kappa) - self.corridor_width(kappa) / 2
+
+    def r_ceiling(self, kappa: Decimal) -> Decimal:
+        """CB lending rate (corridor ceiling)."""
+        return self.corridor_mid(kappa) + self.corridor_width(kappa) / 2
+
+    def loan_maturity(self, maturity_days: int) -> int:
+        """Bank loan maturity in days."""
+        return max(2, int(maturity_days * self.loan_maturity_fraction))
