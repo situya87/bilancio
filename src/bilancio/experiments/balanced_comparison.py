@@ -134,6 +134,33 @@ class BalancedComparisonResult:
     cascade_fraction_dealer_lender: Decimal | None = None
     dealer_lender_modal_call_id: str | None = None
 
+    # G (Bank+Passive) metrics
+    delta_bank_passive: Decimal | None = None
+    phi_bank_passive: Decimal | None = None
+    bank_passive_run_id: str = ""
+    bank_passive_status: str = ""
+    n_defaults_bank_passive: int = 0
+    cascade_fraction_bank_passive: Decimal | None = None
+    bank_passive_modal_call_id: str | None = None
+
+    # H (Bank+Dealer) metrics
+    delta_bank_dealer: Decimal | None = None
+    phi_bank_dealer: Decimal | None = None
+    bank_dealer_run_id: str = ""
+    bank_dealer_status: str = ""
+    n_defaults_bank_dealer: int = 0
+    cascade_fraction_bank_dealer: Decimal | None = None
+    bank_dealer_modal_call_id: str | None = None
+
+    # I (Bank+Dealer+NBFI) metrics
+    delta_bank_dealer_nbfi: Decimal | None = None
+    phi_bank_dealer_nbfi: Decimal | None = None
+    bank_dealer_nbfi_run_id: str = ""
+    bank_dealer_nbfi_status: str = ""
+    n_defaults_bank_dealer_nbfi: int = 0
+    cascade_fraction_bank_dealer_nbfi: Decimal | None = None
+    bank_dealer_nbfi_modal_call_id: str | None = None
+
     @staticmethod
     def _compute_incremental_pnl(
         active_metrics: dict[str, Any] | None,
@@ -200,6 +227,27 @@ class BalancedComparisonResult:
         if self.delta_passive is None or self.delta_dealer_lender is None:
             return None
         return self.delta_passive - self.delta_dealer_lender
+
+    @property
+    def bank_passive_effect(self) -> Decimal | None:
+        """Effect of bank lending = delta_passive - delta_bank_passive."""
+        if self.delta_passive is None or self.delta_bank_passive is None:
+            return None
+        return self.delta_passive - self.delta_bank_passive
+
+    @property
+    def bank_dealer_effect(self) -> Decimal | None:
+        """Effect of banks + dealer = delta_passive - delta_bank_dealer."""
+        if self.delta_passive is None or self.delta_bank_dealer is None:
+            return None
+        return self.delta_passive - self.delta_bank_dealer
+
+    @property
+    def bank_dealer_nbfi_effect(self) -> Decimal | None:
+        """Effect of banks + dealer + NBFI = delta_passive - delta_bank_dealer_nbfi."""
+        if self.delta_passive is None or self.delta_bank_dealer_nbfi is None:
+            return None
+        return self.delta_passive - self.delta_bank_dealer_nbfi
 
 
 class BalancedComparisonConfig(BaseModel):
@@ -334,6 +382,23 @@ class BalancedComparisonConfig(BaseModel):
     enable_dealer_lender: bool = Field(
         default=False, description="Enable fourth arm: dealer trading + non-bank lending combined"
     )
+
+    # Banking arm parameters (Plan 039)
+    enable_bank_passive: bool = Field(
+        default=False, description="Enable arm: banks + passive dealer"
+    )
+    enable_bank_dealer: bool = Field(
+        default=False, description="Enable arm: banks + active dealer"
+    )
+    enable_bank_dealer_nbfi: bool = Field(
+        default=False, description="Enable arm: banks + active dealer + NBFI"
+    )
+    n_banks_for_banking: int = Field(
+        default=3, description="Number of banks in banking arms"
+    )
+    bank_reserve_multiplier: float = Field(
+        default=0.12, description="Reserve multiplier for banking arms (calibrated for fair comparison)"
+    )
     lender_share: Decimal = Field(
         default=Decimal("0.10"), description="Lender capital as fraction of system cash"
     )
@@ -424,6 +489,27 @@ class BalancedComparisonRunner:
         "dealer_lender_status",
         "n_defaults_dealer_lender",
         "cascade_fraction_dealer_lender",
+        "delta_bank_passive",
+        "bank_passive_effect",
+        "phi_bank_passive",
+        "bank_passive_run_id",
+        "bank_passive_status",
+        "n_defaults_bank_passive",
+        "cascade_fraction_bank_passive",
+        "delta_bank_dealer",
+        "bank_dealer_effect",
+        "phi_bank_dealer",
+        "bank_dealer_run_id",
+        "bank_dealer_status",
+        "n_defaults_bank_dealer",
+        "cascade_fraction_bank_dealer",
+        "delta_bank_dealer_nbfi",
+        "bank_dealer_nbfi_effect",
+        "phi_bank_dealer_nbfi",
+        "bank_dealer_nbfi_run_id",
+        "bank_dealer_nbfi_status",
+        "n_defaults_bank_dealer_nbfi",
+        "cascade_fraction_bank_dealer_nbfi",
     ]
 
     def __init__(
@@ -448,6 +534,9 @@ class BalancedComparisonRunner:
         self.active_dir = self.base_dir / "active"
         self.lender_dir = self.base_dir / "nbfi"
         self.dealer_lender_dir = self.base_dir / "dealer_lender"
+        self.bank_passive_dir = self.base_dir / "bank_passive"
+        self.bank_dealer_dir = self.base_dir / "bank_dealer"
+        self.bank_dealer_nbfi_dir = self.base_dir / "bank_dealer_nbfi"
         self.aggregate_dir = self.base_dir / "aggregate"
 
         # Only create local directories if we're doing local processing
@@ -458,6 +547,12 @@ class BalancedComparisonRunner:
                 self.lender_dir.mkdir(parents=True, exist_ok=True)
             if config.enable_dealer_lender:
                 self.dealer_lender_dir.mkdir(parents=True, exist_ok=True)
+            if config.enable_bank_passive:
+                self.bank_passive_dir.mkdir(parents=True, exist_ok=True)
+            if config.enable_bank_dealer:
+                self.bank_dealer_dir.mkdir(parents=True, exist_ok=True)
+            if config.enable_bank_dealer_nbfi:
+                self.bank_dealer_nbfi_dir.mkdir(parents=True, exist_ok=True)
             self.aggregate_dir.mkdir(parents=True, exist_ok=True)
 
         self.comparison_results: list[BalancedComparisonResult] = []
@@ -797,6 +892,147 @@ class BalancedComparisonRunner:
             reserve_multiplier=self.config.reserve_multiplier,
         )
 
+    def _get_bank_passive_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+        """Banks + passive dealer: banks lend, dealer holds but doesn't trade."""
+        return RingSweepRunner(
+            out_dir=self.base_dir / "bank_passive",
+            name_prefix=f"{self.config.name_prefix} (Bank+Passive)",
+            n_agents=self.config.n_agents,
+            maturity_days=self.config.maturity_days,
+            Q_total=self.config.Q_total,
+            liquidity_mode=self.config.liquidity_mode,
+            liquidity_agent=None,
+            base_seed=self.config.base_seed,
+            default_handling=self.config.default_handling,
+            dealer_enabled=False,  # No dealer trading
+            dealer_config=None,
+            balanced_mode=True,
+            face_value=self.config.face_value,
+            outside_mid_ratio=outside_mid_ratio,
+            big_entity_share=self.config.big_entity_share,
+            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
+            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            rollover_enabled=self.config.rollover_enabled,
+            detailed_dealer_logging=self.config.detailed_logging,
+            executor=self.executor,
+            quiet=self.config.quiet,
+            risk_assessment_enabled=self.config.risk_assessment_enabled,
+            risk_assessment_config=self.config.risk_assessment_config
+            if self.config.risk_assessment_enabled
+            else None,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            trading_motive=self.config.trading_motive,
+            lender_mode=False,
+            balanced_mode_override="banking",  # VBT/Dealer cash=0, banks replace
+            n_banks=self.config.n_banks_for_banking,
+            reserve_multiplier=self.config.bank_reserve_multiplier,
+        )
+
+    def _get_bank_dealer_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+        """Banks + active dealer: banks lend, dealer trades (50/50 liquidity split)."""
+        dealer_config = {
+            "ticket_size": int(self.config.face_value),
+            "dealer_share": str(Decimal("0")),
+            "vbt_share": str(self.config.vbt_share),
+        }
+        return RingSweepRunner(
+            out_dir=self.base_dir / "bank_dealer",
+            name_prefix=f"{self.config.name_prefix} (Bank+Dealer)",
+            n_agents=self.config.n_agents,
+            maturity_days=self.config.maturity_days,
+            Q_total=self.config.Q_total,
+            liquidity_mode=self.config.liquidity_mode,
+            liquidity_agent=None,
+            base_seed=self.config.base_seed,
+            default_handling=self.config.default_handling,
+            dealer_enabled=True,  # Dealer trading ON
+            dealer_config=dealer_config,
+            balanced_mode=True,
+            face_value=self.config.face_value,
+            outside_mid_ratio=outside_mid_ratio,
+            big_entity_share=self.config.big_entity_share,
+            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
+            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            rollover_enabled=self.config.rollover_enabled,
+            detailed_dealer_logging=self.config.detailed_logging,
+            executor=self.executor,
+            quiet=self.config.quiet,
+            risk_assessment_enabled=self.config.risk_assessment_enabled,
+            risk_assessment_config=self.config.risk_assessment_config
+            if self.config.risk_assessment_enabled
+            else None,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            trading_motive=self.config.trading_motive,
+            lender_mode=False,
+            balanced_mode_override="bank_dealer",
+            n_banks=self.config.n_banks_for_banking,
+            reserve_multiplier=self.config.bank_reserve_multiplier,
+        )
+
+    def _get_bank_dealer_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+        """Banks + active dealer + NBFI: three-way split."""
+        dealer_config = {
+            "ticket_size": int(self.config.face_value),
+            "dealer_share": str(Decimal("0")),
+            "vbt_share": str(self.config.vbt_share),
+        }
+        return RingSweepRunner(
+            out_dir=self.base_dir / "bank_dealer_nbfi",
+            name_prefix=f"{self.config.name_prefix} (Bank+Dealer+NBFI)",
+            n_agents=self.config.n_agents,
+            maturity_days=self.config.maturity_days,
+            Q_total=self.config.Q_total,
+            liquidity_mode=self.config.liquidity_mode,
+            liquidity_agent=None,
+            base_seed=self.config.base_seed,
+            default_handling=self.config.default_handling,
+            dealer_enabled=True,  # Dealer trading ON
+            dealer_config=dealer_config,
+            balanced_mode=True,
+            face_value=self.config.face_value,
+            outside_mid_ratio=outside_mid_ratio,
+            big_entity_share=self.config.big_entity_share,
+            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
+            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            rollover_enabled=self.config.rollover_enabled,
+            detailed_dealer_logging=self.config.detailed_logging,
+            executor=self.executor,
+            quiet=self.config.quiet,
+            risk_assessment_enabled=self.config.risk_assessment_enabled,
+            risk_assessment_config=self.config.risk_assessment_config
+            if self.config.risk_assessment_enabled
+            else None,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            trading_motive=self.config.trading_motive,
+            # Combined mode: both dealer and lender enabled, with banks
+            lender_mode=True,
+            lender_share=self.config.lender_share,
+            balanced_mode_override="bank_dealer_nbfi",
+            n_banks=self.config.n_banks_for_banking,
+            reserve_multiplier=self.config.bank_reserve_multiplier,
+        )
+
     def run_all(self) -> list[BalancedComparisonResult]:
         """Execute all passive/active pairs and return comparison results.
 
@@ -811,8 +1047,14 @@ class BalancedComparisonRunner:
 
     def _run_all_batch(self) -> list[BalancedComparisonResult]:
         """Execute all pairs using batch execution (parallel on Modal)."""
-        # Lender/dealer+lender arms not yet optimized for batch - fall back to sequential
-        if self.config.enable_lender or self.config.enable_dealer_lender:
+        # Lender/dealer+lender/banking arms not yet optimized for batch - fall back to sequential
+        if (
+            self.config.enable_lender
+            or self.config.enable_dealer_lender
+            or self.config.enable_bank_passive
+            or self.config.enable_bank_dealer
+            or self.config.enable_bank_dealer_nbfi
+        ):
             return self._run_all_sequential()
 
         total_pairs = (
@@ -1277,6 +1519,87 @@ class BalancedComparisonRunner:
                 "dealer_lender_modal_call_id": dl_result.modal_call_id,
             }
 
+        # Run bank+passive (optional — banking arm E)
+        bank_passive_data: dict[str, Any] = {}
+        if self.config.enable_bank_passive:
+            logger.info("  Running Bank+Passive...")
+            print("  Bank+Passive run:", flush=True)
+            bp_runner = self._get_bank_passive_runner(outside_mid_ratio)
+            bp_result = bp_runner._execute_run(
+                phase="balanced_bank_passive",
+                kappa=kappa,
+                concentration=concentration,
+                mu=mu,
+                monotonicity=monotonicity,
+                seed=seed,
+                progress_callback=self._make_progress_callback("bank+passive"),
+            )
+            bank_passive_data = {
+                "delta_bank_passive": bp_result.delta_total,
+                "phi_bank_passive": bp_result.phi_total,
+                "bank_passive_run_id": bp_result.run_id,
+                "bank_passive_status": "completed"
+                if bp_result.delta_total is not None
+                else "failed",
+                "n_defaults_bank_passive": bp_result.n_defaults,
+                "cascade_fraction_bank_passive": bp_result.cascade_fraction,
+                "bank_passive_modal_call_id": bp_result.modal_call_id,
+            }
+
+        # Run bank+dealer (optional — banking arm F)
+        bank_dealer_data: dict[str, Any] = {}
+        if self.config.enable_bank_dealer:
+            logger.info("  Running Bank+Dealer...")
+            print("  Bank+Dealer run:", flush=True)
+            bd_runner = self._get_bank_dealer_runner(outside_mid_ratio)
+            bd_result = bd_runner._execute_run(
+                phase="balanced_bank_dealer",
+                kappa=kappa,
+                concentration=concentration,
+                mu=mu,
+                monotonicity=monotonicity,
+                seed=seed,
+                progress_callback=self._make_progress_callback("bank+dealer"),
+            )
+            bank_dealer_data = {
+                "delta_bank_dealer": bd_result.delta_total,
+                "phi_bank_dealer": bd_result.phi_total,
+                "bank_dealer_run_id": bd_result.run_id,
+                "bank_dealer_status": "completed"
+                if bd_result.delta_total is not None
+                else "failed",
+                "n_defaults_bank_dealer": bd_result.n_defaults,
+                "cascade_fraction_bank_dealer": bd_result.cascade_fraction,
+                "bank_dealer_modal_call_id": bd_result.modal_call_id,
+            }
+
+        # Run bank+dealer+nbfi (optional — banking arm G)
+        bank_dealer_nbfi_data: dict[str, Any] = {}
+        if self.config.enable_bank_dealer_nbfi:
+            logger.info("  Running Bank+Dealer+NBFI...")
+            print("  Bank+Dealer+NBFI run:", flush=True)
+            bdn_runner = self._get_bank_dealer_nbfi_runner(outside_mid_ratio)
+            bdn_result = bdn_runner._execute_run(
+                phase="balanced_bank_dealer_nbfi",
+                kappa=kappa,
+                concentration=concentration,
+                mu=mu,
+                monotonicity=monotonicity,
+                seed=seed,
+                progress_callback=self._make_progress_callback("bank+dealer+nbfi"),
+            )
+            bank_dealer_nbfi_data = {
+                "delta_bank_dealer_nbfi": bdn_result.delta_total,
+                "phi_bank_dealer_nbfi": bdn_result.phi_total,
+                "bank_dealer_nbfi_run_id": bdn_result.run_id,
+                "bank_dealer_nbfi_status": "completed"
+                if bdn_result.delta_total is not None
+                else "failed",
+                "n_defaults_bank_dealer_nbfi": bdn_result.n_defaults,
+                "cascade_fraction_bank_dealer_nbfi": bdn_result.cascade_fraction,
+                "bank_dealer_nbfi_modal_call_id": bdn_result.modal_call_id,
+            }
+
         result = BalancedComparisonResult(
             kappa=kappa,
             concentration=concentration,
@@ -1321,6 +1644,9 @@ class BalancedComparisonRunner:
             ),
             **lender_result_data,
             **dealer_lender_data,
+            **bank_passive_data,
+            **bank_dealer_data,
+            **bank_dealer_nbfi_data,
         )
 
         # Log comparison
@@ -1349,6 +1675,18 @@ class BalancedComparisonRunner:
         if self.config.enable_dealer_lender and dealer_lender_data.get("dealer_lender_run_id"):
             self._persist_run_to_supabase(
                 dl_result, "dealer_lender", kappa, concentration, mu, outside_mid_ratio, seed
+            )
+        if self.config.enable_bank_passive and bank_passive_data.get("bank_passive_run_id"):
+            self._persist_run_to_supabase(
+                bp_result, "bank_passive", kappa, concentration, mu, outside_mid_ratio, seed
+            )
+        if self.config.enable_bank_dealer and bank_dealer_data.get("bank_dealer_run_id"):
+            self._persist_run_to_supabase(
+                bd_result, "bank_dealer", kappa, concentration, mu, outside_mid_ratio, seed
+            )
+        if self.config.enable_bank_dealer_nbfi and bank_dealer_nbfi_data.get("bank_dealer_nbfi_run_id"):
+            self._persist_run_to_supabase(
+                bdn_result, "bank_dealer_nbfi", kappa, concentration, mu, outside_mid_ratio, seed
             )
 
         return result
@@ -1546,6 +1884,51 @@ class BalancedComparisonRunner:
                     "n_defaults_dealer_lender": str(result.n_defaults_dealer_lender),
                     "cascade_fraction_dealer_lender": str(result.cascade_fraction_dealer_lender)
                     if result.cascade_fraction_dealer_lender is not None
+                    else "",
+                    "delta_bank_passive": str(result.delta_bank_passive)
+                    if result.delta_bank_passive is not None
+                    else "",
+                    "bank_passive_effect": str(result.bank_passive_effect)
+                    if result.bank_passive_effect is not None
+                    else "",
+                    "phi_bank_passive": str(result.phi_bank_passive)
+                    if result.phi_bank_passive is not None
+                    else "",
+                    "bank_passive_run_id": result.bank_passive_run_id,
+                    "bank_passive_status": result.bank_passive_status,
+                    "n_defaults_bank_passive": str(result.n_defaults_bank_passive),
+                    "cascade_fraction_bank_passive": str(result.cascade_fraction_bank_passive)
+                    if result.cascade_fraction_bank_passive is not None
+                    else "",
+                    "delta_bank_dealer": str(result.delta_bank_dealer)
+                    if result.delta_bank_dealer is not None
+                    else "",
+                    "bank_dealer_effect": str(result.bank_dealer_effect)
+                    if result.bank_dealer_effect is not None
+                    else "",
+                    "phi_bank_dealer": str(result.phi_bank_dealer)
+                    if result.phi_bank_dealer is not None
+                    else "",
+                    "bank_dealer_run_id": result.bank_dealer_run_id,
+                    "bank_dealer_status": result.bank_dealer_status,
+                    "n_defaults_bank_dealer": str(result.n_defaults_bank_dealer),
+                    "cascade_fraction_bank_dealer": str(result.cascade_fraction_bank_dealer)
+                    if result.cascade_fraction_bank_dealer is not None
+                    else "",
+                    "delta_bank_dealer_nbfi": str(result.delta_bank_dealer_nbfi)
+                    if result.delta_bank_dealer_nbfi is not None
+                    else "",
+                    "bank_dealer_nbfi_effect": str(result.bank_dealer_nbfi_effect)
+                    if result.bank_dealer_nbfi_effect is not None
+                    else "",
+                    "phi_bank_dealer_nbfi": str(result.phi_bank_dealer_nbfi)
+                    if result.phi_bank_dealer_nbfi is not None
+                    else "",
+                    "bank_dealer_nbfi_run_id": result.bank_dealer_nbfi_run_id,
+                    "bank_dealer_nbfi_status": result.bank_dealer_nbfi_status,
+                    "n_defaults_bank_dealer_nbfi": str(result.n_defaults_bank_dealer_nbfi),
+                    "cascade_fraction_bank_dealer_nbfi": str(result.cascade_fraction_bank_dealer_nbfi)
+                    if result.cascade_fraction_bank_dealer_nbfi is not None
                     else "",
                 }
                 writer.writerow(row)
