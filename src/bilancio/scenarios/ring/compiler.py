@@ -508,8 +508,17 @@ def compile_ring_explorer_balanced(
         # 2. Assign agents to banks
         # Traders: each at min(3, n_banks) banks (sliding window)
         # Infrastructure (dealer/VBT/lender): one bank each (round-robin)
-        trader_ids = [a["id"] for a in agents if a["kind"] in ("household", "firm")]
-        infra_ids = [a["id"] for a in agents if a["kind"] not in ("central_bank", "bank", "household", "firm")]
+        _infra_prefixes = ("vbt_", "dealer_", "lender")
+        trader_ids = [
+            a["id"] for a in agents
+            if a["kind"] in ("household", "firm")
+            and not a["id"].startswith(_infra_prefixes)
+        ]
+        infra_ids = [
+            a["id"] for a in agents
+            if a["kind"] not in ("central_bank", "bank", "household", "firm")
+            or a["id"].startswith(_infra_prefixes)
+        ]
 
         banks_per_trader = min(3, n_banks)
         trader_bank_assignments: dict[str, list[str]] = {}
@@ -630,6 +639,8 @@ def compile_ring_explorer_balanced(
             "n_banks": n_banks,
             "bank_assignments": bank_assignments,
             "reserve_multiplier": reserve_multiplier,
+            "kappa": float(kappa) if kappa is not None else None,
+            "maturity_days": params.maturity.days,
             "trader_bank_assignments": trader_bank_assignments if n_banks > 0 else {},
             "infra_bank_assignments": infra_bank_assignments if n_banks > 0 else {},
             "enable_banking": n_banks > 0,

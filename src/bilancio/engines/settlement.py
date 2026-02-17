@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Generator
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from bilancio.core.atomic_tx import atomic
@@ -107,9 +108,45 @@ def _pay_with_deposits(system: System, debtor_id: str, creditor_id: str, amount:
     banking_sub = getattr(system.state, "banking_subsystem", None)
 
     if banking_sub is not None:
-        # Route by r_D: debtor pays from lowest-rate bank, creditor receives at highest
-        debtor_bank_id = _select_pay_bank(system, banking_sub, debtor_id, debtor_deposit_ids, pay_amount)
+        # Multi-bank split payment: pay from banks sorted by ascending r_D
         creditor_bank_id = _select_receive_bank(system, banking_sub, creditor_id)
+        if not creditor_bank_id:
+            return 0
+
+        # Group deposits by bank with balances
+        bank_balances: dict[str, int] = {}
+        for cid in debtor_deposit_ids:
+            contract = system.state.contracts.get(cid)
+            if contract and contract.kind == InstrumentKind.BANK_DEPOSIT:
+                bid = contract.liability_issuer_id
+                bank_balances[bid] = bank_balances.get(bid, 0) + contract.amount
+
+        # Sort by ascending r_D (lowest opportunity cost first)
+        sorted_banks = []
+        for bid, balance in bank_balances.items():
+            if balance <= 0:
+                continue
+            bank_state = banking_sub.banks.get(bid)
+            r_d = Decimal("0")
+            if bank_state and bank_state.current_quote:
+                r_d = bank_state.current_quote.deposit_rate
+            sorted_banks.append((r_d, bid, balance))
+        sorted_banks.sort(key=lambda x: x[0])
+
+        # Pay from each bank until full amount covered
+        total_paid = 0
+        remaining = pay_amount
+        for _, bid, balance in sorted_banks:
+            if remaining <= 0:
+                break
+            chunk = min(balance, remaining)
+            try:
+                client_payment(system, debtor_id, bid, creditor_id, creditor_bank_id, chunk)
+                total_paid += chunk
+                remaining -= chunk
+            except ValidationError:
+                continue
+        return total_paid
     else:
         # Original behavior: use first available deposit's bank
         debtor_bank_id = None
@@ -131,14 +168,14 @@ def _pay_with_deposits(system: System, debtor_id: str, creditor_id: str, amount:
         else:
             creditor_bank_id = debtor_bank_id
 
-    if not debtor_bank_id or not creditor_bank_id:
-        return 0
+        if not debtor_bank_id or not creditor_bank_id:
+            return 0
 
-    try:
-        client_payment(system, debtor_id, debtor_bank_id, creditor_id, creditor_bank_id, pay_amount)
-        return pay_amount
-    except ValidationError:
-        return 0
+        try:
+            client_payment(system, debtor_id, debtor_bank_id, creditor_id, creditor_bank_id, pay_amount)
+            return pay_amount
+        except ValidationError:
+            return 0
 
 
 def _select_pay_bank(

@@ -233,19 +233,19 @@ def run_scenario(
             from bilancio.engines.banking_subsystem import initialize_banking_subsystem
 
             bank_profile = BankProfile()  # Use defaults
-            # Get kappa from balanced_dealer config or _balanced_config
+            # Get kappa: prefer _balanced_config (written by compiler), then balanced_dealer, then default
             _kappa_str = (
-                raw_scenario.get("balanced_dealer", {}).get("kappa")
-                or _balanced_cfg.get("kappa")
+                _balanced_cfg.get("kappa")
+                or raw_scenario.get("balanced_dealer", {}).get("kappa")
                 or "1"
             )
             _kappa_val = Decimal(str(_kappa_str))
-            _maturity_days = raw_scenario.get("run", {}).get("max_days", 10)
-            # Use maturity from the scenario params if available
-            if "params" in raw_scenario:
-                _maturity_days = raw_scenario["params"].get("maturity", {}).get(
-                    "days", _maturity_days
-                )
+            # Get maturity_days: prefer _balanced_config, then params, then max_days
+            _maturity_days = _balanced_cfg.get("maturity_days")
+            if _maturity_days is None and "params" in raw_scenario:
+                _maturity_days = raw_scenario["params"].get("maturity", {}).get("days")
+            if _maturity_days is None:
+                _maturity_days = raw_scenario.get("run", {}).get("max_days", 10)
             _trader_banks = _balanced_cfg.get("trader_bank_assignments", {})
             _infra_banks = _balanced_cfg.get("infra_bank_assignments", {})
 
