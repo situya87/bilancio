@@ -57,12 +57,13 @@ def compute_intraday_nets(system: System, day: int) -> dict[tuple[str, str], int
 
 def settle_intraday_nets(system: System, day: int) -> None:
     """
-    Settle intraday nets between banks using reserves or creating overnight payables.
+    Settle intraday nets between banks using reserves, CB refinancing, or overnight payables.
 
     For each net amount between banks:
     - Try to transfer reserves if sufficient
-    - If insufficient reserves, create overnight payable due tomorrow
-    - Log InterbankCleared or InterbankOvernightCreated events
+    - If insufficient reserves, borrow shortfall from CB and then transfer
+    - If CB borrowing fails, fall back to creating overnight payable due tomorrow
+    - Log InterbankCleared (with optional cb_refinanced) or InterbankOvernightCreated events
 
     Args:
         system: System instance
@@ -118,53 +119,82 @@ def settle_intraday_nets(system: System, day: int) -> None:
                         amount=amount,
                     )
                 else:
-                    # Insufficient reserves - create overnight payable
-                    logger.debug(
-                        "interbank overnight: %s -> %s amount=%d (insufficient reserves)",
-                        debtor_bank,
-                        creditor_bank,
-                        amount,
-                    )
-                    payable_id = system.new_contract_id("P")
-                    overnight_payable = Payable(
-                        id=payable_id,
-                        kind=InstrumentKind.PAYABLE,
-                        amount=amount,
-                        denom="X",
-                        asset_holder_id=creditor_bank,
-                        liability_issuer_id=debtor_bank,
-                        due_day=day + 1,
-                    )
-
-                    system.add_contract(overnight_payable)
-                    system.log(
-                        EventKind.INTERBANK_OVERNIGHT_CREATED,
-                        debtor_bank=debtor_bank,
-                        creditor_bank=creditor_bank,
-                        amount=amount,
-                        payable_id=payable_id,
-                        due_day=day + 1,
-                    )
+                    # Insufficient reserves - borrow from CB to cover shortfall
+                    shortfall = amount - available_reserves
+                    try:
+                        system.cb_lend_reserves(debtor_bank, shortfall, day)
+                        system.transfer_reserves(debtor_bank, creditor_bank, amount)
+                        logger.debug(
+                            "interbank cleared via CB refinancing: %s -> %s amount=%d (CB loan=%d)",
+                            debtor_bank, creditor_bank, amount, shortfall,
+                        )
+                        system.log(
+                            EventKind.INTERBANK_CLEARED,
+                            debtor_bank=debtor_bank,
+                            creditor_bank=creditor_bank,
+                            amount=amount,
+                            cb_refinanced=shortfall,
+                        )
+                    except Exception:
+                        # CB borrowing failed - fall back to overnight payable
+                        logger.warning(
+                            "interbank CB refinancing failed: %s -> %s amount=%d",
+                            debtor_bank, creditor_bank, amount,
+                        )
+                        payable_id = system.new_contract_id("P")
+                        overnight_payable = Payable(
+                            id=payable_id,
+                            kind=InstrumentKind.PAYABLE,
+                            amount=amount,
+                            denom="X",
+                            asset_holder_id=creditor_bank,
+                            liability_issuer_id=debtor_bank,
+                            due_day=day + 1,
+                        )
+                        system.add_contract(overnight_payable)
+                        system.log(
+                            EventKind.INTERBANK_OVERNIGHT_CREATED,
+                            debtor_bank=debtor_bank,
+                            creditor_bank=creditor_bank,
+                            amount=amount,
+                            payable_id=payable_id,
+                            due_day=day + 1,
+                        )
 
         except ValidationError:
-            # If transfer fails, create overnight payable as fallback
-            payable_id = system.new_contract_id("P")
-            overnight_payable = Payable(
-                id=payable_id,
-                kind=InstrumentKind.PAYABLE,
-                amount=amount,
-                denom="X",
-                asset_holder_id=creditor_bank,
-                liability_issuer_id=debtor_bank,
-                due_day=day + 1,
-            )
-
-            system.add_contract(overnight_payable)
-            system.log(
-                EventKind.INTERBANK_OVERNIGHT_CREATED,
-                debtor_bank=debtor_bank,
-                creditor_bank=creditor_bank,
-                amount=amount,
-                payable_id=payable_id,
-                due_day=day + 1,
-            )
+            # Transfer failed even after CB refinancing attempt - create overnight payable
+            shortfall = amount
+            try:
+                system.cb_lend_reserves(debtor_bank, shortfall, day)
+                system.transfer_reserves(debtor_bank, creditor_bank, amount)
+                logger.debug(
+                    "interbank cleared via CB refinancing (fallback): %s -> %s amount=%d",
+                    debtor_bank, creditor_bank, amount,
+                )
+                system.log(
+                    EventKind.INTERBANK_CLEARED,
+                    debtor_bank=debtor_bank,
+                    creditor_bank=creditor_bank,
+                    amount=amount,
+                    cb_refinanced=shortfall,
+                )
+            except Exception:
+                payable_id = system.new_contract_id("P")
+                overnight_payable = Payable(
+                    id=payable_id,
+                    kind=InstrumentKind.PAYABLE,
+                    amount=amount,
+                    denom="X",
+                    asset_holder_id=creditor_bank,
+                    liability_issuer_id=debtor_bank,
+                    due_day=day + 1,
+                )
+                system.add_contract(overnight_payable)
+                system.log(
+                    EventKind.INTERBANK_OVERNIGHT_CREATED,
+                    debtor_bank=debtor_bank,
+                    creditor_bank=creditor_bank,
+                    amount=amount,
+                    payable_id=payable_id,
+                    due_day=day + 1,
+                )

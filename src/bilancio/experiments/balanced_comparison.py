@@ -369,10 +369,10 @@ class BalancedComparisonConfig(BaseModel):
         default="liquidity_then_earning", description="Trading motivation mode"
     )
 
-    # Bank parameters (Plan 038)
-    n_banks: int = Field(default=0, description="Number of banks to add (0 = no banks)")
+    # Bank parameters (Plan 038) — all arms use bank deposits as MoP
+    n_banks: int = Field(default=3, description="Number of banks (all arms use bank deposits)")
     reserve_multiplier: float = Field(
-        default=10.0, description="Bank reserves = reserve_multiplier * face_value"
+        default=10.0, description="Bank reserves = reserve_multiplier * total_deposited / n_banks"
     )
 
     # Non-bank lender parameters
@@ -397,7 +397,7 @@ class BalancedComparisonConfig(BaseModel):
         default=3, description="Number of banks in banking arms"
     )
     bank_reserve_multiplier: float = Field(
-        default=0.12, description="Reserve multiplier for banking arms (calibrated for fair comparison)"
+        default=10.0, description="Reserve multiplier for banking arms (CB refinancing covers shortfalls)"
     )
     lender_share: Decimal = Field(
         default=Decimal("0.10"), description="Lender capital as fraction of system cash"

@@ -520,13 +520,17 @@ def _repay_loan(
                 try:
                     system.transfer_reserves(other_bid, bank_id, debited)
                 except Exception:
-                    # Reserve transfer failed — reverse the deposit debit
-                    # so the loan is not falsely marked as repaid.
-                    logger.warning(
-                        "Reserve transfer failed: %s -> %s amount=%d; "
-                        "reversing deposit debit",
-                        other_bid, bank_id, debited,
-                    )
-                    _increase_deposit(system, borrower_id, other_bid, debited)
-                    continue  # skip this bank, don't reduce remaining
+                    # Reserve transfer failed — borrow from CB to cover
+                    try:
+                        system.cb_lend_reserves(other_bid, debited, system.state.day)
+                        system.transfer_reserves(other_bid, bank_id, debited)
+                    except Exception:
+                        # CB refinancing also failed — reverse deposit debit
+                        logger.warning(
+                            "Reserve transfer failed (even with CB): %s -> %s amount=%d; "
+                            "reversing deposit debit",
+                            other_bid, bank_id, debited,
+                        )
+                        _increase_deposit(system, borrower_id, other_bid, debited)
+                        continue  # skip this bank, don't reduce remaining
             remaining -= debited

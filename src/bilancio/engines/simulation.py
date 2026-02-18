@@ -199,6 +199,7 @@ def run_day(
     enable_lender: bool = False,
     enable_rating: bool = False,
     enable_banking: bool = False,
+    enable_bank_lending: bool = False,
 ) -> None:
     """
     Run a single day's simulation with three phases.
@@ -214,7 +215,8 @@ def run_day(
         enable_dealer: If True, run dealer trading phase between scheduled actions and settlements
         enable_lender: If True, run non-bank lending phase
         enable_rating: If True, run rating agency phase
-        enable_banking: If True, run banking subphases (bank quotes, bank lending, interbank, repayments)
+        enable_banking: If True, run banking infrastructure (bank quotes, interbank, deposits, interbank repayments)
+        enable_bank_lending: If True, run bank lending phases (loan origination and repayment)
 
     Note: Rollover is controlled by system.state.rollover_enabled (Plan 024)
     """
@@ -272,7 +274,7 @@ def run_day(
         system.state.events.extend(lending_events)
 
     # SubphaseB_BankLending: Bank lending to traders (optional)
-    if enable_banking and banking_sub is not None:
+    if enable_bank_lending and banking_sub is not None:
         system.log("SubphaseB_BankLending")
         from bilancio.engines.bank_lending import run_bank_lending_phase
 
@@ -331,7 +333,25 @@ def run_day(
             loan = system.state.contracts.get(loan_id)
             if loan is None:
                 continue
-            system.cb_repay_loan(loan_id, loan.liability_issuer_id)
+            bank_id = loan.liability_issuer_id
+            try:
+                system.cb_repay_loan(loan_id, bank_id)
+            except (ValidationError, Exception):
+                # Bank can't repay — refinance by issuing a new CB loan
+                # to cover the repayment amount, then retry
+                repayment = loan.repayment_amount
+                try:
+                    system.cb_lend_reserves(bank_id, repayment, current_day)
+                    system.cb_repay_loan(loan_id, bank_id)
+                    logger.debug(
+                        "CB loan refinanced: bank=%s loan=%s amount=%d",
+                        bank_id, loan_id, repayment,
+                    )
+                except Exception:
+                    logger.warning(
+                        "CB loan repayment failed even after refinancing: bank=%s loan=%s",
+                        bank_id, loan_id,
+                    )
 
     # Non-bank loan repayment
     has_lender = any(
@@ -343,7 +363,7 @@ def run_day(
         run_loan_repayments(system, current_day)
 
     # Bank loan repayments
-    if enable_banking and banking_sub is not None:
+    if enable_bank_lending and banking_sub is not None:
         from bilancio.engines.bank_lending import run_bank_loan_repayments
 
         bank_repay_events = run_bank_loan_repayments(system, current_day, banking_sub)
@@ -375,6 +395,7 @@ def run_until_stable(
     enable_lender: bool = False,
     enable_rating: bool = False,
     enable_banking: bool = False,
+    enable_bank_lending: bool = False,
 ) -> list[DayReport]:
     """
     Advance day by day until the system is stable:
@@ -388,7 +409,8 @@ def run_until_stable(
         enable_dealer: If True, run dealer trading phase each day
         enable_lender: If True, run non-bank lending phase each day
         enable_rating: If True, run rating agency phase each day
-        enable_banking: If True, run banking subphases each day
+        enable_banking: If True, run banking infrastructure each day
+        enable_bank_lending: If True, run bank lending phases each day
 
     Note: Rollover is controlled by system.state.rollover_enabled (Plan 024)
     """
@@ -405,6 +427,7 @@ def run_until_stable(
             enable_lender=enable_lender,
             enable_rating=enable_rating,
             enable_banking=enable_banking,
+            enable_bank_lending=enable_bank_lending,
         )
         impacted = _impacted_today(system, day_before)
         defaults = _defaults_today(system, day_before)
