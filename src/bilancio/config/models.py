@@ -706,9 +706,12 @@ class BalancedDealerConfig(BaseModel):
     rollover_enabled: bool = Field(
         default=True, description="Enable continuous rollover of matured claims"
     )
-    mode: Literal["passive", "active", "lender", "nbfi", "nbfi_dealer"] = Field(
+    mode: Literal[
+        "passive", "active", "lender", "nbfi", "nbfi_dealer",
+        "banking", "bank_dealer", "bank_dealer_nbfi",
+    ] = Field(
         default="active",
-        description="passive = C (mimics), active = D (dealers), lender/nbfi/nbfi_dealer = with NBFI lending",
+        description="passive = C (mimics), active = D (dealers), lender/nbfi/nbfi_dealer = with NBFI lending, banking/bank_dealer/bank_dealer_nbfi = with banks",
     )
     alpha_vbt: Decimal = Field(
         default=Decimal("0"),

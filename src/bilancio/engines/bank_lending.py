@@ -264,21 +264,28 @@ def _bank_can_lend(system: System, bank_state: BankTreynorState, amount: int) ->
     would remain above the reserve floor. Since bank lending
     creates deposits (not reserve outflow), we check the
     reserve-to-deposit ratio won't fall too low.
+
+    After the loan, deposits increase by ``amount`` (money creation) while
+    reserves stay unchanged. The post-loan reserve ratio must remain above
+    half the *current* target ratio (derived from pre-loan deposits).
     """
     from bilancio.engines.banking_subsystem import _get_bank_deposits_total, _get_bank_reserves
 
     reserves = _get_bank_reserves(system, bank_state.bank_id)
     deposits = _get_bank_deposits_total(system, bank_state.bank_id)
 
+    # Current target ratio (from initialization: reserve_target = ratio * deposits)
+    target_ratio = Decimal(bank_state.pricing_params.reserve_target) / Decimal(max(1, deposits))
+
     # After loan: deposits increase by amount (new deposit created)
     # Reserves unchanged (no reserve movement in money creation)
     new_deposits = deposits + amount
-    reserve_ratio = Decimal(reserves) / Decimal(max(1, new_deposits))
+    post_loan_ratio = Decimal(reserves) / Decimal(max(1, new_deposits))
 
-    # Minimum reserve ratio: half the target ratio
-    min_ratio = Decimal(bank_state.pricing_params.reserve_target) / Decimal(max(1, new_deposits)) / 2
+    # Floor: half the target ratio
+    min_ratio = target_ratio / 2
 
-    return reserve_ratio > min_ratio
+    return post_loan_ratio > min_ratio
 
 
 def _prefer_selling(
@@ -480,13 +487,16 @@ def _repay_loan(
     """Repay a bank loan by debiting borrower deposits.
 
     Tries the lending bank first, then other banks (lowest r_D first).
+    When deposits at a *different* bank are used, reserves must be
+    transferred from that bank to the lending bank to settle the
+    interbank claim.
     """
     borrower_id = loan.borrower_id
     bank_id = loan.bank_id
 
     remaining = amount
 
-    # First, try to debit from the lending bank
+    # First, try to debit from the lending bank (no reserve movement needed)
     debited = _decrease_deposit(system, borrower_id, bank_id, remaining)
     remaining -= debited
 
@@ -504,4 +514,14 @@ def _repay_loan(
             if remaining <= 0:
                 break
             debited = _decrease_deposit(system, borrower_id, other_bid, remaining)
+            if debited > 0:
+                # Cross-bank settlement: transfer reserves from the bank
+                # whose deposit was debited to the lending bank.
+                try:
+                    system.transfer_reserves(other_bid, bank_id, debited)
+                except Exception:
+                    logger.warning(
+                        "Reserve transfer failed: %s -> %s amount=%d",
+                        other_bid, bank_id, debited,
+                    )
             remaining -= debited
