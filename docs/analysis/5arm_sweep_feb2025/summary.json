@@ -1,0 +1,46 @@
+{
+  "total_pairs": 45,
+  "completed_pairs": 45,
+  "mean_delta_passive": 0.5093767357444858,
+  "mean_delta_active": 0.4335581345673525,
+  "mean_trading_effect": 0.07581860117713332,
+  "mean_relief_ratio": 0.17956845071085156,
+  "pairs_with_improvement": 32,
+  "pairs_unchanged": 11,
+  "pairs_worsened": 2,
+  "mean_n_defaults_passive": 19.91111111111111,
+  "mean_n_defaults_active": 19.044444444444444,
+  "mean_cascade_fraction_passive": 0.19879300749313158,
+  "mean_cascade_fraction_active": 0.21642221519071453,
+  "config": {
+    "n_agents": 50,
+    "maturity_days": 10,
+    "Q_total": "10000",
+    "base_seed": 42,
+    "face_value": "20",
+    "big_entity_share": "0.25",
+    "vbt_share_per_bucket": "0.25",
+    "dealer_share_per_bucket": "0.125",
+    "rollover_enabled": true,
+    "kappas": [
+      "0.25",
+      "0.5",
+      "1",
+      "2",
+      "4"
+    ],
+    "concentrations": [
+      "0.5",
+      "1",
+      "2"
+    ],
+    "mus": [
+      "0",
+      "0.5",
+      "1"
+    ],
+    "outside_mid_ratios": [
+      "0.90"
+    ]
+  }
+}
