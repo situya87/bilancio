@@ -109,7 +109,7 @@ def test_run_day_basic():
 
 
 def test_overnight_settlement_next_day():
-    """Test overnight payables from day t are settled on day t+1."""
+    """Test CB refinancing settles cross-bank payments immediately (no overnight payable)."""
     sys = System()
     cb = CentralBank(id="CB1", name="Central Bank", kind="central_bank")
     b1 = Bank(id="B1", name="Bank 1", kind="bank")
@@ -122,7 +122,7 @@ def test_overnight_settlement_next_day():
     sys.add_agent(h1)
     sys.add_agent(h3)
 
-    # Setup: B1 has insufficient reserves, B2 has plenty
+    # Setup: B1 has insufficient reserves (30 < 100), B2 has plenty
     sys.mint_reserves("B1", 30)
     sys.mint_reserves("B2", 500)
 
@@ -132,66 +132,43 @@ def test_overnight_settlement_next_day():
     deposit_cash(sys, "H1", "B1", 200)  # H1@B1
     deposit_cash(sys, "H3", "B2", 100)  # H3@B2
 
-    # Create cross-bank payment that will require overnight payable
-    client_payment(sys, "H1", "B1", "H3", "B2", 100)  # B1 owes B2: 100
+    # Create cross-bank payment: B1 owes B2: 100
+    client_payment(sys, "H1", "B1", "H3", "B2", 100)
 
     day_0 = sys.state.day
 
-    # Run day 0 - should create overnight payable
+    # Run day 0 — CB refinancing covers the reserve shortfall
     run_day(sys)
 
-    # Check overnight payable created
+    # No overnight payable — CB refinancing settled immediately
     payables = [c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE]
-    assert len(payables) == 1
-    overnight_payable = payables[0]
-    assert overnight_payable.liability_issuer_id == "B1"
-    assert overnight_payable.asset_holder_id == "B2"
-    assert overnight_payable.amount == 100
-    assert overnight_payable.due_day == day_0 + 1  # due tomorrow
+    assert len(payables) == 0
 
-    # Check reserves unchanged on day 0 (insufficient)
+    # B1 reserves: had 30, CB lent 70, then transferred 100 → 0 remaining
     b1_reserves = sum(
         sys.state.contracts[cid].amount
         for cid in sys.state.agents["B1"].asset_ids
         if cid in sys.state.contracts
         and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
-    assert b1_reserves == 30  # unchanged
+    assert b1_reserves == 0  # 30 + 70 (CB loan) - 100 (transferred)
 
-    # Now add more reserves to B1 for next day settlement
-    sys.mint_reserves("B1", 200)  # B1 now has 230 total
-
-    # Run day 1 - overnight payable should be settled
-    run_day(sys)
-
-    # Check overnight payable settled and removed
-    payables_after = [c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE]
-    assert len(payables_after) == 0
-
-    # Check reserves transferred on day 1
-    b1_reserves_final = sum(
-        sys.state.contracts[cid].amount
-        for cid in sys.state.agents["B1"].asset_ids
-        if cid in sys.state.contracts
-        and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
-    )
-    b2_reserves_final = sum(
+    # B2 reserves: 500 + 100 received = 600
+    b2_reserves = sum(
         sys.state.contracts[cid].amount
         for cid in sys.state.agents["B2"].asset_ids
         if cid in sys.state.contracts
         and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
-    assert b1_reserves_final == 130  # 230 - 100
-    assert b2_reserves_final == 600  # 500 + 100
+    assert b2_reserves == 600  # 500 + 100
 
-    # Check PayableSettled event on day 1
-    settled_events = [
-        e for e in sys.state.events if e["kind"] == "PayableSettled" and e["day"] == day_0 + 1
-    ]
-    assert len(settled_events) == 1
-    assert settled_events[0]["debtor"] == "B1"
-    assert settled_events[0]["creditor"] == "B2"
-    assert settled_events[0]["amount"] == 100
+    # InterbankCleared event with CB refinancing
+    cleared_events = [e for e in sys.state.events if e["kind"] == "InterbankCleared"]
+    assert len(cleared_events) == 1
+    assert cleared_events[0]["debtor_bank"] == "B1"
+    assert cleared_events[0]["creditor_bank"] == "B2"
+    assert cleared_events[0]["amount"] == 100
+    assert cleared_events[0].get("cb_refinanced") == 70
 
     sys.assert_invariants()
 

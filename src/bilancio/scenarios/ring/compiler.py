@@ -622,6 +622,7 @@ def compile_ring_explorer_balanced(
             "quiet_days": params.maturity.days + 1 if rollover_enabled else 2,
             "rollover_enabled": rollover_enabled,  # Plan 024: continuous rollover
             "enable_banking": n_banks > 0,
+            "enable_bank_lending": n_banks > 0 and mode in ("banking", "bank_dealer", "bank_dealer_nbfi"),
             "show": {
                 "balances": [agent["id"] for agent in agents],
                 "events": "detailed",
@@ -648,6 +649,7 @@ def compile_ring_explorer_balanced(
             "trader_bank_assignments": trader_bank_assignments if n_banks > 0 else {},
             "infra_bank_assignments": infra_bank_assignments if n_banks > 0 else {},
             "enable_banking": n_banks > 0,
+            "enable_bank_lending": n_banks > 0 and mode in ("banking", "bank_dealer", "bank_dealer_nbfi"),
         },
     }
 

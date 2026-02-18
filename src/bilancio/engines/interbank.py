@@ -13,6 +13,7 @@ import logging
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from bilancio.core.atomic_tx import atomic
 from bilancio.domain.instruments.base import InstrumentKind
 
 if TYPE_CHECKING:
@@ -149,13 +150,54 @@ def run_interbank_repayments(
                     "interest": repayment - loan.amount,
                 })
             except Exception:
-                logger.warning(
-                    "Interbank repayment failed: %s -> %s, amount=%d",
-                    loan.borrower_bank, loan.lender_bank, repayment,
-                )
-                # If repayment fails, keep the loan (will trigger CB borrowing)
-                remaining.append(loan)
-                continue
+                # Borrower lacks reserves — refinance via CB
+                from bilancio.engines.banking_subsystem import _get_bank_reserves
+
+                available = _get_bank_reserves(system, loan.borrower_bank)
+                shortfall = repayment - available
+                if shortfall < 0:
+                    shortfall = 0
+
+                cb_loan_id = None
+                try:
+                    with atomic(system):
+                        if shortfall > 0:
+                            cb_loan_id = system.cb_lend_reserves(
+                                loan.borrower_bank, shortfall, current_day,
+                            )
+                        # Retry the transfer after CB refinancing
+                        system.transfer_reserves(
+                            loan.borrower_bank, loan.lender_bank, repayment,
+                        )
+                    # Success — log events OUTSIDE the atomic block
+                    if shortfall > 0:
+                        events.append({
+                            "kind": "CBRefinance",
+                            "day": current_day,
+                            "borrower": loan.borrower_bank,
+                            "amount": shortfall,
+                            "cb_loan_id": cb_loan_id,
+                            "reason": "interbank_repayment",
+                        })
+                    events.append({
+                        "kind": "InterbankRepaid",
+                        "day": current_day,
+                        "lender": loan.lender_bank,
+                        "borrower": loan.borrower_bank,
+                        "principal": loan.amount,
+                        "repayment": repayment,
+                        "interest": repayment - loan.amount,
+                        "cb_refinanced": shortfall > 0,
+                    })
+                except Exception:
+                    # Both operations rolled back atomically
+                    logger.warning(
+                        "Interbank repayment failed even after CB refinancing: "
+                        "%s -> %s, amount=%d",
+                        loan.borrower_bank, loan.lender_bank, repayment,
+                    )
+                    remaining.append(loan)
+                    continue
         else:
             remaining.append(loan)
 

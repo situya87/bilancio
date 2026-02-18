@@ -120,47 +120,43 @@ def test_phase_c_overnight_creation():
 
     current_day = sys.state.day
 
-    # Phase C: Settle intraday nets (should create overnight payable)
+    # Phase C: Settle intraday nets — CB refinancing covers the shortfall
     settle_intraday_nets(sys, current_day)
 
-    # Check B1 reserves unchanged (insufficient to cover 100)
+    # B1 had 30 reserves, needed 100 → CB lends 70, B1 transfers 100 to B2
+    # After transfer: B1 reserves = 30 + 70 - 100 = 0
     b1_reserves = sum(
         sys.state.contracts[cid].amount
         for cid in sys.state.agents["B1"].asset_ids
         if cid in sys.state.contracts
         and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
-    assert b1_reserves == 30  # unchanged
+    assert b1_reserves == 0  # 30 + 70 (CB loan) - 100 (transferred) = 0
 
-    # Check B2 reserves unchanged
+    # B2 reserves increased by 100
     b2_reserves = sum(
         sys.state.contracts[cid].amount
         for cid in sys.state.agents["B2"].asset_ids
         if cid in sys.state.contracts
         and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
     )
-    assert b2_reserves == 1000  # unchanged
+    assert b2_reserves == 1100  # 1000 + 100 received
 
-    # Check overnight payable created: B1 owes B2, due tomorrow
+    # No overnight payable — CB refinancing settled it
     payables = [c for c in sys.state.contracts.values() if c.kind == InstrumentKind.PAYABLE]
-    assert len(payables) == 1
-    overnight_payable = payables[0]
-    assert overnight_payable.liability_issuer_id == "B1"
-    assert overnight_payable.asset_holder_id == "B2"
-    assert overnight_payable.amount == 100
-    assert overnight_payable.due_day == current_day + 1
+    assert len(payables) == 0
 
-    # Check InterbankOvernightCreated event logged
-    overnight_events = [e for e in sys.state.events if e["kind"] == "InterbankOvernightCreated"]
-    assert len(overnight_events) == 1
-    assert overnight_events[0]["debtor_bank"] == "B1"
-    assert overnight_events[0]["creditor_bank"] == "B2"
-    assert overnight_events[0]["amount"] == 100
-    assert overnight_events[0]["due_day"] == current_day + 1
-
-    # No InterbankCleared event
+    # InterbankCleared with cb_refinanced
     cleared_events = [e for e in sys.state.events if e["kind"] == "InterbankCleared"]
-    assert len(cleared_events) == 0
+    assert len(cleared_events) == 1
+    assert cleared_events[0]["debtor_bank"] == "B1"
+    assert cleared_events[0]["creditor_bank"] == "B2"
+    assert cleared_events[0]["amount"] == 100
+    assert cleared_events[0].get("cb_refinanced") == 70
+
+    # No overnight events
+    overnight_events = [e for e in sys.state.events if e["kind"] == "InterbankOvernightCreated"]
+    assert len(overnight_events) == 0
 
     sys.assert_invariants()
 

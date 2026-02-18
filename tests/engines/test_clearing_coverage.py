@@ -139,7 +139,7 @@ class TestNoReservesAvailable:
     """Cover lines 97 (contract is None) and 102 (no reserve IDs)."""
 
     def test_debtor_bank_has_no_reserves(self):
-        """When debtor bank has zero reserve deposits, overnight payable is created."""
+        """When debtor bank has zero reserves, CB refinancing covers the shortfall."""
         sys, cb, b1, b2, h1, h2 = _setup_two_bank_system()
 
         # B1 has NO reserves, B2 has reserves
@@ -154,20 +154,20 @@ class TestNoReservesAvailable:
 
         current_day = sys.state.day
 
-        # Settle: B1 has no reserves, so overnight payable should be created
+        # Settle: B1 has no reserves, so CB refinancing kicks in
         settle_intraday_nets(sys, current_day)
 
-        # Check overnight payable was created
-        overnight_events = [e for e in sys.state.events if e["kind"] == "InterbankOvernightCreated"]
-        assert len(overnight_events) == 1
-        assert overnight_events[0]["debtor_bank"] == "B1"
-        assert overnight_events[0]["creditor_bank"] == "B2"
-        assert overnight_events[0]["amount"] == 100
-        assert overnight_events[0]["due_day"] == current_day + 1
-
-        # No InterbankCleared events
+        # CB refinancing should clear the payment (no overnight payable)
         cleared = [e for e in sys.state.events if e["kind"] == "InterbankCleared"]
-        assert len(cleared) == 0
+        assert len(cleared) == 1
+        assert cleared[0]["debtor_bank"] == "B1"
+        assert cleared[0]["creditor_bank"] == "B2"
+        assert cleared[0]["amount"] == 100
+        assert cleared[0].get("cb_refinanced") == 100
+
+        # No overnight payables
+        overnight_events = [e for e in sys.state.events if e["kind"] == "InterbankOvernightCreated"]
+        assert len(overnight_events) == 0
 
     def test_stale_contract_reference_is_none(self):
         """Cover line 97: contract is None for a stale asset_id reference.

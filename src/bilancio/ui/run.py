@@ -216,6 +216,7 @@ def run_scenario(
     enable_banking = (
         hasattr(system.state, "banking_subsystem") and system.state.banking_subsystem is not None
     )
+    enable_bank_lending = False
 
     # Initialize banking subsystem if banks exist but subsystem not yet initialized
     if not enable_banking:
@@ -259,6 +260,16 @@ def run_scenario(
             )
             system.state.banking_subsystem = banking_sub
             enable_banking = True
+            enable_bank_lending = _balanced_cfg.get("enable_bank_lending", False) or _run_cfg.get("enable_bank_lending", False)
+    else:
+        # Banking already initialized; check if bank lending is enabled
+        import yaml as _yaml2
+
+        with open(path) as _f2:
+            _raw2 = _yaml2.safe_load(_f2)
+        _bc2 = (_raw2 or {}).get("_balanced_config", {})
+        _rc2 = (_raw2 or {}).get("run", {})
+        enable_bank_lending = _bc2.get("enable_bank_lending", False) or _rc2.get("enable_bank_lending", False)
 
     if mode == "step":
         days_data = run_step_mode(
@@ -273,6 +284,7 @@ def run_scenario(
             enable_lender=enable_lender,
             enable_rating=enable_rating,
             enable_banking=enable_banking,
+            enable_bank_lending=enable_bank_lending,
         )
     else:
         days_data = run_until_stable_mode(
@@ -288,6 +300,7 @@ def run_scenario(
             enable_lender=enable_lender,
             enable_rating=enable_rating,
             enable_banking=enable_banking,
+            enable_bank_lending=enable_bank_lending,
             progress_callback=progress_callback,
         )
 
@@ -420,6 +433,7 @@ def run_step_mode(
     enable_lender: bool = False,
     enable_rating: bool = False,
     enable_banking: bool = False,
+    enable_bank_lending: bool = False,
 ) -> list[dict[str, Any]]:
     """Run simulation in step-by-step mode.
 
@@ -434,6 +448,7 @@ def run_step_mode(
         enable_lender: If True, run lender phase each day
         enable_rating: If True, run rating agency phase each day
         enable_banking: If True, run banking subphases each day
+        enable_bank_lending: If True, run bank lending phase each day
 
     Returns:
         List of day data dictionaries
@@ -458,6 +473,7 @@ def run_step_mode(
                 enable_lender=enable_lender,
                 enable_rating=enable_rating,
                 enable_banking=enable_banking,
+                enable_bank_lending=enable_bank_lending,
             )
             from bilancio.engines.simulation import (
                 DayReport,
@@ -612,6 +628,7 @@ def run_until_stable_mode(
     enable_lender: bool = False,
     enable_rating: bool = False,
     enable_banking: bool = False,
+    enable_bank_lending: bool = False,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Run simulation until stable state is reached.
@@ -628,6 +645,7 @@ def run_until_stable_mode(
         enable_lender: If True, run lender phase each day
         enable_rating: If True, run rating agency phase each day
         enable_banking: If True, run banking subphases each day
+        enable_bank_lending: If True, run bank lending phase each day
         progress_callback: Optional callback(current_day, max_days) for progress tracking
 
     Returns:
@@ -662,6 +680,7 @@ def run_until_stable_mode(
                 enable_lender=enable_lender,
                 enable_rating=enable_rating,
                 enable_banking=enable_banking,
+                enable_bank_lending=enable_bank_lending,
             )
             impacted = _impacted_today(system, day_before)
             defaults = _defaults_today(system, day_before)

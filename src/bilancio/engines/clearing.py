@@ -7,7 +7,6 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, cast
 
 from bilancio.core.atomic_tx import atomic
-from bilancio.core.errors import ValidationError
 from bilancio.core.events import EventKind
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
@@ -55,14 +54,91 @@ def compute_intraday_nets(system: System, day: int) -> dict[tuple[str, str], int
     return dict(nets)
 
 
+def _settle_net_with_cb_fallback(
+    system: System,
+    debtor_bank: str,
+    creditor_bank: str,
+    amount: int,
+    shortfall: int,
+    day: int,
+    *,
+    label: str = "",
+) -> None:
+    """Try CB refinancing + reserve transfer atomically; fall back to overnight payable.
+
+    Wraps ``cb_lend_reserves`` and ``transfer_reserves`` inside a single
+    ``atomic(system)`` block so that if the transfer fails after the CB loan
+    is created, both operations are rolled back.  This prevents the debtor
+    bank from keeping extra reserves and a new CB liability when settlement
+    did not actually occur.
+
+    If the atomic block raises, we fall back to creating an overnight
+    interbank payable due ``day + 1``.
+
+    Args:
+        system: System instance.
+        debtor_bank: Agent id of the bank that owes.
+        creditor_bank: Agent id of the bank that is owed.
+        amount: Net amount to settle.
+        shortfall: Amount to borrow from the CB (may equal *amount* when
+            the debtor has no reserves at all).
+        day: Current simulation day.
+        label: Optional label for log messages (e.g. "fallback").
+    """
+    suffix = f" ({label})" if label else ""
+    try:
+        # Atomic: if transfer_reserves fails, cb_lend_reserves is also rolled back.
+        with atomic(system):
+            system.cb_lend_reserves(debtor_bank, shortfall, day)
+            system.transfer_reserves(debtor_bank, creditor_bank, amount)
+        logger.debug(
+            "interbank cleared via CB refinancing%s: %s -> %s amount=%d (CB loan=%d)",
+            suffix, debtor_bank, creditor_bank, amount, shortfall,
+        )
+        system.log(
+            EventKind.INTERBANK_CLEARED,
+            debtor_bank=debtor_bank,
+            creditor_bank=creditor_bank,
+            amount=amount,
+            cb_refinanced=shortfall,
+        )
+    except Exception:
+        # Both cb_lend_reserves and transfer_reserves are rolled back.
+        # Fall back to an overnight interbank payable.
+        logger.warning(
+            "interbank CB refinancing failed%s: %s -> %s amount=%d",
+            suffix, debtor_bank, creditor_bank, amount,
+        )
+        payable_id = system.new_contract_id("P")
+        overnight_payable = Payable(
+            id=payable_id,
+            kind=InstrumentKind.PAYABLE,
+            amount=amount,
+            denom="X",
+            asset_holder_id=creditor_bank,
+            liability_issuer_id=debtor_bank,
+            due_day=day + 1,
+        )
+        system.add_contract(overnight_payable)
+        system.log(
+            EventKind.INTERBANK_OVERNIGHT_CREATED,
+            debtor_bank=debtor_bank,
+            creditor_bank=creditor_bank,
+            amount=amount,
+            payable_id=payable_id,
+            due_day=day + 1,
+        )
+
+
 def settle_intraday_nets(system: System, day: int) -> None:
     """
-    Settle intraday nets between banks using reserves or creating overnight payables.
+    Settle intraday nets between banks using reserves, CB refinancing, or overnight payables.
 
     For each net amount between banks:
     - Try to transfer reserves if sufficient
-    - If insufficient reserves, create overnight payable due tomorrow
-    - Log InterbankCleared or InterbankOvernightCreated events
+    - If insufficient reserves, borrow shortfall from CB and then transfer
+    - If CB borrowing fails, fall back to creating overnight payable due tomorrow
+    - Log InterbankCleared (with optional cb_refinanced) or InterbankOvernightCreated events
 
     Args:
         system: System instance
@@ -86,7 +162,7 @@ def settle_intraday_nets(system: System, day: int) -> None:
             creditor_bank = bank_a
             amount = -net_amount
 
-        # Try to transfer reserves
+        # Try to transfer reserves directly.
         try:
             with atomic(system):
                 # Find available reserves for debtor bank
@@ -118,53 +194,27 @@ def settle_intraday_nets(system: System, day: int) -> None:
                         amount=amount,
                     )
                 else:
-                    # Insufficient reserves - create overnight payable
-                    logger.debug(
-                        "interbank overnight: %s -> %s amount=%d (insufficient reserves)",
-                        debtor_bank,
-                        creditor_bank,
-                        amount,
-                    )
-                    payable_id = system.new_contract_id("P")
-                    overnight_payable = Payable(
-                        id=payable_id,
-                        kind=InstrumentKind.PAYABLE,
-                        amount=amount,
-                        denom="X",
-                        asset_holder_id=creditor_bank,
-                        liability_issuer_id=debtor_bank,
-                        due_day=day + 1,
-                    )
+                    # Insufficient reserves - need CB refinancing.
+                    # Raise to exit the atomic block cleanly, then handle
+                    # refinancing via the helper (which has its own atomic).
+                    raise _NeedsCBRefinancing(amount - available_reserves)
 
-                    system.add_contract(overnight_payable)
-                    system.log(
-                        EventKind.INTERBANK_OVERNIGHT_CREATED,
-                        debtor_bank=debtor_bank,
-                        creditor_bank=creditor_bank,
-                        amount=amount,
-                        payable_id=payable_id,
-                        due_day=day + 1,
-                    )
-
-        except ValidationError:
-            # If transfer fails, create overnight payable as fallback
-            payable_id = system.new_contract_id("P")
-            overnight_payable = Payable(
-                id=payable_id,
-                kind=InstrumentKind.PAYABLE,
-                amount=amount,
-                denom="X",
-                asset_holder_id=creditor_bank,
-                liability_issuer_id=debtor_bank,
-                due_day=day + 1,
+        except _NeedsCBRefinancing as e:
+            _settle_net_with_cb_fallback(
+                system, debtor_bank, creditor_bank, amount, e.shortfall, day,
+            )
+        except Exception:
+            # Direct transfer failed (ValidationError or otherwise, e.g. no
+            # reserves at all).  Attempt CB refinancing for the full amount.
+            _settle_net_with_cb_fallback(
+                system, debtor_bank, creditor_bank, amount, amount, day,
+                label="fallback",
             )
 
-            system.add_contract(overnight_payable)
-            system.log(
-                EventKind.INTERBANK_OVERNIGHT_CREATED,
-                debtor_bank=debtor_bank,
-                creditor_bank=creditor_bank,
-                amount=amount,
-                payable_id=payable_id,
-                due_day=day + 1,
-            )
+
+class _NeedsCBRefinancing(Exception):
+    """Internal signal: debtor has some reserves but not enough; needs CB top-up."""
+
+    def __init__(self, shortfall: int) -> None:
+        self.shortfall = shortfall
+        super().__init__(shortfall)
