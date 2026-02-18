@@ -520,8 +520,13 @@ def _repay_loan(
                 try:
                     system.transfer_reserves(other_bid, bank_id, debited)
                 except Exception:
+                    # Reserve transfer failed — reverse the deposit debit
+                    # so the loan is not falsely marked as repaid.
                     logger.warning(
-                        "Reserve transfer failed: %s -> %s amount=%d",
+                        "Reserve transfer failed: %s -> %s amount=%d; "
+                        "reversing deposit debit",
                         other_bid, bank_id, debited,
                     )
+                    _increase_deposit(system, borrower_id, other_bid, debited)
+                    continue  # skip this bank, don't reduce remaining
             remaining -= debited
