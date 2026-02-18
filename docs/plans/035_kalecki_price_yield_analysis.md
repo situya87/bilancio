@@ -14,7 +14,7 @@ The dealer subsystem already captures rich trade microstructure data:
 
 **What's missing**: No systematic computation of:
 1. Daily aggregate price metrics (VWAP, volume, spread) per bucket
-2. Simple yield implied by prices: `y = (1/P - 1) / τ` where τ = remaining maturity
+2. Simple yield implied by prices: `y = (F/P - 1) / τ` where F = face value, P = absolute price, τ = remaining maturity
 3. Three yield curves (trade-implied, VBT-implied, dealer-implied) per day
 4. Yield curve dynamics (level, slope, curvature) over time
 5. Cross-run comparison of price/yield metrics (passive vs active, across κ)
@@ -23,7 +23,7 @@ The dealer subsystem already captures rich trade microstructure data:
 
 ## Design Decisions
 
-- **Yield formula**: Simple yield `y = (S/P - 1) / τ` (per-day units). Annualize by ×365 for display.
+- **Yield formula**: Simple yield `y = (F/P - 1) / τ` where F = face value, P = absolute price, τ = remaining maturity in days (per-day units). Annualize by ×365 for display. When P is expressed as a fraction of face (i.e. `p = P/F`), this simplifies to `y = (1/p - 1) / τ`.
 - **Yield curves**: Three sources — trade-implied (from executed trades), VBT-implied (from VBT mid/bid/ask), dealer-implied (from dealer kernel quotes). All at bucket level (3 points: short/mid/long).
 - **Price metrics**: Absolute levels AND discount to face (`1 - price`).
 - **Spread tracking**: All three — dealer interior spread, VBT outside spread, effective (realized) spread from trades.
@@ -72,7 +72,7 @@ class BucketPriceMetrics:
     vbt_spread: float | None       # vbt ask - vbt bid (outside)
     effective_spread: float | None # 2 × |trade_price - midpoint| averaged over trades
 
-    # Yield (simple: y = (1/P - 1) / τ)
+    # Yield (simple: y = (1/p - 1) / τ, where p = P/F is price per unit face)
     bucket_tau: float              # representative remaining maturity (bucket midpoint in days)
     yield_trade: float | None      # from VWAP
     yield_vbt_mid: float | None    # from VBT mid
@@ -135,10 +135,15 @@ def compute_bucket_tau(bucket: str, maturity_days: int, day: int) -> float:
     Clipped to ≥ 0.5 to avoid division by zero.
     """
 
-def simple_yield(price: float, tau: float) -> float | None:
-    """Compute simple yield: y = (1/P - 1) / τ.
+def simple_yield(price: float, face: float, tau: float) -> float | None:
+    """Compute simple yield: y = (F/P - 1) / τ.
 
-    Returns None if price ≤ 0 or tau ≤ 0.
+    Args:
+        price: Absolute price P.
+        face: Face value F.
+        tau: Remaining maturity in days.
+
+    Returns None if price ≤ 0, face ≤ 0, or tau ≤ 0.
     """
 
 def compute_effective_spread(trades: list[TradeRecord], midpoint: float) -> float | None:
