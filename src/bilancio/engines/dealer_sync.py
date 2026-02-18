@@ -464,9 +464,15 @@ def _sync_trader_cash_to_system(
     Compares trader.cash in the dealer subsystem to the actual liquidity
     (CASH + BANK_DEPOSIT) in the main system and applies the delta.
 
-    In banking mode (agent holds deposits), adjusts the first deposit's
-    amount rather than minting/retiring CB cash. This preserves the
-    deposit-based money hierarchy.
+    In banking mode (agent holds deposits), uses r_D-based routing to
+    choose which bank deposit to adjust:
+    - Cash increase (trader sold a ticket) → deposit at the highest-r_D bank
+      via ``banking_subsystem.best_deposit_bank()``.
+    - Cash decrease (trader bought a ticket) → withdraw from the lowest-r_D
+      bank via ``banking_subsystem.cheapest_pay_bank()``.
+
+    Falls back to the first deposit found if the banking subsystem is
+    unavailable or the target bank has no deposit for this trader.
 
     Falls back to ``system.mint_cash`` / ``system.retire_cash`` when the
     agent has no deposits (pure cash mode).
@@ -497,16 +503,59 @@ def _sync_trader_cash_to_system(
                     break
 
         if deposit_contract is not None:
-            # Banking mode: adjust deposit balance
-            new_amount = deposit_contract.amount + round(delta)
-            if new_amount < 0:
-                logger.warning(
-                    "Deposit for %s would go negative (%d) during trader sync; "
-                    "proceeding but this indicates a bug",
-                    trader_id,
-                    new_amount,
-                )
-            deposit_contract.amount = new_amount
+            # Banking mode: route delta to appropriate bank
+            banking_sub = getattr(system.state, "banking_subsystem", None)
+            if banking_sub is not None and delta != 0:
+                # Cash increase (trader sold) → deposit at highest r_D bank
+                # Cash decrease (trader bought) → withdraw from lowest r_D bank
+                if delta > 0:
+                    target_bank = banking_sub.best_deposit_bank(trader_id)
+                else:
+                    target_bank = banking_sub.cheapest_pay_bank(trader_id)
+
+                # Find deposit at target bank
+                target_deposit = None
+                if target_bank and agent:
+                    for contract_id in agent.asset_ids:
+                        contract = system.state.contracts.get(contract_id)
+                        if (contract and contract.kind == InstrumentKind.BANK_DEPOSIT
+                                and contract.liability_issuer_id == target_bank):
+                            target_deposit = contract
+                            break
+
+                if target_deposit is not None:
+                    new_amount = target_deposit.amount + round(delta)
+                    if new_amount < 0:
+                        logger.warning(
+                            "Deposit for %s at %s would go negative (%d) during trader sync; "
+                            "proceeding but this indicates a bug",
+                            trader_id,
+                            target_bank,
+                            new_amount,
+                        )
+                    target_deposit.amount = new_amount
+                else:
+                    # Fallback to first deposit
+                    new_amount = deposit_contract.amount + round(delta)
+                    if new_amount < 0:
+                        logger.warning(
+                            "Deposit for %s would go negative (%d) during trader sync; "
+                            "proceeding but this indicates a bug",
+                            trader_id,
+                            new_amount,
+                        )
+                    deposit_contract.amount = new_amount
+            else:
+                # No banking subsystem or zero delta — use first deposit
+                new_amount = deposit_contract.amount + round(delta)
+                if new_amount < 0:
+                    logger.warning(
+                        "Deposit for %s would go negative (%d) during trader sync; "
+                        "proceeding but this indicates a bug",
+                        trader_id,
+                        new_amount,
+                    )
+                deposit_contract.amount = new_amount
         else:
             # Pure cash mode: mint or retire CB cash
             if delta > 0:

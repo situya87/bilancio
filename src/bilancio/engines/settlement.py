@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Generator
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from bilancio.core.atomic_tx import atomic
@@ -18,6 +19,7 @@ from bilancio.ops.aliases import get_alias_for_id
 from bilancio.ops.banking import client_payment
 
 if TYPE_CHECKING:
+    from bilancio.engines.banking_subsystem import BankingSubsystem
     from bilancio.engines.system import System
 
 logger = logging.getLogger(__name__)
@@ -76,7 +78,12 @@ def due_delivery_obligations(system: System, day: int) -> Generator[Instrument, 
 
 
 def _pay_with_deposits(system: System, debtor_id: str, creditor_id: str, amount: int) -> int:
-    """Pay using bank deposits. Returns amount actually paid."""
+    """Pay using bank deposits. Returns amount actually paid.
+
+    When a banking subsystem is active, routes payments:
+    - Debtor pays from the bank with the lowest r_D (min opportunity cost)
+    - Creditor receives at the bank with the highest r_D
+    """
     logger.debug(
         "_pay_with_deposits: debtor=%s creditor=%s amount=%d", debtor_id, creditor_id, amount
     )
@@ -97,33 +104,197 @@ def _pay_with_deposits(system: System, debtor_id: str, creditor_id: str, amount:
 
     pay_amount = min(amount, available)
 
-    debtor_bank_id = None
-    creditor_bank_id = None
+    # Determine banking subsystem for routing
+    banking_sub = getattr(system.state, "banking_subsystem", None)
 
-    if debtor_deposit_ids:
-        debtor_bank_id = system.state.contracts[debtor_deposit_ids[0]].liability_issuer_id
+    if banking_sub is not None:
+        # Multi-bank split payment: pay from banks sorted by ascending r_D
+        creditor_bank_id = _select_receive_bank(system, banking_sub, creditor_id)
+        if not creditor_bank_id:
+            return 0
 
-    creditor_deposit_ids = []
-    for cid in system.state.agents[creditor_id].asset_ids:
-        contract = system.state.contracts.get(cid)
-        if contract is None:
-            continue  # Skip stale references
-        if contract.kind == InstrumentKind.BANK_DEPOSIT:
-            creditor_deposit_ids.append(cid)
+        # Group deposits by bank with balances
+        bank_balances: dict[str, int] = {}
+        for cid in debtor_deposit_ids:
+            contract = system.state.contracts.get(cid)
+            if contract and contract.kind == InstrumentKind.BANK_DEPOSIT:
+                bid = contract.liability_issuer_id
+                bank_balances[bid] = bank_balances.get(bid, 0) + contract.amount
 
-    if creditor_deposit_ids:
-        creditor_bank_id = system.state.contracts[creditor_deposit_ids[0]].liability_issuer_id
+        # Sort by ascending r_D (lowest opportunity cost first)
+        sorted_banks = []
+        for bid, balance in bank_balances.items():
+            if balance <= 0:
+                continue
+            bank_state = banking_sub.banks.get(bid)
+            r_d = Decimal("0")
+            if bank_state and bank_state.current_quote:
+                r_d = bank_state.current_quote.deposit_rate
+            sorted_banks.append((r_d, bid, balance))
+        sorted_banks.sort(key=lambda x: x[0])
+
+        # Pay from each bank until full amount covered
+        total_paid = 0
+        remaining = pay_amount
+        for _, bid, balance in sorted_banks:
+            if remaining <= 0:
+                break
+            chunk = min(balance, remaining)
+            try:
+                client_payment(system, debtor_id, bid, creditor_id, creditor_bank_id, chunk)
+                total_paid += chunk
+                remaining -= chunk
+            except ValidationError:
+                continue
+        return total_paid
     else:
-        creditor_bank_id = debtor_bank_id
+        # Original behavior: use first available deposit's bank
+        debtor_bank_id = None
+        creditor_bank_id = None
 
-    if not debtor_bank_id or not creditor_bank_id:
-        return 0
+        if debtor_deposit_ids:
+            debtor_bank_id = system.state.contracts[debtor_deposit_ids[0]].liability_issuer_id
 
-    try:
-        client_payment(system, debtor_id, debtor_bank_id, creditor_id, creditor_bank_id, pay_amount)
-        return pay_amount
-    except ValidationError:
-        return 0
+        creditor_deposit_ids = []
+        for cid in system.state.agents[creditor_id].asset_ids:
+            contract = system.state.contracts.get(cid)
+            if contract is None:
+                continue
+            if contract.kind == InstrumentKind.BANK_DEPOSIT:
+                creditor_deposit_ids.append(cid)
+
+        if creditor_deposit_ids:
+            creditor_bank_id = system.state.contracts[creditor_deposit_ids[0]].liability_issuer_id
+        else:
+            creditor_bank_id = debtor_bank_id
+
+        if not debtor_bank_id or not creditor_bank_id:
+            return 0
+
+        try:
+            client_payment(system, debtor_id, debtor_bank_id, creditor_id, creditor_bank_id, pay_amount)
+            return pay_amount
+        except ValidationError:
+            return 0
+
+
+def _select_pay_bank(
+    system: System,
+    banking_sub: BankingSubsystem,
+    debtor_id: str,
+    debtor_deposit_ids: list[str],
+    amount: int,
+) -> str | None:
+    """Select the debtor's bank with the lowest deposit rate (r_D) for payment.
+
+    Minimises the opportunity cost of drawing down deposits: the payer
+    withdraws from the bank where deposits earn the *least*.
+
+    Algorithm:
+        1. Group the debtor's deposit contracts by issuing bank.
+        2. Among banks whose balance covers *amount*, pick the one
+           with the lowest r_D.
+        3. If no single bank suffices, fall back to the first bank
+           with any positive balance (partial payment will follow).
+
+    Args:
+        system: Main system state.
+        banking_sub: Active banking subsystem (provides r_D quotes).
+        debtor_id: Agent paying.
+        debtor_deposit_ids: Pre-filtered list of the debtor's BANK_DEPOSIT
+            contract IDs.
+        amount: Target payment amount.
+
+    Returns:
+        The chosen bank_id, or ``None`` if the debtor has no deposits.
+    """
+    from decimal import Decimal
+
+    # Group deposits by bank
+    bank_balances: dict[str, int] = {}
+    for cid in debtor_deposit_ids:
+        contract = system.state.contracts.get(cid)
+        if contract and contract.kind == InstrumentKind.BANK_DEPOSIT:
+            bid = contract.liability_issuer_id
+            bank_balances[bid] = bank_balances.get(bid, 0) + contract.amount
+
+    candidates = []
+    for bid, balance in bank_balances.items():
+        if balance >= amount:
+            bank_state = banking_sub.banks.get(bid)
+            r_d = Decimal("0")
+            if bank_state and bank_state.current_quote:
+                r_d = bank_state.current_quote.deposit_rate
+            candidates.append((r_d, balance, bid))
+
+    if candidates:
+        candidates.sort(key=lambda x: x[0])  # Lowest r_D first
+        return candidates[0][2]
+
+    # No single bank has enough — fall back to first bank with any balance
+    for bid, balance in bank_balances.items():
+        if balance > 0:
+            return bid
+    return None
+
+
+def _select_receive_bank(
+    system: System,
+    banking_sub: BankingSubsystem,
+    creditor_id: str,
+) -> str | None:
+    """Select the creditor's bank with the highest deposit rate (r_D).
+
+    Maximises the return on the received deposit: the payee's incoming
+    payment is credited to the bank that pays the *most* on deposits.
+
+    Algorithm:
+        1. Scan the creditor's existing BANK_DEPOSIT contracts.
+        2. For each issuing bank, look up its current r_D quote.
+        3. Return the bank with the highest r_D.
+        4. Fall back to any deposit-issuing bank, or the subsystem's
+           ``best_deposit_bank`` routing.
+
+    Args:
+        system: Main system state.
+        banking_sub: Active banking subsystem (provides r_D quotes).
+        creditor_id: Agent receiving payment.
+
+    Returns:
+        The chosen bank_id, or ``None`` if no bank can be determined.
+    """
+    from decimal import Decimal
+
+    agent = system.state.agents.get(creditor_id)
+    if agent is None:
+        return None
+
+    best_rate = Decimal("-1")
+    best_bank = None
+
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract and contract.kind == InstrumentKind.BANK_DEPOSIT:
+            bid = contract.liability_issuer_id
+            bank_state = banking_sub.banks.get(bid)
+            r_d = Decimal("0")
+            if bank_state and bank_state.current_quote:
+                r_d = bank_state.current_quote.deposit_rate
+            if r_d > best_rate:
+                best_rate = r_d
+                best_bank = bid
+
+    if best_bank is not None:
+        return best_bank
+
+    # Creditor has no deposits — use first available bank from any deposit
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract and contract.kind == InstrumentKind.BANK_DEPOSIT:
+            return contract.liability_issuer_id
+
+    # No deposits at all — try to get bank from banking subsystem
+    return banking_sub.best_deposit_bank(creditor_id)
 
 
 def _pay_with_cash(system: System, debtor_id: str, creditor_id: str, amount: int) -> int:

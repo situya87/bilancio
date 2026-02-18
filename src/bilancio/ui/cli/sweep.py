@@ -699,6 +699,33 @@ def sweep_comparison(
     help="Enable fourth arm: dealer trading + non-bank lending combined (default: disabled)",
 )
 @click.option(
+    "--enable-bank-passive/--no-bank-passive",
+    default=False,
+    help="Enable arm: banks + passive dealer",
+)
+@click.option(
+    "--enable-bank-dealer/--no-bank-dealer",
+    default=False,
+    help="Enable arm: banks + active dealer",
+)
+@click.option(
+    "--enable-bank-dealer-nbfi/--no-bank-dealer-nbfi",
+    default=False,
+    help="Enable arm: banks + active dealer + NBFI",
+)
+@click.option(
+    "--n-banks-for-banking",
+    type=int,
+    default=3,
+    help="Number of banks in banking arms (default: 3)",
+)
+@click.option(
+    "--bank-reserve-multiplier",
+    type=float,
+    default=0.12,
+    help="Reserve multiplier for banking arms (default: 0.12, calibrated for fair comparison)",
+)
+@click.option(
     "--n-banks",
     type=int,
     default=0,
@@ -743,6 +770,11 @@ def sweep_balanced(
     enable_lender: bool,
     lender_share: Decimal,
     enable_dealer_lender: bool,
+    enable_bank_passive: bool,
+    enable_bank_dealer: bool,
+    enable_bank_dealer_nbfi: bool,
+    n_banks_for_banking: int,
+    bank_reserve_multiplier: float,
     n_banks: int,
     reserve_multiplier: float,
 ) -> None:
@@ -858,6 +890,11 @@ def sweep_balanced(
         enable_lender=enable_lender,
         lender_share=lender_share,
         enable_dealer_lender=enable_dealer_lender,
+        enable_bank_passive=enable_bank_passive,
+        enable_bank_dealer=enable_bank_dealer,
+        enable_bank_dealer_nbfi=enable_bank_dealer_nbfi,
+        n_banks_for_banking=n_banks_for_banking,
+        bank_reserve_multiplier=bank_reserve_multiplier,
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,
     )
@@ -882,9 +919,27 @@ def sweep_balanced(
             except CLI_HANDLED_ERRORS as e:
                 click.echo(f"Warning: Failed to record run progress: {e}")
 
-        # Print summary
+        # Print summary — count completions across ALL enabled arms
         completed = sum(1 for r in results if r.trading_effect is not None)
         improved = sum(1 for r in results if r.trading_effect and r.trading_effect > 0)
+
+        # Track bank arm completions/failures
+        arm_summary: dict[str, dict[str, int]] = {}
+        if enable_lender:
+            ok = sum(1 for r in results if r.delta_lender is not None)
+            arm_summary["lender"] = {"completed": ok, "failed": len(results) - ok}
+        if enable_dealer_lender:
+            ok = sum(1 for r in results if r.delta_dealer_lender is not None)
+            arm_summary["dealer+lender"] = {"completed": ok, "failed": len(results) - ok}
+        if enable_bank_passive:
+            ok = sum(1 for r in results if r.delta_bank_passive is not None)
+            arm_summary["bank+passive"] = {"completed": ok, "failed": len(results) - ok}
+        if enable_bank_dealer:
+            ok = sum(1 for r in results if r.delta_bank_dealer is not None)
+            arm_summary["bank+dealer"] = {"completed": ok, "failed": len(results) - ok}
+        if enable_bank_dealer_nbfi:
+            ok = sum(1 for r in results if r.delta_bank_dealer_nbfi is not None)
+            arm_summary["bank+dealer+nbfi"] = {"completed": ok, "failed": len(results) - ok}
 
         # Complete job with summary
         if manager is not None:
@@ -895,6 +950,7 @@ def sweep_balanced(
                         "total_pairs": len(results),
                         "completed": completed,
                         "improved_with_trading": improved,
+                        "arm_summary": arm_summary,
                     },
                 )
             except CLI_HANDLED_ERRORS as e:
@@ -902,8 +958,11 @@ def sweep_balanced(
 
         click.echo("\nBalanced comparison complete!")
         click.echo(f"  Total pairs: {len(results)}")
-        click.echo(f"  Completed: {completed}")
+        click.echo(f"  Completed (passive vs active): {completed}")
         click.echo(f"  Improved with trading: {improved}")
+        for arm_name, counts in arm_summary.items():
+            status = "OK" if counts["failed"] == 0 else f"{counts['failed']} FAILED"
+            click.echo(f"  {arm_name}: {counts['completed']}/{len(results)} ({status})")
         click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
 
     except CLI_HANDLED_ERRORS as e:

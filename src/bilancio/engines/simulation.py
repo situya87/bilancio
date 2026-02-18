@@ -198,6 +198,7 @@ def run_day(
     enable_dealer: bool = False,
     enable_lender: bool = False,
     enable_rating: bool = False,
+    enable_banking: bool = False,
 ) -> None:
     """
     Run a single day's simulation with three phases.
@@ -213,6 +214,7 @@ def run_day(
         enable_dealer: If True, run dealer trading phase between scheduled actions and settlements
         enable_lender: If True, run non-bank lending phase
         enable_rating: If True, run rating agency phase
+        enable_banking: If True, run banking subphases (bank quotes, bank lending, interbank, repayments)
 
     Note: Rollover is controlled by system.state.rollover_enabled (Plan 024)
     """
@@ -253,6 +255,12 @@ def run_day(
         if system.state.estimate_logging_enabled:
             _log_rating_estimates(system, current_day)
 
+    # SubphaseB_BankQuotes: Refresh bank quotes (optional)
+    banking_sub = getattr(system.state, "banking_subsystem", None)
+    if enable_banking and banking_sub is not None:
+        system.log("SubphaseB_BankQuotes")
+        banking_sub.refresh_all_quotes(system, current_day)
+
     # SubphaseB_Lending: Non-bank lending phase (optional)
     # Runs BEFORE dealer trading so firms can borrow to cover shortfalls
     # before deciding whether to sell claims on the secondary market.
@@ -262,6 +270,14 @@ def run_day(
 
         lending_events = run_lending_phase(system, current_day, system.state.lender_config)
         system.state.events.extend(lending_events)
+
+    # SubphaseB_BankLending: Bank lending to traders (optional)
+    if enable_banking and banking_sub is not None:
+        system.log("SubphaseB_BankLending")
+        from bilancio.engines.bank_lending import run_bank_lending_phase
+
+        bank_lending_events = run_bank_lending_phase(system, current_day, banking_sub)
+        system.state.events.extend(bank_lending_events)
 
     # SubphaseB_Dealer: Run dealer trading phase (optional)
     if enable_dealer and system.state.dealer_subsystem is not None:
@@ -299,6 +315,14 @@ def run_day(
     system.log("PhaseC")  # optional: helps timeline
     settle_intraday_nets(system, current_day)
 
+    # SubphaseC_Interbank: Interbank lending (optional)
+    if enable_banking and banking_sub is not None:
+        system.log("SubphaseC_Interbank")
+        from bilancio.engines.interbank import run_interbank_lending
+
+        interbank_events = run_interbank_lending(system, current_day, banking_sub)
+        system.state.events.extend(interbank_events)
+
     # Phase D: CB corridor maintenance (interest + loan repayment)
     has_cb = any(agent.kind == AgentKind.CENTRAL_BANK for agent in system.state.agents.values())
     if has_cb:
@@ -318,6 +342,27 @@ def run_day(
 
         run_loan_repayments(system, current_day)
 
+    # Bank loan repayments
+    if enable_banking and banking_sub is not None:
+        from bilancio.engines.bank_lending import run_bank_loan_repayments
+
+        bank_repay_events = run_bank_loan_repayments(system, current_day, banking_sub)
+        system.state.events.extend(bank_repay_events)
+
+    # Deposit interest accrual
+    if enable_banking and banking_sub is not None:
+        from bilancio.engines.bank_interest import accrue_deposit_interest
+
+        interest_events = accrue_deposit_interest(system, current_day, banking_sub)
+        system.state.events.extend(interest_events)
+
+    # Interbank loan repayments
+    if enable_banking and banking_sub is not None:
+        from bilancio.engines.interbank import run_interbank_repayments
+
+        ib_repay_events = run_interbank_repayments(system, current_day, banking_sub)
+        system.state.events.extend(ib_repay_events)
+
     # Increment system day
     system.state.day += 1
 
@@ -329,6 +374,7 @@ def run_until_stable(
     enable_dealer: bool = False,
     enable_lender: bool = False,
     enable_rating: bool = False,
+    enable_banking: bool = False,
 ) -> list[DayReport]:
     """
     Advance day by day until the system is stable:
@@ -342,6 +388,7 @@ def run_until_stable(
         enable_dealer: If True, run dealer trading phase each day
         enable_lender: If True, run non-bank lending phase each day
         enable_rating: If True, run rating agency phase each day
+        enable_banking: If True, run banking subphases each day
 
     Note: Rollover is controlled by system.state.rollover_enabled (Plan 024)
     """
@@ -357,6 +404,7 @@ def run_until_stable(
             enable_dealer=enable_dealer,
             enable_lender=enable_lender,
             enable_rating=enable_rating,
+            enable_banking=enable_banking,
         )
         impacted = _impacted_today(system, day_before)
         defaults = _defaults_today(system, day_before)

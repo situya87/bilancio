@@ -428,11 +428,13 @@ def compile_ring_explorer_balanced(
         total_vbt_dealer_liquidity += actual_vbt_face[bucket] * cash_ratio
         total_vbt_dealer_liquidity += actual_dealer_face[bucket] * cash_ratio
 
-    # Cash scaling factor for VBT/Dealer (reduced in nbfi/nbfi_dealer modes)
-    if mode == "nbfi":
-        vbt_dealer_cash_scale = Decimal("0")  # NBFI gets everything
-    elif mode == "nbfi_dealer":
+    # Cash scaling factor for VBT/Dealer (reduced in nbfi/nbfi_dealer/banking modes)
+    if mode in ("nbfi", "banking"):
+        vbt_dealer_cash_scale = Decimal("0")  # NBFI or banks get everything
+    elif mode in ("nbfi_dealer", "bank_dealer"):
         vbt_dealer_cash_scale = Decimal("0.5")  # 50/50 split
+    elif mode == "bank_dealer_nbfi":
+        vbt_dealer_cash_scale = Decimal("1") / Decimal("3")  # Three-way split
     else:
         vbt_dealer_cash_scale = Decimal("1")  # Normal modes
 
@@ -466,8 +468,8 @@ def compile_ring_explorer_balanced(
                 }
             )
 
-    # Add non-bank lender agent and cash (lender/nbfi/nbfi_dealer modes)
-    if mode in ("lender", "nbfi", "nbfi_dealer"):
+    # Add non-bank lender agent and cash (lender/nbfi/nbfi_dealer/bank_dealer_nbfi modes)
+    if mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi"):
         agents.append(
             {
                 "id": "lender",
@@ -481,6 +483,8 @@ def compile_ring_explorer_balanced(
             lender_cash = total_vbt_dealer_liquidity  # 100% of VBT+dealer cash
         elif mode == "nbfi_dealer":
             lender_cash = total_vbt_dealer_liquidity * Decimal("0.5")  # 50% of VBT+dealer cash
+        elif mode == "bank_dealer_nbfi":
+            lender_cash = total_vbt_dealer_liquidity / Decimal("3")  # 33% three-way split
         else:
             lender_cash = Decimal(0)
         if lender_cash > 0:
@@ -505,22 +509,75 @@ def compile_ring_explorer_balanced(
                 "name": f"Bank {bank_idx}",
             })
 
-        # 2. Assign all non-bank, non-CB agents to banks (round-robin)
-        non_bank_ids = [
+        # 2. Assign agents to banks
+        # Traders: each at min(3, n_banks) banks (sliding window)
+        # Infrastructure (dealer/VBT/lender): one bank each (round-robin)
+        _infra_prefixes = ("vbt_", "dealer_", "lender")
+        trader_ids = [
             a["id"] for a in agents
-            if a["kind"] not in ("central_bank", "bank")
+            if a["kind"] in ("household", "firm")
+            and not a["id"].startswith(_infra_prefixes)
         ]
-        for idx, agent_id in enumerate(non_bank_ids):
-            bank_assignments[agent_id] = f"bank_{(idx % n_banks) + 1}"
+        infra_ids = [
+            a["id"] for a in agents
+            if a["kind"] not in ("central_bank", "bank", "household", "firm")
+            or a["id"].startswith(_infra_prefixes)
+        ]
 
-        # 3. After every mint_cash action, add a deposit_cash action
+        banks_per_trader = min(3, n_banks)
+        trader_bank_assignments: dict[str, list[str]] = {}
+        for idx, trader_id in enumerate(trader_ids):
+            assigned = []
+            for b in range(banks_per_trader):
+                bank_idx = ((idx + b) % n_banks) + 1
+                assigned.append(f"bank_{bank_idx}")
+            trader_bank_assignments[trader_id] = assigned
+            # Keep first bank in flat map for backward compat (deposit_cash)
+            bank_assignments[trader_id] = assigned[0]
+
+        infra_bank_assignments: dict[str, str] = {}
+        for idx, agent_id in enumerate(infra_ids):
+            bank_id = f"bank_{(idx % n_banks) + 1}"
+            infra_bank_assignments[agent_id] = bank_id
+            bank_assignments[agent_id] = bank_id
+
+        # 3. After every mint_cash action, add deposit_cash action(s)
+        # Traders: split deposits across assigned banks
+        # Infrastructure: all at one bank
         deposit_actions: list[dict[str, Any]] = []
         total_deposited = Decimal(0)
         for action in initial_actions:
             if "mint_cash" in action:
                 agent_id = action["mint_cash"]["to"]
                 amount = action["mint_cash"]["amount"]
-                if agent_id in bank_assignments:
+                if agent_id in trader_bank_assignments:
+                    # Split across assigned banks
+                    banks = trader_bank_assignments[agent_id]
+                    per_bank = int(Decimal(str(amount)) / len(banks))
+                    remainder = int(Decimal(str(amount))) - per_bank * len(banks)
+                    for i, bid in enumerate(banks):
+                        dep_amount = per_bank + (1 if i < remainder else 0)
+                        if dep_amount > 0:
+                            deposit_actions.append({
+                                "deposit_cash": {
+                                    "customer": agent_id,
+                                    "bank": bid,
+                                    "amount": dep_amount,
+                                }
+                            })
+                    total_deposited += Decimal(str(amount))
+                elif agent_id in infra_bank_assignments:
+                    # Infrastructure: all at one bank
+                    deposit_actions.append({
+                        "deposit_cash": {
+                            "customer": agent_id,
+                            "bank": infra_bank_assignments[agent_id],
+                            "amount": amount,
+                        }
+                    })
+                    total_deposited += Decimal(str(amount))
+                elif agent_id in bank_assignments:
+                    # Fallback to flat assignment
                     deposit_actions.append({
                         "deposit_cash": {
                             "customer": agent_id,
@@ -564,6 +621,7 @@ def compile_ring_explorer_balanced(
             "max_days": max(30, 3 * params.maturity.days),
             "quiet_days": params.maturity.days + 1 if rollover_enabled else 2,
             "rollover_enabled": rollover_enabled,  # Plan 024: continuous rollover
+            "enable_banking": n_banks > 0,
             "show": {
                 "balances": [agent["id"] for agent in agents],
                 "events": "detailed",
@@ -585,6 +643,11 @@ def compile_ring_explorer_balanced(
             "n_banks": n_banks,
             "bank_assignments": bank_assignments,
             "reserve_multiplier": reserve_multiplier,
+            "kappa": float(kappa) if kappa is not None else None,
+            "maturity_days": params.maturity.days,
+            "trader_bank_assignments": trader_bank_assignments if n_banks > 0 else {},
+            "infra_bank_assignments": infra_bank_assignments if n_banks > 0 else {},
+            "enable_banking": n_banks > 0,
         },
     }
 

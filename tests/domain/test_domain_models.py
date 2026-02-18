@@ -438,6 +438,7 @@ class TestInstrumentKind:
             "PAYABLE",
             "CB_LOAN",
             "NON_BANK_LOAN",
+            "BANK_LOAN",
             "DELIVERY_OBLIGATION",
         }
         assert set(InstrumentKind.__members__.keys()) == expected

@@ -207,6 +207,18 @@ def run_lending_phase(
             base_rate = portfolio.target_return()
             rate = pricer.price(base_rate, p_default)
 
+        # Anchor rate to CB corridor when banking subsystem is active
+        banking_sub = getattr(system.state, "banking_subsystem", None)
+        if banking_sub is not None:
+            from decimal import Decimal as D
+            r_floor = banking_sub.bank_profile.r_floor(banking_sub.kappa)
+            omega = banking_sub.bank_profile.corridor_width(banking_sub.kappa)
+            p_0 = D("1") / (D("1") + banking_sub.kappa)
+            if p_0 > D("0"):
+                rate = r_floor + omega * (p_default / p_0)
+            else:
+                rate = r_floor + omega
+
         # Borrow-vs-sell: skip this loan if selling is cheaper
         selling_cost = _expected_selling_cost(system, agent_id, current_day)
         if selling_cost is not None and selling_cost < rate:
@@ -255,6 +267,10 @@ def run_lending_phase(
             effective_maturity = selector.select_maturity()
             if profile is not None and config.max_ring_maturity is not None:
                 effective_maturity = min(profile.max_loan_maturity, config.max_ring_maturity)
+            # Align NBFI loan maturity with bank loan maturity when banking is active
+            banking_sub_mat = getattr(system.state, "banking_subsystem", None)
+            if banking_sub_mat is not None:
+                effective_maturity = banking_sub_mat.loan_maturity
             loan_id = system.nonbank_lend(
                 lender_id=lender_id,
                 borrower_id=opp["borrower_id"],
