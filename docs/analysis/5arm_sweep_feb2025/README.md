@@ -1,10 +1,10 @@
-# 5-Arm Balanced Comparison Sweep — February 2025
+# 4-Arm Balanced Comparison Sweep — February 2025
 
 ## Configuration
 
 | Parameter | Value |
 |-----------|-------|
-| Arms | passive, active (dealer), lender (NBFI), NBFI (dealer+lender combined), dealer+lender |
+| Arms | passive, active (dealer), lender (NBFI), dealer+lender |
 | n_agents | 50 |
 | maturity_days | 10 |
 | face_value | 20 |
@@ -16,7 +16,7 @@
 | planning_horizon | 10 |
 | rollover | enabled |
 | Total pairs | 45 (5×3×3) |
-| Total runs | 225 (45 pairs × 5 arms) |
+| Total runs | 180 (45 pairs × 4 arms) |
 | Duration | 1h 49m (local) |
 
 ## Results by Kappa (averaged over c and μ)
