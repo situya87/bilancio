@@ -14,6 +14,7 @@ import logging
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from bilancio.core.atomic_tx import atomic
 from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
 
@@ -520,12 +521,13 @@ def _repay_loan(
                 try:
                     system.transfer_reserves(other_bid, bank_id, debited)
                 except Exception:
-                    # Reserve transfer failed — borrow from CB to cover
+                    # Reserve transfer failed — try CB refinancing atomically
                     try:
-                        system.cb_lend_reserves(other_bid, debited, system.state.day)
-                        system.transfer_reserves(other_bid, bank_id, debited)
+                        with atomic(system):
+                            system.cb_lend_reserves(other_bid, debited, system.state.day)
+                            system.transfer_reserves(other_bid, bank_id, debited)
                     except Exception:
-                        # CB refinancing also failed — reverse deposit debit
+                        # Both operations rolled back — reverse deposit debit
                         logger.warning(
                             "Reserve transfer failed (even with CB): %s -> %s amount=%d; "
                             "reversing deposit debit",

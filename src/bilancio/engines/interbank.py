@@ -13,6 +13,7 @@ import logging
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from bilancio.core.atomic_tx import atomic
 from bilancio.domain.instruments.base import InstrumentKind
 
 if TYPE_CHECKING:
@@ -157,11 +158,19 @@ def run_interbank_repayments(
                 if shortfall < 0:
                     shortfall = 0
 
+                cb_loan_id = None
                 try:
-                    if shortfall > 0:
-                        cb_loan_id = system.cb_lend_reserves(
-                            loan.borrower_bank, shortfall, current_day,
+                    with atomic(system):
+                        if shortfall > 0:
+                            cb_loan_id = system.cb_lend_reserves(
+                                loan.borrower_bank, shortfall, current_day,
+                            )
+                        # Retry the transfer after CB refinancing
+                        system.transfer_reserves(
+                            loan.borrower_bank, loan.lender_bank, repayment,
                         )
+                    # Success — log events OUTSIDE the atomic block
+                    if shortfall > 0:
                         events.append({
                             "kind": "CBRefinance",
                             "day": current_day,
@@ -170,11 +179,6 @@ def run_interbank_repayments(
                             "cb_loan_id": cb_loan_id,
                             "reason": "interbank_repayment",
                         })
-
-                    # Retry the transfer after CB refinancing
-                    system.transfer_reserves(
-                        loan.borrower_bank, loan.lender_bank, repayment,
-                    )
                     events.append({
                         "kind": "InterbankRepaid",
                         "day": current_day,
@@ -183,9 +187,10 @@ def run_interbank_repayments(
                         "principal": loan.amount,
                         "repayment": repayment,
                         "interest": repayment - loan.amount,
-                        "cb_refinanced": True,
+                        "cb_refinanced": shortfall > 0,
                     })
                 except Exception:
+                    # Both operations rolled back atomically
                     logger.warning(
                         "Interbank repayment failed even after CB refinancing: "
                         "%s -> %s, amount=%d",
