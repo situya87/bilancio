@@ -393,7 +393,7 @@ def run_day(
             bank_id = loan.liability_issuer_id
             try:
                 system.cb_repay_loan(loan_id, bank_id)
-            except (ValidationError, Exception):
+            except Exception:
                 # Bank can't repay — try refinancing
                 repayment = loan.repayment_amount
                 try:
@@ -702,7 +702,7 @@ def _run_bank_loan_winddown(system: System, banking_sub) -> int:
                 bank_id = loan.liability_issuer_id
                 try:
                     system.cb_repay_loan(loan_id, bank_id)
-                except (ValidationError, Exception):
+                except Exception:
                     # CB is frozen during wind-down, so refinancing will fail
                     bank_agent = system.state.agents.get(bank_id)
                     if bank_agent and not bank_agent.defaulted:
@@ -718,6 +718,10 @@ def _run_bank_loan_winddown(system: System, banking_sub) -> int:
                             "Bank %s defaulted during wind-down (can't repay CB loan)",
                             bank_id,
                         )
+                        # Resolve failed bank: distribute reserves, write off liabilities
+                        from bilancio.engines.settlement import _resolve_failed_bank, _write_off_liabilities
+                        _resolve_failed_bank(system, bank_id)
+                        _write_off_liabilities(system, bank_id)
                     _remove_contract(system, loan_id)
 
         system.state.day += 1

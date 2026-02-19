@@ -242,6 +242,10 @@ def burn_bank_cash(system: System, bank_id: str) -> int:
         # Delete the contract
         del system.state.contracts[cid]
 
+    # Decrement CB cash outstanding to maintain invariant
+    # (mirrors retire_cash() in system.py)
+    system.state.cb_cash_outstanding -= total_burned
+
     if total_burned > 0:
         system.log("BankCashBurned", bank_id=bank_id, amount=total_burned)
 
