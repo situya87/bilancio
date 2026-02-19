@@ -161,6 +161,25 @@ class BalancedComparisonResult:
     cascade_fraction_bank_dealer_nbfi: Decimal | None = None
     bank_dealer_nbfi_modal_call_id: str | None = None
 
+    # CB stress metrics (banking arms only)
+    cb_loans_created_bank_passive: int = 0
+    cb_interest_total_bank_passive: int = 0
+    cb_loans_outstanding_pre_final_bank_passive: int = 0
+    bank_defaults_final_bank_passive: int = 0
+    cb_reserve_destruction_pct_bank_passive: float = 0.0
+
+    cb_loans_created_bank_dealer: int = 0
+    cb_interest_total_bank_dealer: int = 0
+    cb_loans_outstanding_pre_final_bank_dealer: int = 0
+    bank_defaults_final_bank_dealer: int = 0
+    cb_reserve_destruction_pct_bank_dealer: float = 0.0
+
+    cb_loans_created_bank_dealer_nbfi: int = 0
+    cb_interest_total_bank_dealer_nbfi: int = 0
+    cb_loans_outstanding_pre_final_bank_dealer_nbfi: int = 0
+    bank_defaults_final_bank_dealer_nbfi: int = 0
+    cb_reserve_destruction_pct_bank_dealer_nbfi: float = 0.0
+
     @staticmethod
     def _compute_incremental_pnl(
         active_metrics: dict[str, Any] | None,
@@ -533,6 +552,21 @@ class BalancedComparisonRunner:
         "bank_dealer_nbfi_status",
         "n_defaults_bank_dealer_nbfi",
         "cascade_fraction_bank_dealer_nbfi",
+        "cb_loans_created_bank_passive",
+        "cb_interest_total_bank_passive",
+        "cb_loans_outstanding_pre_final_bank_passive",
+        "bank_defaults_final_bank_passive",
+        "cb_reserve_destruction_pct_bank_passive",
+        "cb_loans_created_bank_dealer",
+        "cb_interest_total_bank_dealer",
+        "cb_loans_outstanding_pre_final_bank_dealer",
+        "bank_defaults_final_bank_dealer",
+        "cb_reserve_destruction_pct_bank_dealer",
+        "cb_loans_created_bank_dealer_nbfi",
+        "cb_interest_total_bank_dealer_nbfi",
+        "cb_loans_outstanding_pre_final_bank_dealer_nbfi",
+        "bank_defaults_final_bank_dealer_nbfi",
+        "cb_reserve_destruction_pct_bank_dealer_nbfi",
     ]
 
     def __init__(
@@ -1206,6 +1240,11 @@ class BalancedComparisonRunner:
                 "n_defaults_bank_passive": s.n_defaults,
                 "cascade_fraction_bank_passive": s.cascade_fraction,
                 "bank_passive_modal_call_id": s.modal_call_id,
+                "cb_loans_created_bank_passive": s.cb_loans_created_count,
+                "cb_interest_total_bank_passive": s.cb_interest_total_paid,
+                "cb_loans_outstanding_pre_final_bank_passive": s.cb_loans_outstanding_pre_final,
+                "bank_defaults_final_bank_passive": s.bank_defaults_final,
+                "cb_reserve_destruction_pct_bank_passive": s.cb_reserve_destruction_pct,
             }
 
         bank_dealer_data: dict[str, Any] = {}
@@ -1219,6 +1258,11 @@ class BalancedComparisonRunner:
                 "n_defaults_bank_dealer": s.n_defaults,
                 "cascade_fraction_bank_dealer": s.cascade_fraction,
                 "bank_dealer_modal_call_id": s.modal_call_id,
+                "cb_loans_created_bank_dealer": s.cb_loans_created_count,
+                "cb_interest_total_bank_dealer": s.cb_interest_total_paid,
+                "cb_loans_outstanding_pre_final_bank_dealer": s.cb_loans_outstanding_pre_final,
+                "bank_defaults_final_bank_dealer": s.bank_defaults_final,
+                "cb_reserve_destruction_pct_bank_dealer": s.cb_reserve_destruction_pct,
             }
 
         bank_dealer_nbfi_data: dict[str, Any] = {}
@@ -1232,6 +1276,11 @@ class BalancedComparisonRunner:
                 "n_defaults_bank_dealer_nbfi": s.n_defaults,
                 "cascade_fraction_bank_dealer_nbfi": s.cascade_fraction,
                 "bank_dealer_nbfi_modal_call_id": s.modal_call_id,
+                "cb_loans_created_bank_dealer_nbfi": s.cb_loans_created_count,
+                "cb_interest_total_bank_dealer_nbfi": s.cb_interest_total_paid,
+                "cb_loans_outstanding_pre_final_bank_dealer_nbfi": s.cb_loans_outstanding_pre_final,
+                "bank_defaults_final_bank_dealer_nbfi": s.bank_defaults_final,
+                "cb_reserve_destruction_pct_bank_dealer_nbfi": s.cb_reserve_destruction_pct,
             }
 
         return BalancedComparisonResult(
@@ -2127,6 +2176,21 @@ class BalancedComparisonRunner:
                     "cascade_fraction_bank_dealer_nbfi": str(result.cascade_fraction_bank_dealer_nbfi)
                     if result.cascade_fraction_bank_dealer_nbfi is not None
                     else "",
+                    "cb_loans_created_bank_passive": str(result.cb_loans_created_bank_passive),
+                    "cb_interest_total_bank_passive": str(result.cb_interest_total_bank_passive),
+                    "cb_loans_outstanding_pre_final_bank_passive": str(result.cb_loans_outstanding_pre_final_bank_passive),
+                    "bank_defaults_final_bank_passive": str(result.bank_defaults_final_bank_passive),
+                    "cb_reserve_destruction_pct_bank_passive": str(result.cb_reserve_destruction_pct_bank_passive),
+                    "cb_loans_created_bank_dealer": str(result.cb_loans_created_bank_dealer),
+                    "cb_interest_total_bank_dealer": str(result.cb_interest_total_bank_dealer),
+                    "cb_loans_outstanding_pre_final_bank_dealer": str(result.cb_loans_outstanding_pre_final_bank_dealer),
+                    "bank_defaults_final_bank_dealer": str(result.bank_defaults_final_bank_dealer),
+                    "cb_reserve_destruction_pct_bank_dealer": str(result.cb_reserve_destruction_pct_bank_dealer),
+                    "cb_loans_created_bank_dealer_nbfi": str(result.cb_loans_created_bank_dealer_nbfi),
+                    "cb_interest_total_bank_dealer_nbfi": str(result.cb_interest_total_bank_dealer_nbfi),
+                    "cb_loans_outstanding_pre_final_bank_dealer_nbfi": str(result.cb_loans_outstanding_pre_final_bank_dealer_nbfi),
+                    "bank_defaults_final_bank_dealer_nbfi": str(result.bank_defaults_final_bank_dealer_nbfi),
+                    "cb_reserve_destruction_pct_bank_dealer_nbfi": str(result.cb_reserve_destruction_pct_bank_dealer_nbfi),
                 }
                 writer.writerow(row)
 

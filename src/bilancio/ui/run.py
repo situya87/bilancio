@@ -11,6 +11,7 @@ from rich.prompt import Confirm
 
 from bilancio.config import apply_to_system, load_yaml
 from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
+from bilancio.domain.agent import AgentKind
 from bilancio.engines.simulation import run_day
 from bilancio.engines.system import System
 from bilancio.export.writers import write_balances_csv, write_events_jsonl
@@ -697,6 +698,9 @@ def run_until_stable_mode(
             run_day,
         )
 
+        # Capture initial reserves for CB stress metrics
+        system.state.cb_reserves_initial = system.state.cb_reserves_outstanding
+
         reports = []
         consecutive_quiet = 0
         consecutive_no_defaults = 0
@@ -879,6 +883,18 @@ def run_until_stable_mode(
         # If we didn't break early, check if we hit max days
         else:
             console.print("[yellow][!][/yellow] Maximum days reached without stable state")
+
+        # Final CB settlement: force banks to repay outstanding CB loans
+        if enable_banking:
+            has_cb = any(a.kind == AgentKind.CENTRAL_BANK for a in system.state.agents.values())
+            if has_cb:
+                from bilancio.engines.simulation import run_final_cb_settlement
+                final_result = run_final_cb_settlement(system)
+                if final_result["loans_attempted"] > 0 and not quiet_mode:
+                    console.print(
+                        f"[dim]Final CB settlement: {final_result['loans_repaid']}/{final_result['loans_attempted']} repaid, "
+                        f"{final_result['loans_written_off']} written off, {final_result['bank_defaults']} bank defaults[/dim]"
+                    )
 
     except (DefaultError, SimulationHalt) as e:
         show_error_panel(
