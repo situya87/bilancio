@@ -722,8 +722,14 @@ def sweep_comparison(
 @click.option(
     "--bank-reserve-multiplier",
     type=float,
-    default=0.12,
-    help="Reserve multiplier for banking arms (default: 0.12, calibrated for fair comparison)",
+    default=0.5,
+    help="Reserve multiplier for banking arms (default: 0.5, reserve-constrained)",
+)
+@click.option(
+    "--cb-lending-cutoff-day",
+    type=int,
+    default=None,
+    help="Day to freeze CB lending (default: auto = maturity_days)",
 )
 @click.option(
     "--n-banks",
@@ -775,6 +781,7 @@ def sweep_balanced(
     enable_bank_dealer_nbfi: bool,
     n_banks_for_banking: int,
     bank_reserve_multiplier: float,
+    cb_lending_cutoff_day: int | None,
     n_banks: int,
     reserve_multiplier: float,
 ) -> None:
@@ -895,6 +902,7 @@ def sweep_balanced(
         enable_bank_dealer_nbfi=enable_bank_dealer_nbfi,
         n_banks_for_banking=n_banks_for_banking,
         bank_reserve_multiplier=bank_reserve_multiplier,
+        cb_lending_cutoff_day=cb_lending_cutoff_day,
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,
     )

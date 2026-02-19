@@ -416,7 +416,10 @@ class BalancedComparisonConfig(BaseModel):
         default=3, description="Number of banks in banking arms"
     )
     bank_reserve_multiplier: float = Field(
-        default=10.0, description="Reserve multiplier for banking arms (CB refinancing covers shortfalls)"
+        default=0.5, description="Reserve multiplier for banking arms (< 1 = reserve-constrained)"
+    )
+    cb_lending_cutoff_day: int | None = Field(
+        default=None, description="Day to freeze CB lending (None = auto: maturity_days)"
     )
     lender_share: Decimal = Field(
         default=Decimal("0.10"), description="Lender capital as fraction of system cash"
@@ -976,6 +979,7 @@ class BalancedComparisonRunner:
 
     def _get_bank_passive_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
         """Banks + passive dealer: banks lend, dealer holds but doesn't trade."""
+        effective_cutoff = self.config.cb_lending_cutoff_day if self.config.cb_lending_cutoff_day is not None else self.config.maturity_days
         return RingSweepRunner(
             out_dir=self.base_dir / "bank_passive",
             name_prefix=f"{self.config.name_prefix} (Bank+Passive)",
@@ -1020,6 +1024,7 @@ class BalancedComparisonRunner:
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
+            cb_lending_cutoff_day=effective_cutoff,
         )
 
     def _get_bank_dealer_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1029,6 +1034,7 @@ class BalancedComparisonRunner:
             "dealer_share": str(Decimal("0")),
             "vbt_share": str(self.config.vbt_share),
         }
+        effective_cutoff = self.config.cb_lending_cutoff_day if self.config.cb_lending_cutoff_day is not None else self.config.maturity_days
         return RingSweepRunner(
             out_dir=self.base_dir / "bank_dealer",
             name_prefix=f"{self.config.name_prefix} (Bank+Dealer)",
@@ -1073,6 +1079,7 @@ class BalancedComparisonRunner:
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
+            cb_lending_cutoff_day=effective_cutoff,
         )
 
     def _get_bank_dealer_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1082,6 +1089,7 @@ class BalancedComparisonRunner:
             "dealer_share": str(Decimal("0")),
             "vbt_share": str(self.config.vbt_share),
         }
+        effective_cutoff = self.config.cb_lending_cutoff_day if self.config.cb_lending_cutoff_day is not None else self.config.maturity_days
         return RingSweepRunner(
             out_dir=self.base_dir / "bank_dealer_nbfi",
             name_prefix=f"{self.config.name_prefix} (Bank+Dealer+NBFI)",
@@ -1128,6 +1136,7 @@ class BalancedComparisonRunner:
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
+            cb_lending_cutoff_day=effective_cutoff,
         )
 
     def run_all(self) -> list[BalancedComparisonResult]:

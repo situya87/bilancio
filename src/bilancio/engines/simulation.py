@@ -339,8 +339,7 @@ def run_day(
             try:
                 system.cb_repay_loan(loan_id, bank_id)
             except (ValidationError, Exception):
-                # Bank can't repay — refinance by issuing a new CB loan
-                # to cover the repayment amount, then retry
+                # Bank can't repay — try refinancing
                 repayment = loan.repayment_amount
                 try:
                     system.cb_lend_reserves(bank_id, repayment, current_day)
@@ -349,11 +348,31 @@ def run_day(
                         "CB loan refinanced: bank=%s loan=%s amount=%d",
                         bank_id, loan_id, repayment,
                     )
-                except Exception:
-                    logger.warning(
-                        "CB loan repayment failed even after refinancing: bank=%s loan=%s",
-                        bank_id, loan_id,
-                    )
+                except (ValueError, ValidationError):
+                    # Refinancing failed (frozen or cap exceeded)
+                    if system.state.cb_lending_frozen:
+                        # Bank defaults: write off loan, mark as defaulted
+                        bank_agent = system.state.agents.get(bank_id)
+                        if bank_agent and not bank_agent.defaulted:
+                            bank_agent.defaulted = True
+                            system.state.defaulted_agent_ids.add(bank_id)
+                            system.log(
+                                "BankDefaultCBFreeze",
+                                bank_id=bank_id,
+                                loan_id=loan_id,
+                                amount=loan.amount,
+                                day=current_day,
+                            )
+                            logger.info(
+                                "Bank %s defaulted (CB frozen, can't repay %d)",
+                                bank_id, loan.amount,
+                            )
+                        _remove_contract(system, loan_id)
+                    else:
+                        logger.warning(
+                            "CB loan repayment failed even after refinancing: bank=%s loan=%s",
+                            bank_id, loan_id,
+                        )
 
     # Non-bank loan repayment
     has_lender = any(
@@ -542,6 +561,7 @@ def run_until_stable(
     enable_banking: bool = False,
     enable_bank_lending: bool = False,
     enable_final_cb_settlement: bool | None = None,
+    cb_lending_cutoff_day: int | None = None,
 ) -> list[DayReport]:
     """
     Advance day by day until the system is stable:
@@ -572,6 +592,15 @@ def run_until_stable(
 
     for _ in range(max_days):
         day_before = system.state.day
+        # Activate CB lending freeze when cutoff day is reached
+        if (
+            cb_lending_cutoff_day is not None
+            and day_before >= cb_lending_cutoff_day
+            and not system.state.cb_lending_frozen
+        ):
+            system.state.cb_lending_frozen = True
+            system.log("CBLendingFreezeActivated", day=day_before, cutoff_day=cb_lending_cutoff_day)
+            logger.info("CB lending frozen at day %d (cutoff=%d)", day_before, cb_lending_cutoff_day)
         run_day(
             system,
             enable_dealer=enable_dealer,

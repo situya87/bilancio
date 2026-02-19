@@ -67,6 +67,7 @@ class State:
     rating_registry: dict[str, Any] = field(default_factory=dict)
     estimate_log: list[Any] = field(default_factory=list)
     estimate_logging_enabled: bool = False
+    cb_lending_frozen: bool = False
 
 
 class System:
@@ -464,6 +465,9 @@ class System:
         Returns:
             The CBLoan instrument ID
         """
+        if self.state.cb_lending_frozen:
+            self.log("CBLendingFrozen", bank_id=bank_id, amount=amount, day=day)
+            raise ValueError("CB lending is frozen")
         cb_id = self._central_bank_id()
         cb = self.state.agents[cb_id]
 
