@@ -180,6 +180,19 @@ class BalancedComparisonResult:
     bank_defaults_final_bank_dealer_nbfi: int = 0
     cb_reserve_destruction_pct_bank_dealer_nbfi: float = 0.0
 
+    # Banking-specific default metrics (Plan 039: δ_bank + deposit_loss)
+    delta_bank_bank_passive: float | None = None
+    deposit_loss_gross_bank_passive: int = 0
+    deposit_loss_pct_bank_passive: float | None = None
+
+    delta_bank_bank_dealer: float | None = None
+    deposit_loss_gross_bank_dealer: int = 0
+    deposit_loss_pct_bank_dealer: float | None = None
+
+    delta_bank_bank_dealer_nbfi: float | None = None
+    deposit_loss_gross_bank_dealer_nbfi: int = 0
+    deposit_loss_pct_bank_dealer_nbfi: float | None = None
+
     @staticmethod
     def _compute_incremental_pnl(
         active_metrics: dict[str, Any] | None,
@@ -570,6 +583,15 @@ class BalancedComparisonRunner:
         "cb_loans_outstanding_pre_final_bank_dealer_nbfi",
         "bank_defaults_final_bank_dealer_nbfi",
         "cb_reserve_destruction_pct_bank_dealer_nbfi",
+        "delta_bank_bank_passive",
+        "deposit_loss_gross_bank_passive",
+        "deposit_loss_pct_bank_passive",
+        "delta_bank_bank_dealer",
+        "deposit_loss_gross_bank_dealer",
+        "deposit_loss_pct_bank_dealer",
+        "delta_bank_bank_dealer_nbfi",
+        "deposit_loss_gross_bank_dealer_nbfi",
+        "deposit_loss_pct_bank_dealer_nbfi",
     ]
 
     def __init__(
@@ -1254,6 +1276,9 @@ class BalancedComparisonRunner:
                 "cb_loans_outstanding_pre_final_bank_passive": s.cb_loans_outstanding_pre_final,
                 "bank_defaults_final_bank_passive": s.bank_defaults_final,
                 "cb_reserve_destruction_pct_bank_passive": s.cb_reserve_destruction_pct,
+                "delta_bank_bank_passive": s.delta_bank,
+                "deposit_loss_gross_bank_passive": s.deposit_loss_gross,
+                "deposit_loss_pct_bank_passive": s.deposit_loss_pct,
             }
 
         bank_dealer_data: dict[str, Any] = {}
@@ -1272,6 +1297,9 @@ class BalancedComparisonRunner:
                 "cb_loans_outstanding_pre_final_bank_dealer": s.cb_loans_outstanding_pre_final,
                 "bank_defaults_final_bank_dealer": s.bank_defaults_final,
                 "cb_reserve_destruction_pct_bank_dealer": s.cb_reserve_destruction_pct,
+                "delta_bank_bank_dealer": s.delta_bank,
+                "deposit_loss_gross_bank_dealer": s.deposit_loss_gross,
+                "deposit_loss_pct_bank_dealer": s.deposit_loss_pct,
             }
 
         bank_dealer_nbfi_data: dict[str, Any] = {}
@@ -1290,6 +1318,9 @@ class BalancedComparisonRunner:
                 "cb_loans_outstanding_pre_final_bank_dealer_nbfi": s.cb_loans_outstanding_pre_final,
                 "bank_defaults_final_bank_dealer_nbfi": s.bank_defaults_final,
                 "cb_reserve_destruction_pct_bank_dealer_nbfi": s.cb_reserve_destruction_pct,
+                "delta_bank_bank_dealer_nbfi": s.delta_bank,
+                "deposit_loss_gross_bank_dealer_nbfi": s.deposit_loss_gross,
+                "deposit_loss_pct_bank_dealer_nbfi": s.deposit_loss_pct,
             }
 
         return BalancedComparisonResult(
@@ -1799,6 +1830,14 @@ class BalancedComparisonRunner:
                 "n_defaults_bank_passive": bp_result.n_defaults,
                 "cascade_fraction_bank_passive": bp_result.cascade_fraction,
                 "bank_passive_modal_call_id": bp_result.modal_call_id,
+                "cb_loans_created_bank_passive": bp_result.cb_loans_created_count,
+                "cb_interest_total_bank_passive": bp_result.cb_interest_total_paid,
+                "cb_loans_outstanding_pre_final_bank_passive": bp_result.cb_loans_outstanding_pre_final,
+                "bank_defaults_final_bank_passive": bp_result.bank_defaults_final,
+                "cb_reserve_destruction_pct_bank_passive": bp_result.cb_reserve_destruction_pct,
+                "delta_bank_bank_passive": bp_result.delta_bank,
+                "deposit_loss_gross_bank_passive": bp_result.deposit_loss_gross,
+                "deposit_loss_pct_bank_passive": bp_result.deposit_loss_pct,
             }
 
         # Run bank+dealer (optional — banking arm F)
@@ -1826,6 +1865,14 @@ class BalancedComparisonRunner:
                 "n_defaults_bank_dealer": bd_result.n_defaults,
                 "cascade_fraction_bank_dealer": bd_result.cascade_fraction,
                 "bank_dealer_modal_call_id": bd_result.modal_call_id,
+                "cb_loans_created_bank_dealer": bd_result.cb_loans_created_count,
+                "cb_interest_total_bank_dealer": bd_result.cb_interest_total_paid,
+                "cb_loans_outstanding_pre_final_bank_dealer": bd_result.cb_loans_outstanding_pre_final,
+                "bank_defaults_final_bank_dealer": bd_result.bank_defaults_final,
+                "cb_reserve_destruction_pct_bank_dealer": bd_result.cb_reserve_destruction_pct,
+                "delta_bank_bank_dealer": bd_result.delta_bank,
+                "deposit_loss_gross_bank_dealer": bd_result.deposit_loss_gross,
+                "deposit_loss_pct_bank_dealer": bd_result.deposit_loss_pct,
             }
 
         # Run bank+dealer+nbfi (optional — banking arm G)
@@ -1853,6 +1900,14 @@ class BalancedComparisonRunner:
                 "n_defaults_bank_dealer_nbfi": bdn_result.n_defaults,
                 "cascade_fraction_bank_dealer_nbfi": bdn_result.cascade_fraction,
                 "bank_dealer_nbfi_modal_call_id": bdn_result.modal_call_id,
+                "cb_loans_created_bank_dealer_nbfi": bdn_result.cb_loans_created_count,
+                "cb_interest_total_bank_dealer_nbfi": bdn_result.cb_interest_total_paid,
+                "cb_loans_outstanding_pre_final_bank_dealer_nbfi": bdn_result.cb_loans_outstanding_pre_final,
+                "bank_defaults_final_bank_dealer_nbfi": bdn_result.bank_defaults_final,
+                "cb_reserve_destruction_pct_bank_dealer_nbfi": bdn_result.cb_reserve_destruction_pct,
+                "delta_bank_bank_dealer_nbfi": bdn_result.delta_bank,
+                "deposit_loss_gross_bank_dealer_nbfi": bdn_result.deposit_loss_gross,
+                "deposit_loss_pct_bank_dealer_nbfi": bdn_result.deposit_loss_pct,
             }
 
         result = BalancedComparisonResult(
@@ -2200,6 +2255,27 @@ class BalancedComparisonRunner:
                     "cb_loans_outstanding_pre_final_bank_dealer_nbfi": str(result.cb_loans_outstanding_pre_final_bank_dealer_nbfi),
                     "bank_defaults_final_bank_dealer_nbfi": str(result.bank_defaults_final_bank_dealer_nbfi),
                     "cb_reserve_destruction_pct_bank_dealer_nbfi": str(result.cb_reserve_destruction_pct_bank_dealer_nbfi),
+                    "delta_bank_bank_passive": str(result.delta_bank_bank_passive)
+                    if result.delta_bank_bank_passive is not None
+                    else "",
+                    "deposit_loss_gross_bank_passive": str(result.deposit_loss_gross_bank_passive),
+                    "deposit_loss_pct_bank_passive": str(result.deposit_loss_pct_bank_passive)
+                    if result.deposit_loss_pct_bank_passive is not None
+                    else "",
+                    "delta_bank_bank_dealer": str(result.delta_bank_bank_dealer)
+                    if result.delta_bank_bank_dealer is not None
+                    else "",
+                    "deposit_loss_gross_bank_dealer": str(result.deposit_loss_gross_bank_dealer),
+                    "deposit_loss_pct_bank_dealer": str(result.deposit_loss_pct_bank_dealer)
+                    if result.deposit_loss_pct_bank_dealer is not None
+                    else "",
+                    "delta_bank_bank_dealer_nbfi": str(result.delta_bank_bank_dealer_nbfi)
+                    if result.delta_bank_bank_dealer_nbfi is not None
+                    else "",
+                    "deposit_loss_gross_bank_dealer_nbfi": str(result.deposit_loss_gross_bank_dealer_nbfi),
+                    "deposit_loss_pct_bank_dealer_nbfi": str(result.deposit_loss_pct_bank_dealer_nbfi)
+                    if result.deposit_loss_pct_bank_dealer_nbfi is not None
+                    else "",
                 }
                 writer.writerow(row)
 

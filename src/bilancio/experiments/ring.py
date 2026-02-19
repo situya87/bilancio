@@ -65,6 +65,10 @@ class RingRunSummary:
     cb_loans_outstanding_pre_final: int = 0
     bank_defaults_final: int = 0
     cb_reserve_destruction_pct: float = 0.0
+    # Banking-specific default metrics (Plan 039)
+    delta_bank: float | None = None
+    deposit_loss_gross: int = 0
+    deposit_loss_pct: float | None = None
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -836,6 +840,30 @@ class RingSweepRunner:
         n_defaults = int(bundle.summary.get("n_defaults", 0))
         cascade_fraction_val = bundle.summary.get("cascade_fraction")
 
+        # CB stress metrics (Plan 038)
+        cb_loans_created_count = int(
+            bundle.summary.get("cb_loans_created_count", 0)
+        )
+        cb_interest_total_paid = int(
+            bundle.summary.get("cb_interest_total_paid", 0)
+        )
+        cb_loans_outstanding_pre_final = int(
+            bundle.summary.get("cb_loans_outstanding_pre_final", 0)
+        )
+        bank_defaults_final = int(
+            bundle.summary.get("bank_defaults_final", 0)
+        )
+        cb_reserve_destruction_pct = float(
+            bundle.summary.get("cb_reserve_destruction_pct", 0.0)
+        )
+
+        # Banking-specific default metrics (Plan 039)
+        delta_bank = bundle.summary.get("delta_bank")
+        deposit_loss_gross = int(
+            bundle.summary.get("deposit_loss_gross", 0)
+        )
+        deposit_loss_pct = bundle.summary.get("deposit_loss_pct")
+
         # Read dealer metrics if available (treatment runs with dealer enabled)
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = out_dir / "dealer_metrics.json"
@@ -886,6 +914,14 @@ class RingSweepRunner:
             cascade_fraction=cascade_fraction_val,
             dealer_metrics=dealer_metrics,
             modal_call_id=result.modal_call_id,
+            cb_loans_created_count=cb_loans_created_count,
+            cb_interest_total_paid=cb_interest_total_paid,
+            cb_loans_outstanding_pre_final=cb_loans_outstanding_pre_final,
+            bank_defaults_final=bank_defaults_final,
+            cb_reserve_destruction_pct=cb_reserve_destruction_pct,
+            delta_bank=delta_bank,
+            deposit_loss_gross=deposit_loss_gross,
+            deposit_loss_pct=deposit_loss_pct,
         )
 
     def _prepare_run(
@@ -1207,6 +1243,9 @@ class RingSweepRunner:
                 cb_loans_outstanding_pre_final=int(result.metrics.get("cb_loans_outstanding_pre_final", 0)),
                 bank_defaults_final=int(result.metrics.get("bank_defaults_final", 0)),
                 cb_reserve_destruction_pct=float(result.metrics.get("cb_reserve_destruction_pct", 0.0)),
+                delta_bank=result.metrics.get("delta_bank"),
+                deposit_loss_gross=int(result.metrics.get("deposit_loss_gross", 0)),
+                deposit_loss_pct=result.metrics.get("deposit_loss_pct"),
             )
 
         # Local path: load artifacts, compute metrics, update registry
@@ -1285,6 +1324,9 @@ class RingSweepRunner:
             cb_loans_outstanding_pre_final=int(bundle.summary.get("cb_loans_outstanding_pre_final", 0)),
             bank_defaults_final=int(bundle.summary.get("bank_defaults_final", 0)),
             cb_reserve_destruction_pct=float(bundle.summary.get("cb_reserve_destruction_pct", 0.0)),
+            delta_bank=bundle.summary.get("delta_bank"),
+            deposit_loss_gross=int(bundle.summary.get("deposit_loss_gross", 0)),
+            deposit_loss_pct=bundle.summary.get("deposit_loss_pct"),
         )
 
     def _rel_path(self, absolute: Path) -> str:

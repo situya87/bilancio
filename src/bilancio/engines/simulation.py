@@ -368,6 +368,15 @@ def run_day(
                                 "Bank %s defaulted (CB frozen, can't repay %d)",
                                 bank_id, loan.amount,
                             )
+                        # Per-loan writeoff event (emitted for every loan,
+                        # not just the first one that triggers bank default)
+                        system.log(
+                            "CBLoanFreezeWrittenOff",
+                            bank_id=bank_id,
+                            loan_id=loan_id,
+                            amount=loan.amount,
+                            day=current_day,
+                        )
                         _remove_contract(system, loan_id)
                     else:
                         logger.warning(
