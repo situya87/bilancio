@@ -1830,6 +1830,14 @@ class BalancedComparisonRunner:
                 "n_defaults_bank_passive": bp_result.n_defaults,
                 "cascade_fraction_bank_passive": bp_result.cascade_fraction,
                 "bank_passive_modal_call_id": bp_result.modal_call_id,
+                "cb_loans_created_bank_passive": bp_result.cb_loans_created_count,
+                "cb_interest_total_bank_passive": bp_result.cb_interest_total_paid,
+                "cb_loans_outstanding_pre_final_bank_passive": bp_result.cb_loans_outstanding_pre_final,
+                "bank_defaults_final_bank_passive": bp_result.bank_defaults_final,
+                "cb_reserve_destruction_pct_bank_passive": bp_result.cb_reserve_destruction_pct,
+                "delta_bank_bank_passive": bp_result.delta_bank,
+                "deposit_loss_gross_bank_passive": bp_result.deposit_loss_gross,
+                "deposit_loss_pct_bank_passive": bp_result.deposit_loss_pct,
             }
 
         # Run bank+dealer (optional — banking arm F)
@@ -1857,6 +1865,14 @@ class BalancedComparisonRunner:
                 "n_defaults_bank_dealer": bd_result.n_defaults,
                 "cascade_fraction_bank_dealer": bd_result.cascade_fraction,
                 "bank_dealer_modal_call_id": bd_result.modal_call_id,
+                "cb_loans_created_bank_dealer": bd_result.cb_loans_created_count,
+                "cb_interest_total_bank_dealer": bd_result.cb_interest_total_paid,
+                "cb_loans_outstanding_pre_final_bank_dealer": bd_result.cb_loans_outstanding_pre_final,
+                "bank_defaults_final_bank_dealer": bd_result.bank_defaults_final,
+                "cb_reserve_destruction_pct_bank_dealer": bd_result.cb_reserve_destruction_pct,
+                "delta_bank_bank_dealer": bd_result.delta_bank,
+                "deposit_loss_gross_bank_dealer": bd_result.deposit_loss_gross,
+                "deposit_loss_pct_bank_dealer": bd_result.deposit_loss_pct,
             }
 
         # Run bank+dealer+nbfi (optional — banking arm G)
@@ -1884,6 +1900,14 @@ class BalancedComparisonRunner:
                 "n_defaults_bank_dealer_nbfi": bdn_result.n_defaults,
                 "cascade_fraction_bank_dealer_nbfi": bdn_result.cascade_fraction,
                 "bank_dealer_nbfi_modal_call_id": bdn_result.modal_call_id,
+                "cb_loans_created_bank_dealer_nbfi": bdn_result.cb_loans_created_count,
+                "cb_interest_total_bank_dealer_nbfi": bdn_result.cb_interest_total_paid,
+                "cb_loans_outstanding_pre_final_bank_dealer_nbfi": bdn_result.cb_loans_outstanding_pre_final,
+                "bank_defaults_final_bank_dealer_nbfi": bdn_result.bank_defaults_final,
+                "cb_reserve_destruction_pct_bank_dealer_nbfi": bdn_result.cb_reserve_destruction_pct,
+                "delta_bank_bank_dealer_nbfi": bdn_result.delta_bank,
+                "deposit_loss_gross_bank_dealer_nbfi": bdn_result.deposit_loss_gross,
+                "deposit_loss_pct_bank_dealer_nbfi": bdn_result.deposit_loss_pct,
             }
 
         result = BalancedComparisonResult(
