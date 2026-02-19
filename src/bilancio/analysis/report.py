@@ -208,7 +208,7 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         # Bank writeoffs (δ_bank numerator)
         if kind == "CBFinalSettlementWrittenOff":
             bank_writeoffs += amt
-        elif kind == "BankDefaultCBFreeze":
+        elif kind == "CBLoanFreezeWrittenOff":
             bank_writeoffs += amt
         elif kind == "ObligationWrittenOff":
             ck = str(e.get("contract_kind", ""))

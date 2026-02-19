@@ -53,14 +53,30 @@ class TestDeltaBank:
         assert m["bank_writeoffs"] == 500
 
     def test_includes_freeze_defaults(self):
-        """BankDefaultCBFreeze events count as bank writeoffs."""
+        """CBLoanFreezeWrittenOff events (per-loan) count as bank writeoffs."""
         events = [
             _evt("CBLoanCreated", amount=1000),
-            _evt("BankDefaultCBFreeze", amount=1000),
+            _evt("CBLoanFreezeWrittenOff", amount=1000),
         ]
         m = compute_run_level_metrics(events)
         assert m["delta_bank"] == 1.0
         assert m["bank_writeoffs"] == 1000
+
+    def test_freeze_multiple_loans_same_bank(self):
+        """Multiple CB loans written off during freeze are all counted."""
+        events = [
+            _evt("CBLoanCreated", amount=100),
+            _evt("CBLoanCreated", amount=200),
+            _evt("CBLoanCreated", amount=300),
+            # All three loans written off during freeze
+            _evt("CBLoanFreezeWrittenOff", amount=100),
+            _evt("CBLoanFreezeWrittenOff", amount=200),
+            _evt("CBLoanFreezeWrittenOff", amount=300),
+        ]
+        m = compute_run_level_metrics(events)
+        assert m["bank_writeoffs"] == 600
+        assert m["bank_obligations_created"] == 600
+        assert m["delta_bank"] == 1.0
 
     def test_includes_interbank_writeoffs(self):
         """ObligationWrittenOff with interbank contract_kind contributes to delta_bank."""
@@ -90,7 +106,7 @@ class TestDeltaBank:
             _evt("CBLoanCreated", amount=1000),
             _evt("InterbankLoan", amount=200),
             _evt("CBFinalSettlementWrittenOff", amount=300),
-            _evt("BankDefaultCBFreeze", amount=200),
+            _evt("CBLoanFreezeWrittenOff", amount=200),
             _evt("ObligationWrittenOff", contract_kind="interbank_loan", amount=100),
         ]
         m = compute_run_level_metrics(events)

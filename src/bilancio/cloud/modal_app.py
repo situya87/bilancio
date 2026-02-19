@@ -141,6 +141,13 @@ def compute_metrics_from_events(events_path: str) -> dict[str, Any]:
         "cb_reserves_initial": run_level["cb_reserves_initial"],
         "cb_reserves_final": run_level["cb_reserves_final"],
         "cb_reserve_destruction_pct": run_level["cb_reserve_destruction_pct"],
+        # Banking-specific default metrics (Plan 039)
+        "delta_bank": to_serializable(run_level.get("delta_bank")),
+        "deposit_loss_gross": run_level.get("deposit_loss_gross", 0),
+        "deposit_loss_pct": to_serializable(run_level.get("deposit_loss_pct")),
+        "total_deposits_created": run_level.get("total_deposits_created", 0),
+        "bank_obligations_created": run_level.get("bank_obligations_created", 0),
+        "bank_writeoffs": run_level.get("bank_writeoffs", 0),
         "raw_metrics": serializable_summary,
     }
 
