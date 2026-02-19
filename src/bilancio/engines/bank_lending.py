@@ -344,8 +344,8 @@ def _bank_can_lend(system: System, bank_state: BankTreynorState, amount: int) ->
     new_deposits = deposits + amount
     post_loan_ratio = Decimal(reserves) / Decimal(max(1, new_deposits))
 
-    # Floor: half the target ratio
-    min_ratio = target_ratio / 2
+    # Floor: 75% of the target ratio (tighter than the original 50%)
+    min_ratio = target_ratio * 3 / 4
 
     return post_loan_ratio > min_ratio
 
