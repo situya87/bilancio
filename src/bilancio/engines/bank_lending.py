@@ -61,6 +61,20 @@ def run_bank_lending_phase(
 
         r_L = quote.loan_rate
 
+        # Per-borrower credit risk pricing
+        adjusted_rate = _per_borrower_rate(r_L, borrower_id, banking, current_day)
+        if adjusted_rate is None:
+            # Borrower is credit-rationed
+            events.append({
+                "kind": "BankLoanRationed",
+                "day": current_day,
+                "bank": bank_id,
+                "borrower": borrower_id,
+                "shortfall": shortfall,
+            })
+            continue
+        r_L = adjusted_rate
+
         # Check bank has lending capacity
         if not _bank_can_lend(system, bank_state, shortfall):
             continue
@@ -178,6 +192,32 @@ def run_bank_loan_repayments(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _per_borrower_rate(
+    base_rate: Decimal,
+    borrower_id: str,
+    banking: BankingSubsystem,
+    current_day: int,
+) -> Decimal | None:
+    """Compute per-borrower rate: r_L = base + loading × P_default.
+
+    Returns None if the borrower is credit-rationed (P_default > max_borrower_risk).
+    Returns base_rate unchanged when credit_risk_loading == 0 (backward compat).
+    """
+    loading = banking.bank_profile.credit_risk_loading
+    if loading == 0:
+        return base_rate  # backward compat: no per-borrower pricing
+
+    assessor = banking.risk_assessor
+    if assessor is None:
+        return base_rate  # no risk assessor available
+
+    p = assessor.estimate_default_prob(borrower_id, current_day)
+    if p > banking.bank_profile.max_borrower_risk:
+        return None  # credit rationed
+
+    return base_rate + loading * p
 
 
 def _find_eligible_borrowers(

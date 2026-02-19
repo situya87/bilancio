@@ -24,6 +24,7 @@ from bilancio.decision.profiles import BankProfile
 from bilancio.domain.instruments.base import InstrumentKind
 
 if TYPE_CHECKING:
+    from bilancio.domain.agents.central_bank import CentralBank
     from bilancio.engines.system import System
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,9 @@ class BankingSubsystem:
     loan_maturity: int = 5  # Days
     interest_period: int = 2  # Days per interest accrual
 
+    # Risk assessor for credit-risk-adjusted lending rates (optional)
+    risk_assessor: Any = None
+
     def best_deposit_bank(self, agent_id: str) -> str | None:
         """Return bank_id with highest r_D among this agent's banks."""
         bank_ids = self._get_agent_banks(agent_id)
@@ -193,6 +197,20 @@ class BankingSubsystem:
             for loan_id, loan in bank_state.outstanding_loans.items():
                 result.append((loan_id, loan))
         return result
+
+    def update_cb_corridor(self, system: System) -> None:
+        """Sync CB escalated rate into PricingParams corridor ceiling.
+
+        When CB rate escalation is active, the effective ceiling rate rises
+        with CB outstanding. This method updates all bank pricing params
+        so that Treynor quotes reflect the escalated corridor.
+        """
+        cb = _find_central_bank(system)
+        if cb is None:
+            return
+        effective_ceiling = cb.effective_lending_rate(system.state.cb_loans_outstanding)
+        for bank_state in self.banks.values():
+            bank_state.pricing_params.cb_borrowing_rate = effective_ceiling
 
     def _get_agent_banks(self, agent_id: str) -> list[str]:
         """Get list of bank_ids for an agent."""
@@ -267,6 +285,16 @@ def _get_total_deposits(system: System, agent_id: str) -> int:
     return total
 
 
+def _find_central_bank(system: System) -> CentralBank | None:
+    """Find the CentralBank agent in the system."""
+    from bilancio.domain.agents.central_bank import CentralBank
+
+    for agent in system.state.agents.values():
+        if isinstance(agent, CentralBank):
+            return agent
+    return None
+
+
 def initialize_banking_subsystem(
     system: System,
     bank_profile: BankProfile,
@@ -274,6 +302,7 @@ def initialize_banking_subsystem(
     maturity_days: int,
     trader_banks: dict[str, list[str]] | None = None,
     infra_banks: dict[str, str] | None = None,
+    risk_assessor: Any = None,
 ) -> BankingSubsystem:
     """Initialize the banking subsystem from the current system state.
 
@@ -355,6 +384,7 @@ def initialize_banking_subsystem(
         interbank_loans=[],
         loan_maturity=loan_mat,
         interest_period=interest_period,
+        risk_assessor=risk_assessor,
     )
 
     # Compute initial quotes

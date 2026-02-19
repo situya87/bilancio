@@ -745,6 +745,30 @@ rate ≈ profit_target + risk_premium_scale × p_lender
 - At least two κ values ✓
 - maturity_days ≥ 5 ✓
 
+#### V8. Bank borrowing vs liquidation cost
+
+When banking is enabled, verify the two liquidity channels have a meaningful relationship.
+
+```
+bank_cost(P) = r_L_treynor + credit_risk_loading × P
+sell_cost(P) = P + O_short/2
+
+Where:
+  r_L_treynor ≈ BankProfile.corridor_mid(kappa) + inside_width/2
+  O_short = corridor_width × 2 (corridor-derived for banking arms)
+
+At P = initial_prior:
+  bank_rate = r_L_treynor + credit_risk_loading × initial_prior
+  sell_haircut = initial_prior + O_short/2
+```
+
+- credit_risk_loading = 0: bank ALWAYS cheaper (no credit sensitivity) ⚠️
+- bank_rate < sell_haircut: bank preferred at this P ✓ (normal)
+- bank_rate > sell_haircut: sell preferred (unusual) ⚠️
+- max_borrower_risk < 0.3: aggressive credit rationing ⚠️
+- CB rate_escalation_slope = 0: no cost pressure on CB usage ⚠️
+- CB max_outstanding_ratio = 0: uncapped CB lending ⚠️
+
 ### Step 6: Pre-Flight Summary
 
 Present to user before running:

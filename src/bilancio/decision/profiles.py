@@ -78,6 +78,7 @@ class VBTProfile:
 
     mid_sensitivity: Decimal = Decimal("1.0")
     spread_sensitivity: Decimal = Decimal("0.0")
+    spread_scale: Decimal = Decimal("1.0")  # multiplicative scale on base spreads
 
 
 @dataclass(frozen=True)
@@ -196,6 +197,11 @@ class BankProfile:
     loan_maturity_fraction: Decimal = Decimal("0.5")
     interest_period: int = 2
 
+    # Per-borrower credit risk loading: r_L = treynor_base + credit_risk_loading × P_default
+    credit_risk_loading: Decimal = Decimal("0")  # 0 = no per-borrower pricing (backward compat)
+    # Credit rationing threshold: refuse loan when P_default > max_borrower_risk
+    max_borrower_risk: Decimal = Decimal("1.0")  # 1.0 = never refuse (backward compat)
+
     def __post_init__(self) -> None:
         if self.r_base < Decimal("0"):
             raise ValueError("r_base must be non-negative")
@@ -213,6 +219,10 @@ class BankProfile:
             raise ValueError("interest_period must be between 1 and 10")
         if not (Decimal("0") < self.loan_maturity_fraction <= Decimal("1")):
             raise ValueError("loan_maturity_fraction must be in (0, 1]")
+        if self.credit_risk_loading < Decimal("0"):
+            raise ValueError("credit_risk_loading must be non-negative")
+        if not (Decimal("0") < self.max_borrower_risk <= Decimal("1")):
+            raise ValueError("max_borrower_risk must be in (0, 1]")
 
     def _stress_factor(self, kappa: Decimal) -> Decimal:
         """Common stress factor: max(0, 1-kappa) / (1+kappa)."""

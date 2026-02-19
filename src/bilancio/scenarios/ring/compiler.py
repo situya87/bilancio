@@ -206,6 +206,11 @@ def compile_ring_explorer_balanced(
     kappa: Decimal | None = None,
     n_banks: int = 0,
     reserve_multiplier: float = 10.0,
+    credit_risk_loading: Decimal = Decimal("0"),
+    max_borrower_risk: Decimal = Decimal("1.0"),
+    cb_rate_escalation_slope: Decimal = Decimal("0"),
+    cb_max_outstanding_ratio: Decimal = Decimal("0"),
+    spread_scale: Decimal = Decimal("1.0"),
     *,
     source_path: Path | None = None,
 ) -> dict[str, Any]:
@@ -650,6 +655,12 @@ def compile_ring_explorer_balanced(
             "infra_bank_assignments": infra_bank_assignments if n_banks > 0 else {},
             "enable_banking": n_banks > 0,
             "enable_bank_lending": n_banks > 0 and mode in ("banking", "bank_dealer", "bank_dealer_nbfi"),
+            "Q_total": float(params.Q_total),
+            "credit_risk_loading": float(credit_risk_loading),
+            "max_borrower_risk": float(max_borrower_risk),
+            "cb_rate_escalation_slope": float(cb_rate_escalation_slope),
+            "cb_max_outstanding_ratio": float(cb_max_outstanding_ratio),
+            "spread_scale": float(spread_scale),
         },
     }
 

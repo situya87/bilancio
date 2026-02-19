@@ -387,6 +387,12 @@ def _initialize_balanced_market_makers(
         except (AttributeError, TypeError):
             pass  # Fall back to hardcoded spreads
 
+    # Apply spread_scale from VBTProfile (Part D: configurable spread scaling)
+    vbt_profile = getattr(subsystem, 'vbt_profile', None)
+    if vbt_profile is not None and hasattr(vbt_profile, 'spread_scale') and vbt_profile.spread_scale != Decimal("1"):
+        for k in BASE_SPREAD_BY_BUCKET:
+            BASE_SPREAD_BY_BUCKET[k] = BASE_SPREAD_BY_BUCKET[k] * vbt_profile.spread_scale
+
     # VBT mid = pure credit discount: M = 1 - P_prior
     credit_adjusted_mid = Decimal(1) - shared_prior
 

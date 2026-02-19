@@ -283,6 +283,11 @@ class RingSweepRunner:
         balanced_mode_override: str | None = None,
         n_banks: int = 0,
         reserve_multiplier: float = 10.0,
+        credit_risk_loading: Decimal = Decimal("0"),
+        max_borrower_risk: Decimal = Decimal("1.0"),
+        cb_rate_escalation_slope: Decimal = Decimal("0"),
+        cb_max_outstanding_ratio: Decimal = Decimal("0"),
+        spread_scale: Decimal = Decimal("1.0"),
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -323,6 +328,11 @@ class RingSweepRunner:
         self.balanced_mode_override = balanced_mode_override
         self.n_banks = n_banks
         self.reserve_multiplier = reserve_multiplier
+        self.credit_risk_loading = credit_risk_loading
+        self.max_borrower_risk = max_borrower_risk
+        self.cb_rate_escalation_slope = cb_rate_escalation_slope
+        self.cb_max_outstanding_ratio = cb_max_outstanding_ratio
+        self.spread_scale = spread_scale
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -641,6 +651,11 @@ class RingSweepRunner:
                 kappa=kappa,
                 n_banks=self.n_banks,
                 reserve_multiplier=self.reserve_multiplier,
+                credit_risk_loading=self.credit_risk_loading,
+                max_borrower_risk=self.max_borrower_risk,
+                cb_rate_escalation_slope=self.cb_rate_escalation_slope,
+                cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
+                spread_scale=self.spread_scale,
                 source_path=None,
             )
         else:
@@ -967,6 +982,11 @@ class RingSweepRunner:
                 kappa=kappa,
                 n_banks=self.n_banks,
                 reserve_multiplier=self.reserve_multiplier,
+                credit_risk_loading=self.credit_risk_loading,
+                max_borrower_risk=self.max_borrower_risk,
+                cb_rate_escalation_slope=self.cb_rate_escalation_slope,
+                cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
+                spread_scale=self.spread_scale,
                 source_path=None,
             )
         else:

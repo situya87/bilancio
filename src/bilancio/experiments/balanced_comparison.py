@@ -417,6 +417,29 @@ class BalancedComparisonConfig(BaseModel):
     lender_maturity_days: int = Field(default=2, description="Loan term in days")
     lender_horizon: int = Field(default=3, description="Look-ahead for upcoming obligations")
 
+    # Bank credit risk pricing (Plan 036)
+    credit_risk_loading: Decimal = Field(
+        default=Decimal("0"), description="Per-borrower credit risk loading on bank loan rate"
+    )
+    max_borrower_risk: Decimal = Field(
+        default=Decimal("1.0"), description="Max P_default for bank lending (credit rationing threshold)"
+    )
+
+    # CB rate escalation (Plan 036)
+    cb_rate_escalation_slope: Decimal = Field(
+        default=Decimal("0"), description="CB rate escalation slope (0 = static rate)"
+    )
+
+    # CB lending cap (Plan 036)
+    cb_max_outstanding_ratio: Decimal = Field(
+        default=Decimal("0"), description="CB max outstanding as fraction of Q_total (0 = no cap)"
+    )
+
+    # Dealer spread scaling (Plan 036)
+    spread_scale: Decimal = Field(
+        default=Decimal("1.0"), description="Multiplicative scale on dealer base spreads"
+    )
+
 
 class BalancedComparisonRunner:
     """
@@ -692,6 +715,11 @@ class BalancedComparisonRunner:
             trading_motive=self.config.trading_motive,
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -740,6 +768,11 @@ class BalancedComparisonRunner:
             trading_motive=self.config.trading_motive,
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -785,6 +818,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="lender",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -835,6 +873,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="nbfi",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_dealer_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -890,6 +933,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="nbfi_dealer",  # 50/50 cash split
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_bank_passive_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -933,6 +981,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="banking",  # VBT/Dealer cash=0, banks replace
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_bank_dealer_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -981,6 +1034,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="bank_dealer",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_bank_dealer_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1031,6 +1089,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="bank_dealer_nbfi",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def run_all(self) -> list[BalancedComparisonResult]:

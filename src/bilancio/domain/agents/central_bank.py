@@ -45,6 +45,13 @@ class CentralBank(Agent):
     # Whether reserves accrue interest (can be disabled for simpler models)
     reserves_accrue_interest: bool = field(default=True)
 
+    # Rate escalation: effective = base + slope × (outstanding / base_amount)
+    rate_escalation_slope: Decimal = field(default=Decimal("0"))  # 0 = static (backward compat)
+    escalation_base_amount: int = field(default=0)  # Q_total, set at init
+
+    # CB lending cap: max outstanding as fraction of escalation_base_amount
+    max_outstanding_ratio: Decimal = field(default=Decimal("0"))  # 0 = no cap (backward compat)
+
     @property
     def corridor_width(self) -> Decimal:
         """
@@ -70,3 +77,25 @@ class CentralBank(Agent):
         assert self.cb_lending_rate >= self.reserve_remuneration_rate, (
             "Ceiling rate must be >= floor rate"
         )
+
+    def effective_lending_rate(self, outstanding: int) -> Decimal:
+        """CB lending rate with escalation: r = base + slope × (outstanding / Q_total).
+
+        When rate_escalation_slope == 0 or escalation_base_amount <= 0,
+        returns the static cb_lending_rate (backward compatible).
+        """
+        if self.rate_escalation_slope == 0 or self.escalation_base_amount <= 0:
+            return self.cb_lending_rate
+        utilization = Decimal(outstanding) / Decimal(self.escalation_base_amount)
+        return self.cb_lending_rate + self.rate_escalation_slope * utilization
+
+    def can_lend(self, outstanding: int, amount: int) -> bool:
+        """Check if CB can lend given its outstanding cap.
+
+        When max_outstanding_ratio <= 0 or escalation_base_amount <= 0,
+        always returns True (no cap, backward compatible).
+        """
+        if self.max_outstanding_ratio <= 0 or self.escalation_base_amount <= 0:
+            return True
+        cap = int(self.max_outstanding_ratio * self.escalation_base_amount)
+        return outstanding + amount <= cap
