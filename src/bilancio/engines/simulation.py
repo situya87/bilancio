@@ -30,6 +30,7 @@ DEFAULT_EVENTS = {
     "ObligationDefaulted",
     "ObligationWrittenOff",
     "AgentDefaulted",
+    "BankDefaultCBFreeze",
 }
 
 

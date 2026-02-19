@@ -238,6 +238,45 @@ class TestBankDefaultWhenFrozen:
         assert system.state.agents["bank_1"].defaulted is False
 
 
+class TestFreezeDefaultResetsStability:
+    def test_bank_default_cb_freeze_counted_as_default(self) -> None:
+        """BankDefaultCBFreeze is in DEFAULT_EVENTS so stability counter resets."""
+        from bilancio.engines.simulation import DEFAULT_EVENTS
+
+        assert "BankDefaultCBFreeze" in DEFAULT_EVENTS
+
+    def test_freeze_default_resets_quiet_counter(self) -> None:
+        """run_until_stable does not stop early when a bank defaults from freeze."""
+        from bilancio.engines.simulation import _defaults_today, run_day
+        from bilancio.ops.primitives import consume
+
+        system = _make_banking_system(reserves=200)
+
+        # Create CB loan due on day 2 (issuance_day=0 + 2)
+        loan_id = system.cb_lend_reserves("bank_1", 100, day=0)
+
+        # Consume all reserves so bank can't repay
+        bank = system.state.agents["bank_1"]
+        reserve_ids = [
+            cid for cid in list(bank.asset_ids)
+            if cid in system.state.contracts
+            and system.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
+        ]
+        for rid in reserve_ids:
+            r = system.state.contracts[rid]
+            consume(system, rid, r.amount)
+            system.state.cb_reserves_outstanding -= r.amount
+
+        # Freeze and run day 2
+        system.state.cb_lending_frozen = True
+        system.state.day = 2
+        run_day(system)
+
+        # _defaults_today should count the BankDefaultCBFreeze event
+        defaults = _defaults_today(system, 2)
+        assert defaults >= 1
+
+
 class TestFinalSettlementStillRuns:
     def test_final_settlement_still_runs_after_freeze(self) -> None:
         """Final CB settlement catches remaining loans after freeze."""

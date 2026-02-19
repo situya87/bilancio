@@ -320,6 +320,7 @@ def run_scenario(
             enable_rating=enable_rating,
             enable_banking=enable_banking,
             enable_bank_lending=enable_bank_lending,
+            cb_lending_cutoff_day=_cb_lending_cutoff_day,
         )
     else:
         days_data = run_until_stable_mode(
@@ -470,6 +471,7 @@ def run_step_mode(
     enable_rating: bool = False,
     enable_banking: bool = False,
     enable_bank_lending: bool = False,
+    cb_lending_cutoff_day: int | None = None,
 ) -> list[dict[str, Any]]:
     """Run simulation in step-by-step mode.
 
@@ -485,6 +487,7 @@ def run_step_mode(
         enable_rating: If True, run rating agency phase each day
         enable_banking: If True, run banking subphases each day
         enable_bank_lending: If True, run bank lending phase each day
+        cb_lending_cutoff_day: Day to freeze CB lending (None = no freeze)
 
     Returns:
         List of day data dictionaries
@@ -500,6 +503,15 @@ def run_step_mode(
         if not Confirm.ask(f"[cyan]Run day {day_before + 1}?[/cyan]", default=True):
             console.print("[yellow]Simulation stopped by user[/yellow]")
             break
+
+        # Activate CB lending freeze at cutoff day
+        if (
+            cb_lending_cutoff_day is not None
+            and day_before >= cb_lending_cutoff_day
+            and not system.state.cb_lending_frozen
+        ):
+            system.state.cb_lending_frozen = True
+            system.log("CBLendingFreezeActivated", day=day_before, cutoff_day=cb_lending_cutoff_day)
 
         try:
             # Run the next day
