@@ -679,3 +679,99 @@ class TestHasOutstandingBankLoans:
         banking = _init_banking_subsystem(system)
         _issue_bank_loan(system, banking, "bank_1", "H_1", 500)
         assert _has_outstanding_bank_loans(banking)
+
+
+# ===========================================================================
+# P1 fix: final CB settlement writes off failed-bank liabilities
+# ===========================================================================
+
+
+class TestFinalCBSettlementWritesOffLiabilities:
+    """After resolution in run_final_cb_settlement, remaining bank liabilities
+    (BankDeposit, interbank loans, etc.) must be written off so depositors
+    don't keep stale deposit claims on their balance sheets."""
+
+    def test_final_settlement_writes_off_bank_deposits(self):
+        """When a bank defaults in final CB settlement, its BankDeposit
+        liabilities are written off (ObligationWrittenOff events logged)."""
+        system = _make_banking_system(firm_cash=1000, bank_reserves=100)
+        banking = _init_banking_subsystem(system)
+
+        # Issue a CB loan to bank_1, then drain its reserves so it can't repay.
+        system.cb_lend_reserves("bank_1", 5000, day=0)
+        # Transfer all reserves away (to bank_2) so bank_1 is insolvent
+        from bilancio.engines.banking_subsystem import _get_bank_reserves
+        bank1_reserves = _get_bank_reserves(system, "bank_1")
+        if bank1_reserves > 0:
+            system.transfer_reserves("bank_1", "bank_2", bank1_reserves)
+
+        # Verify bank_1 has deposit liabilities (from firm deposits)
+        bank1_deposit_liabs = [
+            c for c in system.state.contracts.values()
+            if c.kind == InstrumentKind.BANK_DEPOSIT
+            and c.liability_issuer_id == "bank_1"
+        ]
+        assert len(bank1_deposit_liabs) > 0, "bank_1 should have deposit liabilities"
+
+        # Run final CB settlement — bank_1 should default
+        result = run_final_cb_settlement(system)
+        assert result["bank_defaults"] >= 1
+
+        # Check that ObligationWrittenOff events were logged for bank deposits
+        written_off_events = [
+            e for e in system.state.events
+            if e.get("kind") == "ObligationWrittenOff"
+            and e.get("debtor") == "bank_1"
+        ]
+        assert len(written_off_events) > 0, (
+            "BankDeposit liabilities should be written off after bank resolution"
+        )
+
+        # Verify no BankDeposit contracts remain for bank_1
+        remaining_deposits = [
+            c for c in system.state.contracts.values()
+            if c.kind == InstrumentKind.BANK_DEPOSIT
+            and c.liability_issuer_id == "bank_1"
+        ]
+        assert len(remaining_deposits) == 0, (
+            "No deposit contracts should remain after write-off"
+        )
+
+
+# ===========================================================================
+# P3 fix: wind-down cap is computed from actual loan maturity days
+# ===========================================================================
+
+
+class TestWinddownCapComputed:
+    """The max_winddown cap should be derived from loan maturity days,
+    not a fixed constant."""
+
+    def test_winddown_cap_adapts_to_maturity(self):
+        """Loans with high maturity days should still be resolved."""
+        system = _make_banking_system(firm_cash=2000, bank_reserves=5000)
+        banking = _init_banking_subsystem(system, maturity_days=100)
+
+        # Issue a loan due at day 80
+        _issue_bank_loan(
+            system, banking, "bank_1", "H_1", 500,
+            current_day=0, maturity=80,
+        )
+        assert _has_outstanding_bank_loans(banking)
+
+        # Start wind-down at day 10 — need 70+ days of wind-down
+        system.state.day = 10
+        days = _run_bank_loan_winddown(system, banking)
+
+        # With include_overdue=True, it should resolve on the first day
+        # (maturity_day=80 <= current_day=10 is False, but <=80 when day reaches 80)
+        # Actually with include_overdue, loan.maturity_day(80) > current_day(10)
+        # so it needs to advance to day 80
+        assert not _has_outstanding_bank_loans(banking)
+
+        winddown_end = [
+            e for e in system.state.events
+            if e.get("kind") == "BankLoanWinddownEnd"
+        ]
+        assert len(winddown_end) == 1
+        assert winddown_end[0]["remaining_loans"] == 0

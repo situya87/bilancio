@@ -541,9 +541,11 @@ def run_final_cb_settlement(system: System) -> dict[str, Any]:
                     )
                     _remove_contract(system, other_id)
 
-            # Resolve the failed bank: distribute remaining reserves to depositors
-            from bilancio.engines.settlement import _resolve_failed_bank
+            # Resolve the failed bank: distribute remaining reserves to depositors,
+            # then write off all remaining liabilities (BankDeposit, interbank, etc.)
+            from bilancio.engines.settlement import _resolve_failed_bank, _write_off_liabilities
             _resolve_failed_bank(system, bank_id)
+            _write_off_liabilities(system, bank_id)
 
     post_outstanding = system.state.cb_loans_outstanding
 
@@ -602,7 +604,17 @@ def _run_bank_loan_winddown(system: System, banking_sub) -> int:
     )
 
     winddown_days = 0
-    max_winddown = 50  # Hard cap to prevent infinite loops
+    # Compute cap from the latest maturity day across all outstanding loans,
+    # plus a small buffer.  Falls back to 50 if no maturity info available.
+    max_maturity = 0
+    for bs in banking_sub.banks.values():
+        for loan in bs.outstanding_loans.values():
+            if loan.maturity_day > max_maturity:
+                max_maturity = loan.maturity_day
+    # We need at most (max_maturity - current_day + 1) days, but use
+    # include_overdue=True so one pass can clear all overdue loans.
+    # Add a buffer of 5 for interbank settlement rounds.
+    max_winddown = max(max_maturity - system.state.day + 5, 10)
 
     for _ in range(max_winddown):
         if not _has_outstanding_bank_loans(banking_sub):

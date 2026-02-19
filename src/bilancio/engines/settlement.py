@@ -964,6 +964,63 @@ def _resolve_failed_bank(system: System, bank_id: str) -> None:
     )
 
 
+def _write_off_liabilities(
+    system: System,
+    agent_id: str,
+    *,
+    skip_contract_id: str | None = None,
+    cancelled_contract_ids: set[str] | None = None,
+    cancelled_aliases: set[str] | None = None,
+) -> tuple[int, int]:
+    """Write off all outstanding liabilities issued by *agent_id*.
+
+    Logs ``ObligationWrittenOff`` for every cancelled contract and removes
+    contracts/aliases from the system.
+
+    Returns:
+        (n_contracts_cancelled, n_aliases_cancelled)
+    """
+    if cancelled_contract_ids is None:
+        cancelled_contract_ids = set()
+    if cancelled_aliases is None:
+        cancelled_aliases = set()
+
+    # Remove any aliases provided for already-cancelled contracts
+    for alias in list(cancelled_aliases):
+        system.state.aliases.pop(alias, None)
+
+    for cid, contract in list(system.state.contracts.items()):
+        if contract.liability_issuer_id != agent_id:
+            continue
+        if skip_contract_id and cid == skip_contract_id:
+            continue
+
+        contract_alias = get_alias_for_id(system, cid)
+        if contract_alias:
+            cancelled_aliases.add(contract_alias)
+        payload = {
+            "contract_id": cid,
+            "alias": contract_alias,
+            "debtor": contract.liability_issuer_id,
+            "creditor": contract.asset_holder_id,
+            "contract_kind": contract.kind,
+            "amount": contract.amount,
+            "due_day": contract.due_day,
+        }
+        if isinstance(contract, DeliveryObligation):
+            payload["sku"] = contract.sku
+        if payload.get("due_day") is None:
+            payload.pop("due_day", None)
+
+        system.log(EventKind.OBLIGATION_WRITTEN_OFF, **payload)
+        _remove_contract(system, cid)
+        cancelled_contract_ids.add(cid)
+        if contract_alias:
+            system.state.aliases.pop(contract_alias, None)
+
+    return len(cancelled_contract_ids), len(cancelled_aliases)
+
+
 def _expel_agent(
     system: System,
     agent_id: str,
@@ -1023,45 +1080,19 @@ def _expel_agent(
     cancelled_contract_ids = set(cancelled_contract_ids or [])
     cancelled_aliases = set(cancelled_aliases or [])
 
-    # Remove any aliases provided for already-cancelled contracts
-    for alias in list(cancelled_aliases):
-        system.state.aliases.pop(alias, None)
-
-    for cid, contract in list(system.state.contracts.items()):
-        if contract.liability_issuer_id != agent_id:
-            continue
-        if trigger_contract_id and cid == trigger_contract_id:
-            continue
-
-        contract_alias = get_alias_for_id(system, cid)
-        if contract_alias:
-            cancelled_aliases.add(contract_alias)
-        payload = {
-            "contract_id": cid,
-            "alias": contract_alias,
-            "debtor": contract.liability_issuer_id,
-            "creditor": contract.asset_holder_id,
-            "contract_kind": contract.kind,
-            "amount": contract.amount,
-            "due_day": contract.due_day,
-        }
-        if isinstance(contract, DeliveryObligation):
-            payload["sku"] = contract.sku
-        if payload.get("due_day") is None:
-            payload.pop("due_day", None)
-
-        system.log(EventKind.OBLIGATION_WRITTEN_OFF, **payload)
-        _remove_contract(system, cid)
-        cancelled_contract_ids.add(cid)
-        if contract_alias:
-            system.state.aliases.pop(contract_alias, None)
+    n_contracts, n_aliases = _write_off_liabilities(
+        system, agent_id,
+        skip_contract_id=trigger_contract_id,
+        cancelled_contract_ids=cancelled_contract_ids,
+        cancelled_aliases=cancelled_aliases,
+    )
 
     _cancel_scheduled_actions_for_agent(system, agent_id, cancelled_contract_ids, cancelled_aliases)
     logger.warning(
         "agent %s expelled: cancelled %d contracts, %d aliases",
         agent_id,
-        len(cancelled_contract_ids),
-        len(cancelled_aliases),
+        n_contracts,
+        n_aliases,
     )
 
     # If every non-central-bank agent has defaulted, halt the simulation with a DefaultError.
