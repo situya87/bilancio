@@ -612,9 +612,12 @@ def _run_bank_loan_winddown(system: System, banking_sub) -> int:
 
         system.log("BankLoanWinddownDay", day=current_day)
 
-        # Run bank loan repayments only
+        # Run bank loan repayments only (include_overdue catches loans
+        # that matured during the main loop but were never settled)
         from bilancio.engines.bank_lending import run_bank_loan_repayments
-        bank_repay_events = run_bank_loan_repayments(system, current_day, banking_sub)
+        bank_repay_events = run_bank_loan_repayments(
+            system, current_day, banking_sub, include_overdue=True
+        )
         system.state.events.extend(bank_repay_events)
 
         # Run interbank repayments
