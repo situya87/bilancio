@@ -470,10 +470,10 @@ class BalancedComparisonConfig(BaseModel):
 
     # Bank credit risk pricing (Plan 036)
     credit_risk_loading: Decimal = Field(
-        default=Decimal("0"), description="Per-borrower credit risk loading on bank loan rate"
+        default=Decimal("0.5"), description="Per-borrower credit risk loading on bank loan rate"
     )
     max_borrower_risk: Decimal = Field(
-        default=Decimal("1.0"), description="Max P_default for bank lending (credit rationing threshold)"
+        default=Decimal("0.4"), description="Max P_default for bank lending (credit rationing threshold)"
     )
 
     # CB rate escalation (Plan 036)

@@ -621,6 +621,9 @@ def run_step_mode(
 
             # Check if we've reached a stable state
             if day_report.impacted == 0 and not _has_open_obligations(system):
+                if enable_banking and not system.state.cb_lending_frozen:
+                    system.state.cb_lending_frozen = True
+                    system.log("CBLendingFreezeStability", day=system.state.day)
                 console.print("[green]OK[/green] System reached stable state")
                 break
 
@@ -902,6 +905,9 @@ def run_until_stable_mode(
                 )
 
             if stability_condition:
+                if enable_banking and not system.state.cb_lending_frozen:
+                    system.state.cb_lending_frozen = True
+                    system.log("CBLendingFreezeStability", day=system.state.day)
                 console.print("[green]OK[/green] System reached stable state")
                 break
 
