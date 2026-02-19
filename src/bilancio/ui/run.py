@@ -909,6 +909,18 @@ def run_until_stable_mode(
         else:
             console.print("[yellow][!][/yellow] Maximum days reached without stable state")
 
+        # Bank loan wind-down: run remaining bank loan repayments after main loop
+        if enable_bank_lending:
+            banking_sub = getattr(system.state, "banking_subsystem", None)
+            if banking_sub is not None:
+                from bilancio.engines.simulation import _run_bank_loan_winddown
+
+                winddown_days = _run_bank_loan_winddown(system, banking_sub)
+                if winddown_days > 0 and not quiet_mode:
+                    console.print(
+                        f"[dim]Bank loan wind-down: {winddown_days} extra days to mature remaining loans[/dim]"
+                    )
+
         # Final CB settlement: force banks to repay outstanding CB loans
         if enable_banking:
             has_cb = any(a.kind == AgentKind.CENTRAL_BANK for a in system.state.agents.values())

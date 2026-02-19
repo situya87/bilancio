@@ -108,6 +108,8 @@ def run_bank_loan_repayments(
     system: System,
     current_day: int,
     banking: BankingSubsystem,
+    *,
+    include_overdue: bool = False,
 ) -> list[dict]:
     """Process bank loan repayments due today.
 
@@ -115,6 +117,11 @@ def run_bank_loan_repayments(
         1. Check if borrower has sufficient deposits.
         2. If yes, debit deposit and retire loan.
         3. If no, log default event.
+
+    Args:
+        include_overdue: If True, also process loans with maturity_day < current_day
+            (used during wind-down to catch loans that matured while the main loop
+            was still running).
 
     Returns list of event dicts.
     """
@@ -126,8 +133,12 @@ def run_bank_loan_repayments(
         repaid_loan_ids = []
 
         for loan_id, loan in list(bank_state.outstanding_loans.items()):
-            if loan.maturity_day != current_day:
-                continue
+            if include_overdue:
+                if loan.maturity_day > current_day:
+                    continue
+            else:
+                if loan.maturity_day != current_day:
+                    continue
 
             borrower_id = loan.borrower_id
             bank_id = loan.bank_id
