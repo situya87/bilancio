@@ -71,6 +71,7 @@ class RingRunSummary:
     deposit_loss_pct: float | None = None
     payable_default_loss: int = 0
     total_loss: int = 0
+    total_loss_pct: float | None = None
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -871,6 +872,8 @@ class RingSweepRunner:
             bundle.summary.get("payable_default_loss", 0)
         )
         total_loss = int(bundle.summary.get("total_loss", 0))
+        S_total = float(bundle.summary.get("S_total", 0))
+        total_loss_pct = total_loss / S_total if S_total > 0 else None
 
         # Read dealer metrics if available (treatment runs with dealer enabled)
         dealer_metrics: dict[str, Any] | None = None
@@ -932,6 +935,7 @@ class RingSweepRunner:
             deposit_loss_pct=deposit_loss_pct,
             payable_default_loss=payable_default_loss,
             total_loss=total_loss,
+            total_loss_pct=total_loss_pct,
         )
 
     def _prepare_run(
@@ -1258,6 +1262,7 @@ class RingSweepRunner:
                 deposit_loss_pct=result.metrics.get("deposit_loss_pct"),
                 payable_default_loss=int(result.metrics.get("payable_default_loss", 0)),
                 total_loss=int(result.metrics.get("total_loss", 0)),
+                total_loss_pct=result.metrics.get("total_loss_pct"),
             )
 
         # Local path: load artifacts, compute metrics, update registry
@@ -1341,6 +1346,10 @@ class RingSweepRunner:
             deposit_loss_pct=bundle.summary.get("deposit_loss_pct"),
             payable_default_loss=int(bundle.summary.get("payable_default_loss", 0)),
             total_loss=int(bundle.summary.get("total_loss", 0)),
+            total_loss_pct=(
+                int(bundle.summary.get("total_loss", 0)) / float(bundle.summary.get("S_total", 0))
+                if float(bundle.summary.get("S_total", 0)) > 0 else None
+            ),
         )
 
     def _rel_path(self, absolute: Path) -> str:

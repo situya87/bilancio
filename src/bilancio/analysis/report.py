@@ -419,6 +419,7 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
         "v_1": v_1,
         "HHIplus_1": HHIplus_1,
         "max_day": max_day,
+        "S_total": float(S_total) if S_total else 0.0,
     }
 
 

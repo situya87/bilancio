@@ -150,6 +150,12 @@ def compute_metrics_from_events(events_path: str) -> dict[str, Any]:
         "bank_writeoffs": run_level.get("bank_writeoffs", 0),
         "payable_default_loss": run_level.get("payable_default_loss", 0),
         "total_loss": run_level.get("total_loss", 0),
+        "S_total": summary.get("S_total", 0),
+        "total_loss_pct": (
+            run_level.get("total_loss", 0) / summary["S_total"]
+            if summary.get("S_total") and summary["S_total"] > 0
+            else None
+        ),
         "raw_metrics": serializable_summary,
     }
 

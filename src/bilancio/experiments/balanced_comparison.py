@@ -209,6 +209,15 @@ class BalancedComparisonResult:
     payable_default_loss_bank_dealer_nbfi: int = 0
     total_loss_bank_dealer_nbfi: int = 0
 
+    # Total loss as fraction of total payable debt (S_total)
+    total_loss_pct_passive: float | None = None
+    total_loss_pct_active: float | None = None
+    total_loss_pct_lender: float | None = None
+    total_loss_pct_dealer_lender: float | None = None
+    total_loss_pct_bank_passive: float | None = None
+    total_loss_pct_bank_dealer: float | None = None
+    total_loss_pct_bank_dealer_nbfi: float | None = None
+
     @staticmethod
     def _compute_incremental_pnl(
         active_metrics: dict[str, Any] | None,
@@ -622,6 +631,13 @@ class BalancedComparisonRunner:
         "total_loss_bank_dealer",
         "payable_default_loss_bank_dealer_nbfi",
         "total_loss_bank_dealer_nbfi",
+        "total_loss_pct_passive",
+        "total_loss_pct_active",
+        "total_loss_pct_lender",
+        "total_loss_pct_dealer_lender",
+        "total_loss_pct_bank_passive",
+        "total_loss_pct_bank_dealer",
+        "total_loss_pct_bank_dealer_nbfi",
     ]
 
     def __init__(
@@ -1277,6 +1293,7 @@ class BalancedComparisonRunner:
                 "lender_modal_call_id": s.modal_call_id,
                 "payable_default_loss_lender": s.payable_default_loss,
                 "total_loss_lender": s.total_loss,
+                "total_loss_pct_lender": s.total_loss_pct,
             }
 
         dealer_lender_data: dict[str, Any] = {}
@@ -1292,6 +1309,7 @@ class BalancedComparisonRunner:
                 "dealer_lender_modal_call_id": s.modal_call_id,
                 "payable_default_loss_dealer_lender": s.payable_default_loss,
                 "total_loss_dealer_lender": s.total_loss,
+                "total_loss_pct_dealer_lender": s.total_loss_pct,
             }
 
         bank_passive_data: dict[str, Any] = {}
@@ -1315,6 +1333,7 @@ class BalancedComparisonRunner:
                 "deposit_loss_pct_bank_passive": s.deposit_loss_pct,
                 "payable_default_loss_bank_passive": s.payable_default_loss,
                 "total_loss_bank_passive": s.total_loss,
+                "total_loss_pct_bank_passive": s.total_loss_pct,
             }
 
         bank_dealer_data: dict[str, Any] = {}
@@ -1338,6 +1357,7 @@ class BalancedComparisonRunner:
                 "deposit_loss_pct_bank_dealer": s.deposit_loss_pct,
                 "payable_default_loss_bank_dealer": s.payable_default_loss,
                 "total_loss_bank_dealer": s.total_loss,
+                "total_loss_pct_bank_dealer": s.total_loss_pct,
             }
 
         bank_dealer_nbfi_data: dict[str, Any] = {}
@@ -1361,6 +1381,7 @@ class BalancedComparisonRunner:
                 "deposit_loss_pct_bank_dealer_nbfi": s.deposit_loss_pct,
                 "payable_default_loss_bank_dealer_nbfi": s.payable_default_loss,
                 "total_loss_bank_dealer_nbfi": s.total_loss,
+                "total_loss_pct_bank_dealer_nbfi": s.total_loss_pct,
             }
 
         return BalancedComparisonResult(
@@ -1393,8 +1414,10 @@ class BalancedComparisonRunner:
             active_modal_call_id=active.modal_call_id,
             payable_default_loss_passive=passive.payable_default_loss,
             total_loss_passive=passive.total_loss,
+            total_loss_pct_passive=passive.total_loss_pct,
             payable_default_loss_active=active.payable_default_loss,
             total_loss_active=active.total_loss,
+            total_loss_pct_active=active.total_loss_pct,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
             risk_aversion=self.config.risk_aversion,
@@ -1822,6 +1845,7 @@ class BalancedComparisonRunner:
                 "lender_modal_call_id": lender_result.modal_call_id,
                 "payable_default_loss_lender": lender_result.payable_default_loss,
                 "total_loss_lender": lender_result.total_loss,
+                "total_loss_pct_lender": lender_result.total_loss_pct,
             }
 
         # Run dealer+lender (optional fourth arm — combined mode)
@@ -1851,6 +1875,7 @@ class BalancedComparisonRunner:
                 "dealer_lender_modal_call_id": dl_result.modal_call_id,
                 "payable_default_loss_dealer_lender": dl_result.payable_default_loss,
                 "total_loss_dealer_lender": dl_result.total_loss,
+                "total_loss_pct_dealer_lender": dl_result.total_loss_pct,
             }
 
         # Run bank+passive (optional — banking arm E)
@@ -1888,6 +1913,7 @@ class BalancedComparisonRunner:
                 "deposit_loss_pct_bank_passive": bp_result.deposit_loss_pct,
                 "payable_default_loss_bank_passive": bp_result.payable_default_loss,
                 "total_loss_bank_passive": bp_result.total_loss,
+                "total_loss_pct_bank_passive": bp_result.total_loss_pct,
             }
 
         # Run bank+dealer (optional — banking arm F)
@@ -1925,6 +1951,7 @@ class BalancedComparisonRunner:
                 "deposit_loss_pct_bank_dealer": bd_result.deposit_loss_pct,
                 "payable_default_loss_bank_dealer": bd_result.payable_default_loss,
                 "total_loss_bank_dealer": bd_result.total_loss,
+                "total_loss_pct_bank_dealer": bd_result.total_loss_pct,
             }
 
         # Run bank+dealer+nbfi (optional — banking arm G)
@@ -1962,6 +1989,7 @@ class BalancedComparisonRunner:
                 "deposit_loss_pct_bank_dealer_nbfi": bdn_result.deposit_loss_pct,
                 "payable_default_loss_bank_dealer_nbfi": bdn_result.payable_default_loss,
                 "total_loss_bank_dealer_nbfi": bdn_result.total_loss,
+                "total_loss_pct_bank_dealer_nbfi": bdn_result.total_loss_pct,
             }
 
         result = BalancedComparisonResult(
@@ -1994,8 +2022,10 @@ class BalancedComparisonRunner:
             active_modal_call_id=active_result.modal_call_id,
             payable_default_loss_passive=passive_result.payable_default_loss,
             total_loss_passive=passive_result.total_loss,
+            total_loss_pct_passive=passive_result.total_loss_pct,
             payable_default_loss_active=active_result.payable_default_loss,
             total_loss_active=active_result.total_loss,
+            total_loss_pct_active=active_result.total_loss_pct,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
             risk_aversion=self.config.risk_aversion,
@@ -2348,6 +2378,13 @@ class BalancedComparisonRunner:
                     "total_loss_bank_dealer": str(result.total_loss_bank_dealer),
                     "payable_default_loss_bank_dealer_nbfi": str(result.payable_default_loss_bank_dealer_nbfi),
                     "total_loss_bank_dealer_nbfi": str(result.total_loss_bank_dealer_nbfi),
+                    "total_loss_pct_passive": str(result.total_loss_pct_passive) if result.total_loss_pct_passive is not None else "",
+                    "total_loss_pct_active": str(result.total_loss_pct_active) if result.total_loss_pct_active is not None else "",
+                    "total_loss_pct_lender": str(result.total_loss_pct_lender) if result.total_loss_pct_lender is not None else "",
+                    "total_loss_pct_dealer_lender": str(result.total_loss_pct_dealer_lender) if result.total_loss_pct_dealer_lender is not None else "",
+                    "total_loss_pct_bank_passive": str(result.total_loss_pct_bank_passive) if result.total_loss_pct_bank_passive is not None else "",
+                    "total_loss_pct_bank_dealer": str(result.total_loss_pct_bank_dealer) if result.total_loss_pct_bank_dealer is not None else "",
+                    "total_loss_pct_bank_dealer_nbfi": str(result.total_loss_pct_bank_dealer_nbfi) if result.total_loss_pct_bank_dealer_nbfi is not None else "",
                 }
                 writer.writerow(row)
 
