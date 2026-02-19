@@ -59,6 +59,12 @@ class RingRunSummary:
     # Cascade/contagion metrics
     n_defaults: int = 0
     cascade_fraction: Decimal | None = None
+    # CB stress metrics (populated for banking runs)
+    cb_loans_created_count: int = 0
+    cb_interest_total_paid: int = 0
+    cb_loans_outstanding_pre_final: int = 0
+    bank_defaults_final: int = 0
+    cb_reserve_destruction_pct: float = 0.0
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -1192,6 +1198,11 @@ class RingSweepRunner:
                 cascade_fraction=cascade_fraction_val,
                 dealer_metrics=None,  # Dealer metrics not available in cloud path
                 modal_call_id=result.modal_call_id,
+                cb_loans_created_count=int(result.metrics.get("cb_loans_created_count", 0)),
+                cb_interest_total_paid=int(result.metrics.get("cb_interest_total_paid", 0)),
+                cb_loans_outstanding_pre_final=int(result.metrics.get("cb_loans_outstanding_pre_final", 0)),
+                bank_defaults_final=int(result.metrics.get("bank_defaults_final", 0)),
+                cb_reserve_destruction_pct=float(result.metrics.get("cb_reserve_destruction_pct", 0.0)),
             )
 
         # Local path: load artifacts, compute metrics, update registry
@@ -1265,6 +1276,11 @@ class RingSweepRunner:
             cascade_fraction=cascade_fraction_val,
             dealer_metrics=dealer_metrics,
             modal_call_id=result.modal_call_id,
+            cb_loans_created_count=int(bundle.summary.get("cb_loans_created_count", 0)),
+            cb_interest_total_paid=int(bundle.summary.get("cb_interest_total_paid", 0)),
+            cb_loans_outstanding_pre_final=int(bundle.summary.get("cb_loans_outstanding_pre_final", 0)),
+            bank_defaults_final=int(bundle.summary.get("bank_defaults_final", 0)),
+            cb_reserve_destruction_pct=float(bundle.summary.get("cb_reserve_destruction_pct", 0.0)),
         )
 
     def _rel_path(self, absolute: Path) -> str:

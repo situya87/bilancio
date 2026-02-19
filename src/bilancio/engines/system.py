@@ -44,6 +44,9 @@ class State:
     cb_cash_outstanding: int = 0
     cb_reserves_outstanding: int = 0
     cb_loans_outstanding: int = 0  # Total CB loans to banks (principal)
+    cb_loans_created_count: int = 0  # Total CB loans issued (count)
+    cb_interest_total_paid: int = 0  # Cumulative interest paid to CB (reserves destroyed)
+    cb_reserves_initial: int = 0  # Reserves at simulation start (set by run_until_stable)
     phase: str = "simulation"
     # Aliases for created contracts (alias -> contract_id)
     aliases: dict[str, str] = field(default_factory=dict)
@@ -511,6 +514,7 @@ class System:
             )
             self.add_contract(loan)
             self.state.cb_loans_outstanding += amount
+            self.state.cb_loans_created_count += 1
 
             self.log(
                 "CBLoanCreated",
@@ -596,6 +600,7 @@ class System:
 
             del self.state.contracts[loan_id]
             self.state.cb_loans_outstanding -= principal
+            self.state.cb_interest_total_paid += (repayment_amount - principal)
 
             self.log(
                 "CBLoanRepaid",

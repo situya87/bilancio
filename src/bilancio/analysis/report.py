@@ -160,15 +160,44 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
     """Compute run-level metrics that span the entire simulation.
 
     These metrics complement the day-by-day metrics and provide systemic
-    risk indicators.
+    risk indicators, including CB stress metrics from final settlement.
 
     Returns dict with:
         n_defaults: int - count of distinct defaulted agents
         cascade_fraction: Optional[Decimal] - fraction of defaults from contagion
+        cb_loans_created_count: int - total CB loans issued
+        cb_interest_total_paid: int - cumulative interest paid to CB
+        cb_loans_outstanding_pre_final: int - CB loans outstanding before final settlement
+        bank_defaults_final: int - banks that defaulted in final settlement
+        cb_reserves_initial: int - reserves at simulation start
+        cb_reserves_final: int - reserves at simulation end
+        cb_reserve_destruction_pct: float - percentage of initial reserves destroyed
     """
+    # CB stress metrics from the CBFinalSettlementEnd event
+    final = next((e for e in events if e.get("kind") == "CBFinalSettlementEnd"), None)
+
+    cb_loans_created_count = int(final.get("cb_loans_created_count", 0)) if final else 0
+    cb_interest_total_paid = int(final.get("cb_interest_total_paid", 0)) if final else 0
+    cb_loans_outstanding_pre_final = int(final.get("cb_loans_outstanding_pre_final", 0)) if final else 0
+    bank_defaults_final = int(final.get("bank_defaults", 0)) if final else 0
+    cb_reserves_initial = int(final.get("cb_reserves_initial", 0)) if final else 0
+    cb_reserves_final = int(final.get("cb_reserves_final", 0)) if final else 0
+
+    # Reserve destruction percentage
+    cb_reserve_destruction_pct = 0.0
+    if cb_reserves_initial > 0:
+        cb_reserve_destruction_pct = (cb_reserves_initial - cb_reserves_final) / cb_reserves_initial
+
     return {
         "n_defaults": count_defaults(events),
         "cascade_fraction": cascade_fraction(events),
+        "cb_loans_created_count": cb_loans_created_count,
+        "cb_interest_total_paid": cb_interest_total_paid,
+        "cb_loans_outstanding_pre_final": cb_loans_outstanding_pre_final,
+        "bank_defaults_final": bank_defaults_final,
+        "cb_reserves_initial": cb_reserves_initial,
+        "cb_reserves_final": cb_reserves_final,
+        "cb_reserve_destruction_pct": cb_reserve_destruction_pct,
     }
 
 

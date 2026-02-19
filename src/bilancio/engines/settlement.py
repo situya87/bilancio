@@ -443,6 +443,8 @@ def _remove_contract(system: System, contract_id: str) -> None:
         system.state.cb_cash_outstanding -= contract_amount
     elif contract_kind == InstrumentKind.RESERVE_DEPOSIT:
         system.state.cb_reserves_outstanding -= contract_amount
+    elif contract_kind == InstrumentKind.CB_LOAN:
+        system.state.cb_loans_outstanding -= contract_amount
 
 
 def _action_references_agent(action_dict: object, agent_id: str) -> bool:

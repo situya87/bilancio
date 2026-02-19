@@ -10,8 +10,9 @@ from typing import TYPE_CHECKING, Any, Protocol
 from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
 from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
+from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.engines.clearing import settle_intraday_nets
-from bilancio.engines.settlement import rollover_settled_payables, settle_due
+from bilancio.engines.settlement import _remove_contract, rollover_settled_payables, settle_due
 
 if TYPE_CHECKING:
     from bilancio.engines.system import System
@@ -388,6 +389,149 @@ def run_day(
     system.state.day += 1
 
 
+def run_final_cb_settlement(system: System) -> dict[str, Any]:
+    """Force all banks to repay outstanding CB loans after the main simulation loop.
+
+    Banks that cannot repay are marked as defaulted and their loans are written off.
+    This makes CB-funded bank fragility observable rather than silently rolling over.
+
+    No cascading is triggered — by this point all trader activity is done.
+
+    Args:
+        system: The system after the main simulation loop has finished.
+
+    Returns:
+        Dict with settlement summary metrics.
+    """
+    pre_outstanding = system.state.cb_loans_outstanding
+    loans_attempted = 0
+    loans_repaid = 0
+    loans_written_off = 0
+    bank_defaults = 0
+    total_written_off_amount = 0
+    defaulted_banks: set[str] = set()
+
+    system.log(
+        "CBFinalSettlementStart",
+        cb_loans_outstanding=pre_outstanding,
+    )
+
+    # Collect all CB_LOAN contracts
+    cb_loans = [
+        (cid, contract)
+        for cid, contract in list(system.state.contracts.items())
+        if contract.kind == InstrumentKind.CB_LOAN and isinstance(contract, CBLoan)
+    ]
+
+    for loan_id, loan in cb_loans:
+        # Skip if loan was already removed (e.g., all loans for a defaulted bank)
+        if loan_id not in system.state.contracts:
+            continue
+
+        bank_id = loan.liability_issuer_id
+
+        # If bank already defaulted in this phase, write off remaining loans
+        if bank_id in defaulted_banks:
+            total_written_off_amount += loan.amount
+            loans_written_off += 1
+            loans_attempted += 1
+            system.log(
+                "CBFinalSettlementWrittenOff",
+                loan_id=loan_id,
+                bank_id=bank_id,
+                amount=loan.amount,
+                reason="bank_already_defaulted",
+            )
+            _remove_contract(system, loan_id)
+            continue
+
+        loans_attempted += 1
+        try:
+            system.cb_repay_loan(loan_id, bank_id)
+            loans_repaid += 1
+            system.log(
+                "CBFinalSettlementRepaid",
+                loan_id=loan_id,
+                bank_id=bank_id,
+            )
+        except (ValidationError, ValueError):
+            # Bank can't repay — default
+            total_written_off_amount += loan.amount
+            loans_written_off += 1
+            defaulted_banks.add(bank_id)
+
+            # Mark bank as defaulted
+            bank_agent = system.state.agents.get(bank_id)
+            if bank_agent and not bank_agent.defaulted:
+                bank_agent.defaulted = True
+                system.state.defaulted_agent_ids.add(bank_id)
+                bank_defaults += 1
+                system.log(
+                    "CBFinalSettlementBankDefault",
+                    bank_id=bank_id,
+                    loan_id=loan_id,
+                    shortfall=loan.amount,
+                )
+
+            # Write off this loan
+            system.log(
+                "CBFinalSettlementWrittenOff",
+                loan_id=loan_id,
+                bank_id=bank_id,
+                amount=loan.amount,
+                reason="insufficient_reserves",
+            )
+            _remove_contract(system, loan_id)
+
+            # Write off ALL remaining CB loans for this bank
+            for other_id, other_loan in list(system.state.contracts.items()):
+                if (
+                    other_id != loan_id
+                    and other_loan.kind == InstrumentKind.CB_LOAN
+                    and isinstance(other_loan, CBLoan)
+                    and other_loan.liability_issuer_id == bank_id
+                    and other_id in system.state.contracts
+                ):
+                    total_written_off_amount += other_loan.amount
+                    loans_written_off += 1
+                    loans_attempted += 1
+                    system.log(
+                        "CBFinalSettlementWrittenOff",
+                        loan_id=other_id,
+                        bank_id=bank_id,
+                        amount=other_loan.amount,
+                        reason="bank_already_defaulted",
+                    )
+                    _remove_contract(system, other_id)
+
+    post_outstanding = system.state.cb_loans_outstanding
+
+    system.log(
+        "CBFinalSettlementEnd",
+        loans_attempted=loans_attempted,
+        loans_repaid=loans_repaid,
+        loans_written_off=loans_written_off,
+        bank_defaults=bank_defaults,
+        total_written_off_amount=total_written_off_amount,
+        cb_loans_outstanding_pre_final=pre_outstanding,
+        cb_loans_outstanding_post_final=post_outstanding,
+        cb_reserves_initial=system.state.cb_reserves_initial,
+        cb_reserves_final=system.state.cb_reserves_outstanding,
+        cb_interest_total_paid=system.state.cb_interest_total_paid,
+        cb_loans_created_count=system.state.cb_loans_created_count,
+    )
+
+    return {
+        "loans_attempted": loans_attempted,
+        "loans_repaid": loans_repaid,
+        "loans_written_off": loans_written_off,
+        "bank_defaults": bank_defaults,
+        "total_written_off_amount": total_written_off_amount,
+        "cb_loans_outstanding_pre_final": pre_outstanding,
+        "cb_loans_outstanding_post_final": post_outstanding,
+    }
+
+
 def run_until_stable(
     system: System,
     max_days: int = 365,
@@ -397,6 +541,7 @@ def run_until_stable(
     enable_rating: bool = False,
     enable_banking: bool = False,
     enable_bank_lending: bool = False,
+    enable_final_cb_settlement: bool | None = None,
 ) -> list[DayReport]:
     """
     Advance day by day until the system is stable:
@@ -412,9 +557,14 @@ def run_until_stable(
         enable_rating: If True, run rating agency phase each day
         enable_banking: If True, run banking infrastructure each day
         enable_bank_lending: If True, run bank lending phases each day
+        enable_final_cb_settlement: If True, force banks to repay all CB loans
+            after the main loop. None = auto (enabled when banking is active).
 
     Note: Rollover is controlled by system.state.rollover_enabled (Plan 024)
     """
+    # Capture initial reserves for CB stress metrics
+    system.state.cb_reserves_initial = system.state.cb_reserves_outstanding
+
     reports = []
     consecutive_quiet = 0
     consecutive_no_defaults = 0
@@ -456,6 +606,21 @@ def run_until_stable(
 
         if stability_condition:
             break
+
+    # Final CB settlement: force banks to repay all outstanding CB loans
+    should_final = (enable_final_cb_settlement is not False) and enable_banking
+    if should_final:
+        has_cb = any(a.kind == AgentKind.CENTRAL_BANK for a in system.state.agents.values())
+        if has_cb:
+            final_result = run_final_cb_settlement(system)
+            if final_result["loans_attempted"] > 0:
+                logger.info(
+                    "final CB settlement: %d/%d repaid, %d written off, %d bank defaults",
+                    final_result["loans_repaid"],
+                    final_result["loans_attempted"],
+                    final_result["loans_written_off"],
+                    final_result["bank_defaults"],
+                )
 
     logger.info("simulation complete: %d days", system.state.day)
     return reports
