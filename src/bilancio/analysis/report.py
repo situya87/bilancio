@@ -227,9 +227,13 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
             if ck == "bank_deposit":
                 deposit_loss_gross += amt
 
-        # Total deposits ever created
+        # Total deposits ever created (cash deposits + loan disbursements + interest)
         if kind == "CashDeposited":
             total_deposits_created += amt
+        elif kind == "BankLoanIssued":
+            total_deposits_created += amt
+        elif kind == "DepositInterest":
+            total_deposits_created += int(e.get("interest", 0))
 
     delta_bank = bank_writeoffs / bank_obligations_created if bank_obligations_created > 0 else None
     deposit_loss_pct = deposit_loss_gross / total_deposits_created if total_deposits_created > 0 else None

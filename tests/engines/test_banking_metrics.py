@@ -170,3 +170,29 @@ class TestDepositLoss:
         m = compute_run_level_metrics(events)
         assert m["deposit_loss_gross"] == 0
         assert m["deposit_loss_pct"] == 0.0
+
+    def test_interest_included_in_denominator(self):
+        """DepositInterest events contribute to total_deposits_created."""
+        events = [
+            _evt("CashDeposited", amount=10000),
+            _evt("DepositInterest", interest=500),
+            _evt("DepositInterest", interest=500),
+            _evt("ObligationWrittenOff", contract_kind="bank_deposit", amount=5500),
+        ]
+        m = compute_run_level_metrics(events)
+        assert m["total_deposits_created"] == 11000  # 10000 + 500 + 500
+        assert m["deposit_loss_gross"] == 5500
+        assert m["deposit_loss_pct"] == 5500 / 11000  # 0.5, not 0.55
+
+    def test_bank_loans_included_in_denominator(self):
+        """BankLoanIssued creates deposits (money creation)."""
+        events = [
+            _evt("CashDeposited", amount=5000),
+            _evt("BankLoanIssued", amount=15000),
+            _evt("DepositInterest", interest=1000),
+            _evt("ObligationWrittenOff", contract_kind="bank_deposit", amount=10500),
+        ]
+        m = compute_run_level_metrics(events)
+        assert m["total_deposits_created"] == 21000  # 5000 + 15000 + 1000
+        assert m["deposit_loss_gross"] == 10500
+        assert m["deposit_loss_pct"] == 10500 / 21000  # 0.5
