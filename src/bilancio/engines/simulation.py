@@ -61,6 +61,14 @@ def _has_open_obligations(system: System) -> bool:
     return False
 
 
+def _has_outstanding_bank_loans(banking_sub) -> bool:
+    """Check if any bank has outstanding loans."""
+    for bank_state in banking_sub.banks.values():
+        if bank_state.outstanding_loans:
+            return True
+    return False
+
+
 class SimulationEngine(Protocol):
     """Protocol for simulation engines that can run financial scenarios."""
 
@@ -533,6 +541,10 @@ def run_final_cb_settlement(system: System) -> dict[str, Any]:
                     )
                     _remove_contract(system, other_id)
 
+            # Resolve the failed bank: distribute remaining reserves to depositors
+            from bilancio.engines.settlement import _resolve_failed_bank
+            _resolve_failed_bank(system, bank_id)
+
     post_outstanding = system.state.cb_loans_outstanding
 
     system.log(
@@ -559,6 +571,79 @@ def run_final_cb_settlement(system: System) -> dict[str, Any]:
         "cb_loans_outstanding_pre_final": pre_outstanding,
         "cb_loans_outstanding_post_final": post_outstanding,
     }
+
+
+def _run_bank_loan_winddown(system: System, banking_sub) -> int:
+    """Run bank loan repayments until all outstanding loans mature.
+
+    After the main simulation loop reaches stability, continue running
+    bank loan repayments only (no new lending) until all outstanding
+    bank loans have matured.
+
+    Args:
+        system: System instance
+        banking_sub: BankingSubsystem with bank states
+
+    Returns:
+        Number of wind-down days executed.
+    """
+    if not _has_outstanding_bank_loans(banking_sub):
+        return 0
+
+    # Count initial outstanding loans
+    initial_loans = sum(
+        len(bs.outstanding_loans) for bs in banking_sub.banks.values()
+    )
+
+    system.log(
+        "BankLoanWinddownStart",
+        day=system.state.day,
+        outstanding_loans=initial_loans,
+    )
+
+    winddown_days = 0
+    max_winddown = 50  # Hard cap to prevent infinite loops
+
+    for _ in range(max_winddown):
+        if not _has_outstanding_bank_loans(banking_sub):
+            break
+
+        current_day = system.state.day
+
+        system.log("BankLoanWinddownDay", day=current_day)
+
+        # Run bank loan repayments only
+        from bilancio.engines.bank_lending import run_bank_loan_repayments
+        bank_repay_events = run_bank_loan_repayments(system, current_day, banking_sub)
+        system.state.events.extend(bank_repay_events)
+
+        # Run interbank repayments
+        from bilancio.engines.interbank import run_interbank_repayments
+        ib_repay_events = run_interbank_repayments(system, current_day, banking_sub)
+        system.state.events.extend(ib_repay_events)
+
+        system.state.day += 1
+        winddown_days += 1
+
+    # Count remaining loans (should be 0)
+    remaining_loans = sum(
+        len(bs.outstanding_loans) for bs in banking_sub.banks.values()
+    )
+
+    system.log(
+        "BankLoanWinddownEnd",
+        day=system.state.day,
+        winddown_days=winddown_days,
+        initial_loans=initial_loans,
+        remaining_loans=remaining_loans,
+    )
+
+    logger.info(
+        "Bank loan wind-down: %d days, %d→%d loans",
+        winddown_days, initial_loans, remaining_loans,
+    )
+
+    return winddown_days
 
 
 def run_until_stable(
@@ -645,6 +730,12 @@ def run_until_stable(
 
         if stability_condition:
             break
+
+    # Bank loan wind-down: run remaining bank loan repayments after main loop
+    if enable_bank_lending:
+        banking_sub = getattr(system.state, "banking_subsystem", None)
+        if banking_sub is not None:
+            _run_bank_loan_winddown(system, banking_sub)
 
     # Final CB settlement: force banks to repay all outstanding CB loans
     should_final = (enable_final_cb_settlement is not False) and enable_banking

@@ -12,6 +12,7 @@ from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
 from bilancio.core.events import EventKind
 from bilancio.domain.agent import Agent, AgentKind
 from bilancio.domain.instruments.base import Instrument, InstrumentKind
+from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.delivery import DeliveryObligation
 from bilancio.domain.instruments.non_bank_loan import NonBankLoan
@@ -739,6 +740,230 @@ def _distribute_pro_rata_recovery(system: System, agent_id: str) -> None:
         )
 
 
+def _consume_reserves_from_bank(system: System, bank_id: str, amount: int) -> None:
+    """Consume reserve instruments from a bank and update CB counters.
+
+    Unlike _remove_contract, consume() does NOT update cb_reserves_outstanding,
+    so we must do it explicitly here.
+    """
+    from bilancio.ops.primitives import consume
+
+    remaining = amount
+    reserve_ids = [
+        cid
+        for cid in system.state.agents[bank_id].asset_ids
+        if cid in system.state.contracts
+        and system.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
+    ]
+
+    for cid in list(reserve_ids):
+        if remaining <= 0:
+            break
+        instr = system.state.contracts.get(cid)
+        if instr is None:
+            continue
+        take = min(instr.amount, remaining)
+        consume(system, cid, take)
+        remaining -= take
+
+    # Update CB reserves counter (consume doesn't do this)
+    system.state.cb_reserves_outstanding -= (amount - remaining)
+
+
+def _find_surviving_bank(system: System, depositor_id: str, failed_bank_id: str) -> str | None:
+    """Find a non-defaulted bank where the depositor has an existing deposit."""
+    agent = system.state.agents.get(depositor_id)
+    if agent is None:
+        return None
+
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if (
+            contract
+            and contract.kind == InstrumentKind.BANK_DEPOSIT
+            and contract.liability_issuer_id != failed_bank_id
+        ):
+            # Check that this bank hasn't defaulted
+            bank_agent = system.state.agents.get(contract.liability_issuer_id)
+            if bank_agent and not bank_agent.defaulted:
+                return contract.liability_issuer_id
+
+    return None
+
+
+def _create_resolution_deposit(system: System, depositor_id: str, bank_id: str, amount: int) -> None:
+    """Create or increase a deposit for a depositor at a receiving bank.
+
+    Mirrors bank_lending.py:_increase_deposit.
+    """
+    from bilancio.engines.bank_lending import _increase_deposit
+    _increase_deposit(system, depositor_id, bank_id, amount)
+
+
+def _resolve_to_cash(system: System, bank_id: str, depositor_id: str, amount: int) -> None:
+    """Convert bank reserves to cash and transfer to depositor."""
+    system.convert_reserves_to_cash(bank_id, amount)
+    system.transfer_cash(bank_id, depositor_id, amount)
+
+
+def _resolve_failed_bank(system: System, bank_id: str) -> None:
+    """Resolve a failed bank by distributing reserves to claimants.
+
+    Resolution procedure:
+    1. Collect bank's total reserves (RESERVE_DEPOSIT assets)
+    2. Cancel CB loans against reserves (CB claims have priority)
+    3. Distribute remaining reserves to depositors pro-rata:
+       - If depositor has a surviving bank: transfer reserves + create deposit
+       - If all depositor's banks failed: convert reserves to cash + transfer
+    4. Clean up banking subsystem state
+    """
+    from bilancio.engines.banking_subsystem import _get_bank_reserves
+
+    agent = system.state.agents.get(bank_id)
+    if agent is None:
+        return
+
+    # 1. Calculate total reserves
+    total_reserves = _get_bank_reserves(system, bank_id)
+    if total_reserves <= 0:
+        system.log(
+            "BankResolutionCompleted",
+            bank_id=bank_id,
+            total_reserves=0,
+            cb_claims_cancelled=0,
+            depositor_distributions=0,
+        )
+        return
+
+    remaining_reserves = total_reserves
+    cb_claims_cancelled = 0
+
+    # 2. CB loan claims first - cancel reserves against outstanding CB loans
+    cb_loans = [
+        (cid, contract)
+        for cid, contract in list(system.state.contracts.items())
+        if contract.kind == InstrumentKind.CB_LOAN
+        and isinstance(contract, CBLoan)
+        and contract.liability_issuer_id == bank_id
+    ]
+
+    for loan_id, loan in cb_loans:
+        if remaining_reserves <= 0:
+            break
+        if loan_id not in system.state.contracts:
+            continue
+
+        cancel_amount = min(loan.amount, remaining_reserves)
+
+        # Consume reserves from bank
+        _consume_reserves_from_bank(system, bank_id, cancel_amount)
+        remaining_reserves -= cancel_amount
+
+        # Remove the CB loan
+        _remove_contract(system, loan_id)
+        cb_claims_cancelled += cancel_amount
+
+        system.log(
+            "BankResolutionCBClaimCancelled",
+            bank_id=bank_id,
+            loan_id=loan_id,
+            loan_amount=loan.amount,
+            cancelled_amount=cancel_amount,
+        )
+
+    # 3. Distribute remaining reserves to depositors pro-rata
+    depositor_distributions = []
+
+    if remaining_reserves > 0:
+        # Collect depositor claims (BankDeposit where bank is liability issuer)
+        deposit_claims: list[tuple[str, int]] = []  # (depositor_id, amount)
+        for cid, contract in system.state.contracts.items():
+            if (
+                contract.kind == InstrumentKind.BANK_DEPOSIT
+                and contract.liability_issuer_id == bank_id
+            ):
+                deposit_claims.append((contract.asset_holder_id, contract.amount))
+
+        total_deposit_claims = sum(amount for _, amount in deposit_claims)
+
+        if total_deposit_claims > 0:
+            total_distributed = 0
+            for depositor_id, claim_amount in deposit_claims:
+                # Pro-rata share, with rounding guard
+                share = round((claim_amount / total_deposit_claims) * remaining_reserves)
+                share = min(share, remaining_reserves - total_distributed)
+                if share <= 0:
+                    continue
+
+                # Find a surviving bank for this depositor
+                surviving_bank_id = _find_surviving_bank(system, depositor_id, bank_id)
+
+                if surviving_bank_id is not None:
+                    # Transfer reserves to surviving bank + create deposit
+                    try:
+                        system.transfer_reserves(bank_id, surviving_bank_id, share)
+                        _create_resolution_deposit(system, depositor_id, surviving_bank_id, share)
+                        total_distributed += share
+                        depositor_distributions.append({
+                            "depositor": depositor_id,
+                            "amount": share,
+                            "method": "deposit_at_surviving_bank",
+                            "bank": surviving_bank_id,
+                        })
+                    except (ValidationError, Exception):
+                        # Fallback to cash if transfer fails
+                        try:
+                            _resolve_to_cash(system, bank_id, depositor_id, share)
+                            total_distributed += share
+                            depositor_distributions.append({
+                                "depositor": depositor_id,
+                                "amount": share,
+                                "method": "cash_fallback",
+                            })
+                        except (ValidationError, Exception):
+                            logger.warning(
+                                "Failed to distribute reserves to depositor %s: share=%d",
+                                depositor_id, share,
+                            )
+                else:
+                    # No surviving bank — convert to cash
+                    try:
+                        _resolve_to_cash(system, bank_id, depositor_id, share)
+                        total_distributed += share
+                        depositor_distributions.append({
+                            "depositor": depositor_id,
+                            "amount": share,
+                            "method": "cash_no_surviving_bank",
+                        })
+                    except (ValidationError, Exception):
+                        logger.warning(
+                            "Failed to convert reserves to cash for depositor %s: share=%d",
+                            depositor_id, share,
+                        )
+
+    # 4. Clean up banking subsystem
+    banking_sub = getattr(system.state, "banking_subsystem", None)
+    if banking_sub is not None:
+        bank_state = banking_sub.banks.get(bank_id)
+        if bank_state:
+            bank_state.outstanding_loans.clear()
+            bank_state.total_loan_principal = 0
+
+    system.log(
+        "BankResolutionCompleted",
+        bank_id=bank_id,
+        total_reserves=total_reserves,
+        remaining_reserves=remaining_reserves,
+        cb_claims_cancelled=cb_claims_cancelled,
+        depositor_distributions=depositor_distributions,
+        num_depositors=len(depositor_distributions),
+    )
+    logger.info(
+        "Bank resolution completed: bank=%s reserves=%d cb_cancelled=%d depositors=%d",
+        bank_id, total_reserves, cb_claims_cancelled, len(depositor_distributions),
+    )
+
+
 def _expel_agent(
     system: System,
     agent_id: str,
@@ -788,8 +1013,12 @@ def _expel_agent(
         mode=_get_default_mode(system),
     )
 
-    # Distribute remaining cash to creditors pro-rata before writing off liabilities
-    _distribute_pro_rata_recovery(system, agent_id)
+    # Bank resolution: distribute reserves to depositors
+    # Non-bank recovery: distribute cash to creditors pro-rata
+    if agent.kind == AgentKind.BANK:
+        _resolve_failed_bank(system, agent_id)
+    else:
+        _distribute_pro_rata_recovery(system, agent_id)
 
     cancelled_contract_ids = set(cancelled_contract_ids or [])
     cancelled_aliases = set(cancelled_aliases or [])
