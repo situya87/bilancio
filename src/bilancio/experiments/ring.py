@@ -707,6 +707,7 @@ class RingSweepRunner:
                     "vbt_mid_sensitivity": str(self.vbt_mid_sensitivity),
                     "vbt_spread_sensitivity": str(self.vbt_spread_sensitivity),
                     "trading_motive": self.trading_motive,
+                    "spread_scale": str(self.spread_scale),
                 }
 
             if self.lender_mode:
@@ -1038,6 +1039,7 @@ class RingSweepRunner:
                     "vbt_mid_sensitivity": str(self.vbt_mid_sensitivity),
                     "vbt_spread_sensitivity": str(self.vbt_spread_sensitivity),
                     "trading_motive": self.trading_motive,
+                    "spread_scale": str(self.spread_scale),
                 }
 
             if self.lender_mode:

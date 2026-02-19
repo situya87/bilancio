@@ -205,19 +205,29 @@ def _per_borrower_rate(
     Returns None if the borrower is credit-rationed (P_default > max_borrower_risk).
     Returns base_rate unchanged when credit_risk_loading == 0 (backward compat).
     """
-    loading = banking.bank_profile.credit_risk_loading
-    if loading == 0:
-        return base_rate  # backward compat: no per-borrower pricing
+    profile = banking.bank_profile
+    loading = profile.credit_risk_loading
+    max_risk = profile.max_borrower_risk
+
+    # If neither pricing nor rationing is configured, skip risk lookup
+    if loading == 0 and max_risk >= Decimal("1"):
+        return base_rate
 
     assessor = banking.risk_assessor
     if assessor is None:
         return base_rate  # no risk assessor available
 
     p = assessor.estimate_default_prob(borrower_id, current_day)
-    if p > banking.bank_profile.max_borrower_risk:
+
+    # Credit rationing (independent of loading)
+    if p > max_risk:
         return None  # credit rationed
 
-    return base_rate + loading * p
+    # Per-borrower pricing
+    if loading > 0:
+        return base_rate + loading * p
+
+    return base_rate
 
 
 def _find_eligible_borrowers(

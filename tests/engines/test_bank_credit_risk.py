@@ -82,6 +82,29 @@ class TestPerBorrowerRate:
         assert result == Decimal("0.05") + Decimal("0.5") * Decimal("0.20")
 
 
+    def test_rationing_without_loading(self):
+        """max_borrower_risk works independently of credit_risk_loading."""
+        profile = BankProfile(
+            credit_risk_loading=Decimal("0"),
+            max_borrower_risk=Decimal("0.15"),
+        )
+        assessor = FakeRiskAssessor(p_default=Decimal("0.20"))
+        banking = FakeBanking(profile, risk_assessor=assessor)
+        result = _per_borrower_rate(Decimal("0.05"), "borrower1", banking, 1)
+        assert result is None  # rationed even though loading=0
+
+    def test_rationing_without_loading_allows_safe_borrower(self):
+        """Borrower under max_borrower_risk gets base rate when loading=0."""
+        profile = BankProfile(
+            credit_risk_loading=Decimal("0"),
+            max_borrower_risk=Decimal("0.30"),
+        )
+        assessor = FakeRiskAssessor(p_default=Decimal("0.10"))
+        banking = FakeBanking(profile, risk_assessor=assessor)
+        result = _per_borrower_rate(Decimal("0.05"), "borrower1", banking, 1)
+        assert result == Decimal("0.05")  # base rate, no loading added
+
+
 class TestBankProfileValidation:
     """Test BankProfile validation of new fields."""
 

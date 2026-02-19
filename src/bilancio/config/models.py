@@ -777,6 +777,11 @@ class BalancedDealerConfig(BaseModel):
         default="liquidity_then_earning",
         description="Trading motivation: liquidity_only, liquidity_then_earning, or unrestricted",
     )
+    spread_scale: Decimal = Field(
+        default=Decimal("1.0"),
+        ge=Decimal("0"),
+        description="Multiplicative scale on dealer base spreads (1.0 = no change)",
+    )
 
     @field_validator("trading_motive")
     @classmethod
