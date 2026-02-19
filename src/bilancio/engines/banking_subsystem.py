@@ -78,29 +78,68 @@ class BankTreynorState:
     total_loan_principal: int = 0
 
     def refresh_quote(self, system: System, current_day: int) -> Quote:
-        """Recompute (r_D, r_L) from bank's current balance sheet."""
+        """Recompute (r_D, r_L) from bank's current balance sheet.
+
+        Uses a 10-day reserve projection path (per paper Section 6.1.3):
+        1. Build path[t] = current_reserves
+        2. For s in 1..10, add scheduled legs (CB loan repayments, bank loan repayments)
+        3. Cash-tightness L* = max(0, reserve_floor - min(path)) / reserve_floor
+        4. Risk index rho = L* (simple version, matches simple_risk_index)
+        5. Inventory x = path[t+2] - reserve_target (projected t+2, not current)
+        """
+        from bilancio.domain.instruments.cb_loan import CBLoan
+
         reserves = _get_bank_reserves(system, self.bank_id)
-        deposits = _get_bank_deposits_total(system, self.bank_id)
-
-        # Reserve target from pricing params
         reserve_target = self.pricing_params.reserve_target
+        reserve_floor = self.pricing_params.reserve_floor
 
-        # Simple inventory: projected reserves at t+2 minus target
-        # For now, use current reserves as a proxy for t+2 projection
-        inventory = compute_inventory(reserves, reserve_target)
+        # --- Build 10-day reserve projection path ---
+        path = [0] * 11  # path[0] = today, path[1..10] = future days
+        path[0] = reserves
 
-        # Simple cash-tightness: how far below target are we?
-        # Guard: reserve_target is always >= 1 (set in initialize_banking_subsystem)
-        # so the denominator is always positive.
-        cash_tightness = Decimal("0")
-        if reserve_target > 0 and reserves < reserve_target:
-            cash_tightness = Decimal(reserve_target - reserves) / Decimal(reserve_target)
+        for s in range(1, 11):
+            proj_day = current_day + s
+            delta = 0
+
+            # CB loan repayments due on proj_day (outflow: bank pays back principal + interest)
+            bank_agent = system.state.agents.get(self.bank_id)
+            if bank_agent:
+                for cid in bank_agent.liability_ids:
+                    contract = system.state.contracts.get(cid)
+                    if (
+                        contract is not None
+                        and contract.kind == InstrumentKind.CB_LOAN
+                        and isinstance(contract, CBLoan)
+                        and contract.maturity_day == proj_day
+                    ):
+                        delta -= contract.repayment_amount
+
+            # Bank loan repayments due on proj_day (inflow: borrowers repay to bank)
+            for loan_rec in self.outstanding_loans.values():
+                if loan_rec.maturity_day == proj_day:
+                    delta += loan_rec.repayment_amount
+
+            path[s] = path[s - 1] + delta
+
+        # --- Cash-tightness: L* = max(0, reserve_floor - min(path)) / reserve_floor ---
+        min_path = min(path)
+        if reserve_floor > 0:
+            cash_tightness = max(Decimal("0"), Decimal(reserve_floor - min_path) / Decimal(reserve_floor))
+        else:
+            cash_tightness = Decimal("0")
+
+        # --- Risk index: rho = L* (simple version) ---
+        risk_index = cash_tightness
+
+        # --- Inventory: x = path[t+2] - reserve_target (projected, not current) ---
+        projected_t2 = path[min(2, len(path) - 1)]
+        inventory = compute_inventory(projected_t2, reserve_target)
 
         # Compute quote from Treynor kernel
         self.current_quote = compute_quotes(
             inventory=inventory,
             cash_tightness=cash_tightness,
-            risk_index=Decimal("0"),  # Risk index TBD (can be enhanced later)
+            risk_index=risk_index,
             params=self.pricing_params,
             day=current_day,
         )

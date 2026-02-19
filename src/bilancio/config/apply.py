@@ -322,6 +322,11 @@ def apply_action(system: System, action_dict: dict[str, Any], agents: dict[str, 
                 alias=action.alias,
             )
 
+        elif action_type == "burn_bank_cash":
+            from bilancio.ops.banking import burn_bank_cash
+
+            burn_bank_cash(system=system, bank_id=action.bank)
+
         elif action_type == "transfer_claim":
             # Transfer claim (reassign asset holder) by alias or id (order-independent validation)
             data = action

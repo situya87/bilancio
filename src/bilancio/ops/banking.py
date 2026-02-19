@@ -202,3 +202,47 @@ def client_payment(
             system.log("CashPayment", payer=payer_id, payee=payee_id, amount=cash_paid)
 
         return dep_rx
+
+
+def burn_bank_cash(system: System, bank_id: str) -> int:
+    """Burn all CASH instruments held by a bank.
+
+    After deposit_cash, banks hold CASH instruments they never use.
+    The paper says bank assets = Reserves + Loans only (Section 5).
+    This removes CASH from bank balance sheets.
+
+    Args:
+        system: System instance
+        bank_id: Bank agent ID
+
+    Returns:
+        Total amount of cash burned
+    """
+    bank = system.state.agents.get(bank_id)
+    if bank is None:
+        return 0
+
+    total_burned = 0
+    cash_ids = [
+        cid for cid in list(bank.asset_ids)
+        if system.state.contracts.get(cid) is not None
+        and system.state.contracts[cid].kind == InstrumentKind.CASH
+    ]
+
+    for cid in cash_ids:
+        contract = system.state.contracts[cid]
+        total_burned += contract.amount
+        # Remove from bank's assets
+        bank.asset_ids.remove(cid)
+        # Remove from CB's liabilities (CASH issuer is always CB)
+        cb_id = contract.liability_issuer_id
+        cb_agent = system.state.agents.get(cb_id)
+        if cb_agent and cid in cb_agent.liability_ids:
+            cb_agent.liability_ids.remove(cid)
+        # Delete the contract
+        del system.state.contracts[cid]
+
+    if total_burned > 0:
+        system.log("BankCashBurned", bank_id=bank_id, amount=total_burned)
+
+    return total_burned

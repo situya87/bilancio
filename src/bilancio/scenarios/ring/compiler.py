@@ -604,6 +604,12 @@ def compile_ring_explorer_balanced(
                 }
             })
 
+        # 5. Burn CASH instruments from bank balance sheets (paper Section 5)
+        for bank_idx in range(1, n_banks + 1):
+            initial_actions.append({
+                "burn_bank_cash": {"bank": f"bank_{bank_idx}"}
+            })
+
     scenario_name = _render_scenario_name(config.name_prefix, params)
     scenario_name = f"{scenario_name} [Balanced {mode}]"
     description = _render_description(params)

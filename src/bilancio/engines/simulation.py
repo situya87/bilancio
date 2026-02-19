@@ -203,6 +203,48 @@ def _log_dealer_estimates(system: System, current_day: int) -> None:
         system.log_estimate(est)
 
 
+def _run_cb_backstop(system: System, banking_sub, current_day: int) -> None:
+    """CB end-of-day backstop: automatically lend from CB to bring bank reserves up to target.
+
+    Per paper Part E, at end of each day the CB checks each bank's reserves
+    and automatically lends to cover any shortfall below target.
+    """
+    from bilancio.engines.banking_subsystem import _get_bank_reserves
+
+    if system.state.cb_lending_frozen:
+        return
+
+    for bank_id, bank_state in banking_sub.banks.items():
+        bank_agent = system.state.agents.get(bank_id)
+        if bank_agent is None or bank_agent.defaulted:
+            continue
+
+        reserves = _get_bank_reserves(system, bank_id)
+        target = bank_state.pricing_params.reserve_target
+        shortfall = target - reserves
+
+        if shortfall > 0:
+            try:
+                system.cb_lend_reserves(bank_id, shortfall, current_day)
+                system.log(
+                    "CBBackstopLoan",
+                    bank_id=bank_id,
+                    amount=shortfall,
+                    day=current_day,
+                    reserves_before=reserves,
+                    reserve_target=target,
+                )
+                logger.debug(
+                    "CB backstop: bank=%s shortfall=%d day=%d",
+                    bank_id, shortfall, current_day,
+                )
+            except (ValueError, Exception):
+                # CB lending frozen or other issue - log and continue
+                logger.warning(
+                    "CB backstop failed for bank=%s shortfall=%d",
+                    bank_id, shortfall,
+                )
+
 def run_day(
     system: System,
     enable_dealer: bool = False,
@@ -316,6 +358,10 @@ def run_day(
     system.log("SubphaseB2")
     settled_for_rollover = settle_due(system, current_day, rollover_enabled=rollover_enabled)
 
+    # Refresh bank quotes after settlements (event-driven pricing)
+    if enable_banking and banking_sub is not None:
+        banking_sub.refresh_all_quotes(system, current_day)
+
     # Plan 024: Rollover - create new payables for settled ones
     if rollover_enabled and settled_for_rollover:
         system.log("SubphaseB_Rollover")
@@ -408,6 +454,9 @@ def run_day(
         bank_repay_events = run_bank_loan_repayments(system, current_day, banking_sub)
         system.state.events.extend(bank_repay_events)
 
+        # Refresh bank quotes after loan repayments (event-driven pricing)
+        banking_sub.refresh_all_quotes(system, current_day)
+
     # Deposit interest accrual
     if enable_banking and banking_sub is not None:
         from bilancio.engines.bank_interest import accrue_deposit_interest
@@ -421,6 +470,11 @@ def run_day(
 
         ib_repay_events = run_interbank_repayments(system, current_day, banking_sub)
         system.state.events.extend(ib_repay_events)
+
+    # CB end-of-day backstop (paper Part E): top up reserves to target
+    if enable_banking and banking_sub is not None:
+        _run_cb_backstop(system, banking_sub, current_day)
+        banking_sub.refresh_all_quotes(system, current_day)
 
     # Increment system day
     system.state.day += 1
@@ -637,6 +691,35 @@ def _run_bank_loan_winddown(system: System, banking_sub) -> int:
         ib_repay_events = run_interbank_repayments(system, current_day, banking_sub)
         system.state.events.extend(ib_repay_events)
 
+        # CB loan repayments during wind-down
+        has_cb = any(a.kind == AgentKind.CENTRAL_BANK for a in system.state.agents.values())
+        if has_cb:
+            system.credit_reserve_interest(current_day)
+            for loan_id in system.get_cb_loans_due(current_day):
+                loan = system.state.contracts.get(loan_id)
+                if loan is None:
+                    continue
+                bank_id = loan.liability_issuer_id
+                try:
+                    system.cb_repay_loan(loan_id, bank_id)
+                except (ValidationError, Exception):
+                    # CB is frozen during wind-down, so refinancing will fail
+                    bank_agent = system.state.agents.get(bank_id)
+                    if bank_agent and not bank_agent.defaulted:
+                        bank_agent.defaulted = True
+                        system.state.defaulted_agent_ids.add(bank_id)
+                        system.log(
+                            "BankDefaultWinddown",
+                            bank_id=bank_id,
+                            loan_id=loan_id,
+                            day=current_day,
+                        )
+                        logger.info(
+                            "Bank %s defaulted during wind-down (can't repay CB loan)",
+                            bank_id,
+                        )
+                    _remove_contract(system, loan_id)
+
         system.state.day += 1
         winddown_days += 1
 
@@ -744,6 +827,10 @@ def run_until_stable(
             )
 
         if stability_condition:
+            if enable_banking and not system.state.cb_lending_frozen:
+                system.state.cb_lending_frozen = True
+                system.log("CBLendingFreezeStability", day=system.state.day)
+                logger.info("CB lending frozen at stability (day %d)", system.state.day)
             break
 
     # Bank loan wind-down: run remaining bank loan repayments after main loop

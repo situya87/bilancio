@@ -370,6 +370,13 @@ class CreateCBLoan(BaseModel):
         return v
 
 
+class BurnBankCash(BaseModel):
+    """Action to burn all CASH instruments held by a bank."""
+
+    action: Literal["burn_bank_cash"] = "burn_bank_cash"
+    bank: str = Field(..., description="Bank ID")
+
+
 class TransferClaim(BaseModel):
     """Action to transfer (assign) a claim to a new creditor.
 
@@ -425,6 +432,7 @@ Action = (
     | CreateDeliveryObligation
     | CreatePayable
     | CreateCBLoan
+    | BurnBankCash
     | TransferClaim
 )
 

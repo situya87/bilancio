@@ -88,6 +88,11 @@ def parse_action(action_dict: dict[str, Any]) -> Action:
         from .models import CreateCBLoan
 
         return CreateCBLoan(**data)
+    elif "burn_bank_cash" in action_dict:
+        data = action_dict["burn_bank_cash"]
+        from .models import BurnBankCash
+
+        return BurnBankCash(**data)
     elif "transfer_claim" in action_dict:
         data = action_dict["transfer_claim"]
         from .models import TransferClaim
