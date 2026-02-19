@@ -233,7 +233,12 @@ def run_scenario(
             from bilancio.decision.profiles import BankProfile
             from bilancio.engines.banking_subsystem import initialize_banking_subsystem
 
-            bank_profile = BankProfile()  # Use defaults
+            _credit_risk_loading = Decimal(str(_balanced_cfg.get("credit_risk_loading", 0)))
+            _max_borrower_risk = Decimal(str(_balanced_cfg.get("max_borrower_risk", "1.0")))
+            bank_profile = BankProfile(
+                credit_risk_loading=_credit_risk_loading,
+                max_borrower_risk=_max_borrower_risk,
+            )
             # Get kappa: prefer _balanced_config (written by compiler), then balanced_dealer, then default
             _kappa_str = (
                 _balanced_cfg.get("kappa")
@@ -259,6 +264,32 @@ def run_scenario(
                 infra_banks=_infra_banks,
             )
             system.state.banking_subsystem = banking_sub
+            # Wire risk assessor for credit-risk-adjusted bank lending
+            if _credit_risk_loading > 0:
+                if system.state.dealer_subsystem and hasattr(system.state.dealer_subsystem, 'risk_assessor') and system.state.dealer_subsystem.risk_assessor:
+                    banking_sub.risk_assessor = system.state.dealer_subsystem.risk_assessor
+                else:
+                    from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
+                    banking_sub.risk_assessor = RiskAssessor(RiskAssessmentParams())
+            # Wire CB escalation and cap params
+            _cb_escalation_slope = Decimal(str(_balanced_cfg.get("cb_rate_escalation_slope", 0)))
+            _cb_max_outstanding = Decimal(str(_balanced_cfg.get("cb_max_outstanding_ratio", 0)))
+            if _cb_escalation_slope > 0 or _cb_max_outstanding > 0:
+                from bilancio.domain.agents.central_bank import CentralBank as _CB
+                for _agent in system.state.agents.values():
+                    if isinstance(_agent, _CB):
+                        _agent.rate_escalation_slope = _cb_escalation_slope
+                        _agent.max_outstanding_ratio = _cb_max_outstanding
+                        _Q_total = int(float(_balanced_cfg.get("Q_total", 0)))
+                        if _Q_total <= 0:
+                            from bilancio.domain.instruments.base import InstrumentKind as _IK
+                            _Q_total = sum(
+                                c.amount for c in system.state.contracts.values()
+                                if c.kind == _IK.PAYABLE
+                            )
+                        _agent.escalation_base_amount = _Q_total
+                        break
+
             enable_banking = True
             enable_bank_lending = _balanced_cfg.get("enable_bank_lending", False) or _run_cfg.get("enable_bank_lending", False)
     else:

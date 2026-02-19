@@ -417,6 +417,29 @@ class BalancedComparisonConfig(BaseModel):
     lender_maturity_days: int = Field(default=2, description="Loan term in days")
     lender_horizon: int = Field(default=3, description="Look-ahead for upcoming obligations")
 
+    # Bank credit risk pricing (Plan 036)
+    credit_risk_loading: Decimal = Field(
+        default=Decimal("0"), description="Per-borrower credit risk loading on bank loan rate"
+    )
+    max_borrower_risk: Decimal = Field(
+        default=Decimal("1.0"), description="Max P_default for bank lending (credit rationing threshold)"
+    )
+
+    # CB rate escalation (Plan 036)
+    cb_rate_escalation_slope: Decimal = Field(
+        default=Decimal("0"), description="CB rate escalation slope (0 = static rate)"
+    )
+
+    # CB lending cap (Plan 036)
+    cb_max_outstanding_ratio: Decimal = Field(
+        default=Decimal("0"), description="CB max outstanding as fraction of Q_total (0 = no cap)"
+    )
+
+    # Dealer spread scaling (Plan 036)
+    spread_scale: Decimal = Field(
+        default=Decimal("1.0"), description="Multiplicative scale on dealer base spreads"
+    )
+
 
 class BalancedComparisonRunner:
     """
@@ -692,6 +715,11 @@ class BalancedComparisonRunner:
             trading_motive=self.config.trading_motive,
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -740,6 +768,11 @@ class BalancedComparisonRunner:
             trading_motive=self.config.trading_motive,
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -785,6 +818,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="lender",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -835,6 +873,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="nbfi",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_dealer_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -890,6 +933,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="nbfi_dealer",  # 50/50 cash split
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_bank_passive_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -933,6 +981,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="banking",  # VBT/Dealer cash=0, banks replace
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_bank_dealer_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -981,6 +1034,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="bank_dealer",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def _get_bank_dealer_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1031,6 +1089,11 @@ class BalancedComparisonRunner:
             balanced_mode_override="bank_dealer_nbfi",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            credit_risk_loading=self.config.credit_risk_loading,
+            max_borrower_risk=self.config.max_borrower_risk,
+            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
+            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
+            spread_scale=self.config.spread_scale,
         )
 
     def run_all(self) -> list[BalancedComparisonResult]:
@@ -1045,19 +1108,191 @@ class BalancedComparisonRunner:
         else:
             return self._run_all_sequential()
 
-    def _run_all_batch(self) -> list[BalancedComparisonResult]:
-        """Execute all pairs using batch execution (parallel on Modal)."""
-        # Lender/dealer+lender/banking arms not yet optimized for batch - fall back to sequential
-        if (
-            self.config.enable_lender
-            or self.config.enable_dealer_lender
-            or self.config.enable_bank_passive
-            or self.config.enable_bank_dealer
-            or self.config.enable_bank_dealer_nbfi
-        ):
-            return self._run_all_sequential()
+    def _get_enabled_arm_defs(
+        self,
+    ) -> list[tuple[str, str, str, str]]:
+        """Return list of (arm_name, phase_name, runner_getter_name, supabase_regime) for enabled arms."""
+        # Always-enabled arms
+        defs: list[tuple[str, str, str, str]] = [
+            ("passive", "balanced_passive", "_get_passive_runner", "passive"),
+            ("active", "balanced_active", "_get_active_runner", "active"),
+        ]
+        # Conditionally-enabled arms
+        if self.config.enable_lender:
+            defs.append(("lender", "balanced_nbfi", "_get_nbfi_runner", "nbfi"))
+        if self.config.enable_dealer_lender:
+            defs.append(
+                (
+                    "dealer_lender",
+                    "balanced_dealer_lender",
+                    "_get_dealer_lender_runner",
+                    "dealer_lender",
+                )
+            )
+        if self.config.enable_bank_passive:
+            defs.append(
+                (
+                    "bank_passive",
+                    "balanced_bank_passive",
+                    "_get_bank_passive_runner",
+                    "bank_passive",
+                )
+            )
+        if self.config.enable_bank_dealer:
+            defs.append(
+                ("bank_dealer", "balanced_bank_dealer", "_get_bank_dealer_runner", "bank_dealer")
+            )
+        if self.config.enable_bank_dealer_nbfi:
+            defs.append(
+                (
+                    "bank_dealer_nbfi",
+                    "balanced_bank_dealer_nbfi",
+                    "_get_bank_dealer_nbfi_runner",
+                    "bank_dealer_nbfi",
+                )
+            )
+        return defs
 
-        total_pairs = (
+    def _build_result_from_summaries(
+        self,
+        arm_summaries: dict[str, RingRunSummary],
+        kappa: Decimal,
+        concentration: Decimal,
+        mu: Decimal,
+        monotonicity: Decimal,
+        outside_mid_ratio: Decimal,
+        seed: int,
+    ) -> BalancedComparisonResult:
+        """Build a BalancedComparisonResult from a dict of arm_name -> RingRunSummary."""
+        passive = arm_summaries["passive"]
+        active = arm_summaries["active"]
+        dm = active.dealer_metrics or {}
+
+        # Build optional arm data dicts (same structure as _run_pair)
+        lender_data: dict[str, Any] = {}
+        if "lender" in arm_summaries:
+            s = arm_summaries["lender"]
+            lender_data = {
+                "delta_lender": s.delta_total,
+                "phi_lender": s.phi_total,
+                "lender_run_id": s.run_id,
+                "lender_status": "completed" if s.delta_total is not None else "failed",
+                "n_defaults_lender": s.n_defaults,
+                "cascade_fraction_lender": s.cascade_fraction,
+                "lender_modal_call_id": s.modal_call_id,
+            }
+
+        dealer_lender_data: dict[str, Any] = {}
+        if "dealer_lender" in arm_summaries:
+            s = arm_summaries["dealer_lender"]
+            dealer_lender_data = {
+                "delta_dealer_lender": s.delta_total,
+                "phi_dealer_lender": s.phi_total,
+                "dealer_lender_run_id": s.run_id,
+                "dealer_lender_status": "completed" if s.delta_total is not None else "failed",
+                "n_defaults_dealer_lender": s.n_defaults,
+                "cascade_fraction_dealer_lender": s.cascade_fraction,
+                "dealer_lender_modal_call_id": s.modal_call_id,
+            }
+
+        bank_passive_data: dict[str, Any] = {}
+        if "bank_passive" in arm_summaries:
+            s = arm_summaries["bank_passive"]
+            bank_passive_data = {
+                "delta_bank_passive": s.delta_total,
+                "phi_bank_passive": s.phi_total,
+                "bank_passive_run_id": s.run_id,
+                "bank_passive_status": "completed" if s.delta_total is not None else "failed",
+                "n_defaults_bank_passive": s.n_defaults,
+                "cascade_fraction_bank_passive": s.cascade_fraction,
+                "bank_passive_modal_call_id": s.modal_call_id,
+            }
+
+        bank_dealer_data: dict[str, Any] = {}
+        if "bank_dealer" in arm_summaries:
+            s = arm_summaries["bank_dealer"]
+            bank_dealer_data = {
+                "delta_bank_dealer": s.delta_total,
+                "phi_bank_dealer": s.phi_total,
+                "bank_dealer_run_id": s.run_id,
+                "bank_dealer_status": "completed" if s.delta_total is not None else "failed",
+                "n_defaults_bank_dealer": s.n_defaults,
+                "cascade_fraction_bank_dealer": s.cascade_fraction,
+                "bank_dealer_modal_call_id": s.modal_call_id,
+            }
+
+        bank_dealer_nbfi_data: dict[str, Any] = {}
+        if "bank_dealer_nbfi" in arm_summaries:
+            s = arm_summaries["bank_dealer_nbfi"]
+            bank_dealer_nbfi_data = {
+                "delta_bank_dealer_nbfi": s.delta_total,
+                "phi_bank_dealer_nbfi": s.phi_total,
+                "bank_dealer_nbfi_run_id": s.run_id,
+                "bank_dealer_nbfi_status": "completed" if s.delta_total is not None else "failed",
+                "n_defaults_bank_dealer_nbfi": s.n_defaults,
+                "cascade_fraction_bank_dealer_nbfi": s.cascade_fraction,
+                "bank_dealer_nbfi_modal_call_id": s.modal_call_id,
+            }
+
+        return BalancedComparisonResult(
+            kappa=kappa,
+            concentration=concentration,
+            mu=mu,
+            monotonicity=monotonicity,
+            seed=seed,
+            face_value=self.config.face_value,
+            outside_mid_ratio=outside_mid_ratio,
+            big_entity_share=self.config.big_entity_share,
+            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
+            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            delta_passive=passive.delta_total,
+            phi_passive=passive.phi_total,
+            passive_run_id=passive.run_id,
+            passive_status="completed" if passive.delta_total is not None else "failed",
+            delta_active=active.delta_total,
+            phi_active=active.phi_total,
+            active_run_id=active.run_id,
+            active_status="completed" if active.delta_total is not None else "failed",
+            dealer_total_pnl=dm.get("dealer_total_pnl"),
+            dealer_total_return=dm.get("dealer_total_return"),
+            total_trades=dm.get("total_trades"),
+            n_defaults_passive=passive.n_defaults,
+            n_defaults_active=active.n_defaults,
+            cascade_fraction_passive=passive.cascade_fraction,
+            cascade_fraction_active=active.cascade_fraction,
+            passive_modal_call_id=passive.modal_call_id,
+            active_modal_call_id=active.modal_call_id,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            dealer_passive_pnl=(passive.dealer_metrics or {}).get("dealer_total_pnl"),
+            dealer_passive_return=(passive.dealer_metrics or {}).get("dealer_total_return"),
+            dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
+                dm,
+                passive.dealer_metrics,
+            ),
+            **lender_data,
+            **dealer_lender_data,
+            **bank_passive_data,
+            **bank_dealer_data,
+            **bank_dealer_nbfi_data,
+        )
+
+    def _run_all_batch(self) -> list[BalancedComparisonResult]:
+        """Execute all runs using batch execution (parallel on Modal).
+
+        Supports all enabled arms (passive, active, lender, dealer+lender,
+        bank-passive, bank-dealer, bank-dealer-nbfi) in a single parallel batch.
+        """
+        arm_defs = self._get_enabled_arm_defs()
+        n_arms = len(arm_defs)
+
+        total_combos = (
             len(self.config.kappas)
             * len(self.config.concentrations)
             * len(self.config.mus)
@@ -1066,31 +1301,42 @@ class BalancedComparisonRunner:
         )
 
         skipped = len(self._completed_keys)
-        remaining = total_pairs - skipped
+        remaining = total_combos - skipped
 
+        arm_names = [a[0] for a in arm_defs]
         logger.info(
-            "Starting BATCH balanced comparison sweep: %d kappas × %d concentrations × %d mus × %d ρ = %d pairs",
+            "Starting BATCH balanced comparison sweep: %d kappas × %d concentrations × %d mus × %d ρ = %d combos × %d arms",
             len(self.config.kappas),
             len(self.config.concentrations),
             len(self.config.mus),
             len(self.config.outside_mid_ratios),
-            total_pairs,
+            total_combos,
+            n_arms,
         )
+        print(f"Arms: {', '.join(arm_names)}", flush=True)
 
         if skipped > 0:
-            print(f"Resuming: {skipped} pairs already completed, {remaining} remaining", flush=True)
+            print(
+                f"Resuming: {skipped} combos already completed, {remaining} remaining", flush=True
+            )
 
         self._start_time = time.time()
 
-        # Phase 1: Prepare all runs
-        print(f"Preparing {remaining * 2} runs...", flush=True)
-        prepared_runs: list[
-            tuple[PreparedRun, PreparedRun, Decimal, Decimal, Decimal, Decimal, Decimal, int]
+        # Phase 1: Prepare all runs for all enabled arms
+        # Each entry: (arm_preps_dict, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed)
+        prepared_combos: list[
+            tuple[dict[str, PreparedRun], Decimal, Decimal, Decimal, Decimal, Decimal, int]
         ] = []
 
+        # Cache runners per outside_mid_ratio to avoid re-creating them
+        runners_cache: dict[tuple[Decimal, str], Any] = {}
+
         for outside_mid_ratio in self.config.outside_mid_ratios:
-            passive_runner = self._get_passive_runner(outside_mid_ratio)
-            active_runner = self._get_active_runner(outside_mid_ratio)
+            # Pre-create runners for this outside_mid_ratio
+            for arm_name, _phase, getter_name, _regime in arm_defs:
+                cache_key = (outside_mid_ratio, arm_name)
+                if cache_key not in runners_cache:
+                    runners_cache[cache_key] = getattr(self, getter_name)(outside_mid_ratio)
 
             for kappa in self.config.kappas:
                 for concentration in self.config.concentrations:
@@ -1104,30 +1350,22 @@ class BalancedComparisonRunner:
 
                             seed = self._next_seed()
 
-                            # Prepare passive run
-                            passive_prep = passive_runner._prepare_run(
-                                phase="balanced_passive",
-                                kappa=kappa,
-                                concentration=concentration,
-                                mu=mu,
-                                monotonicity=monotonicity,
-                                seed=seed,
-                            )
+                            # Prepare all enabled arms for this combo
+                            arm_preps: dict[str, PreparedRun] = {}
+                            for arm_name, phase, getter_name, _regime in arm_defs:
+                                runner = runners_cache[(outside_mid_ratio, arm_name)]
+                                arm_preps[arm_name] = runner._prepare_run(
+                                    phase=phase,
+                                    kappa=kappa,
+                                    concentration=concentration,
+                                    mu=mu,
+                                    monotonicity=monotonicity,
+                                    seed=seed,
+                                )
 
-                            # Prepare active run
-                            active_prep = active_runner._prepare_run(
-                                phase="balanced_active",
-                                kappa=kappa,
-                                concentration=concentration,
-                                mu=mu,
-                                monotonicity=monotonicity,
-                                seed=seed,
-                            )
-
-                            prepared_runs.append(
+                            prepared_combos.append(
                                 (
-                                    passive_prep,
-                                    active_prep,
+                                    arm_preps,
                                     kappa,
                                     concentration,
                                     mu,
@@ -1137,43 +1375,30 @@ class BalancedComparisonRunner:
                                 )
                             )
 
-        if not prepared_runs:
-            print("All pairs already completed!", flush=True)
+        if not prepared_combos:
+            print("All combos already completed!", flush=True)
             return self.comparison_results
 
-        # Phase 2: Build batch and execute
+        # Phase 2: Flatten all arms into one batch and execute
+        total_runs = sum(len(arm_preps) for arm_preps, *_ in prepared_combos)
         print(
-            f"Submitting {len(prepared_runs) * 2} runs to Modal (parallel execution)...", flush=True
+            f"Preparing {total_runs} runs ({remaining} combos × {n_arms} arms)...", flush=True
+        )
+        print(
+            f"Submitting {total_runs} runs to Modal (parallel execution)...", flush=True
         )
 
-        # Build flat list for batch execution
         batch_runs: list[tuple[dict[str, Any], str, RunOptions]] = []
-        run_index_map: dict[str, int] = {}  # run_id -> index in prepared_runs
+        # Map run_id -> (combo_index, arm_name) for result routing
+        run_id_to_location: dict[str, tuple[int, str]] = {}
 
-        for idx, (passive_prep, active_prep, *_) in enumerate(prepared_runs):
-            batch_runs.append(
-                (
-                    passive_prep.scenario_config,
-                    passive_prep.run_id,
-                    passive_prep.options,
-                )
-            )
-            run_index_map[passive_prep.run_id] = idx * 2  # even indices are passive
-
-            batch_runs.append(
-                (
-                    active_prep.scenario_config,
-                    active_prep.run_id,
-                    active_prep.options,
-                )
-            )
-            run_index_map[active_prep.run_id] = idx * 2 + 1  # odd indices are active
+        for combo_idx, (arm_preps, *_params) in enumerate(prepared_combos):
+            for arm_name, prep in arm_preps.items():
+                batch_runs.append((prep.scenario_config, prep.run_id, prep.options))
+                run_id_to_location[prep.run_id] = (combo_idx, arm_name)
 
         # Execute batch with progress callback
-        completed = [0]
-
         def progress_callback(done: int, total: int) -> None:
-            completed[0] = done
             assert self._start_time is not None
             elapsed = time.time() - self._start_time
             if done > 0:
@@ -1185,95 +1410,57 @@ class BalancedComparisonRunner:
                 )
 
         results = self.executor.execute_batch(  # type: ignore[attr-defined]
-            [(config, run_id, opts) for config, run_id, opts, *_ in batch_runs],
+            batch_runs,
             progress_callback=progress_callback,
         )
         print()  # newline after progress
 
+        # Route results back to (combo_idx, arm_name)
+        combo_results: dict[int, dict[str, Any]] = {}
+        for (_config, run_id, _opts), raw_result in zip(batch_runs, results):
+            combo_idx, arm_name = run_id_to_location[run_id]
+            combo_results.setdefault(combo_idx, {})[arm_name] = raw_result
+
         # Phase 3: Finalize runs and build results
         print("Finalizing results...", flush=True)
 
-        for idx, (
-            passive_prep,
-            active_prep,
+        for combo_idx, (
+            arm_preps,
             kappa,
             concentration,
             mu,
             monotonicity,
             outside_mid_ratio,
             seed,
-        ) in enumerate(prepared_runs):
-            passive_result = results[idx * 2]
-            active_result = results[idx * 2 + 1]
+        ) in enumerate(prepared_combos):
+            # Finalize each arm
+            arm_summaries: dict[str, RingRunSummary] = {}
+            for arm_name, prep in arm_preps.items():
+                runner = runners_cache[(outside_mid_ratio, arm_name)]
+                raw = combo_results[combo_idx][arm_name]
+                arm_summaries[arm_name] = runner._finalize_run(prep, raw)
 
-            # Get runners for finalization
-            passive_runner = self._get_passive_runner(outside_mid_ratio)
-            active_runner = self._get_active_runner(outside_mid_ratio)
-
-            # Finalize runs
-            passive_summary = passive_runner._finalize_run(passive_prep, passive_result)
-            active_summary = active_runner._finalize_run(active_prep, active_result)
-
-            # Extract dealer metrics
-            dm = active_summary.dealer_metrics or {}
-
-            result = BalancedComparisonResult(
-                kappa=kappa,
-                concentration=concentration,
-                mu=mu,
-                monotonicity=monotonicity,
-                seed=seed,
-                face_value=self.config.face_value,
-                outside_mid_ratio=outside_mid_ratio,
-                big_entity_share=self.config.big_entity_share,
-                vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-                dealer_share_per_bucket=self.config.dealer_share_per_bucket,
-                delta_passive=passive_summary.delta_total,
-                phi_passive=passive_summary.phi_total,
-                passive_run_id=passive_summary.run_id,
-                passive_status="completed" if passive_summary.delta_total is not None else "failed",
-                delta_active=active_summary.delta_total,
-                phi_active=active_summary.phi_total,
-                active_run_id=active_summary.run_id,
-                active_status="completed" if active_summary.delta_total is not None else "failed",
-                dealer_total_pnl=dm.get("dealer_total_pnl"),
-                dealer_total_return=dm.get("dealer_total_return"),
-                total_trades=dm.get("total_trades"),
-                n_defaults_passive=passive_summary.n_defaults,
-                n_defaults_active=active_summary.n_defaults,
-                cascade_fraction_passive=passive_summary.cascade_fraction,
-                cascade_fraction_active=active_summary.cascade_fraction,
-                passive_modal_call_id=passive_summary.modal_call_id,
-                active_modal_call_id=active_summary.modal_call_id,
-                alpha_vbt=self.config.alpha_vbt,
-                alpha_trader=self.config.alpha_trader,
-                risk_aversion=self.config.risk_aversion,
-                planning_horizon=self.config.planning_horizon,
-                aggressiveness=self.config.aggressiveness,
-                default_observability=self.config.default_observability,
-                vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
-                vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
-                dealer_passive_pnl=(passive_summary.dealer_metrics or {}).get("dealer_total_pnl"),
-                dealer_passive_return=(passive_summary.dealer_metrics or {}).get(
-                    "dealer_total_return"
-                ),
-                dealer_trading_incremental_pnl=BalancedComparisonResult._compute_incremental_pnl(
-                    dm,
-                    passive_summary.dealer_metrics,
-                ),
+            # Build BalancedComparisonResult from all arm summaries
+            result = self._build_result_from_summaries(
+                arm_summaries, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed
             )
 
             self.comparison_results.append(result)
-            key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio)
-            self._completed_keys.add(key)
+            comp_key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio)
+            self._completed_keys.add(comp_key)
 
-            # Persist runs to Supabase (batch path)
-            self._persist_run_to_supabase(
-                passive_summary, "passive", kappa, concentration, mu, outside_mid_ratio, seed
-            )
-            self._persist_run_to_supabase(
-                active_summary, "active", kappa, concentration, mu, outside_mid_ratio, seed
-            )
+            # Persist all arm runs to Supabase
+            for arm_name, _phase, _getter, regime in arm_defs:
+                if arm_name in arm_summaries:
+                    self._persist_run_to_supabase(
+                        arm_summaries[arm_name],
+                        regime,
+                        kappa,
+                        concentration,
+                        mu,
+                        outside_mid_ratio,
+                        seed,
+                    )
 
             # Incremental CSV write
             self._write_comparison_csv()
@@ -1289,16 +1476,26 @@ class BalancedComparisonRunner:
                     all_run_ids.append(result.passive_run_id)
                 if result.active_run_id:
                     all_run_ids.append(result.active_run_id)
+                if result.lender_run_id:
+                    all_run_ids.append(result.lender_run_id)
+                if result.dealer_lender_run_id:
+                    all_run_ids.append(result.dealer_lender_run_id)
+                if result.bank_passive_run_id:
+                    all_run_ids.append(result.bank_passive_run_id)
+                if result.bank_dealer_run_id:
+                    all_run_ids.append(result.bank_dealer_run_id)
+                if result.bank_dealer_nbfi_run_id:
+                    all_run_ids.append(result.bank_dealer_nbfi_run_id)
             if all_run_ids:
                 try:
                     self.executor.compute_aggregate_metrics(all_run_ids)
-                except EXTERNAL_OPERATION_ERRORS as e:
+                except Exception as e:
                     print(f"\nWarning: Aggregate metrics computation failed: {e}", flush=True)
                     print("Local comparison.csv is still available.", flush=True)
 
         total_time = time.time() - self._start_time
         print(
-            f"\nSweep complete! {len(prepared_runs)} pairs in {self._format_time(total_time)}",
+            f"\nSweep complete! {len(prepared_combos)} combos ({total_runs} runs) in {self._format_time(total_time)}",
             flush=True,
         )
         print(f"Results at: {self.aggregate_dir}", flush=True)

@@ -668,6 +668,7 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
             vbt_profile = VBTProfile(
                 mid_sensitivity=config.balanced_dealer.vbt_mid_sensitivity,
                 spread_sensitivity=config.balanced_dealer.vbt_spread_sensitivity,
+                spread_scale=config.balanced_dealer.spread_scale,
             )
 
             system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(

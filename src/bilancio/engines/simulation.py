@@ -261,6 +261,7 @@ def run_day(
     banking_sub = getattr(system.state, "banking_subsystem", None)
     if enable_banking and banking_sub is not None:
         system.log("SubphaseB_BankQuotes")
+        banking_sub.update_cb_corridor(system)
         banking_sub.refresh_all_quotes(system, current_day)
 
     # SubphaseB_Lending: Non-bank lending phase (optional)

@@ -465,7 +465,19 @@ class System:
         cb = self.state.agents[cb_id]
 
         # Get the CB lending rate
-        cb_rate = cb.cb_lending_rate if isinstance(cb, CentralBank) else Decimal("0.03")
+        if isinstance(cb, CentralBank):
+            # Check CB lending cap
+            if not cb.can_lend(self.state.cb_loans_outstanding, amount):
+                self.log(
+                    "CBLendingCapExceeded",
+                    bank_id=bank_id,
+                    amount=amount,
+                    outstanding=self.state.cb_loans_outstanding,
+                )
+                raise ValueError("CB lending cap exceeded")
+            cb_rate = cb.effective_lending_rate(self.state.cb_loans_outstanding)
+        else:
+            cb_rate = Decimal("0.03")
 
         with atomic(self):
             # 1. Create new reserves for the bank
