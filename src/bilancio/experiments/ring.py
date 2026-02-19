@@ -294,6 +294,7 @@ class RingSweepRunner:
         cb_rate_escalation_slope: Decimal = Decimal("0"),
         cb_max_outstanding_ratio: Decimal = Decimal("0"),
         spread_scale: Decimal = Decimal("1.0"),
+        cb_lending_cutoff_day: int | None = None,
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -339,6 +340,7 @@ class RingSweepRunner:
         self.cb_rate_escalation_slope = cb_rate_escalation_slope
         self.cb_max_outstanding_ratio = cb_max_outstanding_ratio
         self.spread_scale = spread_scale
+        self.cb_lending_cutoff_day = cb_lending_cutoff_day
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -662,6 +664,7 @@ class RingSweepRunner:
                 cb_rate_escalation_slope=self.cb_rate_escalation_slope,
                 cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
                 spread_scale=self.spread_scale,
+                cb_lending_cutoff_day=self.cb_lending_cutoff_day,
                 source_path=None,
             )
         else:
@@ -994,6 +997,7 @@ class RingSweepRunner:
                 cb_rate_escalation_slope=self.cb_rate_escalation_slope,
                 cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
                 spread_scale=self.spread_scale,
+                cb_lending_cutoff_day=self.cb_lending_cutoff_day,
                 source_path=None,
             )
         else:

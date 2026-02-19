@@ -211,6 +211,7 @@ def compile_ring_explorer_balanced(
     cb_rate_escalation_slope: Decimal = Decimal("0"),
     cb_max_outstanding_ratio: Decimal = Decimal("0"),
     spread_scale: Decimal = Decimal("1.0"),
+    cb_lending_cutoff_day: int | None = None,
     *,
     source_path: Path | None = None,
 ) -> dict[str, Any]:
@@ -661,6 +662,7 @@ def compile_ring_explorer_balanced(
             "cb_rate_escalation_slope": float(cb_rate_escalation_slope),
             "cb_max_outstanding_ratio": float(cb_max_outstanding_ratio),
             "spread_scale": float(spread_scale),
+            "cb_lending_cutoff_day": cb_lending_cutoff_day,
         },
     }
 

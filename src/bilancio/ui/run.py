@@ -218,6 +218,7 @@ def run_scenario(
         hasattr(system.state, "banking_subsystem") and system.state.banking_subsystem is not None
     )
     enable_bank_lending = False
+    _cb_lending_cutoff_day = None
 
     # Initialize banking subsystem if banks exist but subsystem not yet initialized
     if not enable_banking:
@@ -293,6 +294,7 @@ def run_scenario(
 
             enable_banking = True
             enable_bank_lending = _balanced_cfg.get("enable_bank_lending", False) or _run_cfg.get("enable_bank_lending", False)
+            _cb_lending_cutoff_day = _balanced_cfg.get("cb_lending_cutoff_day")
     else:
         # Banking already initialized; check if bank lending is enabled
         import yaml as _yaml2
@@ -302,6 +304,7 @@ def run_scenario(
         _bc2 = (_raw2 or {}).get("_balanced_config", {})
         _rc2 = (_raw2 or {}).get("run", {})
         enable_bank_lending = _bc2.get("enable_bank_lending", False) or _rc2.get("enable_bank_lending", False)
+        _cb_lending_cutoff_day = _bc2.get("cb_lending_cutoff_day")
 
     if mode == "step":
         days_data = run_step_mode(
@@ -317,6 +320,7 @@ def run_scenario(
             enable_rating=enable_rating,
             enable_banking=enable_banking,
             enable_bank_lending=enable_bank_lending,
+            cb_lending_cutoff_day=_cb_lending_cutoff_day,
         )
     else:
         days_data = run_until_stable_mode(
@@ -333,6 +337,7 @@ def run_scenario(
             enable_rating=enable_rating,
             enable_banking=enable_banking,
             enable_bank_lending=enable_bank_lending,
+            cb_lending_cutoff_day=_cb_lending_cutoff_day,
             progress_callback=progress_callback,
         )
 
@@ -466,6 +471,7 @@ def run_step_mode(
     enable_rating: bool = False,
     enable_banking: bool = False,
     enable_bank_lending: bool = False,
+    cb_lending_cutoff_day: int | None = None,
 ) -> list[dict[str, Any]]:
     """Run simulation in step-by-step mode.
 
@@ -481,6 +487,7 @@ def run_step_mode(
         enable_rating: If True, run rating agency phase each day
         enable_banking: If True, run banking subphases each day
         enable_bank_lending: If True, run bank lending phase each day
+        cb_lending_cutoff_day: Day to freeze CB lending (None = no freeze)
 
     Returns:
         List of day data dictionaries
@@ -496,6 +503,15 @@ def run_step_mode(
         if not Confirm.ask(f"[cyan]Run day {day_before + 1}?[/cyan]", default=True):
             console.print("[yellow]Simulation stopped by user[/yellow]")
             break
+
+        # Activate CB lending freeze at cutoff day
+        if (
+            cb_lending_cutoff_day is not None
+            and day_before >= cb_lending_cutoff_day
+            and not system.state.cb_lending_frozen
+        ):
+            system.state.cb_lending_frozen = True
+            system.log("CBLendingFreezeActivated", day=day_before, cutoff_day=cb_lending_cutoff_day)
 
         try:
             # Run the next day
@@ -661,6 +677,7 @@ def run_until_stable_mode(
     enable_rating: bool = False,
     enable_banking: bool = False,
     enable_bank_lending: bool = False,
+    cb_lending_cutoff_day: int | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Run simulation until stable state is reached.
@@ -709,6 +726,14 @@ def run_until_stable_mode(
         for _ in range(max_days):
             # Run the next day
             day_before = system.state.day
+            # Activate CB lending freeze when cutoff day is reached
+            if (
+                cb_lending_cutoff_day is not None
+                and day_before >= cb_lending_cutoff_day
+                and not system.state.cb_lending_frozen
+            ):
+                system.state.cb_lending_frozen = True
+                system.log("CBLendingFreezeActivated", day=day_before, cutoff_day=cb_lending_cutoff_day)
             run_day(
                 system,
                 enable_dealer=enable_dealer,
