@@ -160,7 +160,8 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
     """Compute run-level metrics that span the entire simulation.
 
     These metrics complement the day-by-day metrics and provide systemic
-    risk indicators, including CB stress metrics from final settlement.
+    risk indicators, including CB stress metrics from final settlement
+    and banking-specific metrics (delta_bank, deposit loss).
 
     Returns dict with:
         n_defaults: int - count of distinct defaulted agents
@@ -172,6 +173,12 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         cb_reserves_initial: int - reserves at simulation start
         cb_reserves_final: int - reserves at simulation end
         cb_reserve_destruction_pct: float - percentage of initial reserves destroyed
+        delta_bank: Optional[float] - bank default rate (writeoffs / obligations created)
+        deposit_loss_gross: int - total deposit amount written off
+        deposit_loss_pct: Optional[float] - deposit loss as fraction of deposits created
+        total_deposits_created: int - total deposit amount ever created
+        bank_obligations_created: int - total bank obligations (CB loans + interbank)
+        bank_writeoffs: int - total bank obligation writeoffs
     """
     # CB stress metrics from the CBFinalSettlementEnd event
     final = next((e for e in events if e.get("kind") == "CBFinalSettlementEnd"), None)
@@ -188,6 +195,45 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
     if cb_reserves_initial > 0:
         cb_reserve_destruction_pct = (cb_reserves_initial - cb_reserves_final) / cb_reserves_initial
 
+    # Banking-specific metrics: δ_bank + deposit loss
+    bank_writeoffs = 0
+    bank_obligations_created = 0
+    deposit_loss_gross = 0
+    total_deposits_created = 0
+
+    for e in events:
+        kind = e.get("kind", "")
+        amt = int(e.get("amount", 0))
+
+        # Bank writeoffs (δ_bank numerator)
+        if kind == "CBFinalSettlementWrittenOff":
+            bank_writeoffs += amt
+        elif kind == "BankDefaultCBFreeze":
+            bank_writeoffs += amt
+        elif kind == "ObligationWrittenOff":
+            ck = str(e.get("contract_kind", ""))
+            if ck in ("interbank_loan", "interbank_overnight"):
+                bank_writeoffs += amt
+
+        # Bank obligations created (δ_bank denominator)
+        if kind == "CBLoanCreated":
+            bank_obligations_created += amt
+        elif kind in ("InterbankLoan", "InterbankOvernightCreated"):
+            bank_obligations_created += amt
+
+        # Deposit loss
+        if kind == "ObligationWrittenOff":
+            ck = str(e.get("contract_kind", ""))
+            if ck == "bank_deposit":
+                deposit_loss_gross += amt
+
+        # Total deposits ever created
+        if kind == "CashDeposited":
+            total_deposits_created += amt
+
+    delta_bank = bank_writeoffs / bank_obligations_created if bank_obligations_created > 0 else None
+    deposit_loss_pct = deposit_loss_gross / total_deposits_created if total_deposits_created > 0 else None
+
     return {
         "n_defaults": count_defaults(events),
         "cascade_fraction": cascade_fraction(events),
@@ -198,6 +244,12 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         "cb_reserves_initial": cb_reserves_initial,
         "cb_reserves_final": cb_reserves_final,
         "cb_reserve_destruction_pct": cb_reserve_destruction_pct,
+        "delta_bank": delta_bank,
+        "deposit_loss_gross": deposit_loss_gross,
+        "deposit_loss_pct": deposit_loss_pct,
+        "total_deposits_created": total_deposits_created,
+        "bank_obligations_created": bank_obligations_created,
+        "bank_writeoffs": bank_writeoffs,
     }
 
 
