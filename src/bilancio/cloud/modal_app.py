@@ -108,10 +108,17 @@ def compute_metrics_from_events(events_path: str) -> dict[str, Any]:
         }
 
     # Use bilancio's metrics computation
-    from bilancio.analysis.report import compute_day_metrics, summarize_day_metrics
+    from bilancio.analysis.report import (
+        compute_day_metrics,
+        compute_run_level_metrics,
+        summarize_day_metrics,
+    )
 
     result = compute_day_metrics(events=events, balances_rows=None, day_list=None)
     summary = summarize_day_metrics(result["day_metrics"])
+
+    # Compute run-level metrics (cascade, contagion, CB stress)
+    run_level = compute_run_level_metrics(events)
 
     # Convert all Decimal values to float for JSON serialization
     serializable_summary = {k: to_serializable(v) for k, v in summary.items()}
@@ -125,6 +132,15 @@ def compute_metrics_from_events(events_path: str) -> dict[str, Any]:
         "Mpeak_1": to_serializable(summary.get("Mpeak_1")),
         "v_1": to_serializable(summary.get("v_1")),
         "HHIplus_1": to_serializable(summary.get("HHIplus_1")),
+        "n_defaults": run_level["n_defaults"],
+        "cascade_fraction": to_serializable(run_level["cascade_fraction"]),
+        "cb_loans_created_count": run_level["cb_loans_created_count"],
+        "cb_interest_total_paid": run_level["cb_interest_total_paid"],
+        "cb_loans_outstanding_pre_final": run_level["cb_loans_outstanding_pre_final"],
+        "bank_defaults_final": run_level["bank_defaults_final"],
+        "cb_reserves_initial": run_level["cb_reserves_initial"],
+        "cb_reserves_final": run_level["cb_reserves_final"],
+        "cb_reserve_destruction_pct": run_level["cb_reserve_destruction_pct"],
         "raw_metrics": serializable_summary,
     }
 

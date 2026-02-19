@@ -454,7 +454,7 @@ def run_final_cb_settlement(system: System) -> dict[str, Any]:
                 loan_id=loan_id,
                 bank_id=bank_id,
             )
-        except (ValidationError, ValueError, Exception):
+        except (ValidationError, ValueError):
             # Bank can't repay — default
             total_written_off_amount += loan.amount
             loans_written_off += 1

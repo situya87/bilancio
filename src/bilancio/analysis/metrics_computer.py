@@ -122,11 +122,11 @@ class MetricsComputer:
         # Compute summary
         summary = summarize_day_metrics(result["day_metrics"])
 
-        # Compute run-level metrics (cascade, contagion)
+        # Compute run-level metrics (cascade, contagion, CB stress)
         run_level = compute_run_level_metrics(events)
         # Merge into summary for downstream consumers
-        summary["n_defaults"] = run_level["n_defaults"]
-        summary["cascade_fraction"] = run_level["cascade_fraction"]
+        for key, value in run_level.items():
+            summary[key] = value
 
         return MetricsBundle(
             day_metrics=result["day_metrics"],
