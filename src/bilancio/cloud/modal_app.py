@@ -148,6 +148,8 @@ def compute_metrics_from_events(events_path: str) -> dict[str, Any]:
         "total_deposits_created": run_level.get("total_deposits_created", 0),
         "bank_obligations_created": run_level.get("bank_obligations_created", 0),
         "bank_writeoffs": run_level.get("bank_writeoffs", 0),
+        "payable_default_loss": run_level.get("payable_default_loss", 0),
+        "total_loss": run_level.get("total_loss", 0),
         "raw_metrics": serializable_summary,
     }
 

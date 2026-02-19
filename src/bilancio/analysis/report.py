@@ -200,6 +200,7 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
     bank_obligations_created = 0
     deposit_loss_gross = 0
     total_deposits_created = 0
+    payable_default_loss = 0
 
     for e in events:
         kind = e.get("kind", "")
@@ -227,6 +228,12 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
             if ck == "bank_deposit":
                 deposit_loss_gross += amt
 
+        # Payable default losses (real-economy loss channel)
+        if kind == "ObligationWrittenOff":
+            ck = str(e.get("contract_kind", ""))
+            if ck == "payable":
+                payable_default_loss += amt
+
         # Total deposits ever created (cash deposits + loan disbursements + interest)
         if kind == "CashDeposited":
             total_deposits_created += amt
@@ -237,6 +244,7 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
 
     delta_bank = bank_writeoffs / bank_obligations_created if bank_obligations_created > 0 else None
     deposit_loss_pct = deposit_loss_gross / total_deposits_created if total_deposits_created > 0 else None
+    total_loss = payable_default_loss + deposit_loss_gross
 
     return {
         "n_defaults": count_defaults(events),
@@ -254,6 +262,8 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         "total_deposits_created": total_deposits_created,
         "bank_obligations_created": bank_obligations_created,
         "bank_writeoffs": bank_writeoffs,
+        "payable_default_loss": payable_default_loss,
+        "total_loss": total_loss,
     }
 
 

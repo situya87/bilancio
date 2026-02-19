@@ -196,3 +196,81 @@ class TestDepositLoss:
         assert m["total_deposits_created"] == 21000  # 5000 + 15000 + 1000
         assert m["deposit_loss_gross"] == 10500
         assert m["deposit_loss_pct"] == 10500 / 21000  # 0.5
+
+
+class TestPayableDefaultLoss:
+    """Tests for payable_default_loss metric."""
+
+    def test_zero_when_no_defaults(self):
+        """No payable writeoffs → payable_default_loss = 0."""
+        events = [
+            _evt("PayableSettled", amount=1000),
+            _evt("PayableSettled", amount=500),
+        ]
+        m = compute_run_level_metrics(events)
+        assert m["payable_default_loss"] == 0
+
+    def test_counts_payable_writeoffs(self):
+        """ObligationWrittenOff with contract_kind=payable → payable_default_loss."""
+        events = [
+            _evt("ObligationWrittenOff", contract_kind="payable", amount=3000),
+            _evt("ObligationWrittenOff", contract_kind="payable", amount=2000),
+        ]
+        m = compute_run_level_metrics(events)
+        assert m["payable_default_loss"] == 5000
+
+    def test_ignores_non_payable_writeoffs(self):
+        """bank_deposit and other writeoffs don't count as payable default loss."""
+        events = [
+            _evt("ObligationWrittenOff", contract_kind="payable", amount=1000),
+            _evt("ObligationWrittenOff", contract_kind="bank_deposit", amount=5000),
+            _evt("ObligationWrittenOff", contract_kind="cb_loan", amount=3000),
+            _evt("ObligationWrittenOff", contract_kind="interbank_loan", amount=2000),
+        ]
+        m = compute_run_level_metrics(events)
+        assert m["payable_default_loss"] == 1000
+
+
+class TestTotalLoss:
+    """Tests for total_loss = payable_default_loss + deposit_loss_gross."""
+
+    def test_no_losses(self):
+        """No writeoffs → total_loss = 0."""
+        events = [
+            _evt("PayableSettled", amount=1000),
+        ]
+        m = compute_run_level_metrics(events)
+        assert m["total_loss"] == 0
+
+    def test_payable_only(self):
+        """Only payable defaults, no banking → total_loss = payable_default_loss."""
+        events = [
+            _evt("ObligationWrittenOff", contract_kind="payable", amount=3000),
+        ]
+        m = compute_run_level_metrics(events)
+        assert m["payable_default_loss"] == 3000
+        assert m["deposit_loss_gross"] == 0
+        assert m["total_loss"] == 3000
+
+    def test_deposit_only(self):
+        """Only deposit losses, no payable defaults → total_loss = deposit_loss_gross."""
+        events = [
+            _evt("CashDeposited", amount=10000),
+            _evt("ObligationWrittenOff", contract_kind="bank_deposit", amount=4000),
+        ]
+        m = compute_run_level_metrics(events)
+        assert m["payable_default_loss"] == 0
+        assert m["deposit_loss_gross"] == 4000
+        assert m["total_loss"] == 4000
+
+    def test_combined(self):
+        """Both channels contribute to total_loss."""
+        events = [
+            _evt("CashDeposited", amount=20000),
+            _evt("ObligationWrittenOff", contract_kind="payable", amount=2000),
+            _evt("ObligationWrittenOff", contract_kind="bank_deposit", amount=5000),
+        ]
+        m = compute_run_level_metrics(events)
+        assert m["payable_default_loss"] == 2000
+        assert m["deposit_loss_gross"] == 5000
+        assert m["total_loss"] == 7000

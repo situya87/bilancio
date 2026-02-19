@@ -69,6 +69,8 @@ class RingRunSummary:
     delta_bank: float | None = None
     deposit_loss_gross: int = 0
     deposit_loss_pct: float | None = None
+    payable_default_loss: int = 0
+    total_loss: int = 0
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -864,6 +866,12 @@ class RingSweepRunner:
         )
         deposit_loss_pct = bundle.summary.get("deposit_loss_pct")
 
+        # Total loss metric
+        payable_default_loss = int(
+            bundle.summary.get("payable_default_loss", 0)
+        )
+        total_loss = int(bundle.summary.get("total_loss", 0))
+
         # Read dealer metrics if available (treatment runs with dealer enabled)
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = out_dir / "dealer_metrics.json"
@@ -922,6 +930,8 @@ class RingSweepRunner:
             delta_bank=delta_bank,
             deposit_loss_gross=deposit_loss_gross,
             deposit_loss_pct=deposit_loss_pct,
+            payable_default_loss=payable_default_loss,
+            total_loss=total_loss,
         )
 
     def _prepare_run(
@@ -1246,6 +1256,8 @@ class RingSweepRunner:
                 delta_bank=result.metrics.get("delta_bank"),
                 deposit_loss_gross=int(result.metrics.get("deposit_loss_gross", 0)),
                 deposit_loss_pct=result.metrics.get("deposit_loss_pct"),
+                payable_default_loss=int(result.metrics.get("payable_default_loss", 0)),
+                total_loss=int(result.metrics.get("total_loss", 0)),
             )
 
         # Local path: load artifacts, compute metrics, update registry
@@ -1327,6 +1339,8 @@ class RingSweepRunner:
             delta_bank=bundle.summary.get("delta_bank"),
             deposit_loss_gross=int(bundle.summary.get("deposit_loss_gross", 0)),
             deposit_loss_pct=bundle.summary.get("deposit_loss_pct"),
+            payable_default_loss=int(bundle.summary.get("payable_default_loss", 0)),
+            total_loss=int(bundle.summary.get("total_loss", 0)),
         )
 
     def _rel_path(self, absolute: Path) -> str:
