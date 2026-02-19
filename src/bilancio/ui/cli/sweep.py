@@ -732,6 +732,18 @@ def sweep_comparison(
     help="Day to freeze CB lending (default: auto = maturity_days)",
 )
 @click.option(
+    "--credit-risk-loading",
+    type=Decimal,
+    default=Decimal("0"),
+    help="Per-borrower credit risk loading on bank loan rate (default: 0)",
+)
+@click.option(
+    "--max-borrower-risk",
+    type=Decimal,
+    default=Decimal("1.0"),
+    help="Max P_default for bank lending threshold (default: 1.0 = never refuse)",
+)
+@click.option(
     "--n-banks",
     type=int,
     default=0,
@@ -782,6 +794,8 @@ def sweep_balanced(
     n_banks_for_banking: int,
     bank_reserve_multiplier: float,
     cb_lending_cutoff_day: int | None,
+    credit_risk_loading: Decimal,
+    max_borrower_risk: Decimal,
     n_banks: int,
     reserve_multiplier: float,
 ) -> None:
@@ -903,6 +917,8 @@ def sweep_balanced(
         n_banks_for_banking=n_banks_for_banking,
         bank_reserve_multiplier=bank_reserve_multiplier,
         cb_lending_cutoff_day=cb_lending_cutoff_day,
+        credit_risk_loading=credit_risk_loading,
+        max_borrower_risk=max_borrower_risk,
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,
     )
