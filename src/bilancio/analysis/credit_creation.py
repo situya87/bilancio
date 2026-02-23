@@ -26,7 +26,7 @@ def credit_created_by_type(
     - BankLoanIssued -> "bank_loan"
     - CBLoanCreated -> "cb_loan"
     - InterbankOvernightCreated -> "interbank_overnight"
-    - NBFILoanIssued -> "nbfi_loan"
+    - NonBankLoanCreated -> "nbfi_loan" (non-bank lender)
     - PayableCreated -> "payable" (trade credit)
 
     Returns:
@@ -38,7 +38,7 @@ def credit_created_by_type(
         "BankLoanIssued": "bank_loan",
         "CBLoanCreated": "cb_loan",
         "InterbankOvernightCreated": "interbank_overnight",
-        "NBFILoanIssued": "nbfi_loan",
+        "NonBankLoanCreated": "nbfi_loan",
         "PayableCreated": "payable",
     }
 
@@ -111,7 +111,7 @@ def credit_creation_by_day(
         "BankLoanIssued": "bank_loan",
         "CBLoanCreated": "cb_loan",
         "InterbankOvernightCreated": "interbank_overnight",
-        "NBFILoanIssued": "nbfi_loan",
+        "NonBankLoanCreated": "nbfi_loan",
         "PayableCreated": "payable",
     }
 

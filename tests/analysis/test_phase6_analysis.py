@@ -71,24 +71,34 @@ def _base_events():
 
 
 def _credit_events():
-    """Events for credit creation/destruction tests."""
+    """Events for credit creation/destruction tests.
+
+    Uses production event schemas:
+    - CBLoanCreated: bank_id (not borrower) — see system.py:525
+    - NonBankLoanCreated (not NBFILoanIssued) — see lending.py:285
+    """
     return [
         {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": 100, "due_day": 1, "day": 0},
-        {"kind": "BankLoanIssued", "day": 0, "amount": 200, "borrower": "A"},
-        {"kind": "CBLoanCreated", "day": 1, "amount": 50, "borrower": "Bank1"},
+        {"kind": "BankLoanIssued", "day": 0, "amount": 200, "bank": "Bank1", "borrower": "A"},
+        {"kind": "CBLoanCreated", "day": 1, "amount": 50, "bank_id": "Bank1"},
+        {"kind": "NonBankLoanCreated", "day": 1, "amount": 75, "lender_id": "NBFI1", "borrower_id": "A"},
         {"kind": "ObligationWrittenOff", "day": 2, "amount": 30, "contract_kind": "payable"},
         {"kind": "CBFinalSettlementWrittenOff", "day": 3, "amount": 20},
     ]
 
 
 def _trade_events():
-    """Events for pricing analysis tests."""
+    """Events for pricing analysis tests.
+
+    Uses production event schema: kind="dealer_trade" with side="sell"|"buy"
+    and field "trader" (not "trader_id") — see dealer_trades.py:168,460.
+    """
     return [
-        {"kind": "DealerSellTrade", "day": 0, "trader_id": "T1", "price": 18, "face": 20},
-        {"kind": "DealerSellTrade", "day": 0, "trader_id": "T2", "price": 17, "face": 20},
-        {"kind": "DealerBuyTrade", "day": 0, "trader_id": "T3", "price": 19, "face": 20},
-        {"kind": "DealerSellTrade", "day": 1, "trader_id": "T1", "price": 16, "face": 20},
-        {"kind": "DealerBuyTrade", "day": 1, "trader_id": "T4", "price": 18, "face": 20},
+        {"kind": "dealer_trade", "day": 0, "trader": "T1", "side": "sell", "price": 18, "face": 20},
+        {"kind": "dealer_trade", "day": 0, "trader": "T2", "side": "sell", "price": 17, "face": 20},
+        {"kind": "dealer_trade", "day": 0, "trader": "T3", "side": "buy", "price": 19, "face": 20},
+        {"kind": "dealer_trade", "day": 1, "trader": "T1", "side": "sell", "price": 16, "face": 20},
+        {"kind": "dealer_trade", "day": 1, "trader": "T4", "side": "buy", "price": 18, "face": 20},
     ]
 
 
@@ -108,6 +118,25 @@ class TestFundingChains:
         inflows = cash_inflows_by_source(events)
         assert inflows["A"]["loan_received"] == Decimal("200")
 
+    def test_cash_inflows_cb_loan_uses_bank_id(self):
+        """CBLoanCreated uses bank_id field, not borrower."""
+        events = _credit_events()
+        inflows = cash_inflows_by_source(events)
+        assert inflows["Bank1"]["cb_loan"] == Decimal("50")
+
+    def test_cash_inflows_nbfi_loan(self):
+        """NonBankLoanCreated uses borrower_id field."""
+        events = _credit_events()
+        inflows = cash_inflows_by_source(events)
+        assert inflows["A"]["nbfi_loan"] == Decimal("75")
+
+    def test_cash_deposited_classified_as_deposit_not_endowment(self):
+        """CashDeposited is an internal transformation, not endowment."""
+        events = [{"kind": "CashDeposited", "customer": "A", "bank": "Bank1", "amount": 100}]
+        inflows = cash_inflows_by_source(events)
+        assert "endowment" not in inflows.get("A", {})
+        assert inflows["A"]["deposit"] == Decimal("100")
+
     def test_cash_outflows_settlement(self):
         events = _base_events()
         outflows = cash_outflows_by_type(events)
@@ -124,7 +153,7 @@ class TestFundingChains:
     def test_funding_mix_fractions_sum_to_one(self):
         events = [
             {"kind": "PayableSettled", "day": 1, "debtor": "X", "creditor": "A", "amount": 60},
-            {"kind": "BankLoanIssued", "day": 0, "amount": 40, "borrower": "A"},
+            {"kind": "BankLoanIssued", "day": 0, "amount": 40, "bank": "Bank1", "borrower": "A"},
         ]
         mix = funding_mix(events, "A")
         total = sum(mix.values(), Decimal(0))
@@ -134,6 +163,17 @@ class TestFundingChains:
         events = _base_events()
         mix = funding_mix(events, "NONEXISTENT")
         assert mix == {}
+
+    def test_dealer_trade_uses_production_schema(self):
+        """dealer_trade events use 'trader' field and side='sell'|'buy'."""
+        events = [
+            {"kind": "dealer_trade", "day": 0, "trader": "T1", "side": "sell", "price": 18, "face": 20},
+            {"kind": "dealer_trade", "day": 0, "trader": "T2", "side": "buy", "price": 19, "face": 20},
+        ]
+        inflows = cash_inflows_by_source(events)
+        assert inflows["T1"]["ticket_sale"] == Decimal("18")
+        outflows = cash_outflows_by_type(events)
+        assert outflows["T2"]["ticket_purchase"] == Decimal("19")
 
     def test_empty_events(self):
         assert cash_inflows_by_source([]) == {}
@@ -153,6 +193,7 @@ class TestCreditCreation:
         assert created["payable"] == Decimal("100")
         assert created["bank_loan"] == Decimal("200")
         assert created["cb_loan"] == Decimal("50")
+        assert created["nbfi_loan"] == Decimal("75")
 
     def test_destroyed_by_type(self):
         events = _credit_events()
@@ -163,8 +204,8 @@ class TestCreditCreation:
     def test_net_credit_impulse_positive(self):
         events = _credit_events()
         impulse = net_credit_impulse(events)
-        # Created: 100 + 200 + 50 = 350, Destroyed: 30 + 20 = 50
-        assert impulse == Decimal("300")
+        # Created: 100 + 200 + 50 + 75 = 425, Destroyed: 30 + 20 = 50
+        assert impulse == Decimal("375")
 
     def test_creation_by_day(self):
         events = _credit_events()
@@ -172,6 +213,7 @@ class TestCreditCreation:
         assert by_day[0]["payable"] == Decimal("100")
         assert by_day[0]["bank_loan"] == Decimal("200")
         assert by_day[1]["cb_loan"] == Decimal("50")
+        assert by_day[1]["nbfi_loan"] == Decimal("75")
 
     def test_destruction_by_day(self):
         events = _credit_events()

@@ -29,13 +29,15 @@ def trade_prices_by_day(
 
     for e in events:
         kind = e.get("kind", "")
-        if kind not in ("DealerSellTrade", "DealerBuyTrade"):
+        if kind != "dealer_trade":
             continue
         day = int(e.get("day", 0))
-        trader = e.get("trader_id") or e.get("seller") or e.get("buyer")
+        trader = e.get("trader")
         price = Decimal(str(e.get("price", e.get("amount", 0))))
         face = Decimal(str(e.get("face", e.get("face_value", 0))))
-        side = "sell" if kind == "DealerSellTrade" else "buy"
+        side = str(e.get("side", ""))
+        if side not in ("buy", "sell"):
+            continue
         price_ratio = price / face if face > 0 else Decimal(0)
 
         by_day[day].append({

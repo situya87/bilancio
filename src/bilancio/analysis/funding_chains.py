@@ -24,13 +24,13 @@ def cash_inflows_by_source(
     """Aggregate cash inflows per agent by source type.
 
     Source categories:
-    - "endowment": initial cash (from Setup events)
     - "settlement_received": payables settled where agent is creditor
     - "ticket_sale": dealer trade where agent sold a ticket
     - "loan_received": bank loan disbursed to agent
-    - "cb_loan": central bank loan to agent
+    - "cb_loan": central bank loan to agent (keyed by bank_id)
+    - "nbfi_loan": non-bank lender loan received
     - "deposit_interest": interest credited on deposits
-    - "ticket_matured": ticket maturity proceeds
+    - "deposit": internal cash-to-deposit transformation
 
     Returns:
         {agent_id: {"endowment": Decimal, "settlement_received": Decimal, ...}}
@@ -48,8 +48,8 @@ def cash_inflows_by_source(
             if creditor:
                 inflows[creditor]["settlement_received"] += amt
 
-        elif kind == "DealerSellTrade":
-            seller = e.get("seller") or e.get("trader_id")
+        elif kind == "dealer_trade" and e.get("side") == "sell":
+            seller = e.get("trader")
             price = Decimal(str(e.get("price", e.get("amount", 0))))
             if seller:
                 inflows[seller]["ticket_sale"] += price
@@ -60,7 +60,7 @@ def cash_inflows_by_source(
                 inflows[borrower]["loan_received"] += amt
 
         elif kind == "CBLoanCreated":
-            borrower = e.get("borrower") or e.get("to")
+            borrower = e.get("bank_id") or e.get("borrower") or e.get("to")
             if borrower:
                 inflows[borrower]["cb_loan"] += amt
 
@@ -71,9 +71,16 @@ def cash_inflows_by_source(
                 inflows[depositor]["deposit_interest"] += interest
 
         elif kind == "CashDeposited":
-            depositor = e.get("depositor") or e.get("from")
-            if depositor:
-                inflows[depositor]["endowment"] += amt
+            # CashDeposited is an internal cash-to-deposit transformation
+            # (banking.py), not new external funding.
+            customer = e.get("customer") or e.get("depositor") or e.get("from")
+            if customer:
+                inflows[customer]["deposit"] += amt
+
+        elif kind == "NonBankLoanCreated":
+            borrower = e.get("borrower_id") or e.get("borrower") or e.get("to")
+            if borrower:
+                inflows[borrower]["nbfi_loan"] += amt
 
     return dict(inflows)
 
@@ -105,8 +112,8 @@ def cash_outflows_by_type(
             if debtor:
                 outflows[debtor]["settlement_paid"] += amt
 
-        elif kind == "DealerBuyTrade":
-            buyer = e.get("buyer") or e.get("trader_id")
+        elif kind == "dealer_trade" and e.get("side") == "buy":
+            buyer = e.get("trader")
             price = Decimal(str(e.get("price", e.get("amount", 0))))
             if buyer:
                 outflows[buyer]["ticket_purchase"] += price
