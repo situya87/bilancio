@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Bilancio — Architecture Visualizations</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f23; color: #ccc; padding: 2em; }
+  h1 { color: #fff; font-size: 2em; margin-bottom: 0.3em; }
+  h2 { color: #7ec8e3; font-size: 1.5em; margin: 2em 0 1em; border-bottom: 1px solid #333; padding-bottom: 0.3em; }
+  .subtitle { color: #888; margin-bottom: 2em; }
+
+  /* ─── GENERAL SIMULATOR ─── */
+  .arch-grid { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 1100px; }
+  .layer { border-radius: 10px; padding: 16px 20px; position: relative; }
+  .layer-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; opacity: 0.7; }
+  .layer-modules { display: flex; gap: 10px; flex-wrap: wrap; }
+  .module { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 14px; min-width: 130px; flex: 1; }
+  .module-name { font-weight: 700; font-size: 14px; color: #fff; margin-bottom: 4px; }
+  .module-desc { font-size: 11px; color: #aaa; line-height: 1.4; }
+  .module-files { font-size: 10px; color: #666; margin-top: 4px; font-family: 'SF Mono', monospace; }
+
+  .l-runner { background: linear-gradient(135deg, #1a1a3e, #1a2a4e); border: 1px solid #2a3a5e; }
+  .l-experiment { background: linear-gradient(135deg, #1a2e1a, #1a3e2a); border: 1px solid #2a4e3a; }
+  .l-scenario { background: linear-gradient(135deg, #2e1a2e, #3e1a3e); border: 1px solid #4e2a4e; }
+  .l-engine { background: linear-gradient(135deg, #2e2a1a, #3e3a1a); border: 1px solid #4e4a2a; }
+  .l-subsystem { background: linear-gradient(135deg, #1a2e3e, #1a3e4e); border: 1px solid #2a4e5e; }
+  .l-decision { background: linear-gradient(135deg, #3e1a1a, #4e2a1a); border: 1px solid #5e3a2a; }
+  .l-core { background: linear-gradient(135deg, #1a1a1a, #2a2a2a); border: 1px solid #3a3a3a; }
+  .l-domain { background: linear-gradient(135deg, #0a1a2e, #0a2a3e); border: 1px solid #1a3a4e; }
+
+  .arrow-down { text-align: center; font-size: 20px; color: #444; margin: 4px 0; }
+
+  /* ─── KALECKI RING ─── */
+  .ring-container { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1100px; }
+  .ring-left { }
+  .ring-right { }
+
+  .ring-svg { width: 100%; max-width: 500px; }
+
+  .phase-timeline { display: flex; flex-direction: column; gap: 6px; }
+  .phase { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 8px; font-size: 13px; }
+  .phase-num { font-weight: 700; font-size: 12px; min-width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; }
+  .phase-text { flex: 1; }
+  .phase-sub { font-size: 11px; color: #888; }
+
+  .p-setup { background: rgba(126,200,227,0.1); border: 1px solid rgba(126,200,227,0.3); }
+  .p-setup .phase-num { background: #7ec8e3; }
+  .p-dealer { background: rgba(255,165,0,0.1); border: 1px solid rgba(255,165,0,0.3); }
+  .p-dealer .phase-num { background: #ffa500; }
+  .p-lending { background: rgba(147,112,219,0.1); border: 1px solid rgba(147,112,219,0.3); }
+  .p-lending .phase-num { background: #9370db; }
+  .p-settle { background: rgba(50,205,50,0.1); border: 1px solid rgba(50,205,50,0.3); }
+  .p-settle .phase-num { background: #32cd32; }
+  .p-bank { background: rgba(255,99,71,0.1); border: 1px solid rgba(255,99,71,0.3); }
+  .p-bank .phase-num { background: #ff6347; }
+  .p-cb { background: rgba(255,215,0,0.1); border: 1px solid rgba(255,215,0,0.3); }
+  .p-cb .phase-num { background: #daa520; }
+
+  .arms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 1em; }
+  .arm { border-radius: 8px; padding: 12px 14px; }
+  .arm-name { font-weight: 700; font-size: 14px; color: #fff; }
+  .arm-desc { font-size: 11px; color: #aaa; margin-top: 4px; line-height: 1.4; }
+  .arm-agents { font-size: 10px; color: #666; margin-top: 4px; font-family: 'SF Mono', monospace; }
+
+  .arm-passive { background: rgba(100,100,100,0.2); border: 1px solid #555; }
+  .arm-active { background: rgba(255,165,0,0.15); border: 1px solid rgba(255,165,0,0.4); }
+  .arm-lender { background: rgba(147,112,219,0.15); border: 1px solid rgba(147,112,219,0.4); }
+  .arm-dl { background: rgba(255,140,0,0.15); border: 1px solid rgba(255,140,0,0.4); }
+  .arm-bp { background: rgba(255,99,71,0.15); border: 1px solid rgba(255,99,71,0.4); }
+  .arm-bd { background: rgba(220,80,50,0.15); border: 1px solid rgba(220,80,50,0.4); }
+  .arm-bdn { background: rgba(200,50,50,0.15); border: 1px solid rgba(200,50,50,0.4); }
+
+  .params-table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 13px; }
+  .params-table th { text-align: left; padding: 6px 10px; background: rgba(255,255,255,0.05); color: #7ec8e3; border-bottom: 1px solid #333; }
+  .params-table td { padding: 6px 10px; border-bottom: 1px solid #222; }
+  .params-table td:first-child { font-family: 'SF Mono', monospace; color: #ffa500; }
+
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin: 1em 0; }
+  .metric { background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 8px; padding: 10px 14px; }
+  .metric-name { font-family: 'SF Mono', monospace; font-size: 13px; color: #7ec8e3; }
+  .metric-desc { font-size: 11px; color: #aaa; margin-top: 4px; }
+
+  .section-divider { border: none; border-top: 2px solid #222; margin: 3em 0; }
+</style>
+</head><body>
+
+<h1>Bilancio Simulator</h1>
+<p class="subtitle">Architecture &amp; Kalecki Ring Scenario</p>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h2>1. General Simulator Architecture</h2>
+
+<div class="arch-grid">
+
+  <div class="layer l-runner">
+    <div class="layer-label">Runner Layer — Execution &amp; Infrastructure</div>
+    <div class="layer-modules">
+      <div class="module">
+        <div class="module-name">CLI</div>
+        <div class="module-desc">bilancio run / sweep commands</div>
+        <div class="module-files">cli.py, ui/run.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Modal Cloud</div>
+        <div class="module-desc">Parallel execution on Modal containers</div>
+        <div class="module-files">cloud/modal_app.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Supabase</div>
+        <div class="module-desc">Persistent job/run/metrics storage</div>
+        <div class="module-files">storage/supabase_client.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Job System</div>
+        <div class="module-desc">Memorable IDs, manifests, tracking</div>
+        <div class="module-files">jobs/</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down">▼</div>
+
+  <div class="layer l-experiment">
+    <div class="layer-label">Experiment Layer — Sweeps &amp; Comparison</div>
+    <div class="layer-modules">
+      <div class="module">
+        <div class="module-name">Ring Sweep</div>
+        <div class="module-desc">Parameter grid exploration (κ, c, μ)</div>
+        <div class="module-files">experiments/ring.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Balanced Comparison</div>
+        <div class="module-desc">7-arm comparison: passive vs active vs bank vs ...</div>
+        <div class="module-files">experiments/balanced_comparison.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Analysis</div>
+        <div class="module-desc">Metrics computation, HTML reports, dashboards</div>
+        <div class="module-files">analysis/report.py, visualization/</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down">▼</div>
+
+  <div class="layer l-scenario">
+    <div class="layer-label">Scenario Layer — Initial Conditions</div>
+    <div class="layer-modules">
+      <div class="module">
+        <div class="module-name">Ring Compiler</div>
+        <div class="module-desc">Generates Kalecki ring topology from κ, c, μ params</div>
+        <div class="module-files">scenarios/ring/compiler.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Config Loader</div>
+        <div class="module-desc">YAML → System: instantiates agents, instruments, actions</div>
+        <div class="module-files">config/apply.py, models.py, loaders.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Plugin System</div>
+        <div class="module-desc">Extensible scenario generation</div>
+        <div class="module-files">scenarios/ring/plugin.py</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down">▼</div>
+
+  <div class="layer l-engine">
+    <div class="layer-label">Engine Layer — Daily Simulation Loop</div>
+    <div class="layer-modules">
+      <div class="module" style="flex: 2;">
+        <div class="module-name">Simulation Engine</div>
+        <div class="module-desc">run_day() → run_until_stable() → wind_down() → final_settlement()</div>
+        <div class="module-files">engines/simulation.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Settlement</div>
+        <div class="module-desc">settle_due(), rollover, default cascades</div>
+        <div class="module-files">engines/settlement.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Clearing</div>
+        <div class="module-desc">Interbank netting (Phase C)</div>
+        <div class="module-files">engines/clearing.py</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down">▼</div>
+
+  <div class="layer l-subsystem">
+    <div class="layer-label">Subsystem Layer — Specialized Market Mechanisms</div>
+    <div class="layer-modules">
+      <div class="module">
+        <div class="module-name">Dealer</div>
+        <div class="module-desc">Secondary market: VBT quotes, dealer inventory, buy/sell trades</div>
+        <div class="module-files">dealer/ + engines/dealer_*.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">NBFI Lender</div>
+        <div class="module-desc">Non-bank credit: kappa-aware pricing, borrow-vs-sell</div>
+        <div class="module-files">engines/lending.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Banking</div>
+        <div class="module-desc">Deposits, loans, Treynor pricing, CB refinancing</div>
+        <div class="module-files">banking/ + engines/banking_subsystem.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Rating Agency</div>
+        <div class="module-desc">Publishes default probabilities</div>
+        <div class="module-files">engines/rating.py</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down">▼</div>
+
+  <div class="layer l-decision">
+    <div class="layer-label">Decision &amp; Information Layer — Agent Behavior</div>
+    <div class="layer-modules">
+      <div class="module">
+        <div class="module-name">Profiles</div>
+        <div class="module-desc">TraderProfile, VBTProfile, BankProfile, LenderProfile</div>
+        <div class="module-files">decision/profiles.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Risk Assessment</div>
+        <div class="module-desc">Bayesian P_default, informedness (α), observability</div>
+        <div class="module-files">dealer/risk_assessment.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Information Service</div>
+        <div class="module-desc">Access levels, noise, channels, estimates</div>
+        <div class="module-files">information/</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Valuers</div>
+        <div class="module-desc">Heuristic instrument valuation (EV, credit-adjusted)</div>
+        <div class="module-files">decision/valuers.py</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down">▼</div>
+
+  <div class="layer l-core">
+    <div class="layer-label">Core Layer — State &amp; Transactions</div>
+    <div class="layer-modules">
+      <div class="module" style="flex: 2;">
+        <div class="module-name">System</div>
+        <div class="module-desc">Central coordinator: mint, transfer, lend, settle, log events</div>
+        <div class="module-files">core/system.py</div>
+      </div>
+      <div class="module">
+        <div class="module-name">State</div>
+        <div class="module-desc">Agents, contracts, day counter, event log, indices</div>
+        <div class="module-files">core/system.py (State)</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Invariants</div>
+        <div class="module-desc">Double-entry, CB cash conservation, no negatives</div>
+        <div class="module-files">core/invariants.py</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-down">▼</div>
+
+  <div class="layer l-domain">
+    <div class="layer-label">Domain Layer — Agents &amp; Instruments</div>
+    <div class="layer-modules">
+      <div class="module">
+        <div class="module-name">Agents</div>
+        <div class="module-desc">Household, Firm, Bank, CentralBank, Dealer, VBT, Lender</div>
+        <div class="module-files">domain/agents/</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Instruments</div>
+        <div class="module-desc">Cash, Payable, BankDeposit, ReserveDeposit, CBLoan, BankLoan</div>
+        <div class="module-files">domain/instruments/</div>
+      </div>
+      <div class="module">
+        <div class="module-name">Policy Engine</div>
+        <div class="module-desc">Who can issue/hold what; MoP settlement order (mop_rank)</div>
+        <div class="module-files">domain/policy.py</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<hr class="section-divider">
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h2>2. Kalecki Ring Scenario</h2>
+
+<div class="ring-container">
+  <div class="ring-left">
+
+    <h3 style="color: #fff; margin-bottom: 12px;">Ring Topology</h3>
+    <svg class="ring-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+      <!-- Ring circle -->
+      <circle cx="200" cy="200" r="150" fill="none" stroke="#333" stroke-width="2" stroke-dasharray="8,4"/>
+
+      <!-- Agents around ring -->
+      <g font-size="11" font-family="-apple-system, sans-serif" font-weight="700">
+        <!-- 12 agents around the ring -->
+        <circle cx="200" cy="50" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="200" y="54" fill="#fff" text-anchor="middle">H1</text>
+        <circle cx="275" cy="67" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="275" y="71" fill="#fff" text-anchor="middle">H2</text>
+        <circle cx="330" cy="125" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="330" y="129" fill="#fff" text-anchor="middle">H3</text>
+        <circle cx="350" cy="200" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="350" y="204" fill="#fff" text-anchor="middle">H4</text>
+        <circle cx="330" cy="275" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="330" y="279" fill="#fff" text-anchor="middle">H5</text>
+        <circle cx="275" cy="333" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="275" y="337" fill="#fff" text-anchor="middle">H6</text>
+        <circle cx="200" cy="350" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="200" y="354" fill="#fff" text-anchor="middle">H7</text>
+        <circle cx="125" cy="333" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="125" y="337" fill="#fff" text-anchor="middle">H8</text>
+        <circle cx="70" cy="275" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="70" y="279" fill="#fff" text-anchor="middle">H9</text>
+        <circle cx="50" cy="200" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="50" y="204" fill="#fff" text-anchor="middle">H10</text>
+        <circle cx="70" cy="125" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="70" y="129" fill="#fff" text-anchor="middle">H11</text>
+        <circle cx="125" cy="67" r="22" fill="#1a3a5e" stroke="#7ec8e3" stroke-width="2"/><text x="125" y="71" fill="#fff" text-anchor="middle">H12</text>
+      </g>
+
+      <!-- Arrows (clockwise debts) -->
+      <defs><marker id="arr" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ff6347" opacity="0.6"/></marker></defs>
+      <g stroke="#ff6347" stroke-width="1.5" fill="none" marker-end="url(#arr)" opacity="0.5">
+        <line x1="218" y1="56" x2="255" y2="65"/>
+        <line x1="293" y1="75" x2="318" y2="110"/>
+        <line x1="340" y1="143" x2="348" y2="178"/>
+        <line x1="348" y1="222" x2="340" y2="257"/>
+        <line x1="318" y1="290" x2="293" y2="325"/>
+        <line x1="255" y1="340" x2="218" y2="348"/>
+        <line x1="182" y1="348" x2="145" y2="340"/>
+        <line x1="107" y1="325" x2="82" y2="290"/>
+        <line x1="60" y1="257" x2="52" y2="222"/>
+        <line x1="52" y1="178" x2="60" y2="143"/>
+        <line x1="82" y1="110" x2="107" y2="75"/>
+        <line x1="145" y1="65" x2="182" y2="56"/>
+      </g>
+
+      <!-- Legend -->
+      <text x="200" y="195" fill="#888" text-anchor="middle" font-size="12" font-family="sans-serif">Each agent owes</text>
+      <text x="200" y="210" fill="#888" text-anchor="middle" font-size="12" font-family="sans-serif">the next in ring</text>
+      <line x1="165" y1="220" x2="235" y2="220" stroke="#ff6347" stroke-width="1.5" marker-end="url(#arr)" opacity="0.8"/>
+      <text x="200" y="236" fill="#ff6347" text-anchor="middle" font-size="10" font-family="monospace" opacity="0.8">Payable (debt)</text>
+    </svg>
+
+    <h3 style="color: #fff; margin: 20px 0 12px;">Parameters</h3>
+    <table class="params-table">
+      <tr><th>Symbol</th><th>Name</th><th>Controls</th></tr>
+      <tr><td>κ (kappa)</td><td>Liquidity ratio</td><td>Cash / Total debt. Lower = more stress</td></tr>
+      <tr><td>c</td><td>Concentration</td><td>Debt inequality (Dirichlet). Lower = more unequal</td></tr>
+      <tr><td>μ (mu)</td><td>Maturity skew</td><td>0 = early due dates, 1 = late</td></tr>
+      <tr><td>ρ</td><td>Outside mid ratio</td><td>VBT price anchor. &lt;1 enables buy trades</td></tr>
+      <tr><td>n</td><td>Ring size</td><td>Number of firms/households</td></tr>
+      <tr><td>M</td><td>Reserve multiplier</td><td>Bank reserves as fraction of deposits</td></tr>
+    </table>
+
+    <h3 style="color: #fff; margin: 20px 0 12px;">Output Metrics</h3>
+    <div class="metric-grid">
+      <div class="metric"><div class="metric-name">δ (delta)</div><div class="metric-desc">Clearing rate — fraction of debt repaid</div></div>
+      <div class="metric"><div class="metric-name">φ (phi)</div><div class="metric-desc">Default rate — fraction of debt defaulted</div></div>
+      <div class="metric"><div class="metric-name">total_loss%</div><div class="metric-desc">Combined payable + deposit losses / S_total</div></div>
+      <div class="metric"><div class="metric-name">trading_effect</div><div class="metric-desc">δ_passive − δ_active (dealer impact)</div></div>
+      <div class="metric"><div class="metric-name">CB_destr%</div><div class="metric-desc">Central bank reserve destruction</div></div>
+      <div class="metric"><div class="metric-name">n_defaults</div><div class="metric-desc">Count of defaulted agents</div></div>
+    </div>
+  </div>
+
+  <div class="ring-right">
+    <h3 style="color: #fff; margin-bottom: 12px;">Daily Phase Sequence</h3>
+    <div class="phase-timeline">
+      <div class="phase p-setup">
+        <div class="phase-num">0</div>
+        <div class="phase-text"><strong>Setup</strong> — Create ring, mint cash, assign payables<div class="phase-sub">One-time: burn bank cash, mint reserves (banking arms)</div></div>
+      </div>
+      <div class="phase p-dealer">
+        <div class="phase-num">1</div>
+        <div class="phase-text"><strong>Dealer Trading</strong> — Secondary market for debt tickets<div class="phase-sub">Sync state → eligible sellers/buyers → execute trades → sync back</div></div>
+      </div>
+      <div class="phase p-lending">
+        <div class="phase-num">2</div>
+        <div class="phase-text"><strong>NBFI Lending</strong> — Non-bank lender offers credit<div class="phase-sub">Borrow-vs-sell decision, kappa-aware pricing</div></div>
+      </div>
+      <div class="phase p-bank">
+        <div class="phase-num">3</div>
+        <div class="phase-text"><strong>Bank Lending</strong> — Banks issue loans, create deposits<div class="phase-sub">Treynor pricing, credit risk loading, capacity check</div></div>
+      </div>
+      <div class="phase p-settle">
+        <div class="phase-num">4</div>
+        <div class="phase-text"><strong>Settlement</strong> — Pay due obligations (MoP order)<div class="phase-sub">Cash → Deposits → Reserves; rollover; default cascade</div></div>
+      </div>
+      <div class="phase p-bank">
+        <div class="phase-num">5</div>
+        <div class="phase-text"><strong>Interbank</strong> — Bank loan repayments, interbank clearing<div class="phase-sub">Reserve transfers, CB loan repayments</div></div>
+      </div>
+      <div class="phase p-cb">
+        <div class="phase-num">6</div>
+        <div class="phase-text"><strong>CB Backstop</strong> — Top up bank reserves to target<div class="phase-sub">Automatic CB lending, quote refresh</div></div>
+      </div>
+      <div style="text-align: center; color: #555; font-size: 12px; margin: 4px 0;">↻ repeat until stable or max days</div>
+      <div class="phase p-cb" style="border-style: dashed;">
+        <div class="phase-num" style="background: #888;">W</div>
+        <div class="phase-text"><strong>Wind-Down</strong> — CB freeze, bank loan maturity<div class="phase-sub">Banks repay CB from loan proceeds; default if can't</div></div>
+      </div>
+      <div class="phase p-cb" style="border-style: dashed;">
+        <div class="phase-num" style="background: #888;">F</div>
+        <div class="phase-text"><strong>Final Settlement</strong> — CB collects all outstanding<div class="phase-sub">Write off unpaid CB loans, compute CB reserve destruction</div></div>
+      </div>
+    </div>
+
+    <h3 style="color: #fff; margin: 24px 0 12px;">7 Comparison Arms</h3>
+    <div class="arms-grid">
+      <div class="arm arm-passive">
+        <div class="arm-name">① Passive</div>
+        <div class="arm-desc">Baseline — pure settlement, no intermediaries</div>
+        <div class="arm-agents">Households only</div>
+      </div>
+      <div class="arm arm-active">
+        <div class="arm-name">② Active (Dealer)</div>
+        <div class="arm-desc">Secondary market with dealer + VBTs</div>
+        <div class="arm-agents">+ Dealer, VBTs</div>
+      </div>
+      <div class="arm arm-lender">
+        <div class="arm-name">③ Lender (NBFI)</div>
+        <div class="arm-desc">Non-bank credit facility</div>
+        <div class="arm-agents">+ NonBankLender</div>
+      </div>
+      <div class="arm arm-dl">
+        <div class="arm-name">④ Dealer + Lender</div>
+        <div class="arm-desc">Both dealer and NBFI active</div>
+        <div class="arm-agents">+ Dealer, VBTs, Lender</div>
+      </div>
+      <div class="arm arm-bp">
+        <div class="arm-name">⑤ Bank + Passive</div>
+        <div class="arm-desc">Banks only, no secondary market</div>
+        <div class="arm-agents">+ Banks, CentralBank</div>
+      </div>
+      <div class="arm arm-bd">
+        <div class="arm-name">⑥ Bank + Dealer</div>
+        <div class="arm-desc">Banks + secondary market</div>
+        <div class="arm-agents">+ Banks, CB, Dealer, VBTs</div>
+      </div>
+      <div class="arm arm-bdn">
+        <div class="arm-name">⑦ Bank + Dealer + NBFI</div>
+        <div class="arm-desc">All intermediaries active</div>
+        <div class="arm-agents">+ Banks, CB, Dealer, VBTs, Lender</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h2>3. Development Timeline</h2>
+
+<style>
+  .timeline { max-width: 1100px; }
+  .tl-phase { margin-bottom: 2em; }
+  .tl-phase-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .tl-phase-dates { font-size: 12px; color: #7ec8e3; margin-bottom: 12px; }
+  .tl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tl-table th { text-align: left; padding: 6px 10px; background: rgba(255,255,255,0.05); color: #888; border-bottom: 1px solid #333; font-weight: 600; }
+  .tl-table td { padding: 6px 10px; border-bottom: 1px solid #1a1a2e; vertical-align: top; }
+  .tl-table td:first-child { color: #666; font-family: 'SF Mono', monospace; font-size: 12px; white-space: nowrap; }
+  .tl-table td:nth-child(2) { color: #ffa500; font-family: 'SF Mono', monospace; font-size: 11px; white-space: nowrap; }
+  .tl-table td:nth-child(3) { color: #fff; font-weight: 600; }
+  .tl-table td:nth-child(4) { color: #aaa; }
+  .tl-table tr:hover { background: rgba(255,255,255,0.03); }
+  .tl-tag { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 3px; margin-left: 6px; font-weight: 700; }
+  .tag-foundation { background: #1a3a5e; color: #7ec8e3; }
+  .tag-kalecki { background: #3e1a1a; color: #ff6347; }
+  .tag-dealer { background: #3e2a1a; color: #ffa500; }
+  .tag-info { background: #2e1a3e; color: #9370db; }
+  .tag-banking { background: #1a2e1a; color: #32cd32; }
+  .tag-infra { background: #1a1a3e; color: #7ec8e3; }
+</style>
+
+<div class="timeline">
+
+  <div class="tl-phase">
+    <div class="tl-phase-title">Phase 1: Foundations <span class="tl-tag tag-foundation">CORE</span></div>
+    <div class="tl-phase-dates">August 2025</div>
+    <table class="tl-table">
+      <tr><th>Date</th><th>Plan</th><th>Feature</th><th>Description</th></tr>
+      <tr><td>Aug 9</td><td>000-001</td><td>Domain &amp; System</td><td>Agents, instruments, contracts, PolicyEngine, System gateway</td></tr>
+      <tr><td>Aug 9</td><td>003</td><td>Cash &amp; Deliverables</td><td>CB cash minting, transfers, split/merge primitives</td></tr>
+      <tr><td>Aug 9</td><td>004</td><td>Banking Operations</td><td>Deposits, withdrawals, client payments, interbank IOUs</td></tr>
+      <tr><td>Aug 9</td><td>005</td><td>Settlement &amp; Clearing</td><td>Phase A/B/C, payable settlement, interbank netting, scheduler</td></tr>
+      <tr><td>Aug 10</td><td>006</td><td>Analytics</td><td>Per-agent balance sheets, system trial balance</td></tr>
+      <tr><td>Aug 15</td><td>007</td><td>Deliverable Refactor</td><td>StockLot (inventory) vs DeliveryObligation (contract)</td></tr>
+      <tr><td>Aug 15-18</td><td>008</td><td>Simulation Engine</td><td>Setup context, settle-on-current-day, run_until_stable</td></tr>
+      <tr><td>Aug 18-19</td><td>009</td><td>CLI</td><td><code>bilancio run</code>, HTML export, event formatting</td></tr>
+      <tr><td>Aug 19-21</td><td>010-011</td><td>T-Accounts &amp; UI</td><td>Row-based T-accounts, event tables, rich HTML reports</td></tr>
+    </table>
+  </div>
+
+  <div class="tl-phase">
+    <div class="tl-phase-title">Phase 2: Kalecki Ring <span class="tl-tag tag-kalecki">KALECKI</span></div>
+    <div class="tl-phase-dates">September – November 2025</div>
+    <table class="tl-table">
+      <tr><th>Date</th><th>Plan</th><th>Feature</th><th>Description</th></tr>
+      <tr><td>Sep 4</td><td>012</td><td>Scheduled Actions</td><td>Phase B split (B1/B2), aliases, claim transfer</td></tr>
+      <tr><td>Sep 10</td><td>014-015</td><td>Kalecki Experiments</td><td>Ring topology, κ/c/μ sweep, metrics (S_t, φ, δ, M^peak)</td></tr>
+      <tr><td>Sep 25</td><td>013</td><td>Default Handling</td><td>Fail-fast vs expel-agent modes, partial payment, write-off</td></tr>
+      <tr><td>Nov 25</td><td>016</td><td>Dealer Module</td><td>VBTs, tickets, maturity buckets, dealer pricing kernel</td></tr>
+      <tr><td>Nov 28</td><td>016</td><td>Dealer-Kalecki Integration</td><td>Secondary market wired into Kalecki ring simulation</td></tr>
+    </table>
+  </div>
+
+  <div class="tl-phase">
+    <div class="tl-phase-title">Phase 3: Dealer Trading &amp; Comparison <span class="tl-tag tag-dealer">DEALER</span></div>
+    <div class="tl-phase-dates">December 2025 – January 2026</div>
+    <table class="tl-table">
+      <tr><th>Date</th><th>Plan</th><th>Feature</th><th>Description</th></tr>
+      <tr><td>Dec 4</td><td>021</td><td>Balanced Comparison</td><td>Passive (C) vs Active (D) with identical starting balances</td></tr>
+      <tr><td>Jan 11</td><td>—</td><td>Abstraction Layers</td><td>Storage + runner abstractions for local/cloud execution</td></tr>
+      <tr><td>Jan 23</td><td>—</td><td>Network Viz</td><td>Interactive balance sheet network visualization</td></tr>
+      <tr><td>Jan 28-29</td><td>—</td><td>Bank-Dealer Integration</td><td>Deposits, CB corridor, CBLoan instrument</td></tr>
+    </table>
+  </div>
+
+  <div class="tl-phase">
+    <div class="tl-phase-title">Phase 4: Information &amp; Decision Architecture <span class="tl-tag tag-info">INTELLIGENCE</span></div>
+    <div class="tl-phase-dates">February 7 – 14, 2026</div>
+    <table class="tl-table">
+      <tr><th>Date</th><th>Plan</th><th>Feature</th><th>Description</th></tr>
+      <tr><td>Feb 7</td><td>—</td><td>Cascade Metrics</td><td>Cascade fraction, contagion measurement</td></tr>
+      <tr><td>Feb 11</td><td>024</td><td>Dealer Redesign</td><td>Rollover, balanced start, credit-adjusted VBT mid, buy trades</td></tr>
+      <tr><td>Feb 12</td><td>032</td><td>Risk Assessment</td><td>RiskAssessor, TraderProfile, VBTProfile, informedness (α)</td></tr>
+      <tr><td>Feb 13</td><td>033</td><td>Information Framework</td><td>Hierarchy, channels, decision protocols, rating agency</td></tr>
+      <tr><td>Feb 14</td><td>034</td><td>Valuation Heuristics</td><td>Estimate provenance, InstrumentValuer, belief logging</td></tr>
+      <tr><td>Feb 14</td><td>—</td><td>NBFI Lending</td><td>3rd arm: kappa-aware pricing, borrow-vs-sell, pro-rata recovery</td></tr>
+      <tr><td>Feb 14</td><td>029</td><td>Job System</td><td>Memorable IDs (word-word-word-word), manifests, tracking</td></tr>
+    </table>
+  </div>
+
+  <div class="tl-phase">
+    <div class="tl-phase-title">Phase 5: Multi-Arm Sweep Infrastructure <span class="tl-tag tag-infra">INFRA</span></div>
+    <div class="tl-phase-dates">February 15 – 16, 2026</div>
+    <table class="tl-table">
+      <tr><th>Date</th><th>Plan</th><th>Feature</th><th>Description</th></tr>
+      <tr><td>Feb 15</td><td>—</td><td>Buy Trades</td><td>Credit facility, independent order flow, viability checks</td></tr>
+      <tr><td>Feb 15</td><td>—</td><td>4th Arm</td><td>Dealer + Lender combined comparison arm</td></tr>
+      <tr><td>Feb 16</td><td>—</td><td>Multi-Issuer Buys</td><td>Traders buy tickets from any issuer on secondary market</td></tr>
+      <tr><td>Feb 16</td><td>—</td><td>Trading Motive</td><td>Configurable: liquidity_only, liquidity_then_earning, unrestricted</td></tr>
+      <tr><td>Feb 16</td><td>—</td><td>Pre-Flight Checks</td><td>Economic viability validation before running sweeps</td></tr>
+      <tr><td>Feb 16</td><td>036</td><td>Plugin Architecture</td><td>Extensible scenario generation system</td></tr>
+    </table>
+  </div>
+
+  <div class="tl-phase">
+    <div class="tl-phase-title">Phase 6: Banking in Kalecki Ring <span class="tl-tag tag-banking">BANKING</span></div>
+    <div class="tl-phase-dates">February 17 – 19, 2026</div>
+    <table class="tl-table">
+      <tr><th>Date</th><th>Plan</th><th>Feature</th><th>Description</th></tr>
+      <tr><td>Feb 17</td><td>037</td><td>Streamlit Simulator</td><td>Interactive balance sheet visualization</td></tr>
+      <tr><td>Feb 17</td><td>038</td><td>Banks as Deposit Issuers</td><td>Agent deposit accounts, cash-to-deposit conversion</td></tr>
+      <tr><td>Feb 18</td><td>039</td><td>Deposits as Universal MoP</td><td>CB refinancing, 7-arm Modal batch execution</td></tr>
+      <tr><td>Feb 19</td><td>036*</td><td>Credit Risk Pricing</td><td>credit_risk_loading, CB escalation + caps, spread scaling</td></tr>
+      <tr><td>Feb 19</td><td>037*</td><td>Final CB Settlement</td><td>CB collects loans, stress metrics (reserve destruction %)</td></tr>
+      <tr><td>Feb 19</td><td>038*</td><td>CB Lending Freeze</td><td>Freeze at stability, bank reserve constraint tightening</td></tr>
+      <tr><td>Feb 19</td><td>039*</td><td>Banking Default Metrics</td><td>δ_bank, deposit_loss_gross, deposit_loss_pct</td></tr>
+      <tr><td>Feb 19</td><td>040</td><td>Bank Resolution</td><td>Wind-down phase, reserve distribution, liability write-off (PR #76)</td></tr>
+      <tr><td>Feb 19</td><td>041</td><td>Paper-Faithful Pricing</td><td>Burn bank cash, 10-day projection, CB backstop, freeze (PR #77)</td></tr>
+      <tr><td>Feb 19</td><td>—</td><td>total_loss_pct</td><td>Combined loss metric: (payable defaults + deposit losses) / S_total</td></tr>
+      <tr><td>Feb 19</td><td>—</td><td>Capacity Tightening</td><td>Bank lending floor: 50% → 75% of target reserve ratio</td></tr>
+    </table>
+  </div>
+
+</div>
+
+</body></html>
