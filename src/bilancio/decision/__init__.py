@@ -18,6 +18,7 @@ from bilancio.decision.protocols import (
     TransactionPricer,
     VBTPricingModel,
 )
+from bilancio.decision.risk_assessment import RiskAssessmentParams, RiskAssessor
 from bilancio.decision.valuers import (
     CoverageRatioValuer,
     CreditAdjustedVBTPricing,
@@ -39,6 +40,8 @@ __all__ = [
     "LinearPricer",
     "PortfolioStrategy",
     "RatingProfile",
+    "RiskAssessmentParams",
+    "RiskAssessor",
     "ThresholdScreener",
     "TraderProfile",
     "TransactionPricer",
