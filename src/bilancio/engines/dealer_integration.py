@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from bilancio.decision.protocols import VBTPricingModel
     from bilancio.engines.system import System
+    from bilancio.information.profile import InformationProfile
 
 from bilancio.core.ids import AgentId, InstrId
 from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
@@ -153,6 +154,9 @@ class DealerSubsystem:
     # Risk assessment module (optional)
     risk_assessor: RiskAssessor | None = None
 
+    # Per-trader risk assessors (optional; when empty, shared risk_assessor is used)
+    trader_assessors: dict[AgentId, RiskAssessor] = field(default_factory=dict)
+
     # Base outside-mid ratio (stored for daily VBT M recalculation)
     outside_mid_ratio: Decimal = Decimal(1)
 
@@ -179,6 +183,11 @@ class DealerSubsystem:
 
     # VBT pricing model (optional — when None, uses inline logic for backward compat)
     vbt_pricing_model: VBTPricingModel | None = None
+
+
+def get_trader_assessor(subsystem: DealerSubsystem, trader_id: AgentId) -> RiskAssessor | None:
+    """Return the per-trader assessor if available, else the shared one."""
+    return subsystem.trader_assessors.get(trader_id, subsystem.risk_assessor)
 
 
 def _get_agent_cash(system: System, agent_id: str) -> Decimal:
@@ -244,6 +253,7 @@ def initialize_dealer_subsystem(
     dealer_config: DealerRingConfig,
     current_day: int = 0,
     risk_params: RiskAssessmentParams | None = None,
+    trader_information_profile: InformationProfile | None = None,
 ) -> DealerSubsystem:
     """
     Initialize dealer subsystem from system state and configuration.
@@ -347,6 +357,15 @@ def initialize_dealer_subsystem(
     # Step 4: Initialize traders (households only)
     _initialize_traders(subsystem, system)
 
+    # Step 4b: Create per-trader assessors if information profile provided
+    if risk_params and trader_information_profile:
+        from bilancio.decision.factories import create_assessor
+
+        for trader_id in subsystem.traders:
+            subsystem.trader_assessors[trader_id] = create_assessor(
+                risk_params, trader_information_profile
+            )
+
     # Step 5: Capture initial debt-to-money ratio
     _capture_initial_debt_to_money(subsystem, system)
 
@@ -371,6 +390,7 @@ def initialize_balanced_dealer_subsystem(
     kappa: Decimal | None = None,
     trader_profile: TraderProfile | None = None,
     vbt_profile: VBTProfile | None = None,
+    trader_information_profile: InformationProfile | None = None,
 ) -> DealerSubsystem:
     """
     Initialize dealer subsystem for balanced scenarios (C vs D comparison).
@@ -494,6 +514,15 @@ def initialize_balanced_dealer_subsystem(
         system,
         skip_prefixes=("vbt_", "dealer_", "big_"),
     )
+
+    # Step 3b: Create per-trader assessors if information profile provided
+    if risk_params and trader_information_profile:
+        from bilancio.decision.factories import create_assessor
+
+        for trader_id in subsystem.traders:
+            subsystem.trader_assessors[trader_id] = create_assessor(
+                risk_params, trader_information_profile
+            )
 
     # Step 4: Capture initial debt-to-money ratio
     _capture_initial_debt_to_money(
