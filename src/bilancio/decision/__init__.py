@@ -18,6 +18,14 @@ from bilancio.decision.protocols import (
     TransactionPricer,
     VBTPricingModel,
 )
+from bilancio.decision.intentions import (
+    BuyIntention,
+    LiquidityDrivenSeller,
+    SellIntention,
+    SurplusBuyer,
+    collect_buy_intentions,
+    collect_sell_intentions,
+)
 from bilancio.decision.risk_assessment import RiskAssessmentParams, RiskAssessor
 from bilancio.decision.valuers import (
     CoverageRatioValuer,
@@ -28,6 +36,7 @@ from bilancio.decision.valuers import (
 __all__ = [
     "AGGRESSIVE",
     "BASELINE",
+    "BuyIntention",
     "CAUTIOUS",
     "CounterpartyScreener",
     "CoverageRatioValuer",
@@ -38,13 +47,18 @@ __all__ = [
     "InstrumentSelector",
     "InstrumentValuer",
     "LinearPricer",
+    "LiquidityDrivenSeller",
     "PortfolioStrategy",
     "RatingProfile",
     "RiskAssessmentParams",
     "RiskAssessor",
+    "SellIntention",
+    "SurplusBuyer",
     "ThresholdScreener",
     "TraderProfile",
     "TransactionPricer",
     "VBTPricingModel",
     "VBTProfile",
+    "collect_buy_intentions",
+    "collect_sell_intentions",
 ]

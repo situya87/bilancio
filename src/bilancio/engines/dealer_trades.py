@@ -602,6 +602,9 @@ def _build_eligible_sellers(
 ) -> list[str]:
     """Identify traders eligible to sell (have shortfall coming in next few days).
 
+    Delegates to :func:`bilancio.decision.intentions.collect_sell_intentions`
+    and extracts trader IDs for backward compatibility.
+
     Args:
         subsystem: Dealer subsystem state
         current_day: Current simulation day
@@ -610,16 +613,13 @@ def _build_eligible_sellers(
     Returns:
         List of trader IDs eligible to sell
     """
-    if horizon is None:
-        horizon = subsystem.trader_profile.sell_horizon
-    eligible_sellers = []
-    for trader_id, trader in subsystem.traders.items():
-        upcoming_shortfall = Decimal(0)
-        for day_offset in range(horizon + 1):
-            upcoming_shortfall = max(upcoming_shortfall, trader.shortfall(current_day + day_offset))
-        if upcoming_shortfall > 0 and trader.tickets_owned:
-            eligible_sellers.append(trader_id)
-    return eligible_sellers
+    from bilancio.decision.intentions import collect_sell_intentions
+
+    kwargs: dict = {}
+    if horizon is not None:
+        kwargs["horizon"] = horizon
+    intentions = collect_sell_intentions(subsystem, current_day, **kwargs)
+    return [si.trader_id for si in intentions]
 
 
 def _build_eligible_buyers(
@@ -629,8 +629,8 @@ def _build_eligible_buyers(
 ) -> list[str]:
     """Identify traders eligible to buy (have surplus cash beyond needs).
 
-    Only allows buying if trader has genuine surplus above ALL upcoming
-    obligations.
+    Delegates to :func:`bilancio.decision.intentions.collect_buy_intentions`
+    and extracts trader IDs for backward compatibility.
 
     Args:
         subsystem: Dealer subsystem state
@@ -640,22 +640,13 @@ def _build_eligible_buyers(
     Returns:
         List of trader IDs eligible to buy
     """
-    if horizon is None:
-        horizon = subsystem.trader_profile.buy_horizon
-    eligible_buyers = []
-    for trader_id, trader in subsystem.traders.items():
-        if subsystem.trader_profile.trading_motive == "liquidity_only":
-            if trader.earliest_liability_day(current_day) is None:
-                continue
-        total_upcoming_dues = Decimal(0)
-        for day_offset in range(horizon + 1):
-            total_upcoming_dues += trader.payment_due(current_day + day_offset)
-        reserved = subsystem.trader_profile.buy_reserve_fraction * total_upcoming_dues
-        surplus = trader.cash - reserved
-        threshold = subsystem.face_value * subsystem.trader_profile.surplus_threshold_factor
-        if surplus > threshold:
-            eligible_buyers.append(trader_id)
-    return eligible_buyers
+    from bilancio.decision.intentions import collect_buy_intentions
+
+    kwargs: dict = {}
+    if horizon is not None:
+        kwargs["horizon"] = horizon
+    intentions = collect_buy_intentions(subsystem, current_day, **kwargs)
+    return [bi.trader_id for bi in intentions]
 
 
 def _execute_interleaved_order_flow(
