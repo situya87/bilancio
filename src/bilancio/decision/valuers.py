@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from bilancio.information.estimates import Estimate
 
 if TYPE_CHECKING:
-    from bilancio.dealer.risk_assessment import RiskAssessor
+    from bilancio.decision.risk_assessment import RiskAssessor
 
 
 # ── EVHoldValuer ───────────────────────────────────────────────────
