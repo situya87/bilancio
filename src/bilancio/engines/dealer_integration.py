@@ -82,6 +82,11 @@ from bilancio.engines.dealer_trades import (
     _build_eligible_sellers,
     _execute_interleaved_order_flow,
 )
+from bilancio.decision.intentions import (
+    collect_buy_intentions,
+    collect_sell_intentions,
+)
+from bilancio.engines.matching import DealerMatchingEngine
 
 # --- Submodule imports (implementation) ---
 from bilancio.engines.dealer_wiring import (
@@ -631,17 +636,17 @@ def run_dealer_trading_phase(
     _capture_trader_snapshots(subsystem, current_day)
     _capture_system_state_snapshot(subsystem, current_day)  # Plan 022
 
-    # Phase 3: Build eligibility sets
-    eligible_sellers = _build_eligible_sellers(subsystem, current_day)
-    eligible_buyers = _build_eligible_buyers(subsystem, current_day)
+    # Phase 3: Collect trade intentions from decision strategies
+    sell_intentions = collect_sell_intentions(subsystem, current_day)
+    buy_intentions = collect_buy_intentions(subsystem, current_day)
 
-    # Phase 4: Interleaved order flow in batches
-    _execute_interleaved_order_flow(
+    # Phase 4: Match intentions against dealer quotes
+    DealerMatchingEngine().execute(
         subsystem,
         system,
         current_day,
-        eligible_sellers,
-        eligible_buyers,
+        sell_intentions,
+        buy_intentions,
         events,
     )
 
