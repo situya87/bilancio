@@ -62,6 +62,24 @@ def _get_risk_assessor(system: System) -> Any:
     return subsystem.risk_assessor if subsystem is not None else None
 
 
+def _update_risk_history(system: System, day: int, issuer_id: str, defaulted: bool) -> None:
+    """Update risk assessor history, including per-trader assessors.
+
+    Propagates the observation to both the shared risk_assessor and all
+    per-trader assessors.  Per-trader assessors receive the same raw history;
+    information friction is applied via ``default_observability`` inside
+    ``estimate_default_prob``, not by filtering ``update_history`` calls.
+    """
+    risk_assessor = _get_risk_assessor(system)
+    if risk_assessor:
+        risk_assessor.update_history(day=day, issuer_id=issuer_id, defaulted=defaulted)
+    # Propagate to per-trader assessors
+    dealer_sub = system.state.dealer_subsystem
+    if dealer_sub and dealer_sub.trader_assessors:
+        for ta in dealer_sub.trader_assessors.values():
+            ta.update_history(day=day, issuer_id=issuer_id, defaulted=defaulted)
+
+
 def due_payables(system: System, day: int) -> Generator[Instrument, None, None]:
     """Look up payables with due_day == day using the due-day index."""
     for cid in list(system.state.contracts_by_due_day.get(day, ())):
@@ -1284,8 +1302,7 @@ def _settle_single_payable(
             creditor=creditor.id,
             amount=payable_amount,
         )
-        if risk_assessor:
-            risk_assessor.update_history(day=day, issuer_id=debtor.id, defaulted=False)
+        _update_risk_history(system, day=day, issuer_id=debtor.id, defaulted=False)
 
         rollover_info = None
         if rollover_enabled and payable_maturity_distance is not None:
@@ -1375,8 +1392,7 @@ def _handle_payable_default(
         cancelled_contract_ids=cancelled_contract_ids,
         cancelled_aliases=cancelled_aliases,
     )
-    if risk_assessor:
-        risk_assessor.update_history(day=day, issuer_id=debtor.id, defaulted=True)
+    _update_risk_history(system, day=day, issuer_id=debtor.id, defaulted=True)
     if rollover_enabled:
         _reconnect_ring(system, debtor.id, ring_successor_id, day)
     return False

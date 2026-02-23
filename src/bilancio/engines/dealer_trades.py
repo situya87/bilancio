@@ -58,15 +58,18 @@ def _check_sell_risk_assessment(
     Returns True if the trade was rejected (should skip this sell).
     Returns False if the trade is acceptable or no risk assessor is configured.
     """
-    if not subsystem.risk_assessor:
+    from bilancio.engines.dealer_integration import get_trader_assessor
+
+    assessor = get_trader_assessor(subsystem, trader_id)
+    if not assessor:
         return False
 
     # Compute asset value as sum of EVs of owned tickets
     asset_value = sum(
-        (subsystem.risk_assessor.expected_value(t, current_day) for t in trader.tickets_owned),
+        (assessor.expected_value(t, current_day) for t in trader.tickets_owned),
         Decimal(0),
     )
-    if subsystem.risk_assessor.should_sell(
+    if assessor.should_sell(
         ticket=ticket,
         dealer_bid=dealer.bid,
         current_day=current_day,
@@ -88,8 +91,8 @@ def _check_sell_risk_assessment(
             "ticket_id": ticket.id,
             "bucket": bucket_id,
             "offered_price": float(dealer.bid),
-            "expected_value": float(subsystem.risk_assessor.expected_value(ticket, current_day)),
-            "threshold": float(subsystem.risk_assessor.params.base_risk_premium),
+            "expected_value": float(assessor.expected_value(ticket, current_day)),
+            "threshold": float(assessor.params.base_risk_premium),
             "reason": "price_below_ev_threshold",
         }
     )
@@ -332,18 +335,21 @@ def _check_buy_risk_assessment(
     Returns True if the trade was rejected (should skip to next bucket).
     Returns False if the trade is acceptable or no risk assessor is configured.
     """
-    if not subsystem.risk_assessor:
+    from bilancio.engines.dealer_integration import get_trader_assessor
+
+    assessor = get_trader_assessor(subsystem, trader_id)
+    if not assessor:
         return False
 
     assert result.ticket is not None
 
     # Compute asset value (including the ticket we just bought)
     asset_value = sum(
-        (subsystem.risk_assessor.expected_value(t, current_day) for t in trader.tickets_owned),
+        (assessor.expected_value(t, current_day) for t in trader.tickets_owned),
         Decimal(0),
     )
     # Check if trader would accept this buy
-    if subsystem.risk_assessor.should_buy(
+    if assessor.should_buy(
         ticket=result.ticket,
         dealer_ask=result.price,  # Unit price
         current_day=current_day,
@@ -365,11 +371,11 @@ def _check_buy_risk_assessment(
             "bucket": bucket_id,
             "offered_price": float(result.price),
             "expected_value": float(
-                subsystem.risk_assessor.expected_value(result.ticket, current_day)
+                assessor.expected_value(result.ticket, current_day)
             ),
             "threshold": float(
-                subsystem.risk_assessor.params.base_risk_premium
-                * subsystem.risk_assessor.params.buy_premium_multiplier
+                assessor.params.base_risk_premium
+                * assessor.params.buy_premium_multiplier
             ),
             "reason": "ev_below_price_threshold",
         }

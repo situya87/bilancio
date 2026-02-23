@@ -1,0 +1,85 @@
+"""Factory for creating information-aware RiskAssessors.
+
+Maps an ``InformationProfile`` to ``RiskAssessmentParams`` adjustments,
+so that traders with limited information access have proportionally
+reduced ``default_observability`` — they rely more on their prior and
+less on observed defaults.
+"""
+
+from __future__ import annotations
+
+from copy import copy
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
+
+if TYPE_CHECKING:
+    from bilancio.information.profile import InformationProfile
+
+
+def observability_from_profile(profile: InformationProfile) -> Decimal:
+    """Derive ``default_observability`` from an InformationProfile.
+
+    Mapping rules (based on ``counterparty_default_history`` access):
+
+    * **PERFECT** → 1.0  (full tracking, current default)
+    * **NONE**    → 0.0  (always uses prior, ignores observed defaults)
+    * **NOISY**   → derived from noise config:
+      - ``SampleNoise``      → ``sample_rate``  (fraction of events seen)
+      - ``EstimationNoise``  → ``max(0, 1 - error_fraction)``
+      - ``LagNoise``         → ``max(0, 1 - 0.1 × lag_days)``
+      - other                → 0.5  (moderate degradation)
+    """
+    from bilancio.information.levels import AccessLevel
+    from bilancio.information.noise import EstimationNoise, LagNoise, SampleNoise
+
+    access = profile.counterparty_default_history
+
+    if access.level == AccessLevel.PERFECT:
+        return Decimal("1.0")
+    if access.level == AccessLevel.NONE:
+        return Decimal("0.0")
+
+    # NOISY — derive from noise config
+    noise = access.noise
+    if isinstance(noise, SampleNoise):
+        return noise.sample_rate
+    if isinstance(noise, EstimationNoise):
+        return max(Decimal("0"), Decimal("1") - noise.error_fraction)
+    if isinstance(noise, LagNoise):
+        return max(Decimal("0"), Decimal("1") - Decimal("0.1") * Decimal(noise.lag_days))
+
+    # Unknown noise type — moderate default
+    return Decimal("0.5")
+
+
+def create_assessor(
+    base_params: RiskAssessmentParams,
+    profile: InformationProfile | None = None,
+) -> RiskAssessor:
+    """Create a RiskAssessor configured from an InformationProfile.
+
+    When *profile* is ``None``, returns a RiskAssessor with the
+    base parameters unchanged (backward-compatible default).
+
+    When a profile is provided, adjusts ``default_observability``
+    based on the profile's ``counterparty_default_history`` access
+    level and noise configuration.
+
+    Args:
+        base_params: Baseline risk assessment parameters.
+        profile: Optional information profile.  When provided,
+            ``default_observability`` is overridden.
+
+    Returns:
+        A configured :class:`RiskAssessor` instance.
+    """
+    if profile is None:
+        return RiskAssessor(base_params)
+
+    # Shallow copy so we don't mutate the caller's params
+    adjusted = copy(base_params)
+    adjusted.default_observability = observability_from_profile(profile)
+
+    return RiskAssessor(adjusted)

@@ -897,6 +897,7 @@ class TestSettleDueEdgeCases:
 
         class MockDealerSubsystem:
             risk_assessor = mock_ra
+            trader_assessors = {}
 
         system.state.dealer_subsystem = MockDealerSubsystem()
 
@@ -924,6 +925,7 @@ class TestSettleDueEdgeCases:
 
         class MockDealerSubsystem:
             risk_assessor = mock_ra
+            trader_assessors = {}
 
         system.state.dealer_subsystem = MockDealerSubsystem()
 
