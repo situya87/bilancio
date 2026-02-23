@@ -21,6 +21,10 @@ from bilancio.domain.instruments.bank_loan import BankLoan
 AgentType = type[Agent]
 InstrType = type[Instrument]
 
+# Default handling modes (domain-level rule declarations)
+DEFAULT_MODE_FAIL_FAST = "fail-fast"
+DEFAULT_MODE_EXPEL = "expel-agent"
+
 
 @dataclass
 class PolicyEngine:
@@ -78,3 +82,19 @@ class PolicyEngine:
 
     def settlement_order(self, agent: Agent) -> Sequence[str]:
         return self.mop_rank.get(agent.kind, [])
+
+    def validate_completeness(self) -> list[str]:
+        """Check that every instrument type has explicit issuer and holder rules.
+
+        Returns a list of warning strings for any instrument type that is
+        registered in ``issuers`` but not ``holders``, or vice-versa.
+        An empty list means the policy is complete.
+        """
+        warnings: list[str] = []
+        all_types = set(self.issuers.keys()) | set(self.holders.keys())
+        for itype in sorted(all_types, key=lambda t: t.__name__):
+            if itype not in self.issuers:
+                warnings.append(f"{itype.__name__}: has holders but no issuers")
+            if itype not in self.holders:
+                warnings.append(f"{itype.__name__}: has issuers but no holders")
+        return warnings

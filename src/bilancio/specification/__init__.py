@@ -1,6 +1,11 @@
 """
 Specification validation framework for agents and instruments.
 
+**Design-time documentation and validation tool** — not a runtime
+enforcement mechanism.  Use this module to check that agent and
+instrument specifications are complete and consistent.  Runtime
+policy enforcement is handled by :class:`bilancio.domain.policy.PolicyEngine`.
+
 This module provides:
 - Data structures for defining agent and instrument specifications
 - Registry for tracking all agents and instruments
