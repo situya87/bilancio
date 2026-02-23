@@ -16,6 +16,7 @@ from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.delivery import DeliveryObligation
 from bilancio.domain.instruments.non_bank_loan import NonBankLoan
+from bilancio.domain.policy import DEFAULT_MODE_EXPEL, DEFAULT_MODE_FAIL_FAST
 from bilancio.ops.aliases import get_alias_for_id
 from bilancio.ops.banking import client_payment
 
@@ -24,9 +25,6 @@ if TYPE_CHECKING:
     from bilancio.engines.system import System
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_MODE_FAIL_FAST = "fail-fast"
-DEFAULT_MODE_EXPEL = "expel-agent"
 
 _ACTION_AGENT_FIELDS = {
     "mint_reserves": ("to",),
