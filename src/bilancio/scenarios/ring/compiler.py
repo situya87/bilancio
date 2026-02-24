@@ -212,6 +212,7 @@ def compile_ring_explorer_balanced(
     cb_max_outstanding_ratio: Decimal = Decimal("0"),
     spread_scale: Decimal = Decimal("1.0"),
     cb_lending_cutoff_day: int | None = None,
+    emit_action_specs: bool = False,
     *,
     source_path: Path | None = None,
 ) -> dict[str, Any]:
@@ -691,6 +692,9 @@ def compile_ring_explorer_balanced(
                 }
             }
 
+    if emit_action_specs:
+        scenario["action_specs"] = _build_action_specs(mode=mode)
+
     if config.compile.emit_yaml:
         _emit_yaml(
             scenario,
@@ -699,6 +703,82 @@ def compile_ring_explorer_balanced(
         )
 
     return scenario
+
+
+def _build_action_specs(
+    mode: str,
+    trader_params: dict[str, Any] | None = None,
+    lender_params: dict[str, Any] | None = None,
+    vbt_params: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Build action_specs dicts from mode and profile parameters.
+
+    Maps the legacy mode string to explicit per-kind action specs.
+
+    Args:
+        mode: One of "passive", "active", "lender", "nbfi", "nbfi_dealer",
+              "banking", "bank_dealer", "bank_dealer_nbfi".
+        trader_params: Profile params for traders (risk_aversion, planning_horizon, etc.).
+        lender_params: Profile params for lender (risk_aversion, profit_target, etc.).
+        vbt_params: Profile params for VBT (mid_sensitivity, spread_sensitivity, etc.).
+
+    Returns:
+        List of action_specs dicts suitable for YAML serialization.
+    """
+    trader_params = trader_params or {}
+    lender_params = lender_params or {}
+    vbt_params = vbt_params or {}
+
+    specs: list[dict[str, Any]] = []
+
+    # Household actions depend on mode
+    household_actions: list[dict[str, Any]] = [
+        {"action": "settle", "phase": "B2_Settlement"},
+    ]
+
+    # Modes with dealer trading
+    has_dealer = mode in ("active", "nbfi_dealer", "bank_dealer", "bank_dealer_nbfi")
+    # Modes with lending
+    has_lending = mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi")
+    # Modes with banking
+    has_banking = mode in ("banking", "bank_dealer", "bank_dealer_nbfi")
+
+    if has_dealer:
+        household_actions.extend([
+            {"action": "sell_ticket", "phase": "B_Dealer", "strategy": "liquidity_driven_seller"},
+            {"action": "buy_ticket", "phase": "B_Dealer", "strategy": "surplus_buyer"},
+        ])
+
+    if has_lending or has_banking:
+        household_actions.append(
+            {"action": "borrow", "phase": "B_Lending"},
+        )
+
+    household_spec: dict[str, Any] = {
+        "kind": "household",
+        "actions": household_actions,
+    }
+
+    if trader_params:
+        household_spec["profile_type"] = "trader"
+        household_spec["profile_params"] = trader_params
+
+    specs.append(household_spec)
+
+    # Non-bank lender (if applicable)
+    if has_lending:
+        lender_spec: dict[str, Any] = {
+            "kind": "non_bank_lender",
+            "actions": [
+                {"action": "lend", "phase": "B_Lending", "strategy": "linear_pricer"},
+            ],
+        }
+        if lender_params:
+            lender_spec["profile_type"] = "lender"
+            lender_spec["profile_params"] = lender_params
+        specs.append(lender_spec)
+
+    return specs
 
 
 def _draw_payables(

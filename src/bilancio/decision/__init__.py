@@ -4,7 +4,9 @@ Provides parameterized profiles for trader risk behavior and VBT pricing
 sensitivity, replacing hardcoded constants across the dealer subsystem.
 """
 
+from bilancio.decision.action_spec import ActionDef, ActionSpec, resolve_strategy
 from bilancio.decision.presets import AGGRESSIVE, BASELINE, CAUTIOUS
+from bilancio.decision.profile_factory import build_profile
 from bilancio.decision.profiles import RatingProfile, TraderProfile, VBTProfile
 from bilancio.decision.protocols import (
     CounterpartyScreener,
@@ -35,6 +37,8 @@ from bilancio.decision.valuers import (
 
 __all__ = [
     "AGGRESSIVE",
+    "ActionDef",
+    "ActionSpec",
     "BASELINE",
     "BuyIntention",
     "CAUTIOUS",
@@ -59,6 +63,8 @@ __all__ = [
     "TransactionPricer",
     "VBTPricingModel",
     "VBTProfile",
+    "build_profile",
     "collect_buy_intentions",
     "collect_sell_intentions",
+    "resolve_strategy",
 ]

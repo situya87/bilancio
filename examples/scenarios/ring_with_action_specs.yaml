@@ -1,0 +1,44 @@
+version: 1
+name: "Kalecki Ring — 5 agents with action_specs"
+description: "Demonstrates the declarative action_specs scenario format"
+
+agents:
+  - {id: CB, kind: central_bank, name: Central Bank}
+  - {id: H1, kind: household, name: Agent 1}
+  - {id: H2, kind: household, name: Agent 2}
+  - {id: H3, kind: household, name: Agent 3}
+  - {id: H4, kind: household, name: Agent 4}
+  - {id: H5, kind: household, name: Agent 5}
+
+action_specs:
+  - kind: household
+    profile_type: trader
+    profile_params:
+      risk_aversion: "0.5"
+      planning_horizon: 10
+      aggressiveness: "1.0"
+      buy_reserve_fraction: "0.5"
+      trading_motive: liquidity_then_earning
+    actions:
+      - {action: settle, phase: B2_Settlement}
+    information: omniscient
+
+initial_actions:
+  - {mint_cash: {to: H1, amount: 200}}
+  - {mint_cash: {to: H2, amount: 200}}
+  - {mint_cash: {to: H3, amount: 200}}
+  - {mint_cash: {to: H4, amount: 200}}
+  - {mint_cash: {to: H5, amount: 200}}
+  - {create_payable: {from: H1, to: H2, amount: 200, due_day: 3}}
+  - {create_payable: {from: H2, to: H3, amount: 200, due_day: 3}}
+  - {create_payable: {from: H3, to: H4, amount: 200, due_day: 3}}
+  - {create_payable: {from: H4, to: H5, amount: 200, due_day: 3}}
+  - {create_payable: {from: H5, to: H1, amount: 200, due_day: 3}}
+
+run:
+  mode: until_stable
+  max_days: 10
+  quiet_days: 2
+  show:
+    balances: [H1, H2, H3, H4, H5]
+    events: detailed

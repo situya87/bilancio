@@ -612,6 +612,19 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
             fx_market.add_rate(pair)
         system.state.fx_market = fx_market
 
+    # Initialize subsystems: new action_specs path or legacy config path
+    if config.action_specs:
+        apply_action_specs(config.action_specs, config, system)
+    else:
+        _apply_legacy_subsystem_configs(config, system)
+
+
+def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> None:
+    """Apply subsystem configurations from legacy config sections.
+
+    This is the original code path: dealer, lender, rating_agency sections.
+    Used when action_specs is absent from the scenario.
+    """
     # Initialize dealer subsystem if configured
     if config.dealer and config.dealer.enabled:
         from bilancio.dealer.models import BucketConfig
@@ -768,3 +781,255 @@ def apply_to_system(config: ScenarioConfig, system: System) -> None:
             rating_profile=rating_profile,
             information_profile=ra_info_profile,
         )
+
+
+def apply_action_specs(
+    specs: list,
+    config: ScenarioConfig,
+    system: System,
+) -> None:
+    """Apply behavioral action specs to the system.
+
+    This is the new code path that initializes subsystems based on
+    declarative action_specs rather than legacy config sections.
+
+    Args:
+        specs: List of ActionSpecConfig objects from the scenario.
+        config: Full scenario config (for run settings and fallback params).
+        system: System instance to configure.
+    """
+    from bilancio.decision.action_spec import ActionDef, ActionSpec
+    from bilancio.decision.profile_factory import build_profile
+
+    # 1. Convert Pydantic configs to domain dataclasses
+    domain_specs: list[ActionSpec] = []
+    for spec in specs:
+        action_defs = tuple(
+            ActionDef(
+                action=ad.action,
+                phase=ad.phase,
+                strategy=ad.strategy,
+                strategy_params=dict(ad.strategy_params),
+            )
+            for ad in spec.actions
+        )
+        domain_specs.append(ActionSpec(
+            kind=spec.kind,
+            actions=action_defs,
+            profile_type=spec.profile_type,
+            profile_params=dict(spec.profile_params),
+            information=spec.information,
+            information_overrides=dict(spec.information_overrides),
+            agent_ids=tuple(spec.agent_ids) if spec.agent_ids else None,
+        ))
+
+    # 2. Scan all specs to determine which phases are needed
+    needed_phases: set[str] = set()
+    for spec in domain_specs:
+        for action_def in spec.actions:
+            needed_phases.add(action_def.phase)
+
+    # 3. Build profiles from specs
+    trader_profile = None
+    vbt_profile = None
+    lender_profile = None
+    rating_profile = None
+
+    # Information presets
+    info_presets: dict[str, str] = {}  # kind -> information preset
+
+    for spec in domain_specs:
+        if spec.profile_type and spec.profile_params:
+            profile = build_profile(spec.profile_type, spec.profile_params)
+            if spec.profile_type == "trader":
+                trader_profile = profile
+            elif spec.profile_type == "vbt":
+                vbt_profile = profile
+            elif spec.profile_type == "lender":
+                lender_profile = profile
+            elif spec.profile_type == "rating":
+                rating_profile = profile
+        info_presets[spec.kind] = spec.information
+
+    # 4. Initialize subsystems based on needed phases
+
+    if "B_Dealer" in needed_phases:
+        _init_dealer_from_action_specs(
+            config, system, trader_profile, vbt_profile,
+        )
+
+    if "B_Lending" in needed_phases:
+        _init_lending_from_action_specs(
+            config, system, lender_profile, info_presets,
+        )
+
+    if "B_Rating" in needed_phases:
+        _init_rating_from_action_specs(
+            config, system, rating_profile, info_presets,
+        )
+
+    logger.info("action_specs applied: phases=%s", sorted(needed_phases))
+
+
+def _init_dealer_from_action_specs(
+    config: ScenarioConfig,
+    system: System,
+    trader_profile: Any | None,
+    vbt_profile: Any | None,
+) -> None:
+    """Initialize dealer subsystem from action spec profiles."""
+    from bilancio.decision.profiles import TraderProfile, VBTProfile
+    from bilancio.dealer.models import BucketConfig
+    from bilancio.dealer.risk_assessment import RiskAssessmentParams
+    from bilancio.dealer.simulation import DealerRingConfig
+    from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
+
+    if trader_profile is None:
+        trader_profile = TraderProfile()
+    if vbt_profile is None:
+        vbt_profile = VBTProfile()
+
+    # Use balanced_dealer config if present, otherwise construct defaults
+    bd = config.balanced_dealer
+    if bd and bd.enabled:
+        # Read risk_assessment from dealer config
+        risk_params = None
+        if config.dealer and config.dealer.risk_assessment and config.dealer.risk_assessment.enabled:
+            risk_params = RiskAssessmentParams(
+                lookback_window=config.dealer.risk_assessment.lookback_window,
+                smoothing_alpha=config.dealer.risk_assessment.smoothing_alpha,
+                base_risk_premium=config.dealer.risk_assessment.base_risk_premium,
+                urgency_sensitivity=config.dealer.risk_assessment.urgency_sensitivity,
+                use_issuer_specific=config.dealer.risk_assessment.use_issuer_specific,
+                buy_premium_multiplier=config.dealer.risk_assessment.buy_premium_multiplier,
+            )
+
+        # Build bucket configs from dealer config or defaults
+        bucket_configs = []
+        vbt_anchors = {}
+        if config.dealer and config.dealer.buckets:
+            for name, bc in config.dealer.buckets.items():
+                bucket_configs.append(
+                    BucketConfig(name=name, tau_min=bc.tau_min, tau_max=bc.tau_max or 999)
+                )
+                vbt_anchors[name] = (bc.M, bc.O)
+            bucket_configs.sort(key=lambda b: b.tau_min)
+        else:
+            from decimal import Decimal
+            bucket_configs = [
+                BucketConfig(name="short", tau_min=1, tau_max=3),
+                BucketConfig(name="mid", tau_min=4, tau_max=8),
+                BucketConfig(name="long", tau_min=9, tau_max=999),
+            ]
+            vbt_anchors = {
+                "short": (Decimal("1.0"), Decimal("0.20")),
+                "mid": (Decimal("1.0"), Decimal("0.30")),
+                "long": (Decimal("1.0"), Decimal("0.40")),
+            }
+
+        from decimal import Decimal
+        dealer_ring_config = DealerRingConfig(
+            ticket_size=config.dealer.ticket_size if config.dealer else Decimal("1"),
+            buckets=bucket_configs,
+            vbt_anchors=vbt_anchors,
+            dealer_share=config.dealer.dealer_share if config.dealer else Decimal("0.25"),
+            vbt_share=config.dealer.vbt_share if config.dealer else Decimal("0.50"),
+            seed=42,
+        )
+
+        system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
+            system,
+            dealer_ring_config,
+            face_value=bd.face_value,
+            outside_mid_ratio=bd.outside_mid_ratio,
+            vbt_share_per_bucket=bd.vbt_share_per_bucket,
+            dealer_share_per_bucket=bd.dealer_share_per_bucket,
+            mode=bd.mode,
+            current_day=0,
+            risk_params=risk_params,
+            alpha_vbt=bd.alpha_vbt,
+            alpha_trader=bd.alpha_trader,
+            kappa=bd.kappa,
+            trader_profile=trader_profile,
+            vbt_profile=vbt_profile,
+        )
+
+
+def _init_lending_from_action_specs(
+    config: ScenarioConfig,
+    system: System,
+    lender_profile: Any | None,
+    info_presets: dict[str, str],
+) -> None:
+    """Initialize lending subsystem from action spec profiles."""
+    from decimal import Decimal
+
+    from bilancio.domain.instruments.base import InstrumentKind
+    from bilancio.engines.lending import LendingConfig
+
+    # Build information profile based on preset
+    info_profile = None
+    lender_info = info_presets.get("non_bank_lender", "omniscient")
+    if lender_info == "realistic":
+        from bilancio.information.presets import LENDER_REALISTIC
+        info_profile = LENDER_REALISTIC
+
+    # Use lender config values if present, otherwise defaults
+    lc = config.lender
+    base_rate = lc.base_rate if lc else Decimal("0.05")
+    risk_premium_scale = lc.risk_premium_scale if lc else Decimal("0.20")
+    max_single_exposure = lc.max_single_exposure if lc else Decimal("0.15")
+    max_total_exposure = lc.max_total_exposure if lc else Decimal("0.80")
+    maturity_days = lc.maturity_days if lc else 2
+    horizon = lc.horizon if lc else 3
+
+    # Compute max_ring_maturity
+    max_ring_maturity: int | None = None
+    for contract in system.state.contracts.values():
+        if contract.kind == InstrumentKind.PAYABLE and contract.due_day is not None:
+            if max_ring_maturity is None or contract.due_day > max_ring_maturity:
+                max_ring_maturity = contract.due_day
+    for actions in system.state.scheduled_actions_by_day.values():
+        for action in actions:
+            cp = action.get("create_payable")
+            if isinstance(cp, dict):
+                dd = cp.get("due_day")
+                if isinstance(dd, int) and (max_ring_maturity is None or dd > max_ring_maturity):
+                    max_ring_maturity = dd
+
+    system.state.lender_config = LendingConfig(
+        base_rate=base_rate,
+        risk_premium_scale=risk_premium_scale,
+        max_single_exposure=max_single_exposure,
+        max_total_exposure=max_total_exposure,
+        maturity_days=maturity_days,
+        horizon=horizon,
+        information_profile=info_profile,
+        lender_profile=lender_profile,
+        max_ring_maturity=max_ring_maturity,
+    )
+
+
+def _init_rating_from_action_specs(
+    config: ScenarioConfig,
+    system: System,
+    rating_profile: Any | None,
+    info_presets: dict[str, str],
+) -> None:
+    """Initialize rating subsystem from action spec profiles."""
+    from bilancio.decision.profiles import RatingProfile
+    from bilancio.engines.rating import RatingConfig
+
+    if rating_profile is None:
+        rating_profile = RatingProfile()
+
+    ra_info_profile = None
+    ra_info = info_presets.get("rating_agency", "omniscient")
+    if ra_info == "realistic":
+        from bilancio.information.presets import RATING_AGENCY_REALISTIC
+        ra_info_profile = RATING_AGENCY_REALISTIC
+
+    system.state.rating_config = RatingConfig(
+        rating_profile=rating_profile,
+        information_profile=ra_info_profile,
+    )
