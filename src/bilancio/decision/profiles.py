@@ -19,8 +19,8 @@ class TraderProfile:
     planning_horizon: int = 10
     aggressiveness: Decimal = Decimal("1.0")
     default_observability: Decimal = Decimal("1.0")
-    buy_reserve_fraction: Decimal = Decimal("0.5")  # 0.5 balances buyer pool size vs prudence
-    trading_motive: str = "liquidity_then_earning"
+    buy_reserve_fraction: Decimal = Decimal("1.0")  # reserve 100% of upcoming dues before buying
+    trading_motive: str = "liquidity_only"
 
     def __post_init__(self) -> None:
         if not (1 <= self.planning_horizon <= 20):
@@ -54,8 +54,12 @@ class TraderProfile:
 
     @property
     def buy_horizon(self) -> int:
-        """Buyer look-ahead horizon = planning_horizon // 2."""
-        return max(1, self.planning_horizon // 2)
+        """Buyer look-ahead horizon = planning_horizon.
+
+        Uses the full planning horizon so the reserve calculation accounts
+        for ALL upcoming obligations, not just near-term ones.
+        """
+        return self.planning_horizon
 
     @property
     def surplus_threshold_factor(self) -> Decimal:

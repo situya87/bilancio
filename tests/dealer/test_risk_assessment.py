@@ -238,14 +238,16 @@ def test_should_buy_requires_higher_premium():
         serial=1,
     )
 
-    # EV ≈ 18.18
-    # For buying: need EV >= cost + 4% (2x base premium)
-    # So dealer must ask <= 18.18 - 0.80 = 17.38
+    # P_default ≈ 0.0909 (Laplace: (1+1)/(2+20)), EV ≈ 18.18
+    # Liquidity premium: cash=100, assets=50 → ratio=0.667,
+    # factor=max(0.75,0.333)=0.75, premium=0.0909*0.75≈0.068
+    # Total threshold ≈ 0.01 + 0.068 = 0.078 × 20 = 1.56
+    # Need ask*20 <= 18.18 - 1.56 = 16.62, ask <= 0.831
 
-    # Test 1: Ask of 0.85 (= 17.0 total) should be accepted
+    # Test 1: Ask of 0.80 (= 16.0 total) should be accepted
     should_accept = assessor.should_buy(
         ticket=ticket,
-        dealer_ask=Decimal("0.85"),
+        dealer_ask=Decimal("0.80"),
         current_day=20,
         trader_cash=Decimal(100),
         trader_shortfall=Decimal(0),

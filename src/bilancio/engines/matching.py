@@ -123,4 +123,5 @@ class DealerMatchingEngine:
                 current_day,
                 events,
                 dealer_budgets,
+                max_spend=intention.max_spend,
             )

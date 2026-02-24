@@ -368,14 +368,18 @@ class RiskAssessor:
         Decision rule:
         Accept if: expected_value >= dealer_cost + threshold
 
-        Buying typically requires higher threshold than selling (bid-ask asymmetry).
+        The threshold combines a base premium with a liquidity-adjusted component:
+        traders with more of their wealth in illiquid receivables demand a higher
+        premium to deploy scarce settlement cash.  The adjustment scales with the
+        issuer's estimated default probability, creating a natural feedback loop
+        (more defaults → higher threshold → fewer buys → less liquidity drain).
 
         Args:
             ticket: Ticket being considered for purchase
             dealer_ask: Dealer's ask price (unit price)
             current_day: Current simulation day
             trader_cash: Trader's current cash
-            trader_shortfall: Trader's shortfall (negative means surplus)
+            trader_shortfall: Trader's shortfall (positive means needs cash)
             trader_asset_value: Total expected value of trader's receivables
 
         Returns:
@@ -387,8 +391,31 @@ class RiskAssessor:
         # Dealer's cost
         dealer_cost = dealer_ask * ticket.face
 
-        # For buying, use higher threshold (bid-ask asymmetry)
+        # Base buy threshold from profile
         buy_threshold = self.params.buy_risk_premium
+
+        # Liquidity-adjusted threshold: deploying settlement cash into illiquid
+        # receivables carries an opportunity cost proportional to the issuer's
+        # default risk and the trader's own cash scarcity.
+        #
+        # The premium uses a blended default estimate (empirical + prior) / 2
+        # to prevent the threshold from dropping too fast when early settlements
+        # succeed.  This reflects model uncertainty: traders stay cautious
+        # until they have extensive evidence of system health.
+        #
+        # The minimum factor of 0.75 ensures even cash-rich traders demand at
+        # least 75% of blended-P as a liquidity premium.  Cash-scarce traders
+        # (low cash_ratio) demand more.
+        total_position = trader_cash + trader_asset_value
+        if total_position > 0 and trader_cash > 0:
+            cash_ratio = trader_cash / total_position
+            p_empirical = self.estimate_default_prob(ticket.issuer_id, current_day)
+            p_blended = (p_empirical + self.params.initial_prior) / 2
+            liquidity_factor = max(Decimal("0.75"), Decimal(1) - cash_ratio)
+            buy_threshold += p_blended * liquidity_factor
+        elif total_position <= 0:
+            return False  # Insolvent — do not buy
+
         threshold_absolute = buy_threshold * ticket.face
 
         # Accept if expected value exceeds cost by at least threshold

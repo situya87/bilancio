@@ -20,6 +20,7 @@ from bilancio.dealer.models import (
     VBTState,
 )
 from bilancio.dealer.trading import TradeExecutor
+from bilancio.decision.profiles import TraderProfile
 from bilancio.engines.dealer_integration import DealerSubsystem
 from bilancio.engines.dealer_trades import (
     _execute_buy_trade,
@@ -101,6 +102,7 @@ def _make_subsystem(
     vbt_cash: Decimal = Decimal(100),
     face_value: Decimal = Decimal(1),
     layoff_threshold: Decimal = Decimal("0.7"),
+    trader_profile: TraderProfile | None = None,
 ) -> DealerSubsystem:
     """Build a subsystem configured for bidirectional trading."""
     params = KernelParams(S=face_value)
@@ -122,6 +124,7 @@ def _make_subsystem(
         face_value=face_value,
         metrics=RunMetrics(),
         layoff_threshold=layoff_threshold,
+        **({"trader_profile": trader_profile} if trader_profile is not None else {}),
     )
 
     return subsystem
@@ -152,8 +155,13 @@ class TestBidirectionalTrading:
         assert events[0]["side"] == "sell"
 
     def test_buys_without_prior_sells(self):
-        """Buyers can execute independently — no cash neutrality constraint."""
-        subsystem = _make_subsystem(dealer_tickets=5, dealer_cash=Decimal(10))
+        """Buyers can execute independently — no cash neutrality constraint.
+
+        Uses unrestricted motive because this test validates buy execution
+        mechanics, not motive gating.
+        """
+        profile = TraderProfile(trading_motive="unrestricted", buy_reserve_fraction=Decimal("0.5"))
+        subsystem = _make_subsystem(dealer_tickets=5, dealer_cash=Decimal(10), trader_profile=profile)
 
         # Add a buyer with surplus
         buyer = TraderState(agent_id="buyer1", cash=Decimal(100))
@@ -166,8 +174,13 @@ class TestBidirectionalTrading:
         assert events[0]["side"] == "buy"
 
     def test_order_flow_both_directions(self):
-        """Interleaved order flow produces both buys and sells."""
-        subsystem = _make_subsystem(dealer_tickets=5, dealer_cash=Decimal(50))
+        """Interleaved order flow produces both buys and sells.
+
+        Uses unrestricted motive because this test validates bidirectional
+        order flow mechanics, not motive gating.
+        """
+        profile = TraderProfile(trading_motive="unrestricted", buy_reserve_fraction=Decimal("0.5"))
+        subsystem = _make_subsystem(dealer_tickets=5, dealer_cash=Decimal(50), trader_profile=profile)
 
         # Add sellers with shortfall
         for i in range(3):

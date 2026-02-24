@@ -186,14 +186,21 @@ class TestSurplusBuyer:
         self.strategy = SurplusBuyer()
 
     def test_buy_when_surplus(self) -> None:
-        """Trader with cash and no obligations should return a BuyIntention."""
+        """Trader with cash and no obligations should return a BuyIntention.
+
+        Uses unrestricted motive because this test validates surplus
+        calculation, not motive gating (liquidity_only is tested separately).
+        """
         trader = TraderState(
             agent_id="b1",
             cash=Decimal("200"),
             tickets_owned=[],
             obligations=[],
         )
-        profile = TraderProfile()  # defaults: buy_reserve_fraction=0.5, aggressiveness=1.0
+        profile = TraderProfile(
+            trading_motive="unrestricted",
+            buy_reserve_fraction=Decimal("0.5"),
+        )
         result = self.strategy.evaluate(
             trader_id="b1",
             trader=trader,
@@ -205,8 +212,8 @@ class TestSurplusBuyer:
         assert result is not None
         assert isinstance(result, BuyIntention)
         assert result.trader_id == "b1"
-        # No obligations -> reserved=0, surplus=200, max_spend=200
-        assert result.max_spend == Decimal("200")
+        # No obligations -> reserved=0, surplus=200, deployable=100 (half surplus)
+        assert result.max_spend == Decimal("100")
 
     def test_no_buy_when_insufficient_surplus(self) -> None:
         """Trader whose reserved amount exceeds cash should not buy."""
@@ -367,7 +374,11 @@ class TestCollectBuyIntentions:
     """Tests for the collect_buy_intentions collector function."""
 
     def test_collects_from_multiple_traders(self) -> None:
-        """Only traders with surplus cash should produce buy intentions."""
+        """Only traders with surplus cash should produce buy intentions.
+
+        Uses unrestricted motive because this test validates surplus-based
+        filtering, not motive gating (liquidity_only is tested separately).
+        """
         traders = {
             # Surplus trader -> should buy
             "b1": TraderState(
@@ -393,7 +404,11 @@ class TestCollectBuyIntentions:
                 ],
             ),
         }
-        sub = MockSubsystem(traders=traders)
+        profile = TraderProfile(
+            trading_motive="unrestricted",
+            buy_reserve_fraction=Decimal("0.5"),
+        )
+        sub = MockSubsystem(traders=traders, trader_profile=profile)
         intentions = collect_buy_intentions(sub, current_day=0)
         assert len(intentions) == 2
         ids = {bi.trader_id for bi in intentions}

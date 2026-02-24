@@ -120,7 +120,12 @@ class SurplusBuyer:
         threshold = face_value * profile.surplus_threshold_factor
 
         if surplus > threshold:
-            return BuyIntention(trader_id=trader_id, max_spend=surplus)
+            # Deploy only half the surplus; the rest is a prudence buffer for
+            # timing risk (obligations may come early), default risk (incoming
+            # payments may not arrive), and rollover risk (new obligations
+            # created when current ones mature).
+            deployable = surplus / 2
+            return BuyIntention(trader_id=trader_id, max_spend=deployable)
 
         return None
 
