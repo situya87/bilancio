@@ -288,16 +288,15 @@ class SweepAnalyzer:
         for i, (key, cell_records) in enumerate(sorted(
             self.cells.items(), key=lambda kv: kv[0].values
         )):
-            control_vals = self._extract_metric(cell_records, control_field)
-            treatment_vals = self._extract_metric(cell_records, treatment_field)
+            # Extract paired values: only include records where BOTH
+            # control and treatment fields are present and valid.
+            # This prevents mispairing when one arm has missing data.
+            control_vals, treatment_vals = self._extract_paired_metrics(
+                cell_records, control_field, treatment_field,
+            )
 
-            n = min(len(control_vals), len(treatment_vals))
-            if n < 2:
+            if len(control_vals) < 2:
                 continue
-
-            # Truncate to equal length (in case some replicates failed in one arm)
-            control_vals = control_vals[:n]
-            treatment_vals = treatment_vals[:n]
 
             cell_seed = seed + i * 3 if seed is not None else None
             stats = summarize_paired_cell(
@@ -390,6 +389,34 @@ class SweepAnalyzer:
                 except (TypeError, ValueError):
                     continue
         return values
+
+    def _extract_paired_metrics(
+        self,
+        records: list[dict],
+        control_field: str,
+        treatment_field: str,
+    ) -> tuple[list[float], list[float]]:
+        """Extract paired values, only including records where both fields are valid.
+
+        This prevents mispairing when some records have missing data in one
+        arm but not the other. Each (control, treatment) pair comes from the
+        same record, preserving seed alignment.
+        """
+        control_vals = []
+        treatment_vals = []
+        for r in records:
+            c_raw = r.get(control_field)
+            t_raw = r.get(treatment_field)
+            if c_raw is None or t_raw is None:
+                continue
+            try:
+                c_val = float(c_raw)
+                t_val = float(t_raw)
+            except (TypeError, ValueError):
+                continue
+            control_vals.append(c_val)
+            treatment_vals.append(t_val)
+        return control_vals, treatment_vals
 
     def _build_cell_means(self, metric: str) -> dict[CellKey, float]:
         """Compute mean of metric within each cell."""

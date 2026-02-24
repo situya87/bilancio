@@ -154,6 +154,32 @@ class TestPairedTTest:
         with pytest.raises(ValueError, match="2 pairs"):
             paired_t_test([1.0], [2.0])
 
+    def test_p_value_always_in_0_1(self):
+        """p-value must be in [0, 1] for all df values.
+
+        Regression test: the t-CDF diverged for moderate df when
+        _regularized_beta lacked the symmetry relation.
+        """
+        import random
+        rng = random.Random(42)
+        for n in range(2, 35):
+            control = [rng.gauss(0, 1) for _ in range(n)]
+            treatment = [rng.gauss(0.5, 1) for _ in range(n)]
+            result = paired_t_test(control, treatment)
+            assert 0.0 <= result.p_value <= 1.0, (
+                f"p={result.p_value} out of [0,1] for n={n} (df={n-1})"
+            )
+
+    def test_known_p_value_small_df(self):
+        """Verify t-CDF gives reasonable p-values for small degrees of freedom."""
+        # 4 pairs, small but real difference
+        control = [0.5, 0.6, 0.7, 0.8]
+        treatment = [0.45, 0.55, 0.65, 0.75]
+        result = paired_t_test(control, treatment)
+        assert 0.0 <= result.p_value <= 1.0
+        # Large t-stat (near-constant differences) -> very small p
+        assert result.p_value < 0.01
+
     def test_str_formatting(self):
         result = paired_t_test([10.0, 11.0, 12.0], [5.0, 6.0, 7.0])
         s = str(result)
@@ -577,3 +603,36 @@ class TestSweepAnalyzer:
         table = analyzer.cell_table(metric="delta", seed=42)
         assert len(table.rows) == 1
         assert table.rows[0].stats.n == 2  # 2 valid, 1 skipped
+
+    def test_treatment_effect_missing_arm_no_mispair(self):
+        """When some records lack one arm, pairs must still align by record.
+
+        Regression test: independent extraction + truncation was silently
+        mispairing control[i] with treatment[j] from different records.
+        """
+        # 5 records in one cell. Records 1 and 3 are missing treatment.
+        # Control values are all ~10. Treatment values are all ~5.
+        # If mispairing occurs, control[2]=10 would pair with treatment
+        # from a different record (still 5), hiding the bug numerically.
+        # So we use distinct values to detect misalignment.
+        records = [
+            {"kappa": 0.5, "seed": 0, "delta_passive": 10.0, "delta_active": 5.0},
+            {"kappa": 0.5, "seed": 1, "delta_passive": 20.0, "delta_active": None},  # missing
+            {"kappa": 0.5, "seed": 2, "delta_passive": 30.0, "delta_active": 15.0},
+            {"kappa": 0.5, "seed": 3, "delta_passive": 40.0, "delta_active": None},  # missing
+            {"kappa": 0.5, "seed": 4, "delta_passive": 50.0, "delta_active": 25.0},
+        ]
+        analyzer = SweepAnalyzer(records, param_fields=["kappa"])
+        effects = analyzer.treatment_effect_table(
+            metric="delta", control_suffix="_passive", treatment_suffix="_active",
+            seed=42,
+        )
+        assert len(effects.rows) == 1
+        row = effects.rows[0]
+        # Only 3 valid pairs (seeds 0, 2, 4). Differences: 5, 15, 25
+        assert row.stats.n_pairs == 3
+        assert row.stats.effect.estimate == pytest.approx(15.0)
+        # Control mean should be (10+30+50)/3 = 30, not (10+20+30)/3 = 20
+        assert row.stats.control.mean == pytest.approx(30.0)
+        # Treatment mean should be (5+15+25)/3 = 15
+        assert row.stats.treatment.mean == pytest.approx(15.0)

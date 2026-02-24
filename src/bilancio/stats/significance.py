@@ -130,7 +130,7 @@ def paired_t_test(
     else:
         t_stat = mean_d / se_d
         # Two-tailed p-value from t-distribution (df = n-1)
-        p_value = 2 * _t_cdf(-abs(t_stat), n - 1)
+        p_value = min(1.0, 2 * _t_cdf(-abs(t_stat), n - 1))
 
     return TestResult(
         test_name="Paired t-test",
@@ -181,25 +181,51 @@ def _t_cdf(t: float, df: int) -> float:
     # Regularized incomplete beta via continued fraction
     p = _regularized_beta(x, df / 2.0, 0.5)
     cdf = 1.0 - 0.5 * p if t >= 0 else 0.5 * p
-    return cdf
+    # Clamp to [0, 1] as a safety net against numerical drift
+    return max(0.0, min(1.0, cdf))
 
 
 def _regularized_beta(x: float, a: float, b: float) -> float:
-    """Regularized incomplete beta function I_x(a, b) via Lentz's method."""
+    """Regularized incomplete beta function I_x(a, b).
+
+    Uses Lentz's continued fraction with the symmetry relation
+    I_x(a,b) = 1 - I_{1-x}(b,a) for convergence.  If the primary
+    CF branch produces an out-of-range result, falls back to the
+    symmetric branch automatically.
+    """
     if x <= 0:
         return 0.0
     if x >= 1:
         return 1.0
 
-    # Use the continued fraction representation
-    # First compute the log of the prefix: x^a (1-x)^b / (a * B(a,b))
+    # Symmetry relation for convergence (Numerical Recipes, Press et al.):
+    # the CF converges well when x < (a+1)/(a+b+2).
+    if x > (a + 1.0) / (a + b + 2.0):
+        result = 1.0 - _betacf(1.0 - x, b, a)
+    else:
+        result = _betacf(x, a, b)
+
+    # If the primary branch didn't converge (result outside [0,1]),
+    # try the other branch as a fallback.
+    if not (0.0 <= result <= 1.0):
+        if x > (a + 1.0) / (a + b + 2.0):
+            result = _betacf(x, a, b)
+        else:
+            result = 1.0 - _betacf(1.0 - x, b, a)
+
+    return max(0.0, min(1.0, result))
+
+
+def _betacf(x: float, a: float, b: float) -> float:
+    """Evaluate I_x(a,b) via Lentz's continued fraction.
+
+    The CF converges well when x is small relative to a/(a+b).
+    May return values outside [0,1] if convergence is poor;
+    callers should validate the result.
+    """
     lbeta = math.lgamma(a) + math.lgamma(b) - math.lgamma(a + b)
     prefix = math.exp(a * math.log(x) + b * math.log(1 - x) - lbeta) / a
 
-    # Lentz's continued fraction
-    # B_x(a,b) = (x^a (1-x)^b / a) * 1/(1+ d1/(1+ d2/(1+ ...)))
-    # where d_{2m+1} = -(a+m)(a+b+m)x / ((a+2m)(a+2m+1))
-    #       d_{2m}   = m(b-m)x / ((a+2m-1)(a+2m))
     max_iter = 200
     eps = 1e-14
     tiny = 1e-30
