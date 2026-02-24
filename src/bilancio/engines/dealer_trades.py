@@ -343,11 +343,14 @@ def _check_buy_risk_assessment(
 
     assert result.ticket is not None
 
-    # Compute asset value (including the ticket we just bought)
+    # Compute asset value including the candidate ticket's EV so that
+    # cash_ratio reflects the post-trade portfolio (the ticket hasn't been
+    # added to tickets_owned yet at this point in the flow).
     asset_value = sum(
         (assessor.expected_value(t, current_day) for t in trader.tickets_owned),
         Decimal(0),
     )
+    asset_value += assessor.expected_value(result.ticket, current_day)
     # Check if trader would accept this buy
     if assessor.should_buy(
         ticket=result.ticket,
