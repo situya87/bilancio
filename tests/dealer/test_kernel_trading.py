@@ -1150,10 +1150,12 @@ class TestShouldBuy:
 
         t = _make_ticket(face=Decimal(10))
         # EV = 8.5 (no history, p_default=0.15)
-        # Low: need EV >= ask*10 + 0.05*10 = ask*10 + 0.5 => ask <= 0.80
-        # High: need EV >= ask*10 + 0.15*10 = ask*10 + 1.5 => ask <= 0.70
+        # Liquidity premium: cash=100, assets=50 → cash_ratio=0.667,
+        #   factor=max(0.75, 0.333)=0.75, premium=0.15*0.75=0.1125
+        # Low: total=0.05+0.1125=0.1625 → need ask*10 <= 8.5-1.625=6.875 → ask<=0.6875
+        # High: total=0.15+0.1125=0.2625 → need ask*10 <= 8.5-2.625=5.875 → ask<=0.5875
 
-        ask = Decimal("0.75")
+        ask = Decimal("0.60")
         buy_low = a_low.should_buy(
             ticket=t,
             dealer_ask=ask,
@@ -1173,27 +1175,40 @@ class TestShouldBuy:
         assert buy_low is True
         assert buy_high is False
 
-    def test_should_buy_ignores_urgency(self):
-        """should_buy uses buy_risk_premium, not urgency-adjusted."""
+    def test_should_buy_liquidity_premium(self):
+        """should_buy adds liquidity premium based on P_default and cash_ratio."""
         assessor = RiskAssessor(
             RiskAssessmentParams(
                 buy_risk_premium=Decimal("0.05"),
-                urgency_sensitivity=Decimal("0.50"),
             )
         )
         t = _make_ticket(face=Decimal(1))
-        # Buy threshold = buy_risk_premium = 0.05
-        # Not affected by urgency_sensitivity
-        # EV = 0.85 (p_default=0.15), need EV >= ask + 0.05 => ask <= 0.80
-        result = assessor.should_buy(
+        # EV = 0.85, p_default=0.15
+        # All-cash trader (assets=0): cash_ratio=1.0, factor=max(0.75, 0)=0.75,
+        # premium=0.15*0.75=0.1125, total=0.05+0.1125=0.1625
+        # Need ask <= 0.85 - 0.1625 = 0.6875
+        result_cash_rich = assessor.should_buy(
+            ticket=t,
+            dealer_ask=Decimal("0.60"),
+            current_day=1,
+            trader_cash=Decimal(100),
+            trader_shortfall=Decimal(0),
+            trader_asset_value=Decimal(0),
+        )
+        assert result_cash_rich is True  # 0.85 >= 0.60 + 0.1625 = 0.7625
+
+        # Asset-heavy trader (assets=400): cash_ratio=0.2, factor=max(0.75,0.8)=0.8,
+        # premium=0.15*0.8=0.12, total=0.05+0.12=0.17
+        # Need ask <= 0.85 - 0.17 = 0.68
+        result_asset_heavy = assessor.should_buy(
             ticket=t,
             dealer_ask=Decimal("0.70"),
             current_day=1,
             trader_cash=Decimal(100),
-            trader_shortfall=Decimal(90),  # high urgency, ignored
-            trader_asset_value=Decimal(0),
+            trader_shortfall=Decimal(0),
+            trader_asset_value=Decimal(400),
         )
-        assert result is True
+        assert result_asset_heavy is False  # 0.85 < 0.70 + 0.17 = 0.87
 
 
 class TestGetDiagnostics:

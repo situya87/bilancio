@@ -155,10 +155,11 @@ def _balanced_scenario_config(*, enabled=True, mode="active"):
 
 class TestApplyBalancedDealer:
     def test_balanced_dealer_uses_correct_vbt_anchors(self):
-        """With balanced_dealer.enabled=True: VBT anchor M = 1 - P_default_prior.
+        """With balanced_dealer.enabled=True: VBT anchor M = ρ × (1 - P_default_prior).
 
-        With no kappa, default prior=0.15: M = 1 - 0.15 = 0.85.
-        The VBT is credit-aware and discounts by estimated default probability.
+        With no kappa, default prior=0.15, ρ=0.75: M = 0.75 × 0.85 = 0.6375.
+        The VBT is credit-aware and discounts by estimated default probability,
+        scaled by the outside_mid_ratio (ρ).
         """
         data = _balanced_scenario_config(enabled=True, mode="active")
         config = ScenarioConfig(**data)
@@ -168,12 +169,13 @@ class TestApplyBalancedDealer:
         subsystem = system.state.dealer_subsystem
         assert subsystem is not None
 
-        # M = 1 - shared_prior = 1 - 0.15 = 0.85 (pure credit discount)
-        expected_M = Decimal(1) - Decimal("0.15")
+        # M = ρ × (1 - shared_prior) = 0.75 × 0.85 = 0.6375
+        rho = Decimal("0.75")
+        expected_M = rho * (Decimal(1) - Decimal("0.15"))
         for bucket_id, vbt in subsystem.vbts.items():
             assert vbt.M == expected_M, (
                 f"VBT bucket '{bucket_id}' M={vbt.M}, expected {expected_M} "
-                f"(1 - 0.15 credit-adjusted)"
+                f"(ρ × (1 - 0.15) credit-adjusted)"
             )
 
     def test_balanced_dealer_gives_inventory(self):

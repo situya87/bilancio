@@ -108,10 +108,11 @@ class CoverageRatioValuer:
 
 @dataclass(frozen=True)
 class CreditAdjustedVBTPricing:
-    """Default VBT pricing: M = 1 - P_default (pure credit discount).
+    """Default VBT pricing: M = ρ × (1 - P_default).
 
-    No arbitrary market haircut — the mid price is simply the survival
-    probability implied by the observed default rate.
+    The mid price is the survival probability scaled by outside_mid_ratio (ρ).
+    When ρ < 1, VBT prices tickets below fair value, creating a spread that
+    makes buy trades viable for traders who value tickets at full EV.
 
     When mid_sensitivity < 1, M is blended toward its initial value
     (computed from initial_prior), damping the response to observed defaults.
@@ -122,17 +123,18 @@ class CreditAdjustedVBTPricing:
 
     mid_sensitivity: Decimal = Decimal("1.0")
     spread_sensitivity: Decimal = Decimal("0.6")
+    outside_mid_ratio: Decimal = Decimal("1.0")
 
     def compute_mid(self, p_default: Decimal, initial_prior: Decimal) -> Decimal:
         """Compute credit-adjusted mid price.
 
         Formula: blend initial_M toward raw_M based on mid_sensitivity.
-        - raw_M = 1 - p_default
-        - initial_M = 1 - initial_prior
+        - raw_M = ρ × (1 - p_default)
+        - initial_M = ρ × (1 - initial_prior)
         - result = initial_M + mid_sensitivity × (raw_M - initial_M)
         """
-        raw_M = Decimal(1) - p_default
-        initial_M = Decimal(1) - initial_prior
+        raw_M = self.outside_mid_ratio * (Decimal(1) - p_default)
+        initial_M = self.outside_mid_ratio * (Decimal(1) - initial_prior)
         return initial_M + self.mid_sensitivity * (raw_M - initial_M)
 
     def compute_spread(self, base_spread: Decimal, p_default: Decimal) -> Decimal:

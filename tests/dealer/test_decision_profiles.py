@@ -33,7 +33,7 @@ class TestTraderProfileDefaults:
 
     def test_default_buy_horizon(self):
         tp = TraderProfile()
-        assert tp.buy_horizon == 5
+        assert tp.buy_horizon == 10  # same as planning_horizon (full obligation window)
 
     def test_default_surplus_threshold_factor(self):
         tp = TraderProfile()
@@ -68,17 +68,17 @@ class TestTraderProfileProperties:
         tp = TraderProfile(planning_horizon=15)
         assert tp.sell_horizon == 15
 
-    def test_buy_horizon_half_of_planning(self):
+    def test_buy_horizon_equals_planning(self):
         tp = TraderProfile(planning_horizon=14)
-        assert tp.buy_horizon == 7
+        assert tp.buy_horizon == 14  # full planning horizon
 
-    def test_buy_horizon_odd_planning(self):
+    def test_buy_horizon_equals_planning_odd(self):
         tp = TraderProfile(planning_horizon=15)
-        assert tp.buy_horizon == 7  # 15 // 2 = 7
+        assert tp.buy_horizon == 15  # full planning horizon
 
     def test_buy_horizon_minimum_one(self):
         tp = TraderProfile(planning_horizon=1)
-        assert tp.buy_horizon == 1  # max(1, 1//2) = max(1, 0) = 1
+        assert tp.buy_horizon == 1
 
     def test_aggressiveness_zero_conservative(self):
         tp = TraderProfile(aggressiveness=Decimal("0"))

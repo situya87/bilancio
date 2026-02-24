@@ -485,6 +485,7 @@ def _execute_buy_trade(
     current_day: int,
     events: list[dict[str, object]],
     dealer_budgets: dict[str, Decimal] | None = None,
+    max_spend: Decimal = Decimal("Inf"),
 ) -> Decimal:
     """Process a single buy trade attempt for a trader. Returns cash drained from ring."""
     trader = subsystem.traders[trader_id]
@@ -513,6 +514,10 @@ def _execute_buy_trade(
         pre_dealer_ask = dealer.ask
         pre_trader_cash = trader.cash
         pre_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
+
+        # Safety margin gate: don't let underwater agents buy
+        if pre_safety_margin < 0:
+            continue
 
         # Execute customer buy
         assert subsystem.executor is not None
@@ -553,12 +558,24 @@ def _execute_buy_trade(
                 recompute_dealer_state(dealer, vbt, subsystem.params)
                 continue  # Try next bucket
 
+            # Budget enforcement: trader must not spend more than declared surplus
+            if scaled_price > max_spend:
+                _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
+                recompute_dealer_state(dealer, vbt, subsystem.params)
+                continue  # Try next bucket (cheaper ticket might exist)
+
             # Update trader state
             trader.tickets_owned.append(result.ticket)
             trader.cash -= scaled_price
 
-            # Capture post-trade state
+            # Post-buy safety margin check: reverse if buy makes trader underwater
             post_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
+            if post_safety_margin < 0:
+                trader.cash += scaled_price
+                trader.tickets_owned.pop()
+                _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
+                recompute_dealer_state(dealer, vbt, subsystem.params)
+                continue  # Try next bucket
 
             # Record trade in metrics, ticket outcomes, and events
             _record_buy_trade(

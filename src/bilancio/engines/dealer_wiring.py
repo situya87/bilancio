@@ -393,8 +393,13 @@ def _initialize_balanced_market_makers(
         for k in BASE_SPREAD_BY_BUCKET:
             BASE_SPREAD_BY_BUCKET[k] = BASE_SPREAD_BY_BUCKET[k] * vbt_profile.spread_scale
 
-    # VBT mid = pure credit discount: M = 1 - P_prior
-    credit_adjusted_mid = Decimal(1) - shared_prior
+    # VBT mid = ρ × (1 - P_prior) via pricing model for consistency
+    if subsystem.vbt_pricing_model is not None:
+        credit_adjusted_mid = subsystem.vbt_pricing_model.compute_mid(
+            shared_prior, shared_prior
+        )
+    else:
+        credit_adjusted_mid = Decimal(1) - shared_prior
 
     for bucket_config in subsystem.bucket_configs:
         bucket_id = bucket_config.name
@@ -409,7 +414,7 @@ def _initialize_balanced_market_makers(
         vbt_cash = _get_agent_cash(system, f"vbt_{bucket_id}")
         dealer_cash = _get_agent_cash(system, f"dealer_{bucket_id}")
 
-        # M = 1 - P_prior (pure credit discount, no arbitrary haircut)
+        # M = ρ × (1 - P_prior) (credit discount with outside mid ratio)
         M = credit_adjusted_mid
 
         # Per-bucket spread: base_spread + spread_sensitivity × P_prior

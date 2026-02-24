@@ -724,7 +724,11 @@ class TestExecuteBuyTrade:
 
     def test_successful_buy_returns_positive_value(self):
         """Successful buy returns positive scaled_price."""
+        from bilancio.decision.profiles import TraderProfile
+
         subsystem = _make_subsystem(dealer_tickets=3, dealer_cash=Decimal(5))
+        # Use unrestricted motive so a buyer without matching obligations can buy
+        subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
         _add_trader(subsystem, "T1", cash=Decimal(100))
         events: list[dict] = []
 
@@ -840,7 +844,11 @@ class TestBuildEligible:
         assert "T1" not in sellers  # has shortfall but no tickets
 
     def test_eligible_buyers_with_surplus(self):
+        from bilancio.decision.profiles import TraderProfile
+
         subsystem = _make_subsystem(face_value=Decimal(1))
+        # Use unrestricted motive so buyers without obligations are eligible
+        subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
         _add_trader(subsystem, "T1", cash=Decimal(100))
 
         buyers = _build_eligible_buyers(subsystem, current_day=5)
@@ -936,11 +944,17 @@ class TestBuyReserveFraction:
         from bilancio.decision.profiles import TraderProfile
 
         subsystem = _make_subsystem(face_value=Decimal(1))
-        subsystem.trader_profile = TraderProfile(buy_reserve_fraction=Decimal("0.5"))
+        # Use liquidity_then_earning so the reserve fraction logic is exercised
+        # without the strict liquidity_only gate rejecting agents whose obligations
+        # are not strictly in the future.
+        subsystem.trader_profile = TraderProfile(
+            buy_reserve_fraction=Decimal("0.5"),
+            trading_motive="liquidity_then_earning",
+        )
 
         # Trader has 60 cash, 100 in upcoming dues
         # With fraction=0.5: reserved=50, surplus=10 > 0 -> eligible
-        obligation = _make_ticket(id="obl", face=Decimal(100), maturity_day=5)
+        obligation = _make_ticket(id="obl", face=Decimal(100), maturity_day=8)
         _add_trader(subsystem, "T1", cash=Decimal(60), obligations=[obligation])
 
         buyers = _build_eligible_buyers(subsystem, current_day=5)
@@ -951,11 +965,16 @@ class TestBuyReserveFraction:
         from bilancio.decision.profiles import TraderProfile
 
         subsystem = _make_subsystem(face_value=Decimal(1))
-        subsystem.trader_profile = TraderProfile(buy_reserve_fraction=Decimal("1.0"))
+        # Use liquidity_then_earning so the reserve fraction logic is actually
+        # exercised (not short-circuited by the liquidity_only gate).
+        subsystem.trader_profile = TraderProfile(
+            buy_reserve_fraction=Decimal("1.0"),
+            trading_motive="liquidity_then_earning",
+        )
 
         # Trader has 60 cash, 100 in upcoming dues
         # With fraction=1.0: reserved=100, surplus=-40 -> NOT eligible
-        obligation = _make_ticket(id="obl", face=Decimal(100), maturity_day=5)
+        obligation = _make_ticket(id="obl", face=Decimal(100), maturity_day=8)
         _add_trader(subsystem, "T1", cash=Decimal(60), obligations=[obligation])
 
         buyers = _build_eligible_buyers(subsystem, current_day=5)
@@ -966,11 +985,16 @@ class TestBuyReserveFraction:
         from bilancio.decision.profiles import TraderProfile
 
         subsystem = _make_subsystem(face_value=Decimal(1))
-        subsystem.trader_profile = TraderProfile(buy_reserve_fraction=Decimal("0"))
+        # Use liquidity_then_earning so the reserve fraction logic is exercised
+        # without the strict liquidity_only gate.
+        subsystem.trader_profile = TraderProfile(
+            buy_reserve_fraction=Decimal("0"),
+            trading_motive="liquidity_then_earning",
+        )
 
         # Trader has 1 cash, 1000 in upcoming dues
         # With fraction=0: reserved=0, surplus=1 > 0 -> eligible
-        obligation = _make_ticket(id="obl", face=Decimal(1000), maturity_day=5)
+        obligation = _make_ticket(id="obl", face=Decimal(1000), maturity_day=8)
         _add_trader(subsystem, "T1", cash=Decimal(1), obligations=[obligation])
 
         buyers = _build_eligible_buyers(subsystem, current_day=5)

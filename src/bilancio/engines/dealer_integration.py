@@ -190,6 +190,7 @@ class DealerSubsystem:
     vbt_pricing_model: VBTPricingModel | None = None
 
 
+
 def get_trader_assessor(subsystem: DealerSubsystem, trader_id: AgentId) -> RiskAssessor | None:
     """Return the per-trader assessor if available, else the shared one."""
     return subsystem.trader_assessors.get(trader_id, subsystem.risk_assessor)
@@ -479,6 +480,7 @@ def initialize_balanced_dealer_subsystem(
     subsystem.vbt_pricing_model = CreditAdjustedVBTPricing(
         mid_sensitivity=effective_vbt_profile.mid_sensitivity,
         spread_sensitivity=effective_vbt_profile.spread_sensitivity,
+        outside_mid_ratio=outside_mid_ratio,
     )
 
     # Initialize risk assessor if params provided
