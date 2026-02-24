@@ -695,6 +695,30 @@ def compile_ring_explorer_balanced(
     if emit_action_specs:
         scenario["action_specs"] = _build_action_specs(mode=mode)
 
+        # Emit dealer/balanced_dealer config for modes that need B_Dealer phase.
+        # Without these, apply_action_specs cannot initialize the dealer subsystem.
+        has_dealer = mode in ("active", "nbfi_dealer", "bank_dealer", "bank_dealer_nbfi")
+        has_passive = mode == "passive"
+        if has_dealer or has_passive:
+            scenario["dealer"] = {
+                "enabled": True,
+                "ticket_size": 1,
+                "dealer_share": float(dealer_share_per_bucket),
+                "vbt_share": float(vbt_share_per_bucket),
+            }
+            scenario["balanced_dealer"] = {
+                "enabled": True,
+                "face_value": str(face_value),
+                "outside_mid_ratio": str(outside_mid_ratio),
+                "vbt_share_per_bucket": str(vbt_share_per_bucket),
+                "dealer_share_per_bucket": str(dealer_share_per_bucket),
+                "mode": mode,
+                "rollover_enabled": rollover_enabled,
+                "spread_scale": str(spread_scale),
+            }
+            if kappa is not None:
+                scenario["balanced_dealer"]["kappa"] = str(kappa)
+
     if config.compile.emit_yaml:
         _emit_yaml(
             scenario,

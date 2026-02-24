@@ -7,7 +7,7 @@ sensitivity, replacing hardcoded constants across the dealer subsystem.
 from bilancio.decision.action_spec import ActionDef, ActionSpec, resolve_strategy
 from bilancio.decision.presets import AGGRESSIVE, BASELINE, CAUTIOUS
 from bilancio.decision.profile_factory import build_profile
-from bilancio.decision.profiles import RatingProfile, TraderProfile, VBTProfile
+from bilancio.decision.profiles import LenderProfile, RatingProfile, TraderProfile, VBTProfile
 from bilancio.decision.protocols import (
     CounterpartyScreener,
     FixedMaturitySelector,
@@ -50,6 +50,7 @@ __all__ = [
     "FixedPortfolioStrategy",
     "InstrumentSelector",
     "InstrumentValuer",
+    "LenderProfile",
     "LinearPricer",
     "LiquidityDrivenSeller",
     "PortfolioStrategy",

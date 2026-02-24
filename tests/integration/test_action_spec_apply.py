@@ -261,6 +261,7 @@ class TestRingCompilerActionSpecs:
         assert household["profile_params"]["risk_aversion"] == "0.5"
 
     def test_emit_action_specs_flag(self):
+        """emit_action_specs=True includes action_specs AND dealer config in output."""
         from bilancio.config.models import RingExplorerGeneratorConfig
         from bilancio.scenarios.ring.compiler import compile_ring_explorer_balanced
 
@@ -269,11 +270,78 @@ class TestRingCompilerActionSpecs:
             params={"n_agents": 5, "kappa": "1.0", "seed": 42, "Q_total": "1000"},
             compile={"emit_yaml": False},
         )
-        # Without flag
+        # Without flag — no action_specs
         scenario = compile_ring_explorer_balanced(config)
         assert "action_specs" not in scenario
 
-        # With flag
-        scenario = compile_ring_explorer_balanced(config, emit_action_specs=True)
+        # With flag — has action_specs AND dealer/balanced_dealer config
+        scenario = compile_ring_explorer_balanced(
+            config, emit_action_specs=True, mode="active",
+        )
         assert "action_specs" in scenario
         assert len(scenario["action_specs"]) >= 1
+        assert "dealer" in scenario, "emit_action_specs should also emit dealer config"
+        assert "balanced_dealer" in scenario, "emit_action_specs should also emit balanced_dealer config"
+        assert scenario["balanced_dealer"]["enabled"] is True
+
+    def test_emit_action_specs_dealer_subsystem_initialized(self):
+        """Compiled active ring with emit_action_specs=True initializes dealer_subsystem."""
+        from bilancio.config.models import RingExplorerGeneratorConfig, ScenarioConfig
+        from bilancio.config.apply import apply_to_system
+        from bilancio.engines.system import System
+        from bilancio.scenarios.ring.compiler import compile_ring_explorer_balanced
+
+        config = RingExplorerGeneratorConfig(
+            name_prefix="test",
+            params={"n_agents": 5, "kappa": "1.0", "seed": 42, "Q_total": "1000"},
+            compile={"emit_yaml": False},
+        )
+        scenario = compile_ring_explorer_balanced(
+            config, emit_action_specs=True, mode="active",
+        )
+        # Strip internal key that ScenarioConfig doesn't know about
+        scenario.pop("_balanced_config", None)
+        # ScenarioConfig rejects unknown keys from run section
+        scenario.get("run", {}).pop("enable_banking", None)
+        scenario.get("run", {}).pop("enable_bank_lending", None)
+
+        sc = ScenarioConfig(**scenario)
+        system = System()
+        apply_to_system(sc, system)
+
+        assert system.state.dealer_subsystem is not None, (
+            "dealer_subsystem should be initialized for active mode with action_specs"
+        )
+
+    def test_action_specs_dealer_without_balanced_dealer_raises(self):
+        """B_Dealer actions without balanced_dealer config raises ConfigurationError."""
+        from bilancio.core.errors import ConfigurationError
+
+        scenario = {
+            "version": 1,
+            "name": "Dealer No Config Test",
+            "agents": [
+                {"id": "CB", "kind": "central_bank", "name": "Central Bank"},
+                {"id": "H1", "kind": "household", "name": "Agent 1"},
+                {"id": "H2", "kind": "household", "name": "Agent 2"},
+            ],
+            "action_specs": [
+                {
+                    "kind": "household",
+                    "actions": [
+                        {"action": "settle", "phase": "B2_Settlement"},
+                        {"action": "sell_ticket", "phase": "B_Dealer"},
+                    ],
+                },
+            ],
+            "initial_actions": [
+                {"mint_cash": {"to": "H1", "amount": 500}},
+                {"mint_cash": {"to": "H2", "amount": 300}},
+                {"create_payable": {"from": "H1", "to": "H2", "amount": 200, "due_day": 3}},
+            ],
+            "run": {"mode": "until_stable", "max_days": 10},
+        }
+        config = ScenarioConfig(**scenario)
+        system = System()
+        with pytest.raises(ConfigurationError, match="B_Dealer"):
+            apply_to_system(config, system)

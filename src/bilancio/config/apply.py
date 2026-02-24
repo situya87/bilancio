@@ -889,70 +889,78 @@ def _init_dealer_from_action_specs(
     if vbt_profile is None:
         vbt_profile = VBTProfile()
 
-    # Use balanced_dealer config if present, otherwise construct defaults
+    # balanced_dealer config is required for dealer initialization —
+    # it carries topology parameters (face_value, outside_mid_ratio, etc.)
+    # that cannot be defaulted from action_specs alone.
     bd = config.balanced_dealer
-    if bd and bd.enabled:
-        # Read risk_assessment from dealer config
-        risk_params = None
-        if config.dealer and config.dealer.risk_assessment and config.dealer.risk_assessment.enabled:
-            risk_params = RiskAssessmentParams(
-                lookback_window=config.dealer.risk_assessment.lookback_window,
-                smoothing_alpha=config.dealer.risk_assessment.smoothing_alpha,
-                base_risk_premium=config.dealer.risk_assessment.base_risk_premium,
-                urgency_sensitivity=config.dealer.risk_assessment.urgency_sensitivity,
-                use_issuer_specific=config.dealer.risk_assessment.use_issuer_specific,
-                buy_premium_multiplier=config.dealer.risk_assessment.buy_premium_multiplier,
+    if not bd or not bd.enabled:
+        raise ConfigurationError(
+            "action_specs request B_Dealer phase but no balanced_dealer config is present. "
+            "Include a balanced_dealer section with enabled=true in the scenario, "
+            "or use the ring compiler with emit_action_specs=True which emits both."
+        )
+
+    # Read risk_assessment from dealer config
+    risk_params = None
+    if config.dealer and config.dealer.risk_assessment and config.dealer.risk_assessment.enabled:
+        risk_params = RiskAssessmentParams(
+            lookback_window=config.dealer.risk_assessment.lookback_window,
+            smoothing_alpha=config.dealer.risk_assessment.smoothing_alpha,
+            base_risk_premium=config.dealer.risk_assessment.base_risk_premium,
+            urgency_sensitivity=config.dealer.risk_assessment.urgency_sensitivity,
+            use_issuer_specific=config.dealer.risk_assessment.use_issuer_specific,
+            buy_premium_multiplier=config.dealer.risk_assessment.buy_premium_multiplier,
+        )
+
+    # Build bucket configs from dealer config or defaults
+    bucket_configs = []
+    vbt_anchors = {}
+    if config.dealer and config.dealer.buckets:
+        for name, bc in config.dealer.buckets.items():
+            bucket_configs.append(
+                BucketConfig(name=name, tau_min=bc.tau_min, tau_max=bc.tau_max or 999)
             )
-
-        # Build bucket configs from dealer config or defaults
-        bucket_configs = []
-        vbt_anchors = {}
-        if config.dealer and config.dealer.buckets:
-            for name, bc in config.dealer.buckets.items():
-                bucket_configs.append(
-                    BucketConfig(name=name, tau_min=bc.tau_min, tau_max=bc.tau_max or 999)
-                )
-                vbt_anchors[name] = (bc.M, bc.O)
-            bucket_configs.sort(key=lambda b: b.tau_min)
-        else:
-            from decimal import Decimal
-            bucket_configs = [
-                BucketConfig(name="short", tau_min=1, tau_max=3),
-                BucketConfig(name="mid", tau_min=4, tau_max=8),
-                BucketConfig(name="long", tau_min=9, tau_max=999),
-            ]
-            vbt_anchors = {
-                "short": (Decimal("1.0"), Decimal("0.20")),
-                "mid": (Decimal("1.0"), Decimal("0.30")),
-                "long": (Decimal("1.0"), Decimal("0.40")),
-            }
-
+            vbt_anchors[name] = (bc.M, bc.O)
+        bucket_configs.sort(key=lambda b: b.tau_min)
+    else:
         from decimal import Decimal
-        dealer_ring_config = DealerRingConfig(
-            ticket_size=config.dealer.ticket_size if config.dealer else Decimal("1"),
-            buckets=bucket_configs,
-            vbt_anchors=vbt_anchors,
-            dealer_share=config.dealer.dealer_share if config.dealer else Decimal("0.25"),
-            vbt_share=config.dealer.vbt_share if config.dealer else Decimal("0.50"),
-            seed=42,
-        )
+        bucket_configs = [
+            BucketConfig(name="short", tau_min=1, tau_max=3),
+            BucketConfig(name="mid", tau_min=4, tau_max=8),
+            BucketConfig(name="long", tau_min=9, tau_max=999),
+        ]
+        vbt_anchors = {
+            "short": (Decimal("1.0"), Decimal("0.20")),
+            "mid": (Decimal("1.0"), Decimal("0.30")),
+            "long": (Decimal("1.0"), Decimal("0.40")),
+        }
 
-        system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
-            system,
-            dealer_ring_config,
-            face_value=bd.face_value,
-            outside_mid_ratio=bd.outside_mid_ratio,
-            vbt_share_per_bucket=bd.vbt_share_per_bucket,
-            dealer_share_per_bucket=bd.dealer_share_per_bucket,
-            mode=bd.mode,
-            current_day=0,
-            risk_params=risk_params,
-            alpha_vbt=bd.alpha_vbt,
-            alpha_trader=bd.alpha_trader,
-            kappa=bd.kappa,
-            trader_profile=trader_profile,
-            vbt_profile=vbt_profile,
-        )
+    from decimal import Decimal
+    dealer_ring_config = DealerRingConfig(
+        ticket_size=config.dealer.ticket_size if config.dealer else Decimal("1"),
+        buckets=bucket_configs,
+        vbt_anchors=vbt_anchors,
+        dealer_share=config.dealer.dealer_share if config.dealer else Decimal("0.25"),
+        vbt_share=config.dealer.vbt_share if config.dealer else Decimal("0.50"),
+        seed=42,
+    )
+
+    system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
+        system,
+        dealer_ring_config,
+        face_value=bd.face_value,
+        outside_mid_ratio=bd.outside_mid_ratio,
+        vbt_share_per_bucket=bd.vbt_share_per_bucket,
+        dealer_share_per_bucket=bd.dealer_share_per_bucket,
+        mode=bd.mode,
+        current_day=0,
+        risk_params=risk_params,
+        alpha_vbt=bd.alpha_vbt,
+        alpha_trader=bd.alpha_trader,
+        kappa=bd.kappa,
+        trader_profile=trader_profile,
+        vbt_profile=vbt_profile,
+    )
 
 
 def _init_lending_from_action_specs(
