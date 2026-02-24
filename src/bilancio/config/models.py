@@ -915,6 +915,70 @@ class RatingAgencyScenarioConfig(BaseModel):
     )
 
 
+class ActionDefConfig(BaseModel):
+    """Configuration for a single action an agent kind can perform."""
+
+    action: str = Field(..., description="Action name: settle, sell_ticket, buy_ticket, borrow, lend, rate")
+    phase: str = Field(..., description="Phase name: B2_Settlement, B_Dealer, B_Lending, B_Rating")
+    strategy: str | None = Field(None, description="Strategy name, e.g. liquidity_driven_seller")
+    strategy_params: dict[str, Any] = Field(default_factory=dict, description="Strategy constructor params")
+
+    @field_validator("action")
+    @classmethod
+    def action_valid(cls, v: str) -> str:
+        valid = {"settle", "sell_ticket", "buy_ticket", "borrow", "lend", "rate"}
+        if v not in valid:
+            raise ValueError(f"action must be one of {sorted(valid)}, got '{v}'")
+        return v
+
+    @field_validator("phase")
+    @classmethod
+    def phase_valid(cls, v: str) -> str:
+        valid = {"B2_Settlement", "B_Dealer", "B_Lending", "B_Rating"}
+        if v not in valid:
+            raise ValueError(f"phase must be one of {sorted(valid)}, got '{v}'")
+        return v
+
+
+class ActionSpecConfig(BaseModel):
+    """Complete behavioral spec for one agent kind (or specific agents)."""
+
+    kind: str = Field(..., description="Agent kind: household, non_bank_lender, etc.")
+    actions: list[ActionDefConfig] = Field(..., description="Actions this agent kind can perform")
+    profile_type: str | None = Field(None, description="Profile type: trader, lender, vbt, rating")
+    profile_params: dict[str, Any] = Field(default_factory=dict, description="Profile constructor params")
+    information: str = Field("omniscient", description="Information preset: omniscient, realistic, blind")
+    information_overrides: dict[str, str] = Field(
+        default_factory=dict, description="Per-category information overrides"
+    )
+    agent_ids: list[str] | None = Field(None, description="Specific agent IDs (None = all of this kind)")
+
+    @field_validator("kind")
+    @classmethod
+    def kind_valid(cls, v: str) -> str:
+        valid = {"central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency"}
+        if v not in valid:
+            raise ValueError(f"kind must be one of {sorted(valid)}, got '{v}'")
+        return v
+
+    @field_validator("profile_type")
+    @classmethod
+    def profile_type_valid(cls, v: str | None) -> str | None:
+        if v is not None:
+            valid = {"trader", "vbt", "lender", "rating"}
+            if v not in valid:
+                raise ValueError(f"profile_type must be one of {sorted(valid)}, got '{v}'")
+        return v
+
+    @field_validator("information")
+    @classmethod
+    def information_valid(cls, v: str) -> str:
+        valid = {"omniscient", "realistic", "blind"}
+        if v not in valid:
+            raise ValueError(f"information must be one of {sorted(valid)}, got '{v}'")
+        return v
+
+
 class ScenarioConfig(BaseModel):
     """Complete scenario configuration."""
 
@@ -929,6 +993,9 @@ class ScenarioConfig(BaseModel):
     lender: LenderScenarioConfig | None = Field(None, description="Non-bank lender configuration")
     rating_agency: RatingAgencyScenarioConfig | None = Field(
         None, description="Rating agency configuration"
+    )
+    action_specs: list[ActionSpecConfig] | None = Field(
+        None, description="Declarative behavioral specs per agent kind (new format)"
     )
     jurisdictions: list[JurisdictionConfig] | None = Field(
         None, description="Jurisdiction definitions for multi-currency scenarios"
