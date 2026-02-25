@@ -577,6 +577,15 @@ class ActivityProfile(Protocol):
 # Composition
 # ---------------------------------------------------------------------------
 
+# Default mapping from simulation phase to activity types.
+# Used by ComposedProfile.for_phase() and AgentDecisionSpec.for_phase().
+PHASE_ACTIVITIES: dict[str, tuple[str, ...]] = {
+    "B_Rating": ("rating",),
+    "B_Lending": ("lending", "bank_lending"),
+    "B_Dealer": ("trading", "market_making", "outside_liquidity"),
+    "D_CB": ("central_banking", "treasury"),
+}
+
 
 @dataclass(frozen=True)
 class ComposedProfile:
@@ -605,17 +614,109 @@ class ComposedProfile:
         the phase's expected activity.  The mapping from activity_type
         to phase is defined by the simulation's phase structure.
         """
-        # Phase-to-activity mapping.  This is a default; scenarios can
-        # override.  Keys are phase identifiers used by the simulation
-        # engine; values are activity_type strings.
-        phase_activities: dict[str, tuple[str, ...]] = {
-            "B_Rating": ("rating",),
-            "B_Lending": ("lending", "bank_lending"),
-            "B_Dealer": ("trading", "market_making", "outside_liquidity"),
-            "D_CB": ("central_banking", "treasury"),
-        }
-        expected = phase_activities.get(phase, ())
+        expected = PHASE_ACTIVITIES.get(phase, ())
         return [p for p in self.activities if p.activity_type in expected]
+
+
+@dataclass(frozen=True)
+class AgentDecisionSpec:
+    """Full decision specification for an agent.
+
+    Combines activity profiles with information access configuration
+    to provide a complete, composable decision-making specification.
+
+    This is the primary unit for describing how an agent makes decisions.
+    The ``run_phase()`` method executes the full four-step pipeline
+    (observe -> value -> assess -> choose) for all activity profiles
+    that match the given phase, using a shared ``CashFlowPosition``.
+
+    Attributes:
+        agent_id: The agent this spec belongs to.
+        activities: Ordered tuple of activity profiles.  Order determines
+            priority when resources compete (earlier = higher priority).
+        information_profile_name: Name of the information profile preset
+            to use when creating an InformationService for this agent.
+            When None, defaults to OMNISCIENT (backward compatible).
+
+    Usage::
+
+        spec = AgentDecisionSpec(
+            agent_id="bank_1",
+            activities=(
+                BankLendingActivity(credit_risk_loading=Decimal("0.03")),
+                BankTreasuryActivity(reserve_target_ratio=Decimal("0.15")),
+            ),
+        )
+        position = build_cash_flow_position(...)
+        actions = spec.run_phase("B_Lending", info_service, position, action_set)
+    """
+
+    agent_id: str
+    activities: tuple[ActivityProfile, ...] = ()
+    information_profile_name: str | None = None
+
+    def for_phase(self, phase: str) -> list[ActivityProfile]:
+        """Return activity profiles that activate in the given phase.
+
+        Uses the same phase-to-activity mapping as ComposedProfile.
+        """
+        expected = PHASE_ACTIVITIES.get(phase, ())
+        return [p for p in self.activities if p.activity_type in expected]
+
+    def run_phase(
+        self,
+        phase: str,
+        info: "InformationService",
+        position: CashFlowPosition,
+        action_set: ActionSet,
+    ) -> list[Action]:
+        """Run the full decision pipeline for all matching profiles.
+
+        For each activity profile that matches the phase:
+        1. observe -- gather information through the InformationService
+        2. value -- apply valuation heuristics
+        3. assess -- evaluate risk given position
+        4. choose -- select an action from the action set
+
+        All profiles share the same CashFlowPosition (the agent's
+        factual state), ensuring consistent decision-making across
+        activities.
+
+        Args:
+            phase: Simulation phase identifier (e.g., "B_Lending", "B_Dealer").
+            info: InformationService configured for this agent.
+            position: The agent's cash flow position (shared across profiles).
+            action_set: Available actions for this phase.
+
+        Returns:
+            List of actions chosen by matching profiles.  May be empty
+            if no profiles match or all choose to hold/pass.
+        """
+        actions: list[Action] = []
+        for profile in self.for_phase(phase):
+            observed = profile.observe(info, position)
+            valuations = profile.value(observed)
+            risk_view = profile.assess(valuations, position)
+            action = profile.choose(risk_view, action_set)
+            if action is not None:
+                actions.append(action)
+        return actions
+
+    @property
+    def activity_types(self) -> tuple[str, ...]:
+        """All activity types in this spec, in priority order."""
+        return tuple(p.activity_type for p in self.activities)
+
+    def has_activity(self, activity_type: str) -> bool:
+        """Check whether this spec includes a given activity type."""
+        return activity_type in self.activity_types
+
+    def get_activity(self, activity_type: str) -> ActivityProfile | None:
+        """Get the first activity profile matching the given type."""
+        for p in self.activities:
+            if p.activity_type == activity_type:
+                return p
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -704,10 +805,12 @@ __all__ = [
     "ACTION_SET_ANCHORS",
     "ACTION_SET_CORRIDOR",
     "ACTION_BACKSTOP_LEND",
+    "ACTION_PUBLISH_RATINGS",
     # Protocol
     "ActivityProfile",
     # Composition
     "ComposedProfile",
+    "AgentDecisionSpec",
     # Helpers
     "build_cash_flow_position_from_trader",
 ]
