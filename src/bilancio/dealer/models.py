@@ -9,10 +9,16 @@ This module defines the core data structures used in the dealer ring model:
 - TraderState: Ring trader state with single-issuer constraint
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from bilancio.core.ids import AgentId
+
+if TYPE_CHECKING:
+    from bilancio.decision.profiles import TraderProfile
 
 # Type alias for ticket identifiers
 TicketId = str
@@ -271,6 +277,8 @@ class TraderState:
         obligations: List of tickets this agent issued (liabilities)
         asset_issuer_id: Issuer assigned via ring topology (payables / rollover only)
         defaulted: True if agent has defaulted
+        profile: Per-agent TraderProfile override.  When ``None``, callers
+            fall back to ``DealerSubsystem.trader_profile``.
     """
 
     agent_id: AgentId
@@ -279,6 +287,7 @@ class TraderState:
     obligations: list[Ticket] = field(default_factory=list)
     asset_issuer_id: AgentId | None = None
     defaulted: bool = False
+    profile: TraderProfile | None = None
 
     def payment_due(self, day: int) -> Decimal:
         """

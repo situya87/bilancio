@@ -238,6 +238,7 @@ def _initialize_traders(
             tickets_owned=[],
             obligations=[],
             asset_issuer_id=None,
+            profile=subsystem.trader_profile,
         )
 
         # Link trader to their tickets

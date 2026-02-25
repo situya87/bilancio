@@ -75,7 +75,7 @@ def _check_sell_risk_assessment(
         current_day=current_day,
         trader_cash=trader.cash,
         trader_shortfall=trader.upcoming_shortfall(
-            current_day, subsystem.trader_profile.sell_horizon
+            current_day, (trader.profile or subsystem.trader_profile).sell_horizon
         ),
         trader_asset_value=asset_value,
     ):
@@ -223,8 +223,9 @@ def _execute_sell_trade(
     pre_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
 
     # Check if liquidity-driven (Section 8.3)
+    sell_profile = trader.profile or subsystem.trader_profile
     is_liquidity_driven = (
-        trader.upcoming_shortfall(current_day, subsystem.trader_profile.sell_horizon) > 0
+        trader.upcoming_shortfall(current_day, sell_profile.sell_horizon) > 0
     )
 
     # Risk assessment check (Plan 032)
@@ -494,7 +495,8 @@ def _execute_buy_trade(
     trader = subsystem.traders[trader_id]
 
     # Bucket ordering depends on trading motive
-    motive = subsystem.trader_profile.trading_motive
+    buy_profile = trader.profile or subsystem.trader_profile
+    motive = buy_profile.trading_motive
     if motive in ("liquidity_only", "liquidity_then_earning"):
         # Sort by tau_min ascending (short bucket first) — prefer tickets maturing soonest
         tau_min_by_name = {bc.name: bc.tau_min for bc in subsystem.bucket_configs}
