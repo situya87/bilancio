@@ -77,6 +77,38 @@ class TradingActivity:
     def instrument_class(self) -> str | None:
         return "payable"
 
+    # Derived properties (mirror TraderProfile)
+
+    @property
+    def base_risk_premium(self) -> Decimal:
+        """Seller premium: always 0 (selling converts uncertainty to certainty)."""
+        return Decimal("0")
+
+    @property
+    def buy_risk_premium(self) -> Decimal:
+        """Buyer premium: 0.01 + 0.02 * risk_aversion."""
+        return Decimal("0.01") + Decimal("0.02") * self.risk_aversion
+
+    @property
+    def buy_premium_multiplier(self) -> Decimal:
+        """Risk-averse traders demand higher buy premium: 1.0 + risk_aversion."""
+        return Decimal("1.0") + self.risk_aversion
+
+    @property
+    def sell_horizon(self) -> int:
+        """Seller look-ahead horizon = planning_horizon."""
+        return self.planning_horizon
+
+    @property
+    def buy_horizon(self) -> int:
+        """Buyer look-ahead horizon = planning_horizon."""
+        return self.planning_horizon
+
+    @property
+    def surplus_threshold_factor(self) -> Decimal:
+        """Factor for buyer surplus threshold: 1 - aggressiveness."""
+        return Decimal("1") - self.aggressiveness
+
     @classmethod
     def from_trader_profile(cls, profile: TraderProfile) -> TradingActivity:
         """Create from an existing TraderProfile."""
@@ -498,11 +530,11 @@ class RatingActivity:
         risk_view: RiskView,
         action_set: ActionSet,
     ) -> Action | None:
-        """Rating agency always publishes ratings when asked."""
+        """Rating agency publishes ratings when asked."""
         for template in action_set.available:
-            if template.action_type == "set_quotes":
+            if template.action_type == "publish_ratings":
                 return Action(
-                    action_type="set_quotes",
+                    action_type="publish_ratings",
                     params={
                         "lookback_window": self.lookback_window,
                         "balance_sheet_weight": self.balance_sheet_weight,

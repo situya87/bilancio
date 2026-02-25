@@ -363,6 +363,7 @@ ACTION_BORROW = "borrow"
 ACTION_SET_ANCHORS = "set_anchors"
 ACTION_SET_CORRIDOR = "set_corridor"
 ACTION_BACKSTOP_LEND = "backstop_lend"
+ACTION_PUBLISH_RATINGS = "publish_ratings"
 
 
 @dataclass
