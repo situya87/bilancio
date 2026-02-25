@@ -1,10 +1,36 @@
-"""Decision module: trader and VBT behavioral profiles.
+"""Decision module: behavioral profiles and the decision pipeline.
 
-Provides parameterized profiles for trader risk behavior and VBT pricing
-sensitivity, replacing hardcoded constants across the dealer subsystem.
+Provides the ``ActivityProfile`` protocol (the universal four-step decision
+pipeline), supporting types (``CashFlowPosition``, ``ObservedState``,
+``Valuations``, ``RiskView``, ``Action``, ``ActionSet``), and parameterized
+profiles for trader risk behavior, VBT pricing, and other agent activities.
 """
 
 from bilancio.decision.action_spec import ActionDef, ActionSpec, resolve_strategy
+from bilancio.decision.activity import (
+    ACTION_BACKSTOP_LEND,
+    ACTION_BORROW,
+    ACTION_BUY,
+    ACTION_EXTEND_LOAN,
+    ACTION_HOLD,
+    ACTION_REFUSE_LOAN,
+    ACTION_SELL,
+    ACTION_SET_ANCHORS,
+    ACTION_SET_CORRIDOR,
+    ACTION_SET_QUOTES,
+    Action,
+    ActionSet,
+    ActionTemplate,
+    ActivityProfile,
+    CashFlowEntry,
+    CashFlowPosition,
+    ComposedProfile,
+    MarketQuote,
+    ObservedState,
+    RiskView,
+    Valuations,
+    build_cash_flow_position_from_trader,
+)
 from bilancio.decision.presets import AGGRESSIVE, BASELINE, CAUTIOUS
 from bilancio.decision.profile_factory import build_profile
 from bilancio.decision.profiles import LenderProfile, RatingProfile, TraderProfile, VBTProfile
@@ -36,36 +62,67 @@ from bilancio.decision.valuers import (
 )
 
 __all__ = [
-    "AGGRESSIVE",
+    # Activity pipeline (Plan 036)
+    "ACTION_BACKSTOP_LEND",
+    "ACTION_BORROW",
+    "ACTION_BUY",
+    "ACTION_EXTEND_LOAN",
+    "ACTION_HOLD",
+    "ACTION_REFUSE_LOAN",
+    "ACTION_SELL",
+    "ACTION_SET_ANCHORS",
+    "ACTION_SET_CORRIDOR",
+    "ACTION_SET_QUOTES",
+    "Action",
+    "ActionSet",
+    "ActionTemplate",
+    "ActivityProfile",
+    "CashFlowEntry",
+    "CashFlowPosition",
+    "ComposedProfile",
+    "MarketQuote",
+    "ObservedState",
+    "RiskView",
+    "Valuations",
+    "build_cash_flow_position_from_trader",
+    # Action specs
     "ActionDef",
     "ActionSpec",
+    # Presets
+    "AGGRESSIVE",
     "BASELINE",
-    "BuyIntention",
     "CAUTIOUS",
+    # Intentions
+    "BuyIntention",
+    "LiquidityDrivenSeller",
+    "SellIntention",
+    "SurplusBuyer",
+    "collect_buy_intentions",
+    "collect_sell_intentions",
+    # Protocols (Plan 033)
     "CounterpartyScreener",
-    "CoverageRatioValuer",
-    "CreditAdjustedVBTPricing",
-    "EVHoldValuer",
     "FixedMaturitySelector",
     "FixedPortfolioStrategy",
     "InstrumentSelector",
     "InstrumentValuer",
-    "LenderProfile",
     "LinearPricer",
-    "LiquidityDrivenSeller",
     "PortfolioStrategy",
-    "RatingProfile",
-    "RiskAssessmentParams",
-    "RiskAssessor",
-    "SellIntention",
-    "SurplusBuyer",
     "ThresholdScreener",
-    "TraderProfile",
     "TransactionPricer",
     "VBTPricingModel",
+    # Valuers
+    "CoverageRatioValuer",
+    "CreditAdjustedVBTPricing",
+    "EVHoldValuer",
+    # Profiles
+    "LenderProfile",
+    "RatingProfile",
+    "TraderProfile",
     "VBTProfile",
+    # Risk assessment
+    "RiskAssessmentParams",
+    "RiskAssessor",
+    # Factories
     "build_profile",
-    "collect_buy_intentions",
-    "collect_sell_intentions",
     "resolve_strategy",
 ]
