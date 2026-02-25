@@ -528,6 +528,31 @@ class _MockDealerProfile:
         )
 
 
+@dataclass(frozen=True)
+class _MockBankLendingProfile:
+    """Minimal bank-lending ActivityProfile for testing phase dispatch."""
+
+    @property
+    def activity_type(self) -> str:
+        return "bank_lending"
+
+    @property
+    def instrument_class(self) -> str | None:
+        return "loan"
+
+    def observe(self, info, position):
+        return ObservedState(position=position)
+
+    def value(self, observed):
+        return Valuations(method="credit_model")
+
+    def assess(self, valuations, position):
+        return RiskView(position=position, valuations=valuations)
+
+    def choose(self, risk_view, action_set):
+        return Action(action_type=ACTION_EXTEND_LOAN)
+
+
 class TestActivityProfileProtocol:
     def test_isinstance_check(self):
         """Mock profiles must satisfy the runtime-checkable ActivityProfile protocol."""
@@ -608,6 +633,15 @@ class TestComposedProfile:
         # Lending phase should return nothing (no lending profile)
         lending_phase = composed.for_phase("B_Lending")
         assert len(lending_phase) == 0
+
+    def test_for_phase_bank_lending_under_B_Lending(self):
+        """bank_lending activity must be dispatched under canonical B_Lending phase."""
+        bank_lender = _MockBankLendingProfile()
+        composed = ComposedProfile(activities=(bank_lender,))
+
+        lending_phase = composed.for_phase("B_Lending")
+        assert len(lending_phase) == 1
+        assert bank_lender in lending_phase
 
     def test_for_phase_unknown(self):
         trading = _MockTradingProfile()

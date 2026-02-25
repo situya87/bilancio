@@ -609,8 +609,7 @@ class ComposedProfile:
         # engine; values are activity_type strings.
         phase_activities: dict[str, tuple[str, ...]] = {
             "B_Rating": ("rating",),
-            "B_Lending": ("lending",),
-            "B_BankLending": ("bank_lending", "lending"),
+            "B_Lending": ("lending", "bank_lending"),
             "B_Dealer": ("trading", "market_making", "outside_liquidity"),
             "D_CB": ("central_banking", "treasury"),
         }
