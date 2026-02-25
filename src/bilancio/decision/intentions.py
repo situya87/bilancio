@@ -144,6 +144,9 @@ def collect_sell_intentions(
 ) -> list[SellIntention]:
     """Walk the trader population and collect sell intentions.
 
+    Uses per-trader profiles when available, falling back to the subsystem
+    default ``trader_profile``.
+
     Parameters
     ----------
     subsystem:
@@ -151,20 +154,23 @@ def collect_sell_intentions(
     current_day:
         Simulation day to evaluate against.
     horizon:
-        Look-ahead window in days.  Defaults to
-        ``subsystem.trader_profile.sell_horizon``.
+        Look-ahead window in days.  When ``None``, each trader's own
+        profile (or the subsystem default) supplies the sell horizon.
     strategy:
         Decision strategy instance.  Defaults to
         ``LiquidityDrivenSeller()``.
     """
     if strategy is None:
         strategy = LiquidityDrivenSeller()
-    if horizon is None:
-        horizon = subsystem.trader_profile.sell_horizon
 
     intentions: list[SellIntention] = []
     for trader_id, trader in subsystem.traders.items():
-        intention = strategy.evaluate(trader_id, trader, current_day, horizon)
+        # Per-agent horizon: use trader's own profile if available
+        trader_horizon = horizon
+        if trader_horizon is None:
+            trader_profile = getattr(trader, 'profile', None) or subsystem.trader_profile
+            trader_horizon = trader_profile.sell_horizon
+        intention = strategy.evaluate(trader_id, trader, current_day, trader_horizon)
         if intention is not None:
             intentions.append(intention)
     return intentions
@@ -179,6 +185,9 @@ def collect_buy_intentions(
 ) -> list[BuyIntention]:
     """Walk the trader population and collect buy intentions.
 
+    Uses per-trader profiles when available, falling back to the subsystem
+    default ``trader_profile``.
+
     Parameters
     ----------
     subsystem:
@@ -187,24 +196,25 @@ def collect_buy_intentions(
     current_day:
         Simulation day to evaluate against.
     horizon:
-        Look-ahead window in days.  Defaults to
-        ``subsystem.trader_profile.buy_horizon``.
+        Look-ahead window in days.  When ``None``, each trader's own
+        profile (or the subsystem default) supplies the buy horizon.
     strategy:
         Decision strategy instance.  Defaults to ``SurplusBuyer()``.
     """
     if strategy is None:
         strategy = SurplusBuyer()
-    if horizon is None:
-        horizon = subsystem.trader_profile.buy_horizon
 
     intentions: list[BuyIntention] = []
     for trader_id, trader in subsystem.traders.items():
+        # Per-agent profile: use trader's own profile if available
+        trader_profile = getattr(trader, 'profile', None) or subsystem.trader_profile
+        trader_horizon = horizon if horizon is not None else trader_profile.buy_horizon
         intention = strategy.evaluate(
             trader_id,
             trader,
             current_day,
-            horizon,
-            subsystem.trader_profile,
+            trader_horizon,
+            trader_profile,
             subsystem.face_value,
         )
         if intention is not None:
