@@ -198,7 +198,6 @@ class TradeExecutor:
             # VBT absorbs the ticket
             vbt.inventory.append(ticket)
             vbt.cash -= execution_price
-            vbt.cumulative_inflow += ticket.face
 
             # Transfer ownership to VBT
             ticket.owner_id = vbt.agent_id
@@ -341,7 +340,6 @@ class TradeExecutor:
             # VBT provides the ticket
             vbt.inventory.remove(ticket)
             vbt.cash += execution_price
-            vbt.cumulative_outflow += ticket.face
 
             # Transfer ownership to buyer
             ticket.owner_id = buyer_id

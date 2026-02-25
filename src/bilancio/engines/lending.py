@@ -209,11 +209,14 @@ def run_lending_phase(
                 p_bayesian = config.risk_assessor.estimate_default_prob(
                     agent_id, current_day
                 )
-                # Count issuer-specific observations for blending weight
-                issuer_hist = config.risk_assessor.belief_tracker.issuer_history.get(
-                    agent_id, []
-                )
-                n = len(issuer_hist)
+                # Count observations within the same lookback window used by the
+                # posterior (estimate_default_prob).  Using lifetime history would
+                # lock w_bayes=1 after enough old observations, permanently
+                # suppressing the coverage component even when recent data is stale.
+                tracker = config.risk_assessor.belief_tracker
+                window_start = current_day - tracker.lookback_window
+                issuer_hist = tracker.issuer_history.get(agent_id, [])
+                n = sum(1 for day, _ in issuer_hist if day >= window_start)
                 w_bayes = min(
                     Decimal("1"),
                     Decimal(str(n)) / Decimal(str(profile.warmup_observations)),

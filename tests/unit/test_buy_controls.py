@@ -108,10 +108,15 @@ def _make_trade_gate(
 
 
 class TestVBTFlowTracking:
-    """Test that VBT cumulative flow counters update correctly."""
+    """Test that VBT cumulative flow counters update correctly.
 
-    def test_vbt_outflow_tracking_increments(self):
-        """VBT outflow increments when customer buys via passthrough."""
+    Flow counters are incremented in the dealer_trades layer (after all
+    rejection gates), NOT in the low-level TradeExecutor.  This prevents
+    rejected trades from inflating net_outflow and widening future asks.
+    """
+
+    def test_vbt_outflow_not_incremented_by_executor(self):
+        """TradeExecutor does NOT increment outflow — that happens after acceptance."""
         face = Decimal("20")
         tickets = [_make_ticket(f"TKT_{i}", serial=i, face=face) for i in range(5)]
         vbt = _make_vbt(inventory=tickets, cash=Decimal("500"))
@@ -121,24 +126,17 @@ class TestVBTFlowTracking:
         recompute_dealer_state(dealer, vbt, params)
         executor = TradeExecutor(params)
 
-        # Dealer has no inventory -> passthrough buy to VBT
+        # Passthrough buy — executor runs but does NOT update counter
         result = executor.execute_customer_buy(
             dealer, vbt, buyer_id="buyer_1", check_assertions=False
         )
         assert result.executed
         assert result.is_passthrough
-        assert vbt.cumulative_outflow == face
-        assert vbt.cumulative_inflow == Decimal(0)
+        # Counter stays at zero — caller is responsible for incrementing
+        assert vbt.cumulative_outflow == Decimal(0)
 
-        # Second buy
-        result2 = executor.execute_customer_buy(
-            dealer, vbt, buyer_id="buyer_2", check_assertions=False
-        )
-        assert result2.executed
-        assert vbt.cumulative_outflow == face * 2
-
-    def test_vbt_inflow_tracking_increments(self):
-        """VBT inflow increments when customer sells via passthrough."""
+    def test_vbt_inflow_not_incremented_by_executor(self):
+        """TradeExecutor does NOT increment inflow — that happens after acceptance."""
         face = Decimal("20")
         ticket = _make_ticket(face=face)
         vbt = _make_vbt(cash=Decimal("500"))
@@ -148,14 +146,41 @@ class TestVBTFlowTracking:
         recompute_dealer_state(dealer, vbt, params)
         executor = TradeExecutor(params)
 
-        # Dealer can't buy interior (K*=0) -> passthrough to VBT
         result = executor.execute_customer_sell(
             dealer, vbt, ticket, check_assertions=False
         )
         assert result.executed
         assert result.is_passthrough
-        assert vbt.cumulative_inflow == face
-        assert vbt.cumulative_outflow == Decimal(0)
+        assert vbt.cumulative_inflow == Decimal(0)
+
+    def test_manual_flow_tracking_after_acceptance(self):
+        """Counters increment correctly when caller updates them post-acceptance."""
+        face = Decimal("20")
+        tickets = [_make_ticket(f"TKT_{i}", serial=i, face=face) for i in range(5)]
+        vbt = _make_vbt(inventory=tickets, cash=Decimal("500"))
+        dealer = _make_dealer(cash=Decimal("0"), inventory=[])
+
+        params = KernelParams(S=face)
+        recompute_dealer_state(dealer, vbt, params)
+        executor = TradeExecutor(params)
+
+        # Simulate the acceptance path in dealer_trades.py
+        result = executor.execute_customer_buy(
+            dealer, vbt, buyer_id="buyer_1", check_assertions=False
+        )
+        assert result.executed and result.is_passthrough
+        # Caller increments after final acceptance (as dealer_trades.py does)
+        vbt.cumulative_outflow += result.ticket.face
+        assert vbt.cumulative_outflow == face
+
+        # Second buy
+        recompute_dealer_state(dealer, vbt, params)
+        result2 = executor.execute_customer_buy(
+            dealer, vbt, buyer_id="buyer_2", check_assertions=False
+        )
+        assert result2.executed
+        vbt.cumulative_outflow += result2.ticket.face
+        assert vbt.cumulative_outflow == face * 2
 
 
 class TestVBTAskWidening:
@@ -170,13 +195,14 @@ class TestVBTAskWidening:
         vbt_base = _make_vbt(M=M, O=O, flow_sensitivity=Decimal("0"))
         ask_base = vbt_base.A
 
-        # With flow sensitivity and accumulated outflow
+        # With flow sensitivity and accumulated outflow (in face-value units)
+        face = Decimal("20")
         vbt_flow = _make_vbt(M=M, O=O, flow_sensitivity=Decimal("0.5"))
-        # Simulate: VBT started with 10 tickets, sold 5
-        vbt_flow.cumulative_outflow = Decimal("5")
+        # Simulate: VBT started with 10 tickets (face=20 each → 200 total), sold 5 → 100 face
+        vbt_flow.cumulative_outflow = face * 5  # 100 face-value units sold
         vbt_flow.cumulative_inflow = Decimal("0")
-        # Current inventory: 5 tickets remain (approximation)
-        vbt_flow.inventory = [_make_ticket(f"TKT_{i}", serial=i) for i in range(5)]
+        # Current inventory: 5 tickets remain (100 face-value)
+        vbt_flow.inventory = [_make_ticket(f"TKT_{i}", serial=i, face=face) for i in range(5)]
         vbt_flow.recompute_quotes()
 
         # Ask should be higher than baseline

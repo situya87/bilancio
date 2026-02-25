@@ -323,6 +323,45 @@ class TestBlending:
         # 10 observations -> w = 1.0 (capped)
         assert min(Decimal("1"), Decimal("10") / Decimal(str(warmup))) == Decimal("1")
 
+    def test_blend_weight_uses_lookback_window_not_lifetime(self):
+        """w_bayes should count only observations within the lookback window,
+        not lifetime history.  If old observations fall outside the window,
+        coverage should regain influence.
+        """
+        lookback = 5
+        warmup = 10
+        params = _make_risk_params(
+            lookback_window=lookback,
+            initial_prior=Decimal("0.50"),
+        )
+        assessor = RiskAssessor(params)
+        assessor.belief_tracker.use_issuer_specific = True
+
+        # Add 10 observations on days 1-10 (all repayments)
+        for day in range(1, 11):
+            assessor.update_history(day=day, issuer_id="F01", defaulted=False)
+
+        # At day 10, lifetime history = 10, but window [5..10] has 6 (days 5-10 inclusive)
+        tracker = assessor.belief_tracker
+        window_start = 10 - tracker.lookback_window  # = 5
+        n_in_window = sum(
+            1 for d, _ in tracker.issuer_history["F01"] if d >= window_start
+        )
+        assert n_in_window == 6, "Days 5-10 inclusive = 6 observations within lookback"
+
+        # w_bayes = 6/10 = 0.6, NOT 10/10 = 1.0 (lifetime would give)
+        w_bayes = min(
+            Decimal("1"),
+            Decimal(str(n_in_window)) / Decimal(str(warmup)),
+        )
+        assert w_bayes == Decimal("0.6"), (
+            f"w_bayes should use lookback-windowed count, got {w_bayes}"
+        )
+        # The key assertion: windowed count < lifetime count
+        assert n_in_window < len(tracker.issuer_history["F01"]), (
+            "Windowed count should be less than lifetime count"
+        )
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 4. Backward Compatibility

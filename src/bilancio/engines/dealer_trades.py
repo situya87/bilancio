@@ -281,6 +281,10 @@ def _execute_sell_trade(
             events,
         )
 
+        # Track VBT flow (passthrough sell → VBT bought from customer)
+        if result.is_passthrough:
+            vbt.cumulative_inflow += ticket.face
+
         # Update dealer/VBT cash budget after successful sell trade
         if dealer_budgets is not None:
             payer_id = f"vbt_{bucket_id}" if result.is_passthrough else f"dealer_{bucket_id}"
@@ -581,6 +585,12 @@ def _execute_buy_trade(
                 _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
                 recompute_dealer_state(dealer, vbt, subsystem.params)
                 continue  # Try next bucket
+
+            # Track VBT flow (passthrough buy → VBT sold to customer).
+            # Updated here (after all rejection gates) so reversed trades
+            # don't inflate net_outflow and widen future asks.
+            if result.is_passthrough:
+                vbt.cumulative_outflow += result.ticket.face
 
             # Record trade in metrics, ticket outcomes, and events
             _record_buy_trade(

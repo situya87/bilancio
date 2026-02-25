@@ -248,11 +248,12 @@ class VBTState:
         if self.flow_sensitivity > 0:
             net_outflow = self.cumulative_outflow - self.cumulative_inflow
             if net_outflow > 0:
-                # Use initial inventory value as normalization base
-                # Approximate: initial_inventory ~ len(inventory) + net_outflow
-                initial_value = Decimal(len(self.inventory)) + net_outflow
-                if initial_value > 0:
-                    outflow_ratio = net_outflow / initial_value
+                # Normalize using face-value units throughout to avoid
+                # mixing ticket count with face-value flow totals.
+                current_face = sum((t.face for t in self.inventory), Decimal(0))
+                initial_face = current_face + net_outflow
+                if initial_face > 0:
+                    outflow_ratio = net_outflow / initial_face
                     ask_premium = self.flow_sensitivity * max(Decimal(0), outflow_ratio)
                     self.A = self.A + ask_premium
 
