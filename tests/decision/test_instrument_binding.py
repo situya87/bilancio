@@ -690,3 +690,80 @@ class TestRealWorldBindingScenario:
         )
         assert len(treasury_actions) == 1
         assert treasury_actions[0].action_type == "set_corridor"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Group 8: Regression — P3 non-dataclass ActivityProfile passthrough
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestBindActivitiesNonDataclass:
+    """bind_activities() must handle non-dataclass ActivityProfile implementations.
+
+    Before this fix, dataclasses.replace() would raise TypeError on a
+    plain-class ActivityProfile.  Now the function checks is_dataclass()
+    and passes non-dataclass activities through unchanged.
+    """
+
+    def test_non_dataclass_activity_passes_through(self):
+        """A non-dataclass ActivityProfile is returned unchanged."""
+
+        class PlainTrading:
+            @property
+            def activity_type(self):
+                return "trading"
+
+            @property
+            def instrument_class(self):
+                return "original"
+
+            def observe(self, info, position):
+                return None
+
+            def value(self, observed):
+                return None
+
+            def assess(self, valuations, position):
+                return None
+
+            def choose(self, risk_view, action_set):
+                return None
+
+        bindings = InstrumentBindings(tradeable="bond")
+        act = PlainTrading()
+        result = bind_activities(bindings, act)
+        assert len(result) == 1
+        assert result[0] is act  # same object, not replaced
+        assert result[0].instrument_class == "original"  # unchanged
+
+    def test_mixed_dataclass_and_non_dataclass(self):
+        """Dataclass activities are rebound; non-dataclass are passed through."""
+
+        class PlainRating:
+            @property
+            def activity_type(self):
+                return "rating"
+
+            @property
+            def instrument_class(self):
+                return None
+
+            def observe(self, info, position):
+                return None
+
+            def value(self, observed):
+                return None
+
+            def assess(self, valuations, position):
+                return None
+
+            def choose(self, risk_view, action_set):
+                return None
+
+        bindings = InstrumentBindings(tradeable="bond")
+        ta = TradingActivity()
+        pr = PlainRating()
+        result = bind_activities(bindings, ta, pr)
+        assert len(result) == 2
+        assert result[0].instrument_class == "bond"  # dataclass rebound
+        assert result[1] is pr  # non-dataclass passed through

@@ -785,7 +785,7 @@ def bind_activities(
         central_banking -> bindings.cb_lendable
         rating         -> (unchanged, instrument_class is None)
     """
-    from dataclasses import replace
+    import dataclasses
 
     role_map: dict[str, str] = {
         "trading": bindings.tradeable,
@@ -799,8 +799,12 @@ def bind_activities(
     result: list[ActivityProfile] = []
     for act in activities:
         binding_value = role_map.get(act.activity_type)
-        if binding_value is not None and hasattr(act, "instrument_class"):
-            result.append(replace(act, instrument_class=binding_value))
+        if (
+            binding_value is not None
+            and dataclasses.is_dataclass(act)
+            and hasattr(act, "instrument_class")
+        ):
+            result.append(dataclasses.replace(act, instrument_class=binding_value))
         else:
             result.append(act)
     return tuple(result)

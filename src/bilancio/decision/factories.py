@@ -8,7 +8,7 @@ less on observed defaults.
 
 from __future__ import annotations
 
-from copy import copy
+from dataclasses import replace
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -88,10 +88,11 @@ def create_assessor(
     if profile is None and information_service is None:
         return RiskAssessor(base_params)
 
-    # Shallow copy so we don't mutate the caller's params
-    adjusted = copy(base_params)
+    # Create adjusted params (RiskAssessmentParams is frozen)
     if profile is not None:
-        adjusted.default_observability = observability_from_profile(profile)
+        adjusted = replace(base_params, default_observability=observability_from_profile(profile))
+    else:
+        adjusted = base_params
 
     assessor = RiskAssessor(adjusted)
     if information_service is not None:

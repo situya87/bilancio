@@ -1014,3 +1014,46 @@ class TestBackwardCompatValues:
         assert len(ra.issuer_history["firm_2"]) == 1
         assert ra.issuer_history["firm_1"][0] == (1, True)
         assert ra.issuer_history["firm_2"][0] == (1, False)
+
+
+# ===========================================================================
+# Regression: P2 — RiskAssessmentParams immutability
+# ===========================================================================
+
+
+class TestParamsImmutability:
+    """RiskAssessmentParams is frozen to prevent stale-snapshot bugs.
+
+    Before this fix, mutating ``assessor.params.base_risk_premium`` after
+    construction had no effect because the value was already snapshotted
+    into ``PositionAssessor`` and ``TradeGate``.  Making params frozen
+    prevents silent desynchronisation.
+    """
+
+    def test_params_is_frozen(self):
+        """Mutating a frozen RiskAssessmentParams raises an error."""
+        params = RiskAssessmentParams(base_risk_premium=Decimal("0"))
+        with pytest.raises(AttributeError):
+            params.base_risk_premium = Decimal("0.1")  # type: ignore[misc]
+
+    def test_params_replace_creates_new_instance(self):
+        """dataclasses.replace() works for creating modified params."""
+        from dataclasses import replace
+
+        original = RiskAssessmentParams(base_risk_premium=Decimal("0"))
+        modified = replace(original, base_risk_premium=Decimal("0.1"))
+        assert original.base_risk_premium == Decimal("0")
+        assert modified.base_risk_premium == Decimal("0.1")
+
+    def test_new_assessor_from_replaced_params(self):
+        """New RiskAssessor from replace()'d params uses the new values."""
+        from dataclasses import replace
+
+        params1 = RiskAssessmentParams(base_risk_premium=Decimal("0"))
+        params2 = replace(params1, base_risk_premium=Decimal("0.1"))
+
+        assessor1 = RiskAssessor(params1)
+        assessor2 = RiskAssessor(params2)
+
+        assert assessor1.position_assessor.base_risk_premium == Decimal("0")
+        assert assessor2.position_assessor.base_risk_premium == Decimal("0.1")

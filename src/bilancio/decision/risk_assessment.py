@@ -33,10 +33,17 @@ if TYPE_CHECKING:
     from bilancio.information.service import InformationService
 
 
-@dataclass
+@dataclass(frozen=True)
 class RiskAssessmentParams:
     """
     Parameters for trader risk assessment.
+
+    This dataclass is **frozen** (immutable).  All parameter values are
+    fixed at construction time and propagated to the pipeline sub-components
+    (``PositionAssessor``, ``TradeGate``, etc.) inside ``RiskAssessor.__init__``.
+    To change parameters, create a new ``RiskAssessmentParams`` instance
+    (e.g. via ``dataclasses.replace(params, field=new_value)``) and construct
+    a new ``RiskAssessor``.
 
     Attributes:
         lookback_window: Number of days to look back for default history
