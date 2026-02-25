@@ -7,12 +7,23 @@ profiles for trader risk behavior, VBT pricing, and other agent activities.
 """
 
 from bilancio.decision.action_spec import ActionDef, ActionSpec, resolve_strategy
+from bilancio.decision.activities import (
+    BankLendingActivity,
+    BankTreasuryActivity,
+    CBActivity,
+    LendingActivity,
+    MarketMakingActivity,
+    OutsideLiquidityActivity,
+    RatingActivity,
+    TradingActivity,
+)
 from bilancio.decision.activity import (
     ACTION_BACKSTOP_LEND,
     ACTION_BORROW,
     ACTION_BUY,
     ACTION_EXTEND_LOAN,
     ACTION_HOLD,
+    ACTION_PUBLISH_RATINGS,
     ACTION_REFUSE_LOAN,
     ACTION_SELL,
     ACTION_SET_ANCHORS,
@@ -75,6 +86,7 @@ __all__ = [
     "ACTION_BUY",
     "ACTION_EXTEND_LOAN",
     "ACTION_HOLD",
+    "ACTION_PUBLISH_RATINGS",
     "ACTION_REFUSE_LOAN",
     "ACTION_SELL",
     "ACTION_SET_ANCHORS",
@@ -92,6 +104,15 @@ __all__ = [
     "RiskView",
     "Valuations",
     "build_cash_flow_position_from_trader",
+    # Activity profile implementations (Plan 036 Phase 5)
+    "BankLendingActivity",
+    "BankTreasuryActivity",
+    "CBActivity",
+    "LendingActivity",
+    "MarketMakingActivity",
+    "OutsideLiquidityActivity",
+    "RatingActivity",
+    "TradingActivity",
     # Action specs
     "ActionDef",
     "ActionSpec",
