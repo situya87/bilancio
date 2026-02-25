@@ -588,6 +588,43 @@ PHASE_ACTIVITIES: dict[str, tuple[str, ...]] = {
 
 
 @dataclass(frozen=True)
+class InstrumentBindings:
+    """Maps abstract instrument roles to concrete instrument kinds.
+
+    Each field represents a role in the financial system. The default
+    values are the Kalecki Ring instrument types. A different scenario
+    can provide different bindings.
+
+    Roles:
+        tradeable: Instruments traded in the secondary market.
+        lendable: Instruments created by non-bank lending.
+        bank_lendable: Instruments created by bank lending.
+        depositable: Deposit instruments.
+        cb_lendable: Central bank lending instruments.
+        bucket_by: How tradeable instruments are bucketed (e.g., "remaining_maturity").
+
+    Usage::
+
+        # Kalecki Ring (default)
+        bindings = InstrumentBindings()
+        assert bindings.tradeable == "payable"
+
+        # Custom scenario
+        bindings = InstrumentBindings(tradeable="bond", bucket_by="credit_rating")
+    """
+
+    tradeable: str = "payable"
+    lendable: str = "non_bank_loan"
+    bank_lendable: str = "bank_loan"
+    depositable: str = "bank_deposit"
+    cb_lendable: str = "cb_loan"
+    bucket_by: str = "remaining_maturity"
+
+
+KALECKI_BINDINGS = InstrumentBindings()
+
+
+@dataclass(frozen=True)
 class ComposedProfile:
     """Multiple activity profiles composed for a single agent.
 
@@ -728,6 +765,7 @@ def build_cash_flow_position_from_trader(
     trader: Any,
     current_day: int,
     planning_horizon: int = 10,
+    instrument_kind: str = "payable",
 ) -> CashFlowPosition:
     """Construct a ``CashFlowPosition`` from a ``TraderState``.
 
@@ -740,6 +778,8 @@ def build_cash_flow_position_from_trader(
         trader: A ``TraderState`` instance (from ``dealer.models``).
         current_day: The current simulation day.
         planning_horizon: How many days ahead to include.
+        instrument_kind: The instrument kind to tag on each cash flow
+            entry.  Defaults to ``"payable"`` for backward compatibility.
 
     Returns:
         A frozen ``CashFlowPosition`` snapshot.
@@ -753,7 +793,7 @@ def build_cash_flow_position_from_trader(
                 amount=ticket.face,
                 counterparty_id=str(ticket.owner_id),
                 instrument_id=str(ticket.id),
-                instrument_kind="payable",
+                instrument_kind=instrument_kind,
             )
         )
 
@@ -766,7 +806,7 @@ def build_cash_flow_position_from_trader(
                 amount=ticket.face,
                 counterparty_id=str(ticket.issuer_id),
                 instrument_id=str(ticket.id),
-                instrument_kind="payable",
+                instrument_kind=instrument_kind,
             )
         )
 
@@ -811,6 +851,9 @@ __all__ = [
     # Composition
     "ComposedProfile",
     "AgentDecisionSpec",
+    # Instrument bindings
+    "InstrumentBindings",
+    "KALECKI_BINDINGS",
     # Helpers
     "build_cash_flow_position_from_trader",
 ]

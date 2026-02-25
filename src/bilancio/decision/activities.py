@@ -32,7 +32,9 @@ from typing import TYPE_CHECKING, Any
 from bilancio.decision.activity import (
     Action,
     ActionSet,
+    ActivityProfile,
     CashFlowPosition,
+    InstrumentBindings,
     ObservedState,
     RiskView,
     Valuations,
@@ -68,14 +70,11 @@ class TradingActivity:
     default_observability: Decimal = Decimal("1.0")
     buy_reserve_fraction: Decimal = Decimal("1.0")
     trading_motive: str = "liquidity_only"
+    instrument_class: str = "payable"
 
     @property
     def activity_type(self) -> str:
         return "trading"
-
-    @property
-    def instrument_class(self) -> str | None:
-        return "payable"
 
     # Derived properties (mirror TraderProfile)
 
@@ -234,13 +233,11 @@ class TradingActivity:
 class MarketMakingActivity:
     """Treynor dealer market-making activity."""
 
+    instrument_class: str = "payable"
+
     @property
     def activity_type(self) -> str:
         return "market_making"
-
-    @property
-    def instrument_class(self) -> str | None:
-        return "payable"
 
     def observe(
         self,
@@ -297,14 +294,11 @@ class OutsideLiquidityActivity:
     mid_sensitivity: Decimal = Decimal("1.0")
     spread_sensitivity: Decimal = Decimal("0.0")
     spread_scale: Decimal = Decimal("1.0")
+    instrument_class: str = "payable"
 
     @property
     def activity_type(self) -> str:
         return "outside_liquidity"
-
-    @property
-    def instrument_class(self) -> str | None:
-        return "payable"
 
     @classmethod
     def from_vbt_profile(cls, profile: VBTProfile) -> OutsideLiquidityActivity:
@@ -379,14 +373,11 @@ class LendingActivity:
     planning_horizon: int = 5
     profit_target: Decimal = Decimal("0.05")
     max_loan_maturity: int = 10
+    instrument_class: str = "non_bank_loan"
 
     @property
     def activity_type(self) -> str:
         return "lending"
-
-    @property
-    def instrument_class(self) -> str | None:
-        return "non_bank_loan"
 
     @classmethod
     def from_lender_profile(cls, profile: LenderProfile) -> LendingActivity:
@@ -480,14 +471,11 @@ class RatingActivity:
     conservatism_bias: Decimal = Decimal("0.02")
     coverage_fraction: Decimal = Decimal("0.8")
     no_data_prior: Decimal = Decimal("0.15")
+    instrument_class: str | None = None
 
     @property
     def activity_type(self) -> str:
         return "rating"
-
-    @property
-    def instrument_class(self) -> str | None:
-        return None  # General, not instrument-specific
 
     @classmethod
     def from_rating_profile(cls, profile: RatingProfile) -> RatingActivity:
@@ -559,14 +547,11 @@ class BankLendingActivity:
     max_borrower_risk: Decimal = Decimal("1.0")
     loan_maturity_fraction: Decimal = Decimal("0.5")
     interest_period: int = 2
+    instrument_class: str = "bank_loan"
 
     @property
     def activity_type(self) -> str:
         return "bank_lending"
-
-    @property
-    def instrument_class(self) -> str | None:
-        return "bank_loan"
 
     @classmethod
     def from_bank_profile(cls, profile: BankProfile) -> BankLendingActivity:
@@ -643,14 +628,11 @@ class BankTreasuryActivity:
     symmetric_capacity_ratio: Decimal = Decimal("2.0")
     alpha: Decimal = Decimal("0.005")
     gamma: Decimal = Decimal("0.002")
+    instrument_class: str = "bank_deposit"
 
     @property
     def activity_type(self) -> str:
         return "treasury"
-
-    @property
-    def instrument_class(self) -> str | None:
-        return "bank_deposit"
 
     @classmethod
     def from_bank_profile(cls, profile: BankProfile) -> BankTreasuryActivity:
@@ -721,13 +703,11 @@ class BankTreasuryActivity:
 class CBActivity:
     """Central bank activity (corridor setting, backstop lending)."""
 
+    instrument_class: str = "cb_loan"
+
     @property
     def activity_type(self) -> str:
         return "central_banking"
-
-    @property
-    def instrument_class(self) -> str | None:
-        return "cb_loan"
 
     def observe(
         self,
@@ -780,6 +760,53 @@ class CBActivity:
 
 
 # ---------------------------------------------------------------------------
+# Binding helper
+# ---------------------------------------------------------------------------
+
+
+def bind_activities(
+    bindings: InstrumentBindings,
+    *activities: ActivityProfile,
+) -> tuple[ActivityProfile, ...]:
+    """Apply instrument bindings to activity profiles.
+
+    Creates copies of the given activities with instrument_class values
+    overridden according to the bindings.  Activities without an
+    instrument_class field (or those not matching any role) are passed
+    through unchanged.
+
+    The mapping from activity_type to binding role:
+        trading        -> bindings.tradeable
+        market_making  -> bindings.tradeable
+        outside_liquidity -> bindings.tradeable
+        lending        -> bindings.lendable
+        bank_lending   -> bindings.bank_lendable
+        treasury       -> bindings.depositable
+        central_banking -> bindings.cb_lendable
+        rating         -> (unchanged, instrument_class is None)
+    """
+    from dataclasses import replace
+
+    role_map: dict[str, str] = {
+        "trading": bindings.tradeable,
+        "market_making": bindings.tradeable,
+        "outside_liquidity": bindings.tradeable,
+        "lending": bindings.lendable,
+        "bank_lending": bindings.bank_lendable,
+        "treasury": bindings.depositable,
+        "central_banking": bindings.cb_lendable,
+    }
+    result: list[ActivityProfile] = []
+    for act in activities:
+        binding_value = role_map.get(act.activity_type)
+        if binding_value is not None and hasattr(act, "instrument_class"):
+            result.append(replace(act, instrument_class=binding_value))
+        else:
+            result.append(act)
+    return tuple(result)
+
+
+# ---------------------------------------------------------------------------
 # Module exports
 # ---------------------------------------------------------------------------
 
@@ -792,4 +819,5 @@ __all__ = [
     "OutsideLiquidityActivity",
     "RatingActivity",
     "TradingActivity",
+    "bind_activities",
 ]
