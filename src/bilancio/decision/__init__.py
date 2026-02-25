@@ -16,6 +16,7 @@ from bilancio.decision.activities import (
     OutsideLiquidityActivity,
     RatingActivity,
     TradingActivity,
+    bind_activities,
 )
 from bilancio.decision.activity import (
     ACTION_BACKSTOP_LEND,
@@ -37,6 +38,8 @@ from bilancio.decision.activity import (
     CashFlowEntry,
     CashFlowPosition,
     ComposedProfile,
+    InstrumentBindings,
+    KALECKI_BINDINGS,
     MarketQuote,
     ObservedState,
     RiskView,
@@ -101,6 +104,8 @@ __all__ = [
     "CashFlowPosition",
     "ComposedProfile",
     "AgentDecisionSpec",
+    "InstrumentBindings",
+    "KALECKI_BINDINGS",
     "MarketQuote",
     "ObservedState",
     "RiskView",
@@ -115,6 +120,7 @@ __all__ = [
     "OutsideLiquidityActivity",
     "RatingActivity",
     "TradingActivity",
+    "bind_activities",
     # Action specs
     "ActionDef",
     "ActionSpec",
