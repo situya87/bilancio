@@ -366,10 +366,18 @@ def initialize_dealer_subsystem(
     # Step 4b: Create per-trader assessors if information profile provided
     if risk_params and trader_information_profile:
         from bilancio.decision.factories import create_assessor
+        from bilancio.information.service import InformationService
 
         for trader_id in subsystem.traders:
+            info_service = InformationService(
+                system=system,
+                profile=trader_information_profile,
+                observer_id=trader_id,
+                rng=random.Random(subsystem.rng.randint(0, 2**31)),
+            )
+            subsystem.traders[trader_id].information_service = info_service
             subsystem.trader_assessors[trader_id] = create_assessor(
-                risk_params, trader_information_profile
+                risk_params, trader_information_profile, information_service=info_service
             )
 
     # Step 5: Capture initial debt-to-money ratio
@@ -525,10 +533,18 @@ def initialize_balanced_dealer_subsystem(
     # Step 3b: Create per-trader assessors if information profile provided
     if risk_params and trader_information_profile:
         from bilancio.decision.factories import create_assessor
+        from bilancio.information.service import InformationService
 
         for trader_id in subsystem.traders:
+            info_service = InformationService(
+                system=system,
+                profile=trader_information_profile,
+                observer_id=trader_id,
+                rng=random.Random(subsystem.rng.randint(0, 2**31)),
+            )
+            subsystem.traders[trader_id].information_service = info_service
             subsystem.trader_assessors[trader_id] = create_assessor(
-                risk_params, trader_information_profile
+                risk_params, trader_information_profile, information_service=info_service
             )
 
     # Step 4: Capture initial debt-to-money ratio

@@ -19,6 +19,7 @@ from bilancio.core.ids import AgentId
 
 if TYPE_CHECKING:
     from bilancio.decision.profiles import TraderProfile
+    from bilancio.information.service import InformationService
 
 # Type alias for ticket identifiers
 TicketId = str
@@ -288,6 +289,7 @@ class TraderState:
     asset_issuer_id: AgentId | None = None
     defaulted: bool = False
     profile: TraderProfile | None = None
+    information_service: InformationService | None = None
 
     def payment_due(self, day: int) -> Decimal:
         """
