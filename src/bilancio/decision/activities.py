@@ -785,7 +785,7 @@ def bind_activities(
         central_banking -> bindings.cb_lendable
         rating         -> (unchanged, instrument_class is None)
     """
-    from dataclasses import FrozenInstanceError, replace
+    from dataclasses import replace
 
     role_map: dict[str, str] = {
         "trading": bindings.tradeable,
@@ -800,10 +800,7 @@ def bind_activities(
     for act in activities:
         binding_value = role_map.get(act.activity_type)
         if binding_value is not None and hasattr(act, "instrument_class"):
-            try:
-                result.append(replace(act, instrument_class=binding_value))
-            except (TypeError, FrozenInstanceError):
-                result.append(act)
+            result.append(replace(act, instrument_class=binding_value))
         else:
             result.append(act)
     return tuple(result)
