@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from bilancio.core.ids import AgentId
 
@@ -288,6 +288,7 @@ class TraderState:
     asset_issuer_id: AgentId | None = None
     defaulted: bool = False
     profile: TraderProfile | None = None
+    information_service: Any = None  # Optional InformationService instance
 
     def payment_due(self, day: int) -> Decimal:
         """

@@ -83,18 +83,29 @@ class BeliefTracker:
         default_observability: Decimal = Decimal("1.0"),
         initial_prior: Decimal = Decimal("0.15"),
         use_issuer_specific: bool = False,
+        information_service: Any = None,  # Optional InformationService
     ):
         self.lookback_window = lookback_window
         self.smoothing_alpha = smoothing_alpha
         self.default_observability = default_observability
         self.initial_prior = initial_prior
         self.use_issuer_specific = use_issuer_specific
+        self._information_service = information_service
 
         # Track system-wide default history: (day, issuer_id, defaulted)
         self.payment_history: list[tuple[int, AgentId, bool]] = []
 
         # Track per-issuer history (if issuer-specific enabled)
         self.issuer_history: dict[AgentId, list[tuple[int, bool]]] = {}
+
+    @property
+    def information_service(self) -> Any:
+        """The InformationService used for queries, if any."""
+        return self._information_service
+
+    @information_service.setter
+    def information_service(self, value: Any) -> None:
+        self._information_service = value
 
     def update_history(self, day: int, issuer_id: AgentId, defaulted: bool) -> None:
         """
@@ -123,6 +134,9 @@ class BeliefTracker:
         Uses recent payment history within the lookback window.
         Applies Laplace smoothing to handle small samples.
 
+        When an InformationService is attached, delegates to it instead
+        of using internal payment history.
+
         Args:
             issuer_id: Agent whose default probability to estimate
             current_day: Current simulation day
@@ -130,6 +144,13 @@ class BeliefTracker:
         Returns:
             Estimated default probability in [0, 1]
         """
+        # Delegate to InformationService when available
+        if self._information_service is not None:
+            p = self._information_service.get_default_probability(issuer_id, current_day)
+            if p is not None:
+                return p
+            # Fall through to internal estimation if service returns None
+
         window_start = current_day - self.lookback_window
 
         if self.use_issuer_specific and issuer_id in self.issuer_history:
@@ -177,6 +198,13 @@ class BeliefTracker:
         estimator_id: str = "system",
     ) -> "Estimate":
         """Return an Estimate wrapping estimate_default_prob() with provenance."""
+        # Delegate to InformationService when available
+        if self._information_service is not None:
+            detail = self._information_service.get_default_probability_detail(issuer_id, current_day)
+            if detail is not None:
+                return detail
+            # Fall through to internal estimation if service returns None
+
         from bilancio.information.estimates import Estimate
 
         value = self.estimate_default_prob(issuer_id, current_day)

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from copy import copy
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
 
@@ -57,29 +57,42 @@ def observability_from_profile(profile: InformationProfile) -> Decimal:
 def create_assessor(
     base_params: RiskAssessmentParams,
     profile: InformationProfile | None = None,
+    information_service: Any = None,
 ) -> RiskAssessor:
     """Create a RiskAssessor configured from an InformationProfile.
 
-    When *profile* is ``None``, returns a RiskAssessor with the
-    base parameters unchanged (backward-compatible default).
+    When *profile* is ``None`` and *information_service* is ``None``,
+    returns a RiskAssessor with the base parameters unchanged
+    (backward-compatible default).
 
     When a profile is provided, adjusts ``default_observability``
     based on the profile's ``counterparty_default_history`` access
     level and noise configuration.
 
+    When an *information_service* is provided, attaches it to the
+    assessor's BeliefTracker so that ``estimate_default_prob()``
+    delegates to the service instead of using internal payment history.
+
     Args:
         base_params: Baseline risk assessment parameters.
         profile: Optional information profile.  When provided,
             ``default_observability`` is overridden.
+        information_service: Optional InformationService instance.
+            When provided, the assessor's BeliefTracker will delegate
+            default probability queries to it.
 
     Returns:
         A configured :class:`RiskAssessor` instance.
     """
-    if profile is None:
+    if profile is None and information_service is None:
         return RiskAssessor(base_params)
 
     # Shallow copy so we don't mutate the caller's params
     adjusted = copy(base_params)
-    adjusted.default_observability = observability_from_profile(profile)
+    if profile is not None:
+        adjusted.default_observability = observability_from_profile(profile)
 
-    return RiskAssessor(adjusted)
+    assessor = RiskAssessor(adjusted)
+    if information_service is not None:
+        assessor.belief_tracker.information_service = information_service
+    return assessor
