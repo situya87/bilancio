@@ -553,6 +553,12 @@ def sweep_comparison(
 @click.option("--q-total", type=Decimal, default=Decimal("10000"), help="Total debt")
 @click.option("--base-seed", type=int, default=42, help="Base random seed")
 @click.option(
+    "--n-replicates",
+    type=int,
+    default=1,
+    help="Number of replicates (seeds) per parameter cell (default: 1). More replicates enable statistical inference.",
+)
+@click.option(
     "--kappas",
     type=str,
     default="0.25,0.5,1,2,4",
@@ -749,6 +755,7 @@ def sweep_balanced(
     maturity_days: int,
     q_total: Decimal,
     base_seed: int,
+    n_replicates: int,
     kappas: str,
     concentrations: str,
     mus: str,
@@ -873,6 +880,7 @@ def sweep_balanced(
         maturity_days=maturity_days,
         Q_total=q_total,
         base_seed=base_seed,
+        n_replicates=n_replicates,
         kappas=_decimal_list(kappas),
         concentrations=_decimal_list(concentrations),
         mus=_decimal_list(mus),
