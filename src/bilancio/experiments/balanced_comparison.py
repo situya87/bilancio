@@ -317,6 +317,7 @@ class BalancedComparisonConfig(BaseModel):
     Q_total: Decimal = Field(default=Decimal("10000"), description="Total debt amount")
     liquidity_mode: str = Field(default="uniform", description="Liquidity allocation mode")
     base_seed: int = Field(default=42, description="Base random seed")
+    n_replicates: int = Field(default=1, ge=1, description="Number of seeds per parameter cell (for statistical power)")
     name_prefix: str = Field(default="Balanced Comparison", description="Scenario name prefix")
     default_handling: str = Field(default="expel-agent", description="Default handling mode")
 
@@ -693,7 +694,7 @@ class BalancedComparisonRunner:
 
         # For progress tracking
         self._start_time: float | None = None
-        self._completed_keys: set[tuple[str, str, str, str, str]] = set()
+        self._completed_counts: dict[tuple[str, str, str, str, str], int] = {}
 
         # Job tracking
         self.job_id = job_id
@@ -734,17 +735,19 @@ class BalancedComparisonRunner:
                         row["monotonicity"],
                         row["outside_mid_ratio"],
                     )
-                    self._completed_keys.add(key)
+                    self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
 
                     # Also track the seed to resume from correct position
                     seed = int(row["seed"])
                     if seed >= self.seed_counter:
                         self.seed_counter = seed + 1
 
-            if self._completed_keys:
+            if self._completed_counts:
+                total_completed = sum(self._completed_counts.values())
                 logger.info(
-                    "Resuming sweep: found %d completed pairs, starting from seed %d",
-                    len(self._completed_keys),
+                    "Resuming sweep: found %d completed runs across %d cells, starting from seed %d",
+                    total_completed,
+                    len(self._completed_counts),
                     self.seed_counter,
                 )
         except EXTERNAL_OPERATION_ERRORS as e:
@@ -1456,7 +1459,11 @@ class BalancedComparisonRunner:
             * len(self.config.outside_mid_ratios)
         )
 
-        skipped = len(self._completed_keys)
+        cells_done = sum(
+            1 for c in self._completed_counts.values()
+            if c >= self.config.n_replicates
+        )
+        skipped = cells_done
         remaining = total_combos - skipped
 
         arm_names = [a[0] for a in arm_defs]
@@ -1501,35 +1508,36 @@ class BalancedComparisonRunner:
                             key = self._make_key(
                                 kappa, concentration, mu, monotonicity, outside_mid_ratio
                             )
-                            if key in self._completed_keys:
-                                continue
+                            completed = self._completed_counts.get(key, 0)
+                            reps_needed = max(0, self.config.n_replicates - completed)
 
-                            seed = self._next_seed()
+                            for _rep in range(reps_needed):
+                                seed = self._next_seed()
 
-                            # Prepare all enabled arms for this combo
-                            arm_preps: dict[str, PreparedRun] = {}
-                            for arm_name, phase, getter_name, _regime in arm_defs:
-                                runner = runners_cache[(outside_mid_ratio, arm_name)]
-                                arm_preps[arm_name] = runner._prepare_run(
-                                    phase=phase,
-                                    kappa=kappa,
-                                    concentration=concentration,
-                                    mu=mu,
-                                    monotonicity=monotonicity,
-                                    seed=seed,
+                                # Prepare all enabled arms for this combo
+                                arm_preps: dict[str, PreparedRun] = {}
+                                for arm_name, phase, getter_name, _regime in arm_defs:
+                                    runner = runners_cache[(outside_mid_ratio, arm_name)]
+                                    arm_preps[arm_name] = runner._prepare_run(
+                                        phase=phase,
+                                        kappa=kappa,
+                                        concentration=concentration,
+                                        mu=mu,
+                                        monotonicity=monotonicity,
+                                        seed=seed,
+                                    )
+
+                                prepared_combos.append(
+                                    (
+                                        arm_preps,
+                                        kappa,
+                                        concentration,
+                                        mu,
+                                        monotonicity,
+                                        outside_mid_ratio,
+                                        seed,
+                                    )
                                 )
-
-                            prepared_combos.append(
-                                (
-                                    arm_preps,
-                                    kappa,
-                                    concentration,
-                                    mu,
-                                    monotonicity,
-                                    outside_mid_ratio,
-                                    seed,
-                                )
-                            )
 
         if not prepared_combos:
             print("All combos already completed!", flush=True)
@@ -1603,7 +1611,7 @@ class BalancedComparisonRunner:
 
             self.comparison_results.append(result)
             comp_key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio)
-            self._completed_keys.add(comp_key)
+            self._completed_counts[comp_key] = self._completed_counts.get(comp_key, 0) + 1
 
             # Persist all arm runs to Supabase
             for arm_name, _phase, _getter, regime in arm_defs:
@@ -1623,6 +1631,7 @@ class BalancedComparisonRunner:
 
         # Write final summary
         self._write_summary_json()
+        self._write_stats_analysis()
 
         # Compute aggregate metrics on Modal (if using cloud executor)
         if hasattr(self.executor, "compute_aggregate_metrics"):
@@ -1668,7 +1677,11 @@ class BalancedComparisonRunner:
             * len(self.config.outside_mid_ratios)
         )
 
-        skipped = len(self._completed_keys)
+        cells_done = sum(
+            1 for c in self._completed_counts.values()
+            if c >= self.config.n_replicates
+        )
+        skipped = cells_done
         remaining = total_pairs - skipped
 
         logger.info(
@@ -1694,58 +1707,64 @@ class BalancedComparisonRunner:
                         for monotonicity in self.config.monotonicities:
                             pair_idx += 1
 
-                            # Check if already completed
+                            # Check how many replicates still needed
                             key = self._make_key(
                                 kappa, concentration, mu, monotonicity, outside_mid_ratio
                             )
-                            if key in self._completed_keys:
+                            completed = self._completed_counts.get(key, 0)
+                            reps_needed = max(0, self.config.n_replicates - completed)
+                            if reps_needed == 0:
                                 continue
 
-                            # Progress and ETA
-                            if completed_this_run > 0:
+                            for rep in range(reps_needed):
+                                rep_label = f" rep {completed + rep + 1}/{self.config.n_replicates}" if self.config.n_replicates > 1 else ""
+
+                                # Progress and ETA
+                                if completed_this_run > 0:
+                                    elapsed = time.time() - self._start_time
+                                    avg_time = elapsed / completed_this_run
+                                    eta = avg_time * (remaining * self.config.n_replicates - completed_this_run)
+                                    progress_str = (
+                                        f"[{pair_idx}/{total_pairs}] ({completed_this_run} done) "
+                                        f"ETA: {self._format_time(eta)}"
+                                    )
+                                else:
+                                    progress_str = f"[{pair_idx}/{total_pairs}]"
+
+                                print(
+                                    f"{progress_str} Running{rep_label}: κ={kappa}, c={concentration}, μ={mu}, ρ={outside_mid_ratio}",
+                                    flush=True,
+                                )
+
+                                result = self._run_pair(
+                                    kappa, concentration, mu, monotonicity, outside_mid_ratio
+                                )
+                                self.comparison_results.append(result)
+                                self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
+                                completed_this_run += 1
+
+                                # Write incremental results
+                                self._write_comparison_csv()
+
+                                # Log completion with timing
                                 elapsed = time.time() - self._start_time
-                                avg_time = elapsed / completed_this_run
-                                eta = avg_time * (remaining - completed_this_run)
-                                progress_str = (
-                                    f"[{pair_idx}/{total_pairs}] ({completed_this_run}/{remaining} this run) "
-                                    f"ETA: {self._format_time(eta)}"
-                                )
-                            else:
-                                progress_str = f"[{pair_idx}/{total_pairs}]"
-
-                            print(
-                                f"{progress_str} Running: κ={kappa}, c={concentration}, μ={mu}, ρ={outside_mid_ratio}",
-                                flush=True,
-                            )
-
-                            result = self._run_pair(
-                                kappa, concentration, mu, monotonicity, outside_mid_ratio
-                            )
-                            self.comparison_results.append(result)
-                            self._completed_keys.add(key)
-                            completed_this_run += 1
-
-                            # Write incremental results
-                            self._write_comparison_csv()
-
-                            # Log completion with timing
-                            elapsed = time.time() - self._start_time
-                            if result.delta_passive is not None and result.delta_active is not None:
-                                print(
-                                    f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
-                                    f"δ_passive={result.delta_passive:.3f}, δ_active={result.delta_active:.3f}, "
-                                    f"effect={result.trading_effect:.3f}",
-                                    flush=True,
-                                )
-                            else:
-                                print(
-                                    f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
-                                    f"(one or both runs failed)",
-                                    flush=True,
-                                )
+                                if result.delta_passive is not None and result.delta_active is not None:
+                                    print(
+                                        f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
+                                        f"δ_passive={result.delta_passive:.3f}, δ_active={result.delta_active:.3f}, "
+                                        f"effect={result.trading_effect:.3f}",
+                                        flush=True,
+                                    )
+                                else:
+                                    print(
+                                        f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
+                                        f"(one or both runs failed)",
+                                        flush=True,
+                                    )
 
         # Write final summary
         self._write_summary_json()
+        self._write_stats_analysis()
 
         total_time = time.time() - self._start_time
         print(
@@ -2499,6 +2518,32 @@ class BalancedComparisonRunner:
 
         with self.summary_path.open("w") as fh:
             json.dump(summary, fh, indent=2)
+
+    def _write_stats_analysis(self) -> None:
+        """Write statistical analysis files using RingSweepAnalysis (skipped in cloud-only mode)."""
+        if self.skip_local_processing:
+            return
+        if not self.comparison_results:
+            return
+
+        try:
+            from bilancio.experiments.sweep_analysis import RingSweepAnalysis
+
+            analysis = RingSweepAnalysis.from_results(self.comparison_results)
+            if analysis.min_replicates() < 2:
+                logger.info(
+                    "Skipping statistical analysis: need >= 2 replicates per cell, have %d",
+                    analysis.min_replicates(),
+                )
+                return
+
+            paths = analysis.write_stats(self.aggregate_dir)
+            for name, path in paths.items():
+                logger.info("Stats %s written to %s", name, path)
+            print(f"Statistical analysis written to {self.aggregate_dir}", flush=True)
+        except Exception as e:
+            logger.warning("Statistical analysis failed: %s", e)
+            print(f"Warning: Statistical analysis failed: {e}", flush=True)
 
 
 def run_balanced_comparison_sweep(
