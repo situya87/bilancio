@@ -317,7 +317,7 @@ class BalancedComparisonConfig(BaseModel):
     Q_total: Decimal = Field(default=Decimal("10000"), description="Total debt amount")
     liquidity_mode: str = Field(default="uniform", description="Liquidity allocation mode")
     base_seed: int = Field(default=42, description="Base random seed")
-    n_replicates: int = Field(default=1, description="Number of seeds per parameter cell (for statistical power)")
+    n_replicates: int = Field(default=1, ge=1, description="Number of seeds per parameter cell (for statistical power)")
     name_prefix: str = Field(default="Balanced Comparison", description="Scenario name prefix")
     default_handling: str = Field(default="expel-agent", description="Default handling mode")
 

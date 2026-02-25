@@ -554,7 +554,7 @@ def sweep_comparison(
 @click.option("--base-seed", type=int, default=42, help="Base random seed")
 @click.option(
     "--n-replicates",
-    type=int,
+    type=click.IntRange(min=1),
     default=1,
     help="Number of replicates (seeds) per parameter cell (default: 1). More replicates enable statistical inference.",
 )

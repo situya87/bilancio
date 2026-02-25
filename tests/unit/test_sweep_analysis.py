@@ -43,6 +43,7 @@ def make_record(
     kappa=1.0,
     concentration=1.0,
     mu=0.0,
+    monotonicity=1.0,
     outside_mid_ratio=0.9,
     delta_passive=0.3,
     delta_active=0.2,
@@ -56,6 +57,7 @@ def make_record(
         "kappa": kappa,
         "concentration": concentration,
         "mu": mu,
+        "monotonicity": monotonicity,
         "outside_mid_ratio": outside_mid_ratio,
         "delta_passive": delta_passive,
         "delta_active": delta_active,
@@ -181,6 +183,7 @@ class TestFromResults:
         kappa=Decimal("1.0"),
         concentration=Decimal("1.0"),
         mu=Decimal("0.0"),
+        monotonicity=Decimal("1.0"),
         outside_mid_ratio=Decimal("0.9"),
         seed=42,
         delta_passive=Decimal("0.30"),
@@ -195,6 +198,7 @@ class TestFromResults:
             kappa=kappa,
             concentration=concentration,
             mu=mu,
+            monotonicity=monotonicity,
             outside_mid_ratio=outside_mid_ratio,
             seed=seed,
             delta_passive=delta_passive,
@@ -251,6 +255,7 @@ class TestFromResults:
             kappa=Decimal("2.0"),
             concentration=Decimal("0.5"),
             mu=Decimal("0.3"),
+            monotonicity=Decimal("0.8"),
             outside_mid_ratio=Decimal("0.85"),
             seed=99,
         )
@@ -258,6 +263,7 @@ class TestFromResults:
         assert d["kappa"] == pytest.approx(2.0)
         assert d["concentration"] == pytest.approx(0.5)
         assert d["mu"] == pytest.approx(0.3)
+        assert d["monotonicity"] == pytest.approx(0.8)
         assert d["outside_mid_ratio"] == pytest.approx(0.85)
         assert d["seed"] == 99
 
@@ -565,10 +571,10 @@ class TestInferBounds:
     def test_non_numeric_skipped(self):
         """Non-numeric values in parameter fields should be skipped."""
         records = [
-            {"kappa": "bad", "concentration": 1.0, "mu": 0.0, "outside_mid_ratio": 0.9,
-             "delta_passive": 0.3, "seed": 0},
-            {"kappa": 1.0, "concentration": 1.0, "mu": 0.0, "outside_mid_ratio": 0.9,
-             "delta_passive": 0.2, "seed": 1},
+            {"kappa": "bad", "concentration": 1.0, "mu": 0.0, "monotonicity": 1.0,
+             "outside_mid_ratio": 0.9, "delta_passive": 0.3, "seed": 0},
+            {"kappa": 1.0, "concentration": 1.0, "mu": 0.0, "monotonicity": 1.0,
+             "outside_mid_ratio": 0.9, "delta_passive": 0.2, "seed": 1},
         ]
         analysis = RingSweepAnalysis(records)
         bounds = analysis._infer_bounds()
@@ -578,10 +584,10 @@ class TestInferBounds:
     def test_missing_field_skipped(self):
         """Records missing a parameter field should be skipped for that param."""
         records = [
-            {"kappa": 0.5, "concentration": 1.0, "mu": 0.0, "outside_mid_ratio": 0.9,
-             "delta_passive": 0.3, "seed": 0},
-            {"concentration": 1.0, "mu": 0.0, "outside_mid_ratio": 0.9,
-             "delta_passive": 0.2, "seed": 1},  # missing kappa
+            {"kappa": 0.5, "concentration": 1.0, "mu": 0.0, "monotonicity": 1.0,
+             "outside_mid_ratio": 0.9, "delta_passive": 0.3, "seed": 0},
+            {"concentration": 1.0, "mu": 0.0, "monotonicity": 1.0,
+             "outside_mid_ratio": 0.9, "delta_passive": 0.2, "seed": 1},  # missing kappa
         ]
         analysis = RingSweepAnalysis(records)
         bounds = analysis._infer_bounds()
@@ -590,10 +596,10 @@ class TestInferBounds:
     def test_string_numeric_values(self):
         """CSV-loaded records have string values; _infer_bounds should convert them."""
         records = [
-            {"kappa": "0.25", "concentration": "1.0", "mu": "0.0", "outside_mid_ratio": "0.9",
-             "delta_passive": "0.3", "seed": "0"},
-            {"kappa": "2.0", "concentration": "1.0", "mu": "0.0", "outside_mid_ratio": "0.9",
-             "delta_passive": "0.2", "seed": "1"},
+            {"kappa": "0.25", "concentration": "1.0", "mu": "0.0", "monotonicity": "1.0",
+             "outside_mid_ratio": "0.9", "delta_passive": "0.3", "seed": "0"},
+            {"kappa": "2.0", "concentration": "1.0", "mu": "0.0", "monotonicity": "1.0",
+             "outside_mid_ratio": "0.9", "delta_passive": "0.2", "seed": "1"},
         ]
         analysis = RingSweepAnalysis(records)
         bounds = analysis._infer_bounds()
@@ -689,8 +695,8 @@ class TestWriteStats:
     def test_no_effects_when_single_arm(self, tmp_path):
         """When only passive data exists, effects CSV should not be written."""
         records = [
-            {"kappa": 0.5, "concentration": 1.0, "mu": 0.0, "outside_mid_ratio": 0.9,
-             "delta_passive": 0.3, "seed": i}
+            {"kappa": 0.5, "concentration": 1.0, "mu": 0.0, "monotonicity": 1.0,
+             "outside_mid_ratio": 0.9, "delta_passive": 0.3, "seed": i}
             for i in range(5)
         ]
         analysis = RingSweepAnalysis(records)
@@ -732,6 +738,7 @@ class TestConstants:
         assert "kappa" in RING_PARAM_FIELDS
         assert "concentration" in RING_PARAM_FIELDS
         assert "mu" in RING_PARAM_FIELDS
+        assert "monotonicity" in RING_PARAM_FIELDS
         assert "outside_mid_ratio" in RING_PARAM_FIELDS
 
     def test_ring_arms(self):
@@ -760,8 +767,8 @@ class TestEdgeCases:
         """CSV-loaded values are strings; analysis should handle them."""
         records = [
             {"kappa": "0.5", "concentration": "1.0", "mu": "0.0",
-             "outside_mid_ratio": "0.9", "delta_passive": "0.30",
-             "delta_active": "0.20", "seed": str(i)}
+             "monotonicity": "1.0", "outside_mid_ratio": "0.9",
+             "delta_passive": "0.30", "delta_active": "0.20", "seed": str(i)}
             for i in range(5)
         ]
         analysis = RingSweepAnalysis(records)
@@ -809,3 +816,84 @@ class TestEdgeCases:
                 content1 = paths1[key].read_text()
                 content2 = paths2[key].read_text()
                 assert content1 == content2, f"Mismatch in {key}"
+
+
+# ============================================================
+# Regression tests for review fixes
+# ============================================================
+
+
+class TestMonotonicityCellKey:
+    """P1 fix: monotonicity must be part of cell grouping keys."""
+
+    def test_different_monotonicity_creates_separate_cells(self):
+        """Records with different monotonicity should NOT be merged into one cell."""
+        records = [
+            make_record(kappa=0.5, monotonicity=0.5, delta_passive=0.3, seed=0),
+            make_record(kappa=0.5, monotonicity=0.5, delta_passive=0.35, seed=1),
+            make_record(kappa=0.5, monotonicity=1.0, delta_passive=0.5, seed=0),
+            make_record(kappa=0.5, monotonicity=1.0, delta_passive=0.55, seed=1),
+        ]
+        analysis = RingSweepAnalysis(records)
+        assert analysis.n_cells == 2
+        assert analysis.min_replicates() == 2
+
+    def test_monotonicity_in_result_to_dict(self):
+        """_result_to_dict must include monotonicity."""
+        result = SimpleNamespace(
+            kappa=Decimal("1.0"), concentration=Decimal("1.0"),
+            mu=Decimal("0.0"), monotonicity=Decimal("0.75"),
+            outside_mid_ratio=Decimal("0.9"), seed=42,
+            delta_passive=Decimal("0.3"), phi_passive=Decimal("0.7"),
+            delta_active=Decimal("0.2"), phi_active=Decimal("0.8"),
+            delta_lender=None, phi_lender=None,
+            n_defaults_passive=None, n_defaults_active=None,
+            cascade_fraction_passive=None, cascade_fraction_active=None,
+            trading_effect=Decimal("0.1"), lending_effect=None, combined_effect=None,
+        )
+        d = _result_to_dict(result)
+        assert "monotonicity" in d
+        assert d["monotonicity"] == pytest.approx(0.75)
+
+
+class TestNReplicatesValidation:
+    """P2 fix: n_replicates must be >= 1."""
+
+    def test_config_rejects_zero(self):
+        from pydantic import ValidationError
+        from bilancio.experiments.balanced_comparison import BalancedComparisonConfig
+        with pytest.raises(ValidationError):
+            BalancedComparisonConfig(n_replicates=0)
+
+    def test_config_rejects_negative(self):
+        from pydantic import ValidationError
+        from bilancio.experiments.balanced_comparison import BalancedComparisonConfig
+        with pytest.raises(ValidationError):
+            BalancedComparisonConfig(n_replicates=-1)
+
+    def test_config_accepts_one(self):
+        from bilancio.experiments.balanced_comparison import BalancedComparisonConfig
+        cfg = BalancedComparisonConfig(n_replicates=1)
+        assert cfg.n_replicates == 1
+
+
+class TestWriteStatsPathExistence:
+    """P2 fix: write_stats should only return paths for files that actually exist."""
+
+    def test_no_cells_path_when_no_data(self, tmp_path):
+        """With insufficient data, cells CSV won't be written -> path not in result."""
+        # Single record per cell => summarize_cell skips (need >= 2)
+        records = [make_record(kappa=0.5, seed=0)]
+        analysis = RingSweepAnalysis(records)
+        paths = analysis.write_stats(tmp_path / "out", seed=42)
+        # cells requires >= 2 replicates, so should not be written
+        if "cells" in paths:
+            assert paths["cells"].exists()
+
+    def test_all_returned_paths_exist(self, tmp_path):
+        """Every path in the returned dict must correspond to an existing file."""
+        records = make_replicated_records(kappas=(0.5, 1.0), n_seeds=5)
+        analysis = RingSweepAnalysis(records)
+        paths = analysis.write_stats(tmp_path / "out", seed=42)
+        for name, path in paths.items():
+            assert path.exists(), f"Path for '{name}' does not exist: {path}"

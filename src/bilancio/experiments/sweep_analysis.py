@@ -43,7 +43,7 @@ from bilancio.stats.types import MorrisResult
 logger = logging.getLogger(__name__)
 
 # Ring parameter fields used for cell grouping
-RING_PARAM_FIELDS = ["kappa", "concentration", "mu", "outside_mid_ratio"]
+RING_PARAM_FIELDS = ["kappa", "concentration", "mu", "monotonicity", "outside_mid_ratio"]
 
 # Treatment arms and their CSV column suffixes
 RING_ARMS: dict[str, str] = {
@@ -275,22 +275,26 @@ class RingSweepAnalysis:
         if effects:
             effects_path = output_dir / "stats_effects.csv"
             self._write_effects_csv(effects, effects_path)
-            paths["effects"] = effects_path
+            if effects_path.exists():
+                paths["effects"] = effects_path
 
         # Cell summaries CSV
         cells_path = output_dir / "stats_cells.csv"
         self._write_cells_csv(confidence, n_bootstrap, seed, cells_path)
-        paths["cells"] = cells_path
+        if cells_path.exists():
+            paths["cells"] = cells_path
 
         # Summary JSON
         summary_path = output_dir / "stats_summary.json"
         self._write_summary_json(effects, summary_path)
-        paths["summary"] = summary_path
+        if summary_path.exists():
+            paths["summary"] = summary_path
 
         # Sensitivity JSON
         sensitivity_path = output_dir / "stats_sensitivity.json"
         self._write_sensitivity_json(seed, sensitivity_path)
-        paths["sensitivity"] = sensitivity_path
+        if sensitivity_path.exists():
+            paths["sensitivity"] = sensitivity_path
 
         return paths
 
@@ -408,6 +412,7 @@ def _result_to_dict(result: Any) -> dict[str, Any]:
     d["kappa"] = _to_float(result.kappa)
     d["concentration"] = _to_float(result.concentration)
     d["mu"] = _to_float(result.mu)
+    d["monotonicity"] = _to_float(getattr(result, "monotonicity", None))
     d["outside_mid_ratio"] = _to_float(getattr(result, "outside_mid_ratio", None))
     d["seed"] = getattr(result, "seed", None)
 
