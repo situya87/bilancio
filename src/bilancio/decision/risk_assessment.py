@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from bilancio.dealer.models import Ticket
     from bilancio.decision.protocols import InstrumentValuer
     from bilancio.information.estimates import Estimate
+    from bilancio.information.service import InformationService
 
 
 @dataclass
@@ -83,7 +84,7 @@ class BeliefTracker:
         default_observability: Decimal = Decimal("1.0"),
         initial_prior: Decimal = Decimal("0.15"),
         use_issuer_specific: bool = False,
-        information_service: Any = None,  # Optional InformationService
+        information_service: InformationService | None = None,
     ):
         self.lookback_window = lookback_window
         self.smoothing_alpha = smoothing_alpha
@@ -99,12 +100,12 @@ class BeliefTracker:
         self.issuer_history: dict[AgentId, list[tuple[int, bool]]] = {}
 
     @property
-    def information_service(self) -> Any:
+    def information_service(self) -> InformationService | None:
         """The InformationService used for queries, if any."""
         return self._information_service
 
     @information_service.setter
-    def information_service(self, value: Any) -> None:
+    def information_service(self, value: InformationService | None) -> None:
         self._information_service = value
 
     def update_history(self, day: int, issuer_id: AgentId, defaulted: bool) -> None:

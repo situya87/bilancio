@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from copy import copy
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
 
 if TYPE_CHECKING:
     from bilancio.information.profile import InformationProfile
+    from bilancio.information.service import InformationService
 
 
 def observability_from_profile(profile: InformationProfile) -> Decimal:
@@ -57,7 +58,7 @@ def observability_from_profile(profile: InformationProfile) -> Decimal:
 def create_assessor(
     base_params: RiskAssessmentParams,
     profile: InformationProfile | None = None,
-    information_service: Any = None,
+    information_service: InformationService | None = None,
 ) -> RiskAssessor:
     """Create a RiskAssessor configured from an InformationProfile.
 
