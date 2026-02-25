@@ -180,7 +180,72 @@ def _pool_desk_cash(subsystem: DealerSubsystem) -> None:
             vbt.cash = per_desk
 
 
-def _update_vbt_credit_mids(subsystem: DealerSubsystem, current_day: int) -> None:
+def estimate_forward_stress(
+    system: System,
+    current_day: int,
+    horizon: int = 5,
+) -> Decimal:
+    """Estimate forward stress from upcoming obligations vs available cash.
+
+    stress = max(0, 1 - total_cash / total_due)
+
+    When total_cash >= total_due, stress = 0 (system has enough cash).
+    When total_cash < total_due, stress > 0 (defaults likely).
+
+    Args:
+        system: The simulation system
+        current_day: Current simulation day
+        horizon: Days to look ahead
+
+    Returns:
+        Stress signal in [0, 1]
+    """
+    from bilancio.domain.instruments.base import InstrumentKind
+    from bilancio.domain.instruments.non_bank_loan import NonBankLoan
+
+    total_due = Decimal(0)
+    total_cash = Decimal(0)
+
+    for agent_id, agent in system.state.agents.items():
+        if agent.defaulted:
+            continue
+
+        # Sum cash for non-defaulted agents
+        for cid in agent.asset_ids:
+            contract = system.state.contracts.get(cid)
+            if contract is not None and contract.kind in (
+                InstrumentKind.CASH,
+                InstrumentKind.BANK_DEPOSIT,
+            ):
+                total_cash += Decimal(contract.amount)
+
+        # Sum obligations maturing within horizon
+        for cid in agent.liability_ids:
+            contract = system.state.contracts.get(cid)
+            if contract is None:
+                continue
+            due_day = contract.due_day
+            if due_day is None:
+                if isinstance(contract, NonBankLoan):
+                    due_day = contract.maturity_day
+                else:
+                    continue
+            if current_day <= due_day <= current_day + horizon:
+                if contract.kind == InstrumentKind.PAYABLE:
+                    total_due += Decimal(contract.amount)
+                elif isinstance(contract, NonBankLoan):
+                    total_due += Decimal(contract.repayment_amount)
+
+    if total_due <= 0:
+        return Decimal(0)
+
+    stress = max(Decimal(0), Decimal(1) - total_cash / total_due)
+    return min(Decimal(1), stress)
+
+
+def _update_vbt_credit_mids(
+    subsystem: DealerSubsystem, current_day: int, system: System | None = None
+) -> None:
     """Update VBT mid prices to reflect the risk assessor's current default estimate.
 
     When a VBT pricing model is attached to the subsystem, delegates to it.
@@ -199,7 +264,18 @@ def _update_vbt_credit_mids(subsystem: DealerSubsystem, current_day: int) -> Non
     if pricing_model is not None:
         # Delegate to the VBT's own pricing heuristic
         initial_prior = subsystem.risk_assessor.params.initial_prior
-        new_M = pricing_model.compute_mid(p_default, initial_prior)
+
+        # Check if forward stress blending is enabled
+        vbt_profile = subsystem.vbt_profile
+        if vbt_profile.forward_weight > 0 and system is not None:
+            p_forward = estimate_forward_stress(
+                system, current_day, vbt_profile.stress_horizon
+            )
+            new_M = pricing_model.compute_mid_blended(
+                p_default, p_forward, initial_prior, vbt_profile.forward_weight
+            )
+        else:
+            new_M = pricing_model.compute_mid(p_default, initial_prior)
 
         for bucket_id, vbt in subsystem.vbts.items():
             vbt.M = new_M
@@ -212,13 +288,26 @@ def _update_vbt_credit_mids(subsystem: DealerSubsystem, current_day: int) -> Non
             vbt.recompute_quotes()
     else:
         # Legacy inline logic (backward compatibility)
-        raw_M = subsystem.outside_mid_ratio * (Decimal(1) - p_default)
         initial_prior = subsystem.risk_assessor.params.initial_prior
+
+        # Blend forward stress into default probability for mid computation
+        vbt_profile = subsystem.vbt_profile
+        raw_p = p_default
+        if vbt_profile.forward_weight > 0 and system is not None:
+            p_forward = estimate_forward_stress(
+                system, current_day, vbt_profile.stress_horizon
+            )
+            raw_p = (
+                (Decimal(1) - vbt_profile.forward_weight) * p_default
+                + vbt_profile.forward_weight * p_forward
+            )
+
+        raw_M = subsystem.outside_mid_ratio * (Decimal(1) - raw_p)
         initial_M = subsystem.outside_mid_ratio * (Decimal(1) - initial_prior)
-        sens = subsystem.vbt_profile.mid_sensitivity
+        sens = vbt_profile.mid_sensitivity
         new_M = initial_M + sens * (raw_M - initial_M)
 
-        spread_sens = subsystem.vbt_profile.spread_sensitivity
+        spread_sens = vbt_profile.spread_sensitivity
 
         for bucket_id, vbt in subsystem.vbts.items():
             vbt.M = new_M

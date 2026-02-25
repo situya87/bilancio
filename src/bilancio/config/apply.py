@@ -728,6 +728,15 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 max_loan_maturity=config.lender.max_loan_maturity or config.lender.maturity_days,
             )
 
+        # Create NBFI RiskAssessor when profile has risk_assessment_params
+        nbfi_risk_assessor = None
+        if lender_profile is not None and lender_profile.risk_assessment_params is not None:
+            from bilancio.decision.risk_assessment import RiskAssessor
+
+            nbfi_risk_assessor = RiskAssessor(lender_profile.risk_assessment_params)
+            # Enable issuer-specific tracking for per-borrower learning
+            nbfi_risk_assessor.belief_tracker.use_issuer_specific = True
+
         # Compute max_ring_maturity from existing payables and scheduled actions
         max_ring_maturity: int | None = None
         from bilancio.domain.instruments.base import InstrumentKind
@@ -756,6 +765,7 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
             information_profile=info_profile,
             lender_profile=lender_profile,
             max_ring_maturity=max_ring_maturity,
+            risk_assessor=nbfi_risk_assessor,
         )
 
     # Set up rating agency config if present in scenario
@@ -991,6 +1001,15 @@ def _init_lending_from_action_specs(
     maturity_days = lc.maturity_days if lc else 2
     horizon = lc.horizon if lc else 3
 
+    # Create NBFI RiskAssessor when profile has risk_assessment_params
+    nbfi_risk_assessor = None
+    if lender_profile is not None and hasattr(lender_profile, "risk_assessment_params"):
+        if lender_profile.risk_assessment_params is not None:
+            from bilancio.decision.risk_assessment import RiskAssessor
+
+            nbfi_risk_assessor = RiskAssessor(lender_profile.risk_assessment_params)
+            nbfi_risk_assessor.belief_tracker.use_issuer_specific = True
+
     # Compute max_ring_maturity
     max_ring_maturity: int | None = None
     for contract in system.state.contracts.values():
@@ -1015,6 +1034,7 @@ def _init_lending_from_action_specs(
         information_profile=info_profile,
         lender_profile=lender_profile,
         max_ring_maturity=max_ring_maturity,
+        risk_assessor=nbfi_risk_assessor,
     )
 
 

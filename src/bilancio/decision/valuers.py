@@ -137,6 +137,21 @@ class CreditAdjustedVBTPricing:
         initial_M = self.outside_mid_ratio * (Decimal(1) - initial_prior)
         return initial_M + self.mid_sensitivity * (raw_M - initial_M)
 
+    def compute_mid_blended(
+        self,
+        p_default: Decimal,
+        p_forward: Decimal,
+        initial_prior: Decimal,
+        forward_weight: Decimal,
+    ) -> Decimal:
+        """Compute credit-adjusted mid with forward stress blending.
+
+        p_blend = (1 - forward_weight) * p_default + forward_weight * p_forward
+        Then apply the same mid_sensitivity logic as compute_mid().
+        """
+        p_blend = (Decimal(1) - forward_weight) * p_default + forward_weight * p_forward
+        return self.compute_mid(p_blend, initial_prior)
+
     def compute_spread(self, base_spread: Decimal, p_default: Decimal) -> Decimal:
         """Compute adjusted spread.
 
