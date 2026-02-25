@@ -168,7 +168,7 @@ def collect_sell_intentions(
         # Per-agent horizon: use trader's own profile if available
         trader_horizon = horizon
         if trader_horizon is None:
-            trader_profile = getattr(trader, 'profile', None) or subsystem.trader_profile
+            trader_profile = trader.profile or subsystem.trader_profile
             trader_horizon = trader_profile.sell_horizon
         intention = strategy.evaluate(trader_id, trader, current_day, trader_horizon)
         if intention is not None:

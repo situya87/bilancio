@@ -75,7 +75,7 @@ def _check_sell_risk_assessment(
         current_day=current_day,
         trader_cash=trader.cash,
         trader_shortfall=trader.upcoming_shortfall(
-            current_day, (getattr(trader, 'profile', None) or subsystem.trader_profile).sell_horizon
+            current_day, (trader.profile or subsystem.trader_profile).sell_horizon
         ),
         trader_asset_value=asset_value,
     ):
