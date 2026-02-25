@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from bilancio.dealer.models import Ticket
+    from bilancio.decision.protocols import InstrumentValuer
     from bilancio.information.estimates import Estimate
 
 
@@ -231,7 +232,7 @@ class EVValuer:
     injected, delegates to it instead of using the built-in formula.
     """
 
-    def __init__(self, belief_source: BeliefTracker, instrument_valuer: Any = None):
+    def __init__(self, belief_source: BeliefTracker, instrument_valuer: InstrumentValuer | None = None):
         self.belief_source = belief_source
         self.instrument_valuer = instrument_valuer
 
@@ -517,7 +518,7 @@ class RiskAssessor:
     All public methods delegate to the appropriate component.
     """
 
-    def __init__(self, params: RiskAssessmentParams, instrument_valuer: Any = None):
+    def __init__(self, params: RiskAssessmentParams, instrument_valuer: InstrumentValuer | None = None):
         """
         Initialize risk assessor.
 
