@@ -54,7 +54,14 @@ from bilancio.decision.intentions import (
     collect_buy_intentions,
     collect_sell_intentions,
 )
-from bilancio.decision.risk_assessment import RiskAssessmentParams, RiskAssessor
+from bilancio.decision.risk_assessment import (
+    BeliefTracker,
+    EVValuer,
+    PositionAssessor,
+    RiskAssessmentParams,
+    RiskAssessor,
+    TradeGate,
+)
 from bilancio.decision.valuers import (
     CoverageRatioValuer,
     CreditAdjustedVBTPricing,
@@ -120,8 +127,12 @@ __all__ = [
     "TraderProfile",
     "VBTProfile",
     # Risk assessment
+    "BeliefTracker",
+    "EVValuer",
+    "PositionAssessor",
     "RiskAssessmentParams",
     "RiskAssessor",
+    "TradeGate",
     # Factories
     "build_profile",
     "resolve_strategy",

@@ -5,6 +5,20 @@ RiskAssessor and RiskAssessmentParams have moved to
 import path working.
 """
 
-from bilancio.decision.risk_assessment import RiskAssessmentParams, RiskAssessor
+from bilancio.decision.risk_assessment import (
+    BeliefTracker,
+    EVValuer,
+    PositionAssessor,
+    RiskAssessmentParams,
+    RiskAssessor,
+    TradeGate,
+)
 
-__all__ = ["RiskAssessmentParams", "RiskAssessor"]
+__all__ = [
+    "BeliefTracker",
+    "EVValuer",
+    "PositionAssessor",
+    "RiskAssessmentParams",
+    "RiskAssessor",
+    "TradeGate",
+]
