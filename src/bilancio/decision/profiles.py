@@ -1,7 +1,13 @@
 """Frozen dataclasses for trader, VBT, rating, and lender behavioral profiles."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bilancio.decision.risk_assessment import RiskAssessmentParams
 
 
 @dataclass(frozen=True)
@@ -83,6 +89,9 @@ class VBTProfile:
     mid_sensitivity: Decimal = Decimal("1.0")
     spread_sensitivity: Decimal = Decimal("0.0")
     spread_scale: Decimal = Decimal("1.0")  # multiplicative scale on base spreads
+    forward_weight: Decimal = Decimal("0.0")  # 0 = disabled (backward compat)
+    stress_horizon: int = 5  # days to look ahead for stress estimation
+    flow_sensitivity: Decimal = Decimal("0.0")  # 0 = disabled (backward compat)
 
 
 @dataclass(frozen=True)
@@ -141,6 +150,8 @@ class LenderProfile:
     planning_horizon: int = 5
     profit_target: Decimal = Decimal("0.05")
     max_loan_maturity: int = 10
+    risk_assessment_params: RiskAssessmentParams | None = None  # None = disable (backward compat)
+    warmup_observations: int = 10  # data points before Bayesian dominates coverage
 
     def __post_init__(self) -> None:
         if self.kappa <= Decimal("0"):
@@ -153,6 +164,8 @@ class LenderProfile:
             raise ValueError("risk_aversion must be between 0 and 1")
         if not (self.max_loan_maturity >= 1):
             raise ValueError("max_loan_maturity must be >= 1")
+        if self.warmup_observations < 1:
+            raise ValueError("warmup_observations must be >= 1")
 
     @property
     def base_default_estimate(self) -> Decimal:

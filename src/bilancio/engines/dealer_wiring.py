@@ -188,6 +188,7 @@ def _initialize_market_makers(
             clip_nonneg_B=dealer_config.clip_nonneg_B,
             inventory=[],  # Empty! VBTs build inventory by buying from traders
             cash=vbt_capital_per_bucket,  # NEW outside money
+            flow_sensitivity=subsystem.vbt_profile.flow_sensitivity,
         )
         vbt.recompute_quotes()
         subsystem.vbts[bucket_id] = vbt
@@ -440,6 +441,7 @@ def _initialize_balanced_market_makers(
             clip_nonneg_B=dealer_config.clip_nonneg_B,
             inventory=list(vbt_bucket_tickets),  # VBT starts WITH inventory!
             cash=vbt_cash,
+            flow_sensitivity=subsystem.vbt_profile.flow_sensitivity,
         )
         vbt.recompute_quotes()
         subsystem.vbts[bucket_id] = vbt

@@ -21,6 +21,7 @@ if TYPE_CHECKING:
         PortfolioStrategy,
         TransactionPricer,
     )
+    from bilancio.decision.risk_assessment import RiskAssessor
     from bilancio.engines.system import System
     from bilancio.information.profile import InformationProfile
 
@@ -42,6 +43,7 @@ class LendingConfig:
     information_profile: InformationProfile | None = None
     lender_profile: LenderProfile | None = None
     max_ring_maturity: int | None = None  # computed at ring creation time
+    risk_assessor: RiskAssessor | None = None  # persists across days for Bayesian learning
     # Decision protocol overrides (None = auto-construct from scalar params)
     portfolio_strategy: PortfolioStrategy | None = None
     counterparty_screener: CounterpartyScreener | None = None
@@ -193,10 +195,33 @@ def run_lending_phase(
             )
             total_resources = max(agent_cash + receivables, 0)
             coverage = Decimal(str(total_resources)) / Decimal(str(max(upcoming_due, 1)))
-            # Blend kappa-based prior with coverage ratio
-            p_default = profile.base_default_estimate * (
+            # Coverage-based default estimate (original heuristic)
+            p_coverage = profile.base_default_estimate * (
                 Decimal("1") / max(coverage, Decimal("0.01"))
             )
+            p_coverage = max(Decimal("0.01"), min(Decimal("0.95"), p_coverage))
+
+            # Blend with Bayesian posterior when assessor is available
+            if (
+                config.risk_assessor is not None
+                and profile.risk_assessment_params is not None
+            ):
+                p_bayesian = config.risk_assessor.estimate_default_prob(
+                    agent_id, current_day
+                )
+                # Count issuer-specific observations for blending weight
+                issuer_hist = config.risk_assessor.belief_tracker.issuer_history.get(
+                    agent_id, []
+                )
+                n = len(issuer_hist)
+                w_bayes = min(
+                    Decimal("1"),
+                    Decimal(str(n)) / Decimal(str(profile.warmup_observations)),
+                )
+                p_default = w_bayes * p_bayesian + (Decimal("1") - w_bayes) * p_coverage
+            else:
+                p_default = p_coverage
+
             p_default = max(Decimal("0.01"), min(Decimal("0.95"), p_default))
 
         # Price the loan
@@ -318,6 +343,10 @@ def run_loan_repayments(system: System, current_day: int) -> list[dict[str, Any]
     """
     events: list[dict[str, Any]] = []
 
+    # Get assessor from lending config (if available) for Bayesian learning
+    lender_config = getattr(system.state, "lender_config", None)
+    assessor = lender_config.risk_assessor if lender_config is not None else None
+
     due_loans = system.get_nonbank_loans_due(current_day)
     for loan_id in due_loans:
         loan = system.state.contracts.get(loan_id)
@@ -336,6 +365,9 @@ def run_loan_repayments(system: System, current_day: int) -> list[dict[str, Any]
                     "repaid": repaid,
                 }
             )
+            # Update NBFI BeliefTracker with loan outcome
+            if assessor is not None:
+                assessor.update_history(current_day, borrower_id, defaulted=not repaid)
         except (ValidationError, ValueError, KeyError) as e:
             logger.warning("Loan repayment failed for %s: %s", loan_id, e)
 

@@ -642,7 +642,7 @@ def run_dealer_trading_phase(
     # VBTs are credit-aware holders: M = outside_mid_ratio × (1 - P_default).
     # As the system learns actual default rates, VBT mid drifts accordingly,
     # keeping dealer asks below par so rational buys remain viable.
-    _update_vbt_credit_mids(subsystem, current_day)
+    _update_vbt_credit_mids(subsystem, current_day, system)
 
     # Phase 2: Recompute dealer quotes for all buckets
     for bucket_id, dealer in subsystem.dealers.items():

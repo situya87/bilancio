@@ -212,6 +212,13 @@ class VBTState:
     inventory: list[Ticket] = field(default_factory=list)
     cash: Decimal = Decimal(0)
 
+    # Flow tracking (monotonically increasing)
+    cumulative_outflow: Decimal = Decimal(0)  # face value sold to customers
+    cumulative_inflow: Decimal = Decimal(0)   # face value bought from customers
+
+    # Flow-aware ask pricing (from VBTProfile, set at creation time)
+    flow_sensitivity: Decimal = Decimal(0)
+
     def recompute_quotes(self) -> None:
         """
         Update A and B from M and O with optional clipping.
@@ -223,6 +230,11 @@ class VBTState:
         Applies clipping:
             - O >= O_min (minimum spread)
             - B >= 0 if clip_nonneg_B is True
+
+        When flow_sensitivity > 0, applies a flow-aware ask premium that
+        widens the ask when the VBT has been a net seller (cumulative_outflow
+        exceeds cumulative_inflow).  This prevents unlimited draining of
+        VBT inventory at nearly-fixed prices.
         """
         # Ensure minimum spread
         O_effective = max(self.O, self.O_min)
@@ -231,6 +243,18 @@ class VBTState:
         half_spread = O_effective / 2
         self.A = self.M + half_spread
         self.B = self.M - half_spread
+
+        # Apply flow-aware ask premium
+        if self.flow_sensitivity > 0:
+            net_outflow = self.cumulative_outflow - self.cumulative_inflow
+            if net_outflow > 0:
+                # Use initial inventory value as normalization base
+                # Approximate: initial_inventory ~ len(inventory) + net_outflow
+                initial_value = Decimal(len(self.inventory)) + net_outflow
+                if initial_value > 0:
+                    outflow_ratio = net_outflow / initial_value
+                    ask_premium = self.flow_sensitivity * max(Decimal(0), outflow_ratio)
+                    self.A = self.A + ask_premium
 
         # Cap ask at par: zero-coupon claims pay at most face at maturity
         self.A = min(self.A, Decimal(1))

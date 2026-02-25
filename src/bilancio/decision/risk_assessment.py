@@ -70,6 +70,7 @@ class RiskAssessmentParams:
     initial_prior: Decimal = Decimal(
         "0.15"
     )  # No-history default prior (can be overridden by informedness)
+    earning_motive_premium: Decimal = Decimal("0.0")  # 0 = disabled (backward compat)
 
 
 # ---------------------------------------------------------------------------
@@ -415,12 +416,14 @@ class TradeGate:
         buy_risk_premium: Decimal = Decimal("0.01"),
         buy_premium_multiplier: Decimal = Decimal("1.0"),
         initial_prior: Decimal = Decimal("0.15"),
+        earning_motive_premium: Decimal = Decimal("0.0"),
     ):
         self.valuer = valuer
         self.position_assessor = position_assessor
         self.buy_risk_premium = buy_risk_premium
         self.buy_premium_multiplier = buy_premium_multiplier
         self.initial_prior = initial_prior
+        self.earning_motive_premium = earning_motive_premium
 
     def should_sell(
         self,
@@ -508,6 +511,13 @@ class TradeGate:
         # Base buy threshold from profile
         buy_threshold = self.buy_risk_premium
 
+        # Earning-motive premium: higher bar for speculative (no-shortfall) buys.
+        # When a trader has no upcoming shortfall, buying is purely speculative
+        # (earning motive). The extra premium reflects the low marginal value
+        # of adding another receivable when liquidity needs are already met.
+        if self.earning_motive_premium > 0 and trader_shortfall == 0:
+            buy_threshold += self.earning_motive_premium
+
         # Liquidity-adjusted threshold: deploying settlement cash into illiquid
         # receivables carries an opportunity cost proportional to the issuer's
         # default risk and the trader's own cash scarcity.
@@ -586,6 +596,7 @@ class RiskAssessor:
             buy_risk_premium=params.buy_risk_premium,
             buy_premium_multiplier=params.buy_premium_multiplier,
             initial_prior=params.initial_prior,
+            earning_motive_premium=params.earning_motive_premium,
         )
 
     # -- Backward-compatible attribute access --------------------------------
