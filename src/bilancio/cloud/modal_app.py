@@ -69,11 +69,33 @@ image = (
 RESULTS_MOUNT_PATH = "/results"
 
 
-def compute_metrics_from_events(events_path: str) -> dict[str, Any]:
+def _compute_dealer_vbt_loss(dealer_metrics_path: str | None) -> float:
+    """Extract dealer+VBT loss from dealer_metrics.json, returning 0 if unavailable."""
+    if not dealer_metrics_path:
+        return 0.0
+    import json
+    from pathlib import Path
+
+    path = Path(dealer_metrics_path)
+    if not path.exists():
+        return 0.0
+    try:
+        with path.open() as f:
+            data = json.load(f)
+        pnl = data.get("dealer_total_pnl")
+        if pnl is not None:
+            return max(0.0, -float(pnl))
+    except (json.JSONDecodeError, ValueError, KeyError):
+        pass
+    return 0.0
+
+
+def compute_metrics_from_events(events_path: str, dealer_metrics_path: str | None = None) -> dict[str, Any]:
     """Compute metrics from events.jsonl file.
 
     Args:
         events_path: Path to events.jsonl file.
+        dealer_metrics_path: Optional path to dealer_metrics.json for intermediary loss computation.
 
     Returns:
         Dict with all global metrics from summarize_day_metrics, properly serialized.
@@ -155,6 +177,17 @@ def compute_metrics_from_events(events_path: str) -> dict[str, Any]:
             run_level.get("total_loss", 0) / summary["S_total"]
             if summary.get("S_total") and summary["S_total"] > 0
             else None
+        ),
+        # Intermediary loss metrics
+        "nbfi_loan_loss": run_level.get("nbfi_loan_loss", 0),
+        "bank_credit_loss": run_level.get("bank_credit_loss", 0),
+        "cb_backstop_loss": run_level.get("cb_backstop_loss", 0),
+        "dealer_vbt_loss": _compute_dealer_vbt_loss(dealer_metrics_path),
+        "intermediary_loss_total": (
+            run_level.get("nbfi_loan_loss", 0)
+            + run_level.get("bank_credit_loss", 0)
+            + run_level.get("cb_backstop_loss", 0)
+            + _compute_dealer_vbt_loss(dealer_metrics_path)
         ),
         "raw_metrics": serializable_summary,
     }
@@ -398,10 +431,14 @@ def run_simulation(
 
         # Compute metrics from events
         events_path = out_dir / "events.jsonl"
+        dealer_metrics_path = out_dir / "dealer_metrics.json"
         metrics = {}
         if events_path.exists():
             print("Computing metrics from events...", flush=True)
-            metrics = compute_metrics_from_events(str(events_path))
+            metrics = compute_metrics_from_events(
+                str(events_path),
+                dealer_metrics_path=str(dealer_metrics_path) if dealer_metrics_path.exists() else None,
+            )
             print(
                 f"Metrics: δ={metrics.get('delta_total')}, φ={metrics.get('phi_total')}", flush=True
             )

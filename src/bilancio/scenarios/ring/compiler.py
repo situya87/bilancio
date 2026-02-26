@@ -612,7 +612,7 @@ def compile_ring_explorer_balanced(
                 target_bank_reserves = total_vbt_dealer_liquidity / Decimal("3")
             else:
                 # Non-banking modes: fall back to multiplier
-                target_bank_reserves = Decimal(str(reserve_multiplier)) * total_deposited / n_banks
+                target_bank_reserves = Decimal(str(reserve_multiplier)) * total_deposited
             reserves_per_bank = int(target_bank_reserves / n_banks)
         else:
             reserves_per_bank = int(reserve_multiplier * float(total_deposited) / n_banks)
