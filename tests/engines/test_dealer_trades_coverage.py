@@ -842,6 +842,147 @@ class TestExecuteBuyTrade:
 
 
 # ===================================================================
+# Cash-only obligation coverage check
+# ===================================================================
+
+
+class TestCashOnlyObligationCoverage:
+    """Test the cash-only obligation coverage check in _execute_buy_trade.
+
+    This check prevents the 'safety margin illusion' where receivables
+    (valued at dealer bid) mask a cash shortfall.  An agent must be able
+    to cover ALL obligations with cash alone after any purchase.
+    """
+
+    def test_buy_rejected_when_cash_below_obligations(self):
+        """Buy is reversed when post-buy cash < total obligations.
+
+        The safety margin illusion: trader holds receivables valued at
+        dealer bid, making the overall margin look positive, but cash
+        alone can't cover obligations after the purchase.
+
+        Setup: cash=17, obligations=17, already owns 2 tickets (face=1).
+        Safety margin = 17 + 2*bid - 17 > 0 (would pass old check).
+        Buy costs ~0.95 → cash=16.05 < 17 → cash-only check rejects.
+        """
+        from bilancio.decision.profiles import TraderProfile
+
+        subsystem = _make_subsystem(
+            dealer_tickets=3,
+            dealer_cash=Decimal(5),
+            face_value=Decimal(1),
+        )
+        subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
+
+        obligation = _make_ticket(
+            id="obl1", face=Decimal(17), maturity_day=15, serial=0
+        )
+        # Existing receivables — these inflate the safety margin
+        existing_ticket_1 = _make_ticket(
+            id="recv1", face=Decimal(1), maturity_day=10, serial=10,
+            bucket_id="short",
+        )
+        existing_ticket_2 = _make_ticket(
+            id="recv2", face=Decimal(1), maturity_day=12, serial=11,
+            bucket_id="short",
+        )
+        trader = _add_trader(
+            subsystem, "T1", cash=Decimal(17),
+            obligations=[obligation],
+            tickets=[existing_ticket_1, existing_ticket_2],
+        )
+        initial_cash = trader.cash
+        events: list[dict] = []
+
+        result = _execute_buy_trade(subsystem, "T1", 1, events)
+
+        # Buy should be rejected: post-buy cash < total obligations
+        assert result == Decimal(0), (
+            f"Buy should have been rejected but returned {result}"
+        )
+        assert trader.cash == initial_cash
+        # Only the 2 existing tickets, no new one acquired
+        assert len(trader.tickets_owned) == 2
+
+    def test_buy_allowed_when_cash_covers_obligations(self):
+        """Buy proceeds when post-buy cash >= total obligations."""
+        from bilancio.decision.profiles import TraderProfile
+
+        subsystem = _make_subsystem(
+            dealer_tickets=3,
+            dealer_cash=Decimal(5),
+            face_value=Decimal(1),
+        )
+        subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
+
+        # Small obligation that cash easily covers even after buying
+        obligation = _make_ticket(
+            id="obl1", face=Decimal(5), maturity_day=15, serial=0
+        )
+        trader = _add_trader(
+            subsystem, "T1", cash=Decimal(100), obligations=[obligation]
+        )
+        events: list[dict] = []
+
+        result = _execute_buy_trade(subsystem, "T1", 1, events)
+
+        # Buy should succeed — plenty of cash left
+        assert result > Decimal(0)
+        assert trader.cash < Decimal(100)  # Some cash was spent
+        assert trader.cash >= Decimal(5)  # Still covers obligations
+        assert len(trader.tickets_owned) == 1
+
+    def test_borderline_buy_rejected_when_exactly_insufficient(self):
+        """Edge case: cash exactly equals obligations, any buy rejected."""
+        from bilancio.decision.profiles import TraderProfile
+
+        subsystem = _make_subsystem(
+            dealer_tickets=3,
+            dealer_cash=Decimal(5),
+            face_value=Decimal(1),
+        )
+        subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
+
+        # Cash exactly matches obligations — any buy would push cash below
+        obligation = _make_ticket(
+            id="obl1", face=Decimal(10), maturity_day=15, serial=0
+        )
+        trader = _add_trader(
+            subsystem, "T1", cash=Decimal(10), obligations=[obligation]
+        )
+        initial_cash = trader.cash
+        events: list[dict] = []
+
+        result = _execute_buy_trade(subsystem, "T1", 1, events)
+
+        assert result == Decimal(0)
+        assert trader.cash == initial_cash
+        assert len(trader.tickets_owned) == 0
+
+    def test_no_obligations_allows_buy(self):
+        """Agents without obligations can buy freely (no coverage check needed)."""
+        from bilancio.decision.profiles import TraderProfile
+
+        subsystem = _make_subsystem(
+            dealer_tickets=3,
+            dealer_cash=Decimal(5),
+            face_value=Decimal(1),
+        )
+        subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
+
+        trader = _add_trader(
+            subsystem, "T1", cash=Decimal(100), obligations=[]
+        )
+        events: list[dict] = []
+
+        result = _execute_buy_trade(subsystem, "T1", 1, events)
+
+        # No obligations → total_obligations = 0 → cash always covers
+        assert result > Decimal(0)
+        assert len(trader.tickets_owned) == 1
+
+
+# ===================================================================
 # _build_eligible_sellers and _build_eligible_buyers
 # ===================================================================
 

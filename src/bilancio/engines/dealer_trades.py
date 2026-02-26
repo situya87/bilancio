@@ -577,6 +577,22 @@ def _execute_buy_trade(
             trader.tickets_owned.append(result.ticket)
             trader.cash -= scaled_price
 
+            # Cash-only obligation coverage check: prevent the "safety margin
+            # illusion" where receivables (valued at dealer bid) mask a cash
+            # shortfall.  An agent must be able to cover ALL outstanding
+            # obligations with cash alone after any purchase — receivables
+            # are uncertain (the issuer may default) and cannot be relied
+            # upon to meet payment obligations.
+            total_obligations = sum(
+                (o.face for o in trader.obligations), Decimal(0)
+            )
+            if trader.cash < total_obligations:
+                trader.cash += scaled_price
+                trader.tickets_owned.pop()
+                _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
+                recompute_dealer_state(dealer, vbt, subsystem.params)
+                continue  # Try next bucket
+
             # Post-buy safety margin check: reverse if buy makes trader underwater
             post_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
             if post_safety_margin < 0:
