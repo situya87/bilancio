@@ -327,8 +327,7 @@ class TestMatchedPairsFirst:
             call_log.append(f"buy:{trader_id}")
 
         with patch("bilancio.engines.dealer_trades._execute_sell_trade", side_effect=mock_sell), \
-             patch("bilancio.engines.dealer_trades._execute_buy_trade", side_effect=mock_buy), \
-             patch("bilancio.engines.dealer_integration._get_agent_cash", return_value=Decimal(1000)):
+             patch("bilancio.engines.dealer_trades._execute_buy_trade", side_effect=mock_buy):
 
             subsystem = MagicMock()
             subsystem.dealers = {}
@@ -362,8 +361,7 @@ class TestMatchedPairsFirst:
             call_log.append(f"buy:{trader_id}")
 
         with patch("bilancio.engines.dealer_trades._execute_sell_trade", side_effect=mock_sell), \
-             patch("bilancio.engines.dealer_trades._execute_buy_trade", side_effect=mock_buy), \
-             patch("bilancio.engines.dealer_integration._get_agent_cash", return_value=Decimal(1000)):
+             patch("bilancio.engines.dealer_trades._execute_buy_trade", side_effect=mock_buy):
 
             subsystem = MagicMock()
             subsystem.dealers = {}
@@ -396,8 +394,7 @@ class TestMatchedPairsFirst:
             call_log.append(f"buy:{trader_id}")
 
         with patch("bilancio.engines.dealer_trades._execute_sell_trade", side_effect=mock_sell), \
-             patch("bilancio.engines.dealer_trades._execute_buy_trade", side_effect=mock_buy), \
-             patch("bilancio.engines.dealer_integration._get_agent_cash", return_value=Decimal(1000)):
+             patch("bilancio.engines.dealer_trades._execute_buy_trade", side_effect=mock_buy):
 
             subsystem = MagicMock()
             subsystem.dealers = {}
@@ -429,8 +426,7 @@ class TestMatchedPairsFirst:
             call_log.append(f"buy:{trader_id}")
 
         with patch("bilancio.engines.dealer_trades._execute_sell_trade", side_effect=mock_sell), \
-             patch("bilancio.engines.dealer_trades._execute_buy_trade", side_effect=mock_buy), \
-             patch("bilancio.engines.dealer_integration._get_agent_cash", return_value=Decimal(1000)):
+             patch("bilancio.engines.dealer_trades._execute_buy_trade", side_effect=mock_buy):
 
             subsystem = MagicMock()
             subsystem.dealers = {}
@@ -457,8 +453,7 @@ class TestMatchedPairsFirst:
             call_log.append(f"buy:{trader_id}")
 
         with patch("bilancio.engines.dealer_trades._execute_sell_trade", side_effect=mock_sell), \
-             patch("bilancio.engines.dealer_trades._execute_buy_trade", side_effect=mock_buy), \
-             patch("bilancio.engines.dealer_integration._get_agent_cash", return_value=Decimal(1000)):
+             patch("bilancio.engines.dealer_trades._execute_buy_trade", side_effect=mock_buy):
 
             subsystem = MagicMock()
             subsystem.dealers = {}

@@ -89,7 +89,6 @@ class DealerMatchingEngine:
         """
         # Lazy imports to break circular dependency
         # (dealer_integration ↔ dealer_trades ↔ matching)
-        from bilancio.engines.dealer_integration import _get_agent_cash
         from bilancio.engines.dealer_trades import (
             _execute_buy_trade,
             _execute_sell_trade,
@@ -103,16 +102,16 @@ class DealerMatchingEngine:
         subsystem.rng.shuffle(sell_order)  # type: ignore[arg-type]
         subsystem.rng.shuffle(buy_order)  # type: ignore[arg-type]
 
-        # --- Snapshot dealer/VBT cash as execution budgets ---
+        # --- Build execution budgets from subsystem cash (not system) ---
+        # Subsystem dealer/VBT cash is the live, authoritative value that
+        # reflects trades executed in prior sub-rounds.  Reading from the
+        # main system would return stale values (system cash is only synced
+        # at the end of the full trading phase).
         dealer_budgets: dict[str, Decimal] = {}
         for _bucket_id, dealer in subsystem.dealers.items():
-            dealer_budgets[dealer.agent_id] = _get_agent_cash(
-                system, dealer.agent_id
-            )
+            dealer_budgets[dealer.agent_id] = dealer.cash
         for _bucket_id, vbt in subsystem.vbts.items():
-            dealer_budgets[vbt.agent_id] = _get_agent_cash(
-                system, vbt.agent_id
-            )
+            dealer_budgets[vbt.agent_id] = vbt.cash
 
         # --- Phase 1: matched pairs (sell then buy, alternating) ---
         n_paired = min(len(sell_order), len(buy_order))
