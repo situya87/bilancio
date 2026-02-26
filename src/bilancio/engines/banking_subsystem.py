@@ -262,12 +262,13 @@ class BankingSubsystem:
                 bank_state.pricing_params.reserve_remuneration_rate = r_floor
                 bank_state.pricing_params.cb_borrowing_rate = r_ceiling
 
-        # --- Existing: rate escalation on top ---
-        effective_ceiling = cb.effective_lending_rate(system.state.cb_loans_outstanding)
-        for bank_state in self.banks.values():
-            # Only override if escalated rate exceeds current ceiling
-            if effective_ceiling > bank_state.pricing_params.cb_borrowing_rate:
-                bank_state.pricing_params.cb_borrowing_rate = effective_ceiling
+        # --- Existing: rate escalation stacked on top ---
+        if cb.rate_escalation_slope > 0 and cb.escalation_base_amount > 0:
+            outstanding = system.state.cb_loans_outstanding
+            utilization = Decimal(outstanding) / Decimal(cb.escalation_base_amount)
+            escalation_increment = cb.rate_escalation_slope * utilization
+            for bank_state in self.banks.values():
+                bank_state.pricing_params.cb_borrowing_rate += escalation_increment
 
     def _get_agent_banks(self, agent_id: str) -> list[str]:
         """Get list of bank_ids for an agent."""
