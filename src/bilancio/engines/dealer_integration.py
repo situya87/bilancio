@@ -189,6 +189,9 @@ class DealerSubsystem:
     # VBT pricing model (optional — when None, uses inline logic for backward compat)
     vbt_pricing_model: VBTPricingModel | None = None
 
+    # Number of trading sub-rounds per day (default 1 = current behavior)
+    trading_rounds: int = 1
+
 
 
 def get_trader_assessor(subsystem: DealerSubsystem, trader_id: AgentId) -> RiskAssessor | None:
@@ -654,19 +657,33 @@ def run_dealer_trading_phase(
     _capture_trader_snapshots(subsystem, current_day)
     _capture_system_state_snapshot(subsystem, current_day)  # Plan 022
 
-    # Phase 3: Collect trade intentions from decision strategies
-    sell_intentions = collect_sell_intentions(subsystem, current_day)
-    buy_intentions = collect_buy_intentions(subsystem, current_day)
+    # Phase 3+4: Trading sub-rounds
+    # Each sub-round re-collects intentions (so a trader who sold in round 1
+    # can sell another ticket in round 2 if still short on cash) and
+    # re-matches against dealer quotes.  Dealer state is recomputed between
+    # rounds to reflect updated inventory/cash.
+    n_rounds = getattr(subsystem, "trading_rounds", 1)
+    for _round in range(n_rounds):
+        sell_intentions = collect_sell_intentions(subsystem, current_day)
+        buy_intentions = collect_buy_intentions(subsystem, current_day)
 
-    # Phase 4: Match intentions against dealer quotes
-    DealerMatchingEngine().execute(
-        subsystem,
-        system,
-        current_day,
-        sell_intentions,
-        buy_intentions,
-        events,
-    )
+        if not sell_intentions and not buy_intentions:
+            break  # No one wants to trade — stop early
+
+        DealerMatchingEngine().execute(
+            subsystem,
+            system,
+            current_day,
+            sell_intentions,
+            buy_intentions,
+            events,
+        )
+
+        # Recompute dealer quotes between rounds (updated inventory/cash)
+        if _round < n_rounds - 1:
+            for bucket_id, dealer in subsystem.dealers.items():
+                vbt = subsystem.vbts[bucket_id]
+                recompute_dealer_state(dealer, vbt, subsystem.params)
 
     return events
 

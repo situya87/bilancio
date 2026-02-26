@@ -10,10 +10,13 @@ derived from the VBT mid-price and the bucket spread parameter.
 There is no order book and no price discovery.  The dealer is always
 the counterparty, acting as a market-maker with bounded inventory.
 
-Execution order within a day:
+Execution order within each sub-round:
 
-1. All **sells** are processed first (urgent liquidity needs).
-2. All **buys** are processed second (surplus investment).
+1. **Matched pairs** — process one sell then one buy, alternating,
+   until the shorter list is exhausted.  This lets the dealer offset
+   incoming inventory immediately, minimising capacity usage.
+2. **Residual sells** — any remaining sells (dealer absorbs inventory).
+3. **Residual buys** — any remaining buys (dealer depletes inventory).
 
 Within each phase the intention list is shuffled so that no agent has a
 systematic positional advantage.
@@ -39,10 +42,10 @@ class DealerMatchingEngine:
     lifts the ask, and the dealer's inventory / cash budget is the only
     binding constraint.
 
-    The engine does **not** perform price discovery or maintain an order
-    book — it simply dispatches each intention to the appropriate
-    ``_execute_sell_trade`` or ``_execute_buy_trade`` helper, which
-    handles ticket selection, pricing, and settlement.
+    The engine processes **matched pairs first** (one sell, one buy)
+    so the dealer can immediately offset incoming inventory before
+    absorbing the residual one-sided flow.  This minimises the
+    dealer's peak inventory and cash usage.
     """
 
     def execute(
@@ -56,11 +59,17 @@ class DealerMatchingEngine:
     ) -> None:
         """Match sell and buy intentions against dealer quotes.
 
-        Produces identical behaviour to the legacy
-        ``_execute_interleaved_order_flow`` function: sells are processed
-        first (urgent liquidity), then buys (surplus investment).  Both
-        lists are shuffled independently so no agent has a positional
-        advantage.
+        Execution order:
+
+        1. Pair up sells and buys — process sell-then-buy in lockstep
+           until the shorter list is exhausted.
+        2. Process any remaining sells (dealer absorbs inventory or
+           passthroughs to VBT).
+        3. Process any remaining buys (dealer sells from inventory or
+           passthroughs from VBT).
+
+        Both lists are shuffled independently so no agent has a
+        positional advantage.
 
         Parameters
         ----------
@@ -105,23 +114,42 @@ class DealerMatchingEngine:
                 system, vbt.agent_id
             )
 
-        # --- Phase 1: process all sells (urgent liquidity) ---
-        for intention in sell_order:
+        # --- Phase 1: matched pairs (sell then buy, alternating) ---
+        n_paired = min(len(sell_order), len(buy_order))
+        for i in range(n_paired):
             _execute_sell_trade(
                 subsystem,
-                intention.trader_id,
+                sell_order[i].trader_id,
+                current_day,
+                events,
+                dealer_budgets,
+            )
+            _execute_buy_trade(
+                subsystem,
+                buy_order[i].trader_id,
+                current_day,
+                events,
+                dealer_budgets,
+                max_spend=buy_order[i].max_spend,
+            )
+
+        # --- Phase 2: residual sells (dealer absorbs inventory) ---
+        for i in range(n_paired, len(sell_order)):
+            _execute_sell_trade(
+                subsystem,
+                sell_order[i].trader_id,
                 current_day,
                 events,
                 dealer_budgets,
             )
 
-        # --- Phase 2: process all buys (surplus investment) ---
-        for intention in buy_order:
+        # --- Phase 3: residual buys (dealer depletes inventory) ---
+        for i in range(n_paired, len(buy_order)):
             _execute_buy_trade(
                 subsystem,
-                intention.trader_id,
+                buy_order[i].trader_id,
                 current_day,
                 events,
                 dealer_budgets,
-                max_spend=intention.max_spend,
+                max_spend=buy_order[i].max_spend,
             )

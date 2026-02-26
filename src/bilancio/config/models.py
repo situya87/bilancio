@@ -790,6 +790,12 @@ class BalancedDealerConfig(BaseModel):
         ge=Decimal("0"),
         description="Multiplicative scale on dealer base spreads (1.0 = no change)",
     )
+    trading_rounds: int = Field(
+        default=1,
+        ge=1,
+        le=10,
+        description="Number of trading sub-rounds per day (1=current behavior, higher=more throughput)",
+    )
 
     @field_validator("trading_motive")
     @classmethod
