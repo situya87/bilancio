@@ -579,14 +579,16 @@ def _execute_buy_trade(
 
             # Cash-only obligation coverage check: prevent the "safety margin
             # illusion" where receivables (valued at dealer bid) mask a cash
-            # shortfall.  An agent must be able to cover ALL outstanding
-            # obligations with cash alone after any purchase — receivables
-            # are uncertain (the issuer may default) and cannot be relied
-            # upon to meet payment obligations.
-            total_obligations = sum(
-                (o.face for o in trader.obligations), Decimal(0)
-            )
-            if trader.cash < total_obligations:
+            # shortfall.  After buying, the trader must still be able to
+            # cover obligations within its planning horizon with cash alone.
+            # Uses the same horizon as SurplusBuyer to stay consistent with
+            # the buy-intention eligibility policy (buy_reserve_fraction,
+            # planning_horizon).
+            horizon = buy_profile.buy_horizon
+            upcoming_obligations = Decimal(0)
+            for day_offset in range(horizon + 1):
+                upcoming_obligations += trader.payment_due(current_day + day_offset)
+            if trader.cash < upcoming_obligations:
                 trader.cash += scaled_price
                 trader.tickets_owned.pop()
                 _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)

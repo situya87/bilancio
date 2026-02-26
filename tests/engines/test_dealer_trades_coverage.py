@@ -849,21 +849,23 @@ class TestExecuteBuyTrade:
 class TestCashOnlyObligationCoverage:
     """Test the cash-only obligation coverage check in _execute_buy_trade.
 
-    This check prevents the 'safety margin illusion' where receivables
-    (valued at dealer bid) mask a cash shortfall.  An agent must be able
-    to cover ALL obligations with cash alone after any purchase.
+    The guard uses the same horizon as ``SurplusBuyer`` (``buy_horizon``)
+    so that eligibility and execution stay consistent.  Obligations outside
+    the horizon do NOT block the buy.
     """
 
-    def test_buy_rejected_when_cash_below_obligations(self):
-        """Buy is reversed when post-buy cash < total obligations.
+    def test_buy_rejected_when_cash_below_horizon_obligations(self):
+        """Buy is reversed when post-buy cash < upcoming obligations in horizon.
 
         The safety margin illusion: trader holds receivables valued at
         dealer bid, making the overall margin look positive, but cash
-        alone can't cover obligations after the purchase.
+        alone can't cover near-term obligations after the purchase.
 
-        Setup: cash=17, obligations=17, already owns 2 tickets (face=1).
-        Safety margin = 17 + 2*bid - 17 > 0 (would pass old check).
-        Buy costs ~0.95 → cash=16.05 < 17 → cash-only check rejects.
+        Setup (current_day=1, buy_horizon=10 → window [1..11]):
+          cash=17, obligation face=17 due on day 5 (within horizon),
+          already owns 2 tickets (face=1 each).
+          Safety margin = 17 + 2*bid - 17 > 0 (old check passes).
+          Buy costs ~0.95 → cash ≈ 16.05 < 17 → guard rejects.
         """
         from bilancio.decision.profiles import TraderProfile
 
@@ -874,10 +876,11 @@ class TestCashOnlyObligationCoverage:
         )
         subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
 
+        # Obligation within horizon (day 5 with current_day=1, horizon=10)
         obligation = _make_ticket(
-            id="obl1", face=Decimal(17), maturity_day=15, serial=0
+            id="obl1", face=Decimal(17), maturity_day=5, serial=0
         )
-        # Existing receivables — these inflate the safety margin
+        # Existing receivables — inflate the safety margin
         existing_ticket_1 = _make_ticket(
             id="recv1", face=Decimal(1), maturity_day=10, serial=10,
             bucket_id="short",
@@ -896,16 +899,14 @@ class TestCashOnlyObligationCoverage:
 
         result = _execute_buy_trade(subsystem, "T1", 1, events)
 
-        # Buy should be rejected: post-buy cash < total obligations
         assert result == Decimal(0), (
             f"Buy should have been rejected but returned {result}"
         )
         assert trader.cash == initial_cash
-        # Only the 2 existing tickets, no new one acquired
         assert len(trader.tickets_owned) == 2
 
-    def test_buy_allowed_when_cash_covers_obligations(self):
-        """Buy proceeds when post-buy cash >= total obligations."""
+    def test_buy_allowed_when_cash_covers_horizon_obligations(self):
+        """Buy proceeds when post-buy cash >= horizon-windowed obligations."""
         from bilancio.decision.profiles import TraderProfile
 
         subsystem = _make_subsystem(
@@ -915,9 +916,9 @@ class TestCashOnlyObligationCoverage:
         )
         subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
 
-        # Small obligation that cash easily covers even after buying
+        # Small obligation within horizon (day 5)
         obligation = _make_ticket(
-            id="obl1", face=Decimal(5), maturity_day=15, serial=0
+            id="obl1", face=Decimal(5), maturity_day=5, serial=0
         )
         trader = _add_trader(
             subsystem, "T1", cash=Decimal(100), obligations=[obligation]
@@ -926,14 +927,13 @@ class TestCashOnlyObligationCoverage:
 
         result = _execute_buy_trade(subsystem, "T1", 1, events)
 
-        # Buy should succeed — plenty of cash left
         assert result > Decimal(0)
-        assert trader.cash < Decimal(100)  # Some cash was spent
-        assert trader.cash >= Decimal(5)  # Still covers obligations
+        assert trader.cash < Decimal(100)
+        assert trader.cash >= Decimal(5)
         assert len(trader.tickets_owned) == 1
 
     def test_borderline_buy_rejected_when_exactly_insufficient(self):
-        """Edge case: cash exactly equals obligations, any buy rejected."""
+        """Edge case: cash exactly equals horizon obligations, any buy rejected."""
         from bilancio.decision.profiles import TraderProfile
 
         subsystem = _make_subsystem(
@@ -943,9 +943,9 @@ class TestCashOnlyObligationCoverage:
         )
         subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
 
-        # Cash exactly matches obligations — any buy would push cash below
+        # Obligation within horizon — cash exactly matches
         obligation = _make_ticket(
-            id="obl1", face=Decimal(10), maturity_day=15, serial=0
+            id="obl1", face=Decimal(10), maturity_day=5, serial=0
         )
         trader = _add_trader(
             subsystem, "T1", cash=Decimal(10), obligations=[obligation]
@@ -960,7 +960,7 @@ class TestCashOnlyObligationCoverage:
         assert len(trader.tickets_owned) == 0
 
     def test_no_obligations_allows_buy(self):
-        """Agents without obligations can buy freely (no coverage check needed)."""
+        """Agents without obligations can buy freely."""
         from bilancio.decision.profiles import TraderProfile
 
         subsystem = _make_subsystem(
@@ -977,8 +977,41 @@ class TestCashOnlyObligationCoverage:
 
         result = _execute_buy_trade(subsystem, "T1", 1, events)
 
-        # No obligations → total_obligations = 0 → cash always covers
         assert result > Decimal(0)
+        assert len(trader.tickets_owned) == 1
+
+    def test_far_future_obligations_do_not_block_buy(self):
+        """Obligations outside the planning horizon don't prevent buying.
+
+        Verifies the guard is horizon-consistent: a trader with cash=17,
+        a far-future obligation (day 50, outside horizon=10) should be
+        able to buy — the guard only checks upcoming obligations.
+        """
+        from bilancio.decision.profiles import TraderProfile
+
+        subsystem = _make_subsystem(
+            dealer_tickets=3,
+            dealer_cash=Decimal(5),
+            face_value=Decimal(1),
+        )
+        subsystem.trader_profile = TraderProfile(trading_motive="unrestricted")
+
+        # Obligation far outside horizon (day 50 with current_day=1, horizon=10)
+        obligation = _make_ticket(
+            id="obl1", face=Decimal(17), maturity_day=50, serial=0
+        )
+        trader = _add_trader(
+            subsystem, "T1", cash=Decimal(17),
+            obligations=[obligation],
+        )
+        events: list[dict] = []
+
+        result = _execute_buy_trade(subsystem, "T1", 1, events)
+
+        # Far-future obligation doesn't block buy — horizon sees 0 upcoming dues
+        assert result > Decimal(0), (
+            "Buy should succeed: obligation is outside planning horizon"
+        )
         assert len(trader.tickets_owned) == 1
 
 
