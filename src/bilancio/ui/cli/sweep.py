@@ -749,6 +749,12 @@ def sweep_comparison(
     default=10.0,
     help="Bank reserves = reserve_multiplier * face_value (default: 10.0)",
 )
+@click.option(
+    "--trading-rounds",
+    type=click.IntRange(min=1),
+    default=1,
+    help="Number of trading sub-rounds per day (default: 1)",
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -791,6 +797,7 @@ def sweep_balanced(
     cb_lending_cutoff_day: int | None,
     n_banks: int,
     reserve_multiplier: float,
+    trading_rounds: int,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -913,6 +920,7 @@ def sweep_balanced(
         cb_lending_cutoff_day=cb_lending_cutoff_day,
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,
+        trading_rounds=trading_rounds,
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)

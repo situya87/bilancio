@@ -705,6 +705,7 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 trader_profile=trader_profile,
                 vbt_profile=vbt_profile,
             )
+            system.state.dealer_subsystem.trading_rounds = config.balanced_dealer.trading_rounds
         else:
             system.state.dealer_subsystem = initialize_dealer_subsystem(
                 system, dealer_ring_config, risk_params=risk_params
@@ -971,6 +972,7 @@ def _init_dealer_from_action_specs(
         trader_profile=trader_profile,
         vbt_profile=vbt_profile,
     )
+    system.state.dealer_subsystem.trading_rounds = bd.trading_rounds
 
 
 def _init_lending_from_action_specs(
