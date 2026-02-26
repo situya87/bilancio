@@ -202,6 +202,11 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
     total_deposits_created = 0
     payable_default_loss = 0
 
+    # Intermediary losses (non-trader entity losses)
+    nbfi_loan_loss = 0
+    bank_credit_loss = 0
+    cb_backstop_loss = 0
+
     for e in events:
         kind = e.get("kind", "")
         amt = int(e.get("amount", 0))
@@ -211,6 +216,7 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
             bank_writeoffs += amt
         elif kind == "CBLoanFreezeWrittenOff":
             bank_writeoffs += amt
+            cb_backstop_loss += amt
         elif kind == "ObligationWrittenOff":
             ck = str(e.get("contract_kind", ""))
             if ck in ("interbank_loan", "interbank_overnight"):
@@ -242,6 +248,18 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         elif kind == "DepositInterest":
             total_deposits_created += int(e.get("interest", 0))
 
+        # NBFI lender losses from defaulted loans
+        if kind == "NonBankLoanDefaulted":
+            amount_owed = int(e.get("amount_owed", 0))
+            cash_available = int(e.get("cash_available", 0))
+            nbfi_loan_loss += max(0, amount_owed - cash_available)
+
+        # Bank credit losses from defaulted customer loans
+        if kind == "BankLoanDefault":
+            repayment_due = int(e.get("repayment_due", 0))
+            recovered = int(e.get("recovered", 0))
+            bank_credit_loss += max(0, repayment_due - recovered)
+
     delta_bank = bank_writeoffs / bank_obligations_created if bank_obligations_created > 0 else None
     deposit_loss_pct = deposit_loss_gross / total_deposits_created if total_deposits_created > 0 else None
     total_loss = payable_default_loss + deposit_loss_gross
@@ -264,6 +282,9 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         "bank_writeoffs": bank_writeoffs,
         "payable_default_loss": payable_default_loss,
         "total_loss": total_loss,
+        "nbfi_loan_loss": nbfi_loan_loss,
+        "bank_credit_loss": bank_credit_loss,
+        "cb_backstop_loss": cb_backstop_loss,
     }
 
 
@@ -901,3 +922,105 @@ def render_dashboard(results_csv: Path | str, dashboard_html: Path | str) -> Non
 
     with dashboard_path.open("w", encoding="utf-8") as fh:
         fh.write(html)
+
+
+def extract_initial_capitals(scenario_config: dict[str, Any]) -> dict[str, float]:
+    """Extract initial capital of each intermediary type from scenario setup actions.
+
+    Parses the scenario's initial_actions to sum mint_cash/mint_reserves
+    amounts per intermediary type.
+
+    Returns:
+        Dict with keys: trader_capital, dealer_capital, vbt_capital,
+        lender_capital, bank_capital, intermediary_capital.
+    """
+    trader_cash = 0.0
+    dealer_cash = 0.0
+    vbt_cash = 0.0
+    lender_cash = 0.0
+    bank_reserves = 0.0
+
+    for action in scenario_config.get("initial_actions", []):
+        if not isinstance(action, dict):
+            continue
+        for action_type, params in action.items():
+            if not isinstance(params, dict):
+                continue
+            to = params.get("to", "")
+            amount = float(params.get("amount", 0))
+            if action_type == "mint_cash":
+                if to.startswith("H") and to[1:].isdigit():
+                    trader_cash += amount
+                elif to.startswith("dealer_"):
+                    dealer_cash += amount
+                elif to.startswith("vbt_"):
+                    vbt_cash += amount
+                elif to == "lender":
+                    lender_cash += amount
+            elif action_type == "mint_reserves":
+                if to.startswith("bank_"):
+                    bank_reserves += amount
+
+    intermediary_capital = dealer_cash + vbt_cash + lender_cash + bank_reserves
+
+    result: dict[str, float] = {
+        "trader_capital": trader_cash,
+        "dealer_capital": dealer_cash,
+        "vbt_capital": vbt_cash,
+        "lender_capital": lender_cash,
+        "bank_capital": bank_reserves,
+        "intermediary_capital": intermediary_capital,
+    }
+    return result
+
+
+def compute_intermediary_losses(
+    events: Sequence[dict[str, Any]],
+    dealer_metrics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compute losses absorbed by non-trader intermediary entities.
+
+    Measures the cost borne by dealers, VBTs, NBFI lenders, banks, and the CB
+    to facilitate the payment system. Used to compute adjusted treatment effects
+    that control for intermediary loss-shifting across arms.
+
+    Returns dict with:
+        dealer_vbt_loss: float - dealer+VBT mark-to-market loss (from dealer_metrics)
+        nbfi_loan_loss: float - NBFI lender losses from defaulted loans
+        bank_credit_loss: float - bank losses from defaulted customer loans
+        cb_backstop_loss: float - CB losses from written-off backstop loans
+        intermediary_loss_total: float - sum of all intermediary losses
+    """
+    # 1. Dealer+VBT loss from dealer_metrics
+    dealer_vbt_loss = 0.0
+    if dealer_metrics:
+        pnl = dealer_metrics.get("dealer_total_pnl")
+        if pnl is not None:
+            dealer_vbt_loss = max(0.0, -float(pnl))
+
+    # 2. Event-based losses: single pass
+    nbfi_loan_loss = 0.0
+    bank_credit_loss = 0.0
+    cb_backstop_loss = 0.0
+    for e in events:
+        kind = e.get("kind", "")
+        if kind == "NonBankLoanDefaulted":
+            amount_owed = float(e.get("amount_owed", 0))
+            cash_available = float(e.get("cash_available", 0))
+            nbfi_loan_loss += max(0.0, amount_owed - cash_available)
+        elif kind == "BankLoanDefault":
+            repayment_due = float(e.get("repayment_due", 0))
+            recovered = float(e.get("recovered", 0))
+            bank_credit_loss += max(0.0, repayment_due - recovered)
+        elif kind == "CBLoanFreezeWrittenOff":
+            cb_backstop_loss += float(e.get("amount", 0))
+
+    intermediary_loss_total = dealer_vbt_loss + nbfi_loan_loss + bank_credit_loss + cb_backstop_loss
+
+    return {
+        "dealer_vbt_loss": dealer_vbt_loss,
+        "nbfi_loan_loss": nbfi_loan_loss,
+        "bank_credit_loss": bank_credit_loss,
+        "cb_backstop_loss": cb_backstop_loss,
+        "intermediary_loss_total": intermediary_loss_total,
+    }

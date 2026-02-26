@@ -72,6 +72,17 @@ class RingRunSummary:
     payable_default_loss: int = 0
     total_loss: int = 0
     total_loss_pct: float | None = None
+    # Intermediary loss metrics (non-trader entity losses)
+    intermediary_loss_total: float = 0.0
+    dealer_vbt_loss: float = 0.0
+    nbfi_loan_loss: float = 0.0
+    bank_credit_loss: float = 0.0
+    cb_backstop_loss: float = 0.0
+    # Initial intermediary capital (for normalization)
+    initial_intermediary_capital: float = 0.0
+    initial_dealer_vbt_cash: float = 0.0
+    initial_lender_cash: float = 0.0
+    initial_bank_reserves: float = 0.0
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -914,6 +925,10 @@ class RingSweepRunner:
             },
         )
 
+        # Extract initial intermediary capitals from scenario config
+        from bilancio.analysis.report import extract_initial_capitals
+        capitals = extract_initial_capitals(scenario)
+
         return RingRunSummary(
             run_id=run_id,
             phase=phase,
@@ -939,6 +954,20 @@ class RingSweepRunner:
             payable_default_loss=payable_default_loss,
             total_loss=total_loss,
             total_loss_pct=total_loss_pct,
+            nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
+            bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
+            cb_backstop_loss=int(bundle.summary.get("cb_backstop_loss", 0)),
+            dealer_vbt_loss=max(0.0, -float((dealer_metrics or {}).get("dealer_total_pnl", 0))),
+            intermediary_loss_total=(
+                max(0.0, -float((dealer_metrics or {}).get("dealer_total_pnl", 0)))
+                + int(bundle.summary.get("nbfi_loan_loss", 0))
+                + int(bundle.summary.get("bank_credit_loss", 0))
+                + int(bundle.summary.get("cb_backstop_loss", 0))
+            ),
+            initial_intermediary_capital=capitals["intermediary_capital"],
+            initial_dealer_vbt_cash=capitals["dealer_capital"] + capitals["vbt_capital"],
+            initial_lender_cash=capitals["lender_capital"],
+            initial_bank_reserves=capitals["bank_capital"],
         )
 
     def _prepare_run(
@@ -1242,6 +1271,10 @@ class RingSweepRunner:
             if cascade_fraction_val is not None:
                 cascade_fraction_val = Decimal(str(cascade_fraction_val))
 
+            # Extract initial intermediary capitals from scenario config
+            from bilancio.analysis.report import extract_initial_capitals
+            capitals = extract_initial_capitals(prepared.scenario_config)
+
             return RingRunSummary(
                 run_id=prepared.run_id,
                 phase=prepared.phase,
@@ -1267,6 +1300,15 @@ class RingSweepRunner:
                 payable_default_loss=int(result.metrics.get("payable_default_loss", 0)),
                 total_loss=int(result.metrics.get("total_loss", 0)),
                 total_loss_pct=result.metrics.get("total_loss_pct"),
+                nbfi_loan_loss=int(result.metrics.get("nbfi_loan_loss", 0)),
+                bank_credit_loss=int(result.metrics.get("bank_credit_loss", 0)),
+                cb_backstop_loss=int(result.metrics.get("cb_backstop_loss", 0)),
+                dealer_vbt_loss=float(result.metrics.get("dealer_vbt_loss", 0.0)),
+                intermediary_loss_total=float(result.metrics.get("intermediary_loss_total", 0.0)),
+                initial_intermediary_capital=capitals["intermediary_capital"],
+                initial_dealer_vbt_cash=capitals["dealer_capital"] + capitals["vbt_capital"],
+                initial_lender_cash=capitals["lender_capital"],
+                initial_bank_reserves=capitals["bank_capital"],
             )
 
         # Local path: load artifacts, compute metrics, update registry
@@ -1326,6 +1368,10 @@ class RingSweepRunner:
             },
         )
 
+        # Extract initial intermediary capitals from scenario config
+        from bilancio.analysis.report import extract_initial_capitals
+        capitals = extract_initial_capitals(prepared.scenario_config)
+
         return RingRunSummary(
             run_id=prepared.run_id,
             phase=prepared.phase,
@@ -1354,6 +1400,20 @@ class RingSweepRunner:
                 int(bundle.summary.get("total_loss", 0)) / float(bundle.summary.get("S_total", 0))
                 if float(bundle.summary.get("S_total", 0)) > 0 else None
             ),
+            nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
+            bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
+            cb_backstop_loss=int(bundle.summary.get("cb_backstop_loss", 0)),
+            dealer_vbt_loss=max(0.0, -float((dealer_metrics or {}).get("dealer_total_pnl", 0))),
+            intermediary_loss_total=(
+                max(0.0, -float((dealer_metrics or {}).get("dealer_total_pnl", 0)))
+                + int(bundle.summary.get("nbfi_loan_loss", 0))
+                + int(bundle.summary.get("bank_credit_loss", 0))
+                + int(bundle.summary.get("cb_backstop_loss", 0))
+            ),
+            initial_intermediary_capital=capitals["intermediary_capital"],
+            initial_dealer_vbt_cash=capitals["dealer_capital"] + capitals["vbt_capital"],
+            initial_lender_cash=capitals["lender_capital"],
+            initial_bank_reserves=capitals["bank_capital"],
         )
 
     def _rel_path(self, absolute: Path) -> str:
