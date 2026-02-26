@@ -218,6 +218,58 @@ class BalancedComparisonResult:
     total_loss_pct_bank_dealer: float | None = None
     total_loss_pct_bank_dealer_nbfi: float | None = None
 
+    # Intermediary loss metrics (non-trader entity losses, per arm)
+    intermediary_loss_passive: float = 0.0
+    intermediary_loss_active: float = 0.0
+    intermediary_loss_lender: float = 0.0
+    intermediary_loss_dealer_lender: float = 0.0
+    intermediary_loss_bank_passive: float = 0.0
+    intermediary_loss_bank_dealer: float = 0.0
+    intermediary_loss_bank_dealer_nbfi: float = 0.0
+
+    # Intermediary loss as fraction of initial_total_debt
+    intermediary_loss_pct_passive: float | None = None
+    intermediary_loss_pct_active: float | None = None
+    intermediary_loss_pct_lender: float | None = None
+    intermediary_loss_pct_dealer_lender: float | None = None
+    intermediary_loss_pct_bank_passive: float | None = None
+    intermediary_loss_pct_bank_dealer: float | None = None
+    intermediary_loss_pct_bank_dealer_nbfi: float | None = None
+
+    # Approach 3: Total System Loss (trader + intermediary, main metric)
+    system_loss_passive: float = 0.0
+    system_loss_active: float = 0.0
+    system_loss_lender: float = 0.0
+    system_loss_dealer_lender: float = 0.0
+    system_loss_bank_passive: float = 0.0
+    system_loss_bank_dealer: float = 0.0
+    system_loss_bank_dealer_nbfi: float = 0.0
+
+    system_loss_pct_passive: float | None = None
+    system_loss_pct_active: float | None = None
+    system_loss_pct_lender: float | None = None
+    system_loss_pct_dealer_lender: float | None = None
+    system_loss_pct_bank_passive: float | None = None
+    system_loss_pct_bank_dealer: float | None = None
+    system_loss_pct_bank_dealer_nbfi: float | None = None
+
+    # Approach 2: Loss/Capital Ratio (intermediary loss / intermediary's own capital)
+    intermediary_capital_passive: float = 0.0
+    intermediary_capital_active: float = 0.0
+    intermediary_capital_lender: float = 0.0
+    intermediary_capital_dealer_lender: float = 0.0
+    intermediary_capital_bank_passive: float = 0.0
+    intermediary_capital_bank_dealer: float = 0.0
+    intermediary_capital_bank_dealer_nbfi: float = 0.0
+
+    loss_capital_ratio_passive: float | None = None
+    loss_capital_ratio_active: float | None = None
+    loss_capital_ratio_lender: float | None = None
+    loss_capital_ratio_dealer_lender: float | None = None
+    loss_capital_ratio_bank_passive: float | None = None
+    loss_capital_ratio_bank_dealer: float | None = None
+    loss_capital_ratio_bank_dealer_nbfi: float | None = None
+
     @staticmethod
     def _compute_incremental_pnl(
         active_metrics: dict[str, Any] | None,
@@ -305,6 +357,120 @@ class BalancedComparisonResult:
         if self.delta_passive is None or self.delta_bank_dealer_nbfi is None:
             return None
         return self.delta_passive - self.delta_bank_dealer_nbfi
+
+    @property
+    def adjusted_trading_effect(self) -> float | None:
+        """Trading effect adjusted for intermediary loss differential.
+
+        Controls for losses shifted from traders to dealer/VBT.
+        adjusted = raw_effect - (intermediary_cost_active - intermediary_cost_passive) / debt
+        """
+        if self.trading_effect is None:
+            return None
+        if self.intermediary_loss_pct_active is None or self.intermediary_loss_pct_passive is None:
+            return None
+        return float(self.trading_effect) - (
+            self.intermediary_loss_pct_active - self.intermediary_loss_pct_passive
+        )
+
+    @property
+    def adjusted_lending_effect(self) -> float | None:
+        """Lending effect adjusted for intermediary loss differential."""
+        if self.lending_effect is None:
+            return None
+        if self.intermediary_loss_pct_lender is None or self.intermediary_loss_pct_passive is None:
+            return None
+        return float(self.lending_effect) - (
+            self.intermediary_loss_pct_lender - self.intermediary_loss_pct_passive
+        )
+
+    @property
+    def adjusted_combined_effect(self) -> float | None:
+        """Dealer+Lender effect adjusted for intermediary loss differential."""
+        if self.combined_effect is None:
+            return None
+        if self.intermediary_loss_pct_dealer_lender is None or self.intermediary_loss_pct_passive is None:
+            return None
+        return float(self.combined_effect) - (
+            self.intermediary_loss_pct_dealer_lender - self.intermediary_loss_pct_passive
+        )
+
+    @property
+    def adjusted_bank_passive_effect(self) -> float | None:
+        """Bank passive effect adjusted for intermediary loss differential."""
+        if self.bank_passive_effect is None:
+            return None
+        if self.intermediary_loss_pct_bank_passive is None or self.intermediary_loss_pct_passive is None:
+            return None
+        return float(self.bank_passive_effect) - (
+            self.intermediary_loss_pct_bank_passive - self.intermediary_loss_pct_passive
+        )
+
+    @property
+    def adjusted_bank_dealer_effect(self) -> float | None:
+        """Bank+dealer effect adjusted for intermediary loss differential."""
+        if self.bank_dealer_effect is None:
+            return None
+        if self.intermediary_loss_pct_bank_dealer is None or self.intermediary_loss_pct_passive is None:
+            return None
+        return float(self.bank_dealer_effect) - (
+            self.intermediary_loss_pct_bank_dealer - self.intermediary_loss_pct_passive
+        )
+
+    @property
+    def adjusted_bank_dealer_nbfi_effect(self) -> float | None:
+        """Bank+dealer+NBFI effect adjusted for intermediary loss differential."""
+        if self.bank_dealer_nbfi_effect is None:
+            return None
+        if self.intermediary_loss_pct_bank_dealer_nbfi is None or self.intermediary_loss_pct_passive is None:
+            return None
+        return float(self.bank_dealer_nbfi_effect) - (
+            self.intermediary_loss_pct_bank_dealer_nbfi - self.intermediary_loss_pct_passive
+        )
+
+    # ── Approach 3: Total System Loss effects ─────────────────────────
+
+    @property
+    def system_loss_trading_effect(self) -> float | None:
+        """Approach 3 (main): Total system loss reduction from active trading."""
+        if self.system_loss_pct_passive is None or self.system_loss_pct_active is None:
+            return None
+        return self.system_loss_pct_passive - self.system_loss_pct_active
+
+    @property
+    def system_loss_lending_effect(self) -> float | None:
+        """Approach 3: Total system loss reduction from NBFI lending."""
+        if self.system_loss_pct_passive is None or self.system_loss_pct_lender is None:
+            return None
+        return self.system_loss_pct_passive - self.system_loss_pct_lender
+
+    @property
+    def system_loss_combined_effect(self) -> float | None:
+        """Approach 3: Total system loss reduction from dealer+lender."""
+        if self.system_loss_pct_passive is None or self.system_loss_pct_dealer_lender is None:
+            return None
+        return self.system_loss_pct_passive - self.system_loss_pct_dealer_lender
+
+    @property
+    def system_loss_bank_passive_effect(self) -> float | None:
+        """Approach 3: Total system loss reduction from banking."""
+        if self.system_loss_pct_passive is None or self.system_loss_pct_bank_passive is None:
+            return None
+        return self.system_loss_pct_passive - self.system_loss_pct_bank_passive
+
+    @property
+    def system_loss_bank_dealer_effect(self) -> float | None:
+        """Approach 3: Total system loss reduction from bank+dealer."""
+        if self.system_loss_pct_passive is None or self.system_loss_pct_bank_dealer is None:
+            return None
+        return self.system_loss_pct_passive - self.system_loss_pct_bank_dealer
+
+    @property
+    def system_loss_bank_dealer_nbfi_effect(self) -> float | None:
+        """Approach 3: Total system loss reduction from bank+dealer+NBFI."""
+        if self.system_loss_pct_passive is None or self.system_loss_pct_bank_dealer_nbfi is None:
+            return None
+        return self.system_loss_pct_passive - self.system_loss_pct_bank_dealer_nbfi
 
 
 class BalancedComparisonConfig(BaseModel):
@@ -456,6 +622,9 @@ class BalancedComparisonConfig(BaseModel):
     )
     bank_reserve_multiplier: float = Field(
         default=0.5, description="Reserve multiplier for banking arms (< 1 = reserve-constrained)"
+    )
+    equalize_bank_capacity: bool = Field(
+        default=True, description="Equalize bank reserves to match non-bank intermediary capital"
     )
     cb_lending_cutoff_day: int | None = Field(
         default=None, description="Day to freeze CB lending (None = auto: maturity_days)"
@@ -646,6 +815,62 @@ class BalancedComparisonRunner:
         "total_loss_pct_bank_passive",
         "total_loss_pct_bank_dealer",
         "total_loss_pct_bank_dealer_nbfi",
+        "intermediary_loss_passive",
+        "intermediary_loss_active",
+        "intermediary_loss_lender",
+        "intermediary_loss_dealer_lender",
+        "intermediary_loss_bank_passive",
+        "intermediary_loss_bank_dealer",
+        "intermediary_loss_bank_dealer_nbfi",
+        "intermediary_loss_pct_passive",
+        "intermediary_loss_pct_active",
+        "intermediary_loss_pct_lender",
+        "intermediary_loss_pct_dealer_lender",
+        "intermediary_loss_pct_bank_passive",
+        "intermediary_loss_pct_bank_dealer",
+        "intermediary_loss_pct_bank_dealer_nbfi",
+        "adjusted_trading_effect",
+        "adjusted_lending_effect",
+        "adjusted_combined_effect",
+        "adjusted_bank_passive_effect",
+        "adjusted_bank_dealer_effect",
+        "adjusted_bank_dealer_nbfi_effect",
+        # Approach 3: Total System Loss
+        "system_loss_passive",
+        "system_loss_active",
+        "system_loss_lender",
+        "system_loss_dealer_lender",
+        "system_loss_bank_passive",
+        "system_loss_bank_dealer",
+        "system_loss_bank_dealer_nbfi",
+        "system_loss_pct_passive",
+        "system_loss_pct_active",
+        "system_loss_pct_lender",
+        "system_loss_pct_dealer_lender",
+        "system_loss_pct_bank_passive",
+        "system_loss_pct_bank_dealer",
+        "system_loss_pct_bank_dealer_nbfi",
+        "system_loss_trading_effect",
+        "system_loss_lending_effect",
+        "system_loss_combined_effect",
+        "system_loss_bank_passive_effect",
+        "system_loss_bank_dealer_effect",
+        "system_loss_bank_dealer_nbfi_effect",
+        # Approach 2: Loss/Capital Ratio
+        "intermediary_capital_passive",
+        "intermediary_capital_active",
+        "intermediary_capital_lender",
+        "intermediary_capital_dealer_lender",
+        "intermediary_capital_bank_passive",
+        "intermediary_capital_bank_dealer",
+        "intermediary_capital_bank_dealer_nbfi",
+        "loss_capital_ratio_passive",
+        "loss_capital_ratio_active",
+        "loss_capital_ratio_lender",
+        "loss_capital_ratio_dealer_lender",
+        "loss_capital_ratio_bank_passive",
+        "loss_capital_ratio_bank_dealer",
+        "loss_capital_ratio_bank_dealer_nbfi",
     ]
 
     def __init__(
@@ -1102,6 +1327,7 @@ class BalancedComparisonRunner:
             balanced_mode_override="banking",  # VBT/Dealer cash=0, banks replace
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            equalize_capacity=self.config.equalize_bank_capacity,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
@@ -1158,6 +1384,7 @@ class BalancedComparisonRunner:
             balanced_mode_override="bank_dealer",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            equalize_capacity=self.config.equalize_bank_capacity,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
@@ -1216,6 +1443,7 @@ class BalancedComparisonRunner:
             balanced_mode_override="bank_dealer_nbfi",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            equalize_capacity=self.config.equalize_bank_capacity,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
@@ -1312,6 +1540,8 @@ class BalancedComparisonRunner:
                 "payable_default_loss_lender": s.payable_default_loss,
                 "total_loss_lender": s.total_loss,
                 "total_loss_pct_lender": s.total_loss_pct,
+                "intermediary_loss_lender": s.intermediary_loss_total,
+                "intermediary_capital_lender": s.initial_intermediary_capital,
             }
 
         dealer_lender_data: dict[str, Any] = {}
@@ -1328,6 +1558,8 @@ class BalancedComparisonRunner:
                 "payable_default_loss_dealer_lender": s.payable_default_loss,
                 "total_loss_dealer_lender": s.total_loss,
                 "total_loss_pct_dealer_lender": s.total_loss_pct,
+                "intermediary_loss_dealer_lender": s.intermediary_loss_total,
+                "intermediary_capital_dealer_lender": s.initial_intermediary_capital,
             }
 
         bank_passive_data: dict[str, Any] = {}
@@ -1352,6 +1584,8 @@ class BalancedComparisonRunner:
                 "payable_default_loss_bank_passive": s.payable_default_loss,
                 "total_loss_bank_passive": s.total_loss,
                 "total_loss_pct_bank_passive": s.total_loss_pct,
+                "intermediary_loss_bank_passive": s.intermediary_loss_total,
+                "intermediary_capital_bank_passive": s.initial_intermediary_capital,
             }
 
         bank_dealer_data: dict[str, Any] = {}
@@ -1376,6 +1610,8 @@ class BalancedComparisonRunner:
                 "payable_default_loss_bank_dealer": s.payable_default_loss,
                 "total_loss_bank_dealer": s.total_loss,
                 "total_loss_pct_bank_dealer": s.total_loss_pct,
+                "intermediary_loss_bank_dealer": s.intermediary_loss_total,
+                "intermediary_capital_bank_dealer": s.initial_intermediary_capital,
             }
 
         bank_dealer_nbfi_data: dict[str, Any] = {}
@@ -1400,9 +1636,11 @@ class BalancedComparisonRunner:
                 "payable_default_loss_bank_dealer_nbfi": s.payable_default_loss,
                 "total_loss_bank_dealer_nbfi": s.total_loss,
                 "total_loss_pct_bank_dealer_nbfi": s.total_loss_pct,
+                "intermediary_loss_bank_dealer_nbfi": s.intermediary_loss_total,
+                "intermediary_capital_bank_dealer_nbfi": s.initial_intermediary_capital,
             }
 
-        return BalancedComparisonResult(
+        result = BalancedComparisonResult(
             kappa=kappa,
             concentration=concentration,
             mu=mu,
@@ -1436,6 +1674,10 @@ class BalancedComparisonRunner:
             payable_default_loss_active=active.payable_default_loss,
             total_loss_active=active.total_loss,
             total_loss_pct_active=active.total_loss_pct,
+            intermediary_loss_passive=passive.intermediary_loss_total,
+            intermediary_loss_active=active.intermediary_loss_total,
+            intermediary_capital_passive=passive.initial_intermediary_capital,
+            intermediary_capital_active=active.initial_intermediary_capital,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
             risk_aversion=self.config.risk_aversion,
@@ -1456,6 +1698,71 @@ class BalancedComparisonRunner:
             **bank_dealer_data,
             **bank_dealer_nbfi_data,
         )
+
+        # Compute intermediary loss percentages from initial_total_debt
+        initial_debt = float(dm.get("initial_total_debt", 0))
+        if initial_debt <= 0:
+            # Fallback: try passive dealer_metrics
+            initial_debt = float((passive.dealer_metrics or {}).get("initial_total_debt", 0))
+        if initial_debt > 0:
+            result.intermediary_loss_pct_passive = result.intermediary_loss_passive / initial_debt
+            result.intermediary_loss_pct_active = result.intermediary_loss_active / initial_debt
+            if "lender" in arm_summaries:
+                result.intermediary_loss_pct_lender = result.intermediary_loss_lender / initial_debt
+            if "dealer_lender" in arm_summaries:
+                result.intermediary_loss_pct_dealer_lender = result.intermediary_loss_dealer_lender / initial_debt
+            if "bank_passive" in arm_summaries:
+                result.intermediary_loss_pct_bank_passive = result.intermediary_loss_bank_passive / initial_debt
+            if "bank_dealer" in arm_summaries:
+                result.intermediary_loss_pct_bank_dealer = result.intermediary_loss_bank_dealer / initial_debt
+            if "bank_dealer_nbfi" in arm_summaries:
+                result.intermediary_loss_pct_bank_dealer_nbfi = result.intermediary_loss_bank_dealer_nbfi / initial_debt
+
+        # Approach 3: Total System Loss = total_loss (trader) + intermediary_loss
+        result.system_loss_passive = result.total_loss_passive + result.intermediary_loss_passive
+        result.system_loss_active = result.total_loss_active + result.intermediary_loss_active
+        if "lender" in arm_summaries:
+            result.system_loss_lender = result.total_loss_lender + result.intermediary_loss_lender
+        if "dealer_lender" in arm_summaries:
+            result.system_loss_dealer_lender = result.total_loss_dealer_lender + result.intermediary_loss_dealer_lender
+        if "bank_passive" in arm_summaries:
+            result.system_loss_bank_passive = result.total_loss_bank_passive + result.intermediary_loss_bank_passive
+        if "bank_dealer" in arm_summaries:
+            result.system_loss_bank_dealer = result.total_loss_bank_dealer + result.intermediary_loss_bank_dealer
+        if "bank_dealer_nbfi" in arm_summaries:
+            result.system_loss_bank_dealer_nbfi = result.total_loss_bank_dealer_nbfi + result.intermediary_loss_bank_dealer_nbfi
+
+        if initial_debt > 0:
+            result.system_loss_pct_passive = result.system_loss_passive / initial_debt
+            result.system_loss_pct_active = result.system_loss_active / initial_debt
+            if "lender" in arm_summaries:
+                result.system_loss_pct_lender = result.system_loss_lender / initial_debt
+            if "dealer_lender" in arm_summaries:
+                result.system_loss_pct_dealer_lender = result.system_loss_dealer_lender / initial_debt
+            if "bank_passive" in arm_summaries:
+                result.system_loss_pct_bank_passive = result.system_loss_bank_passive / initial_debt
+            if "bank_dealer" in arm_summaries:
+                result.system_loss_pct_bank_dealer = result.system_loss_bank_dealer / initial_debt
+            if "bank_dealer_nbfi" in arm_summaries:
+                result.system_loss_pct_bank_dealer_nbfi = result.system_loss_bank_dealer_nbfi / initial_debt
+
+        # Approach 2: Loss/Capital Ratio
+        if result.intermediary_capital_passive > 0:
+            result.loss_capital_ratio_passive = result.intermediary_loss_passive / result.intermediary_capital_passive
+        if result.intermediary_capital_active > 0:
+            result.loss_capital_ratio_active = result.intermediary_loss_active / result.intermediary_capital_active
+        if "lender" in arm_summaries and result.intermediary_capital_lender > 0:
+            result.loss_capital_ratio_lender = result.intermediary_loss_lender / result.intermediary_capital_lender
+        if "dealer_lender" in arm_summaries and result.intermediary_capital_dealer_lender > 0:
+            result.loss_capital_ratio_dealer_lender = result.intermediary_loss_dealer_lender / result.intermediary_capital_dealer_lender
+        if "bank_passive" in arm_summaries and result.intermediary_capital_bank_passive > 0:
+            result.loss_capital_ratio_bank_passive = result.intermediary_loss_bank_passive / result.intermediary_capital_bank_passive
+        if "bank_dealer" in arm_summaries and result.intermediary_capital_bank_dealer > 0:
+            result.loss_capital_ratio_bank_dealer = result.intermediary_loss_bank_dealer / result.intermediary_capital_bank_dealer
+        if "bank_dealer_nbfi" in arm_summaries and result.intermediary_capital_bank_dealer_nbfi > 0:
+            result.loss_capital_ratio_bank_dealer_nbfi = result.intermediary_loss_bank_dealer_nbfi / result.intermediary_capital_bank_dealer_nbfi
+
+        return result
 
     def _run_all_batch(self) -> list[BalancedComparisonResult]:
         """Execute all runs using batch execution (parallel on Modal).
@@ -1880,6 +2187,8 @@ class BalancedComparisonRunner:
                 "payable_default_loss_lender": lender_result.payable_default_loss,
                 "total_loss_lender": lender_result.total_loss,
                 "total_loss_pct_lender": lender_result.total_loss_pct,
+                "intermediary_loss_lender": lender_result.intermediary_loss_total,
+                "intermediary_capital_lender": lender_result.initial_intermediary_capital,
             }
 
         # Run dealer+lender (optional fourth arm — combined mode)
@@ -1910,6 +2219,8 @@ class BalancedComparisonRunner:
                 "payable_default_loss_dealer_lender": dl_result.payable_default_loss,
                 "total_loss_dealer_lender": dl_result.total_loss,
                 "total_loss_pct_dealer_lender": dl_result.total_loss_pct,
+                "intermediary_loss_dealer_lender": dl_result.intermediary_loss_total,
+                "intermediary_capital_dealer_lender": dl_result.initial_intermediary_capital,
             }
 
         # Run bank+passive (optional — banking arm E)
@@ -1948,6 +2259,8 @@ class BalancedComparisonRunner:
                 "payable_default_loss_bank_passive": bp_result.payable_default_loss,
                 "total_loss_bank_passive": bp_result.total_loss,
                 "total_loss_pct_bank_passive": bp_result.total_loss_pct,
+                "intermediary_loss_bank_passive": bp_result.intermediary_loss_total,
+                "intermediary_capital_bank_passive": bp_result.initial_intermediary_capital,
             }
 
         # Run bank+dealer (optional — banking arm F)
@@ -1986,6 +2299,8 @@ class BalancedComparisonRunner:
                 "payable_default_loss_bank_dealer": bd_result.payable_default_loss,
                 "total_loss_bank_dealer": bd_result.total_loss,
                 "total_loss_pct_bank_dealer": bd_result.total_loss_pct,
+                "intermediary_loss_bank_dealer": bd_result.intermediary_loss_total,
+                "intermediary_capital_bank_dealer": bd_result.initial_intermediary_capital,
             }
 
         # Run bank+dealer+nbfi (optional — banking arm G)
@@ -2024,6 +2339,8 @@ class BalancedComparisonRunner:
                 "payable_default_loss_bank_dealer_nbfi": bdn_result.payable_default_loss,
                 "total_loss_bank_dealer_nbfi": bdn_result.total_loss,
                 "total_loss_pct_bank_dealer_nbfi": bdn_result.total_loss_pct,
+                "intermediary_loss_bank_dealer_nbfi": bdn_result.intermediary_loss_total,
+                "intermediary_capital_bank_dealer_nbfi": bdn_result.initial_intermediary_capital,
             }
 
         result = BalancedComparisonResult(
@@ -2060,6 +2377,10 @@ class BalancedComparisonRunner:
             payable_default_loss_active=active_result.payable_default_loss,
             total_loss_active=active_result.total_loss,
             total_loss_pct_active=active_result.total_loss_pct,
+            intermediary_loss_passive=passive_result.intermediary_loss_total,
+            intermediary_loss_active=active_result.intermediary_loss_total,
+            intermediary_capital_passive=passive_result.initial_intermediary_capital,
+            intermediary_capital_active=active_result.initial_intermediary_capital,
             alpha_vbt=self.config.alpha_vbt,
             alpha_trader=self.config.alpha_trader,
             risk_aversion=self.config.risk_aversion,
@@ -2080,6 +2401,68 @@ class BalancedComparisonRunner:
             **bank_dealer_data,
             **bank_dealer_nbfi_data,
         )
+
+        # Compute intermediary loss percentages from initial_total_debt
+        initial_debt = float(dm.get("initial_total_debt", 0))
+        if initial_debt <= 0:
+            initial_debt = float((passive_result.dealer_metrics or {}).get("initial_total_debt", 0))
+        if initial_debt > 0:
+            result.intermediary_loss_pct_passive = result.intermediary_loss_passive / initial_debt
+            result.intermediary_loss_pct_active = result.intermediary_loss_active / initial_debt
+            if self.config.enable_lender and lender_result_data:
+                result.intermediary_loss_pct_lender = result.intermediary_loss_lender / initial_debt
+            if self.config.enable_dealer_lender and dealer_lender_data:
+                result.intermediary_loss_pct_dealer_lender = result.intermediary_loss_dealer_lender / initial_debt
+            if self.config.enable_bank_passive and bank_passive_data:
+                result.intermediary_loss_pct_bank_passive = result.intermediary_loss_bank_passive / initial_debt
+            if self.config.enable_bank_dealer and bank_dealer_data:
+                result.intermediary_loss_pct_bank_dealer = result.intermediary_loss_bank_dealer / initial_debt
+            if self.config.enable_bank_dealer_nbfi and bank_dealer_nbfi_data:
+                result.intermediary_loss_pct_bank_dealer_nbfi = result.intermediary_loss_bank_dealer_nbfi / initial_debt
+
+        # Approach 3: Total System Loss = total_loss (trader) + intermediary_loss
+        result.system_loss_passive = result.total_loss_passive + result.intermediary_loss_passive
+        result.system_loss_active = result.total_loss_active + result.intermediary_loss_active
+        if self.config.enable_lender and lender_result_data:
+            result.system_loss_lender = result.total_loss_lender + result.intermediary_loss_lender
+        if self.config.enable_dealer_lender and dealer_lender_data:
+            result.system_loss_dealer_lender = result.total_loss_dealer_lender + result.intermediary_loss_dealer_lender
+        if self.config.enable_bank_passive and bank_passive_data:
+            result.system_loss_bank_passive = result.total_loss_bank_passive + result.intermediary_loss_bank_passive
+        if self.config.enable_bank_dealer and bank_dealer_data:
+            result.system_loss_bank_dealer = result.total_loss_bank_dealer + result.intermediary_loss_bank_dealer
+        if self.config.enable_bank_dealer_nbfi and bank_dealer_nbfi_data:
+            result.system_loss_bank_dealer_nbfi = result.total_loss_bank_dealer_nbfi + result.intermediary_loss_bank_dealer_nbfi
+
+        if initial_debt > 0:
+            result.system_loss_pct_passive = result.system_loss_passive / initial_debt
+            result.system_loss_pct_active = result.system_loss_active / initial_debt
+            if self.config.enable_lender and lender_result_data:
+                result.system_loss_pct_lender = result.system_loss_lender / initial_debt
+            if self.config.enable_dealer_lender and dealer_lender_data:
+                result.system_loss_pct_dealer_lender = result.system_loss_dealer_lender / initial_debt
+            if self.config.enable_bank_passive and bank_passive_data:
+                result.system_loss_pct_bank_passive = result.system_loss_bank_passive / initial_debt
+            if self.config.enable_bank_dealer and bank_dealer_data:
+                result.system_loss_pct_bank_dealer = result.system_loss_bank_dealer / initial_debt
+            if self.config.enable_bank_dealer_nbfi and bank_dealer_nbfi_data:
+                result.system_loss_pct_bank_dealer_nbfi = result.system_loss_bank_dealer_nbfi / initial_debt
+
+        # Approach 2: Loss/Capital Ratio
+        if result.intermediary_capital_passive > 0:
+            result.loss_capital_ratio_passive = result.intermediary_loss_passive / result.intermediary_capital_passive
+        if result.intermediary_capital_active > 0:
+            result.loss_capital_ratio_active = result.intermediary_loss_active / result.intermediary_capital_active
+        if self.config.enable_lender and lender_result_data and result.intermediary_capital_lender > 0:
+            result.loss_capital_ratio_lender = result.intermediary_loss_lender / result.intermediary_capital_lender
+        if self.config.enable_dealer_lender and dealer_lender_data and result.intermediary_capital_dealer_lender > 0:
+            result.loss_capital_ratio_dealer_lender = result.intermediary_loss_dealer_lender / result.intermediary_capital_dealer_lender
+        if self.config.enable_bank_passive and bank_passive_data and result.intermediary_capital_bank_passive > 0:
+            result.loss_capital_ratio_bank_passive = result.intermediary_loss_bank_passive / result.intermediary_capital_bank_passive
+        if self.config.enable_bank_dealer and bank_dealer_data and result.intermediary_capital_bank_dealer > 0:
+            result.loss_capital_ratio_bank_dealer = result.intermediary_loss_bank_dealer / result.intermediary_capital_bank_dealer
+        if self.config.enable_bank_dealer_nbfi and bank_dealer_nbfi_data and result.intermediary_capital_bank_dealer_nbfi > 0:
+            result.loss_capital_ratio_bank_dealer_nbfi = result.intermediary_loss_bank_dealer_nbfi / result.intermediary_capital_bank_dealer_nbfi
 
         # Log comparison
         if result.trading_effect is not None:
@@ -2419,6 +2802,62 @@ class BalancedComparisonRunner:
                     "total_loss_pct_bank_passive": str(result.total_loss_pct_bank_passive) if result.total_loss_pct_bank_passive is not None else "",
                     "total_loss_pct_bank_dealer": str(result.total_loss_pct_bank_dealer) if result.total_loss_pct_bank_dealer is not None else "",
                     "total_loss_pct_bank_dealer_nbfi": str(result.total_loss_pct_bank_dealer_nbfi) if result.total_loss_pct_bank_dealer_nbfi is not None else "",
+                    "intermediary_loss_passive": str(result.intermediary_loss_passive),
+                    "intermediary_loss_active": str(result.intermediary_loss_active),
+                    "intermediary_loss_lender": str(result.intermediary_loss_lender),
+                    "intermediary_loss_dealer_lender": str(result.intermediary_loss_dealer_lender),
+                    "intermediary_loss_bank_passive": str(result.intermediary_loss_bank_passive),
+                    "intermediary_loss_bank_dealer": str(result.intermediary_loss_bank_dealer),
+                    "intermediary_loss_bank_dealer_nbfi": str(result.intermediary_loss_bank_dealer_nbfi),
+                    "intermediary_loss_pct_passive": str(result.intermediary_loss_pct_passive) if result.intermediary_loss_pct_passive is not None else "",
+                    "intermediary_loss_pct_active": str(result.intermediary_loss_pct_active) if result.intermediary_loss_pct_active is not None else "",
+                    "intermediary_loss_pct_lender": str(result.intermediary_loss_pct_lender) if result.intermediary_loss_pct_lender is not None else "",
+                    "intermediary_loss_pct_dealer_lender": str(result.intermediary_loss_pct_dealer_lender) if result.intermediary_loss_pct_dealer_lender is not None else "",
+                    "intermediary_loss_pct_bank_passive": str(result.intermediary_loss_pct_bank_passive) if result.intermediary_loss_pct_bank_passive is not None else "",
+                    "intermediary_loss_pct_bank_dealer": str(result.intermediary_loss_pct_bank_dealer) if result.intermediary_loss_pct_bank_dealer is not None else "",
+                    "intermediary_loss_pct_bank_dealer_nbfi": str(result.intermediary_loss_pct_bank_dealer_nbfi) if result.intermediary_loss_pct_bank_dealer_nbfi is not None else "",
+                    "adjusted_trading_effect": str(result.adjusted_trading_effect) if result.adjusted_trading_effect is not None else "",
+                    "adjusted_lending_effect": str(result.adjusted_lending_effect) if result.adjusted_lending_effect is not None else "",
+                    "adjusted_combined_effect": str(result.adjusted_combined_effect) if result.adjusted_combined_effect is not None else "",
+                    "adjusted_bank_passive_effect": str(result.adjusted_bank_passive_effect) if result.adjusted_bank_passive_effect is not None else "",
+                    "adjusted_bank_dealer_effect": str(result.adjusted_bank_dealer_effect) if result.adjusted_bank_dealer_effect is not None else "",
+                    "adjusted_bank_dealer_nbfi_effect": str(result.adjusted_bank_dealer_nbfi_effect) if result.adjusted_bank_dealer_nbfi_effect is not None else "",
+                    # Approach 3: Total System Loss
+                    "system_loss_passive": str(result.system_loss_passive),
+                    "system_loss_active": str(result.system_loss_active),
+                    "system_loss_lender": str(result.system_loss_lender),
+                    "system_loss_dealer_lender": str(result.system_loss_dealer_lender),
+                    "system_loss_bank_passive": str(result.system_loss_bank_passive),
+                    "system_loss_bank_dealer": str(result.system_loss_bank_dealer),
+                    "system_loss_bank_dealer_nbfi": str(result.system_loss_bank_dealer_nbfi),
+                    "system_loss_pct_passive": str(result.system_loss_pct_passive) if result.system_loss_pct_passive is not None else "",
+                    "system_loss_pct_active": str(result.system_loss_pct_active) if result.system_loss_pct_active is not None else "",
+                    "system_loss_pct_lender": str(result.system_loss_pct_lender) if result.system_loss_pct_lender is not None else "",
+                    "system_loss_pct_dealer_lender": str(result.system_loss_pct_dealer_lender) if result.system_loss_pct_dealer_lender is not None else "",
+                    "system_loss_pct_bank_passive": str(result.system_loss_pct_bank_passive) if result.system_loss_pct_bank_passive is not None else "",
+                    "system_loss_pct_bank_dealer": str(result.system_loss_pct_bank_dealer) if result.system_loss_pct_bank_dealer is not None else "",
+                    "system_loss_pct_bank_dealer_nbfi": str(result.system_loss_pct_bank_dealer_nbfi) if result.system_loss_pct_bank_dealer_nbfi is not None else "",
+                    "system_loss_trading_effect": str(result.system_loss_trading_effect) if result.system_loss_trading_effect is not None else "",
+                    "system_loss_lending_effect": str(result.system_loss_lending_effect) if result.system_loss_lending_effect is not None else "",
+                    "system_loss_combined_effect": str(result.system_loss_combined_effect) if result.system_loss_combined_effect is not None else "",
+                    "system_loss_bank_passive_effect": str(result.system_loss_bank_passive_effect) if result.system_loss_bank_passive_effect is not None else "",
+                    "system_loss_bank_dealer_effect": str(result.system_loss_bank_dealer_effect) if result.system_loss_bank_dealer_effect is not None else "",
+                    "system_loss_bank_dealer_nbfi_effect": str(result.system_loss_bank_dealer_nbfi_effect) if result.system_loss_bank_dealer_nbfi_effect is not None else "",
+                    # Approach 2: Loss/Capital Ratio
+                    "intermediary_capital_passive": str(result.intermediary_capital_passive),
+                    "intermediary_capital_active": str(result.intermediary_capital_active),
+                    "intermediary_capital_lender": str(result.intermediary_capital_lender),
+                    "intermediary_capital_dealer_lender": str(result.intermediary_capital_dealer_lender),
+                    "intermediary_capital_bank_passive": str(result.intermediary_capital_bank_passive),
+                    "intermediary_capital_bank_dealer": str(result.intermediary_capital_bank_dealer),
+                    "intermediary_capital_bank_dealer_nbfi": str(result.intermediary_capital_bank_dealer_nbfi),
+                    "loss_capital_ratio_passive": str(result.loss_capital_ratio_passive) if result.loss_capital_ratio_passive is not None else "",
+                    "loss_capital_ratio_active": str(result.loss_capital_ratio_active) if result.loss_capital_ratio_active is not None else "",
+                    "loss_capital_ratio_lender": str(result.loss_capital_ratio_lender) if result.loss_capital_ratio_lender is not None else "",
+                    "loss_capital_ratio_dealer_lender": str(result.loss_capital_ratio_dealer_lender) if result.loss_capital_ratio_dealer_lender is not None else "",
+                    "loss_capital_ratio_bank_passive": str(result.loss_capital_ratio_bank_passive) if result.loss_capital_ratio_bank_passive is not None else "",
+                    "loss_capital_ratio_bank_dealer": str(result.loss_capital_ratio_bank_dealer) if result.loss_capital_ratio_bank_dealer is not None else "",
+                    "loss_capital_ratio_bank_dealer_nbfi": str(result.loss_capital_ratio_bank_dealer_nbfi) if result.loss_capital_ratio_bank_dealer_nbfi is not None else "",
                 }
                 writer.writerow(row)
 
