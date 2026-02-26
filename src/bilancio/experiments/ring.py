@@ -307,6 +307,7 @@ class RingSweepRunner:
         balanced_mode_override: str | None = None,
         n_banks: int = 0,
         reserve_multiplier: float = 10.0,
+        equalize_capacity: bool = False,
         credit_risk_loading: Decimal = Decimal("0.5"),
         max_borrower_risk: Decimal = Decimal("0.4"),
         cb_rate_escalation_slope: Decimal = Decimal("0"),
@@ -354,6 +355,7 @@ class RingSweepRunner:
         self.balanced_mode_override = balanced_mode_override
         self.n_banks = n_banks
         self.reserve_multiplier = reserve_multiplier
+        self.equalize_capacity = equalize_capacity
         self.credit_risk_loading = credit_risk_loading
         self.max_borrower_risk = max_borrower_risk
         self.cb_rate_escalation_slope = cb_rate_escalation_slope
@@ -679,6 +681,7 @@ class RingSweepRunner:
                 kappa=kappa,
                 n_banks=self.n_banks,
                 reserve_multiplier=self.reserve_multiplier,
+                equalize_capacity=self.equalize_capacity,
                 credit_risk_loading=self.credit_risk_loading,
                 max_borrower_risk=self.max_borrower_risk,
                 cb_rate_escalation_slope=self.cb_rate_escalation_slope,
@@ -1074,6 +1077,7 @@ class RingSweepRunner:
                 kappa=kappa,
                 n_banks=self.n_banks,
                 reserve_multiplier=self.reserve_multiplier,
+                equalize_capacity=self.equalize_capacity,
                 credit_risk_loading=self.credit_risk_loading,
                 max_borrower_risk=self.max_borrower_risk,
                 cb_rate_escalation_slope=self.cb_rate_escalation_slope,

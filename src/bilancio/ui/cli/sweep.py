@@ -755,6 +755,11 @@ def sweep_comparison(
     default=1,
     help="Number of trading sub-rounds per day (default: 1)",
 )
+@click.option(
+    "--equalize-bank-capacity/--no-equalize-bank-capacity",
+    default=True,
+    help="Equalize bank reserves to match non-bank intermediary capital (default: True)",
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -798,6 +803,7 @@ def sweep_balanced(
     n_banks: int,
     reserve_multiplier: float,
     trading_rounds: int,
+    equalize_bank_capacity: bool,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -917,6 +923,7 @@ def sweep_balanced(
         enable_bank_dealer_nbfi=enable_bank_dealer_nbfi,
         n_banks_for_banking=n_banks_for_banking,
         bank_reserve_multiplier=bank_reserve_multiplier,
+        equalize_bank_capacity=equalize_bank_capacity,
         cb_lending_cutoff_day=cb_lending_cutoff_day,
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,

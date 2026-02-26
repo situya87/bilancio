@@ -623,6 +623,9 @@ class BalancedComparisonConfig(BaseModel):
     bank_reserve_multiplier: float = Field(
         default=0.5, description="Reserve multiplier for banking arms (< 1 = reserve-constrained)"
     )
+    equalize_bank_capacity: bool = Field(
+        default=True, description="Equalize bank reserves to match non-bank intermediary capital"
+    )
     cb_lending_cutoff_day: int | None = Field(
         default=None, description="Day to freeze CB lending (None = auto: maturity_days)"
     )
@@ -1324,6 +1327,7 @@ class BalancedComparisonRunner:
             balanced_mode_override="banking",  # VBT/Dealer cash=0, banks replace
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            equalize_capacity=self.config.equalize_bank_capacity,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
@@ -1380,6 +1384,7 @@ class BalancedComparisonRunner:
             balanced_mode_override="bank_dealer",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            equalize_capacity=self.config.equalize_bank_capacity,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
@@ -1438,6 +1443,7 @@ class BalancedComparisonRunner:
             balanced_mode_override="bank_dealer_nbfi",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
+            equalize_capacity=self.config.equalize_bank_capacity,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,

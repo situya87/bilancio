@@ -212,6 +212,7 @@ def compile_ring_explorer_balanced(
     cb_max_outstanding_ratio: Decimal = Decimal("0"),
     spread_scale: Decimal = Decimal("1.0"),
     cb_lending_cutoff_day: int | None = None,
+    equalize_capacity: bool = False,
     emit_action_specs: bool = False,
     *,
     source_path: Path | None = None,
@@ -595,8 +596,26 @@ def compile_ring_explorer_balanced(
                     total_deposited += Decimal(str(amount))
         initial_actions.extend(deposit_actions)
 
-        # 4. Mint ample reserves to each bank
-        reserves_per_bank = int(reserve_multiplier * float(total_deposited) / n_banks)
+        # 4. Mint reserves to each bank
+        if equalize_capacity:
+            # Capacity equalization: bank reserves = bank's share of the
+            # total_vbt_dealer_liquidity pool, so total intermediary capital
+            # is the same across all arms.
+            if mode == "banking":
+                # Bank-only: bank gets 100% of the intermediary pool
+                target_bank_reserves = total_vbt_dealer_liquidity
+            elif mode == "bank_dealer":
+                # 50/50 split with dealer/VBT
+                target_bank_reserves = total_vbt_dealer_liquidity * Decimal("0.5")
+            elif mode == "bank_dealer_nbfi":
+                # Three-way split with dealer/VBT and NBFI
+                target_bank_reserves = total_vbt_dealer_liquidity / Decimal("3")
+            else:
+                # Non-banking modes: fall back to multiplier
+                target_bank_reserves = Decimal(str(reserve_multiplier)) * total_deposited / n_banks
+            reserves_per_bank = int(target_bank_reserves / n_banks)
+        else:
+            reserves_per_bank = int(reserve_multiplier * float(total_deposited) / n_banks)
         for bank_idx in range(1, n_banks + 1):
             initial_actions.append({
                 "mint_reserves": {
@@ -670,6 +689,7 @@ def compile_ring_explorer_balanced(
             "cb_max_outstanding_ratio": float(cb_max_outstanding_ratio),
             "spread_scale": float(spread_scale),
             "cb_lending_cutoff_day": cb_lending_cutoff_day,
+            "equalize_capacity": equalize_capacity,
         },
     }
 
