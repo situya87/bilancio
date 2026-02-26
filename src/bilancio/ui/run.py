@@ -292,6 +292,14 @@ def run_scenario(
                         _agent.escalation_base_amount = _Q_total
                         break
 
+            # Wire κ-informed prior onto CentralBank for dynamic corridor (Plan 041)
+            from bilancio.dealer.priors import kappa_informed_prior as _kip
+            from bilancio.domain.agents.central_bank import CentralBank as _CB2
+            for _agent in system.state.agents.values():
+                if isinstance(_agent, _CB2):
+                    _agent.kappa_prior = _kip(_kappa_val)
+                    break
+
             enable_banking = True
             enable_bank_lending = _balanced_cfg.get("enable_bank_lending", False) or _run_cfg.get("enable_bank_lending", False)
             _cb_lending_cutoff_day = _balanced_cfg.get("cb_lending_cutoff_day")

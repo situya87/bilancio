@@ -44,6 +44,7 @@ class LendingConfig:
     lender_profile: LenderProfile | None = None
     max_ring_maturity: int | None = None  # computed at ring creation time
     risk_assessor: RiskAssessor | None = None  # persists across days for Bayesian learning
+    initial_prior: Decimal = Decimal("0.15")  # κ-informed default probability prior
     # Decision protocol overrides (None = auto-construct from scalar params)
     portfolio_strategy: PortfolioStrategy | None = None
     counterparty_screener: CounterpartyScreener | None = None
@@ -180,10 +181,10 @@ def run_lending_phase(
         if info is not None:
             p_default = info.get_default_probability(agent_id, current_day)
             if p_default is None:
-                p_default = Decimal("0.15")  # Prior when unobservable
+                p_default = config.initial_prior  # Prior when unobservable
         else:
             assert default_probs is not None
-            p_default = default_probs.get(agent_id, Decimal("0.15"))
+            p_default = default_probs.get(agent_id, config.initial_prior)
         if not screener.is_eligible(p_default):
             continue
 

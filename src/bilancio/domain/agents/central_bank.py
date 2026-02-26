@@ -52,6 +52,17 @@ class CentralBank(Agent):
     # CB lending cap: max outstanding as fraction of escalation_base_amount
     max_outstanding_ratio: Decimal = field(default=Decimal("0"))  # 0 = no cap (backward compat)
 
+    # === κ-Informed Corridor (Plan 041) ===
+    # P_0 = kappa_informed_prior(κ), set at scenario compilation
+    kappa_prior: Decimal = field(default=Decimal("0"))  # 0 = disabled (backward compat)
+
+    # Dynamic corridor adjustment: deviation from expectation
+    # surprise_t = max(0, P_realized_t - P_0)
+    # mid_t = mid_0 + beta_mid × surprise_t
+    # width_t = width_0 + beta_width × surprise_t
+    beta_mid: Decimal = field(default=Decimal("0.50"))
+    beta_width: Decimal = field(default=Decimal("0.30"))
+
     @property
     def corridor_width(self) -> Decimal:
         """
@@ -99,3 +110,45 @@ class CentralBank(Agent):
             return True
         cap = int(self.max_outstanding_ratio * self.escalation_base_amount)
         return outstanding + amount <= cap
+
+    def compute_corridor(
+        self, n_defaulted: int, n_total: int
+    ) -> tuple[Decimal, Decimal]:
+        """Compute dynamic corridor based on deviation from expectation.
+
+        When kappa_prior > 0, the corridor adjusts based on how much the
+        realized default rate exceeds the initial expectation (P_0).
+
+        surprise_t = max(0, P_realized_t - P_0)
+        mid_t   = base_mid + beta_mid × surprise_t
+        width_t = base_width + beta_width × surprise_t
+        r_floor = mid_t - width_t / 2
+        r_ceiling = mid_t + width_t / 2
+
+        When kappa_prior == 0, returns the static corridor (backward compat).
+
+        Args:
+            n_defaulted: Number of agents that have defaulted.
+            n_total: Total number of agents in the system.
+
+        Returns:
+            (r_floor, r_ceiling) tuple.
+        """
+        if self.kappa_prior <= 0:
+            return self.reserve_remuneration_rate, self.cb_lending_rate
+
+        # Base corridor mid and width from initial static rates
+        base_mid = self.corridor_mid
+        base_width = self.corridor_width
+
+        # Deviation from expectation
+        p_realized = Decimal(n_defaulted) / Decimal(max(n_total, 1))
+        surprise = max(Decimal(0), p_realized - self.kappa_prior)
+
+        # Adjust mid and width
+        mid = base_mid + self.beta_mid * surprise
+        width = base_width + self.beta_width * surprise
+
+        r_floor = max(Decimal(0), mid - width / 2)
+        r_ceiling = mid + width / 2
+        return r_floor, r_ceiling

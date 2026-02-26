@@ -238,18 +238,36 @@ class BankingSubsystem:
         return result
 
     def update_cb_corridor(self, system: System) -> None:
-        """Sync CB escalated rate into PricingParams corridor ceiling.
+        """Sync CB corridor into PricingParams.
 
-        When CB rate escalation is active, the effective ceiling rate rises
-        with CB outstanding. This method updates all bank pricing params
-        so that Treynor quotes reflect the escalated corridor.
+        Handles two independent corridor adjustment mechanisms:
+        1. Rate escalation: CB lending rate rises with outstanding CB loans.
+        2. Deviation from expectation (Plan 041): corridor mid shifts up
+           and width widens when realized defaults exceed the kappa-informed
+           prior (P_0).
+
+        Both mechanisms stack: escalation raises the ceiling further after
+        deviation-from-expectation has set the base corridor.
         """
         cb = _find_central_bank(system)
         if cb is None:
             return
+
+        # --- Plan 041: Deviation-from-expectation corridor ---
+        if cb.kappa_prior > 0:
+            n_total = len(system.state.agents)
+            n_defaulted = len(system.state.defaulted_agent_ids)
+            r_floor, r_ceiling = cb.compute_corridor(n_defaulted, n_total)
+            for bank_state in self.banks.values():
+                bank_state.pricing_params.reserve_remuneration_rate = r_floor
+                bank_state.pricing_params.cb_borrowing_rate = r_ceiling
+
+        # --- Existing: rate escalation on top ---
         effective_ceiling = cb.effective_lending_rate(system.state.cb_loans_outstanding)
         for bank_state in self.banks.values():
-            bank_state.pricing_params.cb_borrowing_rate = effective_ceiling
+            # Only override if escalated rate exceeds current ceiling
+            if effective_ceiling > bank_state.pricing_params.cb_borrowing_rate:
+                bank_state.pricing_params.cb_borrowing_rate = effective_ceiling
 
     def _get_agent_banks(self, agent_id: str) -> list[str]:
         """Get list of bank_ids for an agent."""
