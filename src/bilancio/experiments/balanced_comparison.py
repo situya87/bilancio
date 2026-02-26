@@ -1704,6 +1704,11 @@ class BalancedComparisonRunner:
         if initial_debt <= 0:
             # Fallback: try passive dealer_metrics
             initial_debt = float((passive.dealer_metrics or {}).get("initial_total_debt", 0))
+        if initial_debt <= 0:
+            # Fallback: Q_total scaled by VBT+dealer share (total payable debt
+            # includes trader→VBT and trader→dealer obligations)
+            share_factor = 1.0 + float(self.config.vbt_share_per_bucket) + float(self.config.dealer_share_per_bucket)
+            initial_debt = float(self.config.Q_total) * share_factor
         if initial_debt > 0:
             result.intermediary_loss_pct_passive = result.intermediary_loss_passive / initial_debt
             result.intermediary_loss_pct_active = result.intermediary_loss_active / initial_debt
@@ -2406,6 +2411,9 @@ class BalancedComparisonRunner:
         initial_debt = float(dm.get("initial_total_debt", 0))
         if initial_debt <= 0:
             initial_debt = float((passive_result.dealer_metrics or {}).get("initial_total_debt", 0))
+        if initial_debt <= 0:
+            share_factor = 1.0 + float(self.config.vbt_share_per_bucket) + float(self.config.dealer_share_per_bucket)
+            initial_debt = float(self.config.Q_total) * share_factor
         if initial_debt > 0:
             result.intermediary_loss_pct_passive = result.intermediary_loss_passive / initial_debt
             result.intermediary_loss_pct_active = result.intermediary_loss_active / initial_debt

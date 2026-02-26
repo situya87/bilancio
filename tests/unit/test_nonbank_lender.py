@@ -659,6 +659,16 @@ class TestLendingConfig:
         assert cfg.min_shortfall == 100
         assert cfg.max_default_prob == Decimal("0.80")
 
+    def test_initial_prior_default(self):
+        """Default initial_prior is 0.15."""
+        cfg = LendingConfig()
+        assert cfg.initial_prior == Decimal("0.15")
+
+    def test_initial_prior_custom(self):
+        """Custom initial_prior flows through."""
+        cfg = LendingConfig(initial_prior=Decimal("0.08"))
+        assert cfg.initial_prior == Decimal("0.08")
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 6. Lending Strategy Tests (run_lending_phase)

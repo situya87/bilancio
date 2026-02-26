@@ -756,6 +756,13 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                     ):
                         max_ring_maturity = dd
 
+        # Compute κ-informed prior for lending decisions
+        lending_initial_prior = Decimal("0.15")  # default
+        if config.lender.kappa is not None:
+            from bilancio.dealer.priors import kappa_informed_prior
+
+            lending_initial_prior = kappa_informed_prior(config.lender.kappa)
+
         system.state.lender_config = LendingConfig(
             base_rate=config.lender.base_rate,
             risk_premium_scale=config.lender.risk_premium_scale,
@@ -767,6 +774,7 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
             lender_profile=lender_profile,
             max_ring_maturity=max_ring_maturity,
             risk_assessor=nbfi_risk_assessor,
+            initial_prior=lending_initial_prior,
         )
 
     # Set up rating agency config if present in scenario
@@ -1026,6 +1034,18 @@ def _init_lending_from_action_specs(
                 if isinstance(dd, int) and (max_ring_maturity is None or dd > max_ring_maturity):
                     max_ring_maturity = dd
 
+    # Compute κ-informed prior for lending decisions
+    lending_initial_prior = Decimal("0.15")  # default
+    _lender_kappa = None
+    if lender_profile is not None and hasattr(lender_profile, "kappa"):
+        _lender_kappa = lender_profile.kappa
+    elif lc is not None and lc.kappa is not None:
+        _lender_kappa = lc.kappa
+    if _lender_kappa is not None:
+        from bilancio.dealer.priors import kappa_informed_prior
+
+        lending_initial_prior = kappa_informed_prior(_lender_kappa)
+
     system.state.lender_config = LendingConfig(
         base_rate=base_rate,
         risk_premium_scale=risk_premium_scale,
@@ -1037,6 +1057,7 @@ def _init_lending_from_action_specs(
         lender_profile=lender_profile,
         max_ring_maturity=max_ring_maturity,
         risk_assessor=nbfi_risk_assessor,
+        initial_prior=lending_initial_prior,
     )
 
 

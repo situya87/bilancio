@@ -650,3 +650,94 @@ class TestCBCorridorIntegration:
 
         # Net cost to bank: 500 - 100 = 400
         # This is the corridor spread penalty for borrowing
+
+
+# =============================================================================
+# Dynamic Corridor Tests (Plan 041)
+# =============================================================================
+
+
+class TestDynamicCorridor:
+    """Tests for compute_corridor with deviation-from-expectation."""
+
+    def test_disabled_when_kappa_prior_zero(self):
+        """compute_corridor returns static rates when kappa_prior=0."""
+        cb = CentralBank(
+            id="CB",
+            name="CB",
+            reserve_remuneration_rate=Decimal("0.01"),
+            cb_lending_rate=Decimal("0.03"),
+            kappa_prior=Decimal("0"),
+        )
+        r_floor, r_ceiling = cb.compute_corridor(10, 100)
+        assert r_floor == Decimal("0.01")
+        assert r_ceiling == Decimal("0.03")
+
+    def test_no_surprise_no_change(self):
+        """When realized defaults <= P_0, surprise=0, corridor unchanged."""
+        cb = CentralBank(
+            id="CB",
+            name="CB",
+            reserve_remuneration_rate=Decimal("0.01"),
+            cb_lending_rate=Decimal("0.03"),
+            kappa_prior=Decimal("0.15"),
+            beta_mid=Decimal("0.50"),
+            beta_width=Decimal("0.30"),
+        )
+        # 10 out of 100 = 0.10 < 0.15 = P_0 → surprise = 0
+        r_floor, r_ceiling = cb.compute_corridor(10, 100)
+        assert r_floor == Decimal("0.01")
+        assert r_ceiling == Decimal("0.03")
+
+    def test_surprise_widens_corridor(self):
+        """When realized defaults > P_0, corridor mid rises and widens."""
+        cb = CentralBank(
+            id="CB",
+            name="CB",
+            reserve_remuneration_rate=Decimal("0.01"),
+            cb_lending_rate=Decimal("0.03"),
+            kappa_prior=Decimal("0.10"),
+            beta_mid=Decimal("0.50"),
+            beta_width=Decimal("0.30"),
+        )
+        # mid_0 = 0.02, width_0 = 0.02
+        # 30 of 100 = 0.30, surprise = 0.30 - 0.10 = 0.20
+        # mid = 0.02 + 0.50 * 0.20 = 0.12
+        # width = 0.02 + 0.30 * 0.20 = 0.08
+        # r_floor = 0.12 - 0.04 = 0.08
+        # r_ceiling = 0.12 + 0.04 = 0.16
+        r_floor, r_ceiling = cb.compute_corridor(30, 100)
+        assert r_floor == Decimal("0.08")
+        assert r_ceiling == Decimal("0.16")
+
+    def test_floor_clamped_at_zero(self):
+        """Floor rate never goes negative."""
+        cb = CentralBank(
+            id="CB",
+            name="CB",
+            reserve_remuneration_rate=Decimal("0.005"),
+            cb_lending_rate=Decimal("0.015"),
+            kappa_prior=Decimal("0.10"),
+            beta_mid=Decimal("0.01"),
+            beta_width=Decimal("5.0"),  # extreme width sensitivity
+        )
+        # mid_0 = 0.01, width_0 = 0.01
+        # surprise = 0.40 - 0.10 = 0.30
+        # mid = 0.01 + 0.01*0.30 = 0.013
+        # width = 0.01 + 5.0*0.30 = 1.51
+        # r_floor = max(0, 0.013 - 0.755) = 0
+        r_floor, r_ceiling = cb.compute_corridor(40, 100)
+        assert r_floor == Decimal("0")
+        assert r_ceiling > Decimal("0")
+
+    def test_zero_total_agents_no_crash(self):
+        """No division by zero when n_total=0."""
+        cb = CentralBank(
+            id="CB",
+            name="CB",
+            kappa_prior=Decimal("0.15"),
+        )
+        r_floor, r_ceiling = cb.compute_corridor(0, 0)
+        # p_realized = 0/1 = 0, surprise = max(0, 0-0.15) = 0
+        assert r_floor == cb.reserve_remuneration_rate
+        assert r_ceiling == cb.cb_lending_rate
