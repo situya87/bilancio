@@ -8,6 +8,7 @@ at runtime; the directive below silences mypy for this single error code.
 # mypy: disable-error-code="union-attr"
 
 import logging
+from decimal import Decimal
 from typing import Any
 
 from bilancio.core.atomic_tx import atomic
