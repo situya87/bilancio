@@ -244,6 +244,9 @@ class BankingSubsystem:
     # Risk assessor for credit-risk-adjusted lending rates (optional)
     risk_assessor: Any = None
 
+    # "Fool me once" — borrowers who defaulted on a bank loan are blocked
+    defaulted_borrowers: set[str] = field(default_factory=set)
+
     def best_deposit_bank(self, agent_id: str) -> str | None:
         """Return bank_id with highest r_D among this agent's banks."""
         bank_ids = self._get_agent_banks(agent_id)
@@ -297,6 +300,14 @@ class BankingSubsystem:
         n_banks = len(self.banks)
         for bank_state in self.banks.values():
             bank_state.refresh_quote(system, current_day, n_banks)
+
+    def has_outstanding_loan(self, borrower_id: str) -> bool:
+        """Check if a borrower has any outstanding loan at any bank."""
+        for bank_state in self.banks.values():
+            for loan in bank_state.outstanding_loans.values():
+                if loan.borrower_id == borrower_id:
+                    return True
+        return False
 
     def all_outstanding_loans(self) -> list[tuple[str, BankLoanRecord]]:
         """Return all outstanding bank loans across all banks."""
