@@ -17,10 +17,10 @@ from bilancio.engines.dealer_integration import DealerSubsystem
 class TestTradingRoundsDefault:
     """DealerSubsystem defaults and attribute tests."""
 
-    def test_trading_rounds_default_is_one(self):
-        """DealerSubsystem defaults to trading_rounds=1."""
+    def test_trading_rounds_default_is_high(self):
+        """DealerSubsystem defaults to trading_rounds=100 (exhaust intentions)."""
         subsystem = DealerSubsystem()
-        assert subsystem.trading_rounds == 1
+        assert subsystem.trading_rounds == 100
 
     def test_trading_rounds_configurable(self):
         """Can set trading_rounds at construction."""

@@ -675,9 +675,9 @@ class BalancedComparisonConfig(BaseModel):
         default=Decimal("1.0"), description="Multiplicative scale on dealer base spreads"
     )
 
-    # Trading rounds per day
+    # Trading rounds per day (high default; loop exits early when no intentions remain)
     trading_rounds: int = Field(
-        default=1,
+        default=100,
         ge=1,
         description="Number of trading sub-rounds per day (1=current behavior, higher=more throughput)",
     )

@@ -1013,14 +1013,16 @@ class TestPhase1BucketTransition:
         run_dealer_trading_phase(subsystem, system, current_day=3)
 
         ticket = subsystem.tickets.get(ticket_id)
-        if ticket:  # Might have been removed if matured
+        if ticket:  # Might have been removed if matured or sold to trader
             assert ticket.bucket_id == "short"
-            assert ticket.owner_id == "dealer_short"
-            assert ticket in subsystem.dealers["short"].inventory
-
-            # Main system payable should also be reassigned
-            payable = system.state.contracts[test_payable.id]
-            assert payable.asset_holder_id == "dealer_short"
+            # Ticket may still be held by dealer or may have been sold to a trader
+            if ticket.owner_id == "dealer_short":
+                assert ticket in subsystem.dealers["short"].inventory
+                payable = system.state.contracts[test_payable.id]
+                assert payable.asset_holder_id == "dealer_short"
+            else:
+                # Sold to a trader — bucket transition still happened correctly
+                assert ticket.owner_id.startswith("H")
 
     def test_dealer_bucket_transition_is_free_internal_move(self):
         """Bucket transitions are internal moves (cash pooling), no interdealer payment."""

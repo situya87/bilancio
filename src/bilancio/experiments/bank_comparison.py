@@ -227,7 +227,7 @@ class BankComparisonConfig(BaseModel):
 
     # Spread scaling
     spread_scale: Decimal = Field(default=Decimal("1.0"), description="Spread scale")
-    trading_rounds: int = Field(default=1, ge=1, description="Trading sub-rounds per day")
+    trading_rounds: int = Field(default=100, ge=1, description="Trading sub-rounds per day (exits early when no intentions)")
 
     # Detailed logging
     detailed_logging: bool = Field(default=False, description="Enable detailed CSV logging")

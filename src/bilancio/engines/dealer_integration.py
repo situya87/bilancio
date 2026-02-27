@@ -189,8 +189,9 @@ class DealerSubsystem:
     # VBT pricing model (optional — when None, uses inline logic for backward compat)
     vbt_pricing_model: VBTPricingModel | None = None
 
-    # Number of trading sub-rounds per day (default 1 = current behavior)
-    trading_rounds: int = 1
+    # Number of trading sub-rounds per day.  High default lets the loop
+    # run until no intentions remain (early-termination at line 670).
+    trading_rounds: int = 100
 
 
 

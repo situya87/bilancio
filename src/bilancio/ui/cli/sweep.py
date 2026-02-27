@@ -758,8 +758,8 @@ def sweep_comparison(
 @click.option(
     "--trading-rounds",
     type=click.IntRange(min=1),
-    default=1,
-    help="Number of trading sub-rounds per day (default: 1)",
+    default=100,
+    help="Max trading sub-rounds per day; loop exits early when no intentions remain (default: 100)",
 )
 @click.option(
     "--equalize-bank-capacity/--no-equalize-bank-capacity",
