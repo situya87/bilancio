@@ -1167,6 +1167,7 @@ class BalancedComparisonRunner:
             # Lender-specific: pass lender mode and config
             lender_mode=True,
             lender_share=self.config.lender_share,
+            lender_min_coverage=self.config.lender_min_coverage,
             balanced_mode_override="lender",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
