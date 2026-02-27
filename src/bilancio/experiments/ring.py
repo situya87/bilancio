@@ -316,6 +316,7 @@ class RingSweepRunner:
         spread_scale: Decimal = Decimal("1.0"),
         cb_lending_cutoff_day: int | None = None,
         trading_rounds: int = 1,
+        reserve_ratio: Decimal | None = None,
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -365,6 +366,7 @@ class RingSweepRunner:
         self.spread_scale = spread_scale
         self.cb_lending_cutoff_day = cb_lending_cutoff_day
         self.trading_rounds = trading_rounds
+        self.reserve_ratio = reserve_ratio
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -691,6 +693,7 @@ class RingSweepRunner:
                 cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
                 spread_scale=self.spread_scale,
                 cb_lending_cutoff_day=self.cb_lending_cutoff_day,
+                reserve_ratio=self.reserve_ratio,
                 source_path=None,
             )
         else:
@@ -1088,6 +1091,7 @@ class RingSweepRunner:
                 cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
                 spread_scale=self.spread_scale,
                 cb_lending_cutoff_day=self.cb_lending_cutoff_day,
+                reserve_ratio=self.reserve_ratio,
                 source_path=None,
             )
         else:

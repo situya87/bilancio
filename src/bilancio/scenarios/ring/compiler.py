@@ -214,6 +214,7 @@ def compile_ring_explorer_balanced(
     spread_scale: Decimal = Decimal("1.0"),
     cb_lending_cutoff_day: int | None = None,
     equalize_capacity: bool = False,
+    reserve_ratio: Decimal | None = None,
     emit_action_specs: bool = False,
     *,
     source_path: Path | None = None,
@@ -287,10 +288,17 @@ def compile_ring_explorer_balanced(
         bucket = payable_buckets[idx]
         bucket_totals[bucket] += amount
 
+    # bank_idle/bank_lend: no VBT/Dealer, traders hold 100% of claims
+    skip_vbt_dealer = mode in ("bank_idle", "bank_lend")
+
     # Calculate big entity holdings per bucket
     # VBT gets vbt_share_per_bucket of each bucket, Dealer gets dealer_share_per_bucket
-    vbt_holdings = {b: bucket_totals[b] * vbt_share_per_bucket for b in BUCKETS}
-    dealer_holdings = {b: bucket_totals[b] * dealer_share_per_bucket for b in BUCKETS}
+    if skip_vbt_dealer:
+        vbt_holdings = {b: Decimal("0") for b in BUCKETS}
+        dealer_holdings = {b: Decimal("0") for b in BUCKETS}
+    else:
+        vbt_holdings = {b: bucket_totals[b] * vbt_share_per_bucket for b in BUCKETS}
+        dealer_holdings = {b: bucket_totals[b] * dealer_share_per_bucket for b in BUCKETS}
 
     # Calculate additional debt per trader to VBT/Dealer
     # Each trader contributes proportionally to their original debt
@@ -323,22 +331,23 @@ def compile_ring_explorer_balanced(
     # Build agents
     agents = _build_agents(params.n_agents)
 
-    # Add VBT and Dealer agents per bucket
-    for bucket in BUCKETS:
-        agents.append(
-            {
-                "id": f"vbt_{bucket}",
-                "kind": "household",
-                "name": f"VBT ({bucket})",
-            }
-        )
-        agents.append(
-            {
-                "id": f"dealer_{bucket}",
-                "kind": "household",
-                "name": f"Dealer ({bucket})",
-            }
-        )
+    # Add VBT and Dealer agents per bucket (skip for bank-only modes)
+    if not skip_vbt_dealer:
+        for bucket in BUCKETS:
+            agents.append(
+                {
+                    "id": f"vbt_{bucket}",
+                    "kind": "household",
+                    "name": f"VBT ({bucket})",
+                }
+            )
+            agents.append(
+                {
+                    "id": f"dealer_{bucket}",
+                    "kind": "household",
+                    "name": f"Dealer ({bucket})",
+                }
+            )
 
     initial_actions = []
 
@@ -380,47 +389,48 @@ def compile_ring_explorer_balanced(
     actual_vbt_face = {b: Decimal(0) for b in BUCKETS}
     actual_dealer_face = {b: Decimal(0) for b in BUCKETS}
 
-    # Create payables from traders to VBT (per bucket)
-    for idx in range(params.n_agents):
-        vbt_amount, bucket, due_day = trader_to_vbt[idx]
-        if vbt_amount > Decimal("0.01"):  # Skip tiny amounts
-            truncated = Decimal(int(vbt_amount))  # Match int() in apply.py
-            actual_vbt_face[bucket] += truncated
-            from_agent = f"H{idx + 1}"
-            to_agent = f"vbt_{bucket}"
-            initial_actions.append(
-                {
-                    "create_payable": {
-                        "from": from_agent,
-                        "to": to_agent,
-                        "amount": vbt_amount,
-                        "due_day": due_day,
-                        "alias": f"P_{from_agent}_{to_agent}",
-                        "maturity_distance": due_day,  # Plan 024: for rollover
+    if not skip_vbt_dealer:
+        # Create payables from traders to VBT (per bucket)
+        for idx in range(params.n_agents):
+            vbt_amount, bucket, due_day = trader_to_vbt[idx]
+            if vbt_amount > Decimal("0.01"):  # Skip tiny amounts
+                truncated = Decimal(int(vbt_amount))  # Match int() in apply.py
+                actual_vbt_face[bucket] += truncated
+                from_agent = f"H{idx + 1}"
+                to_agent = f"vbt_{bucket}"
+                initial_actions.append(
+                    {
+                        "create_payable": {
+                            "from": from_agent,
+                            "to": to_agent,
+                            "amount": vbt_amount,
+                            "due_day": due_day,
+                            "alias": f"P_{from_agent}_{to_agent}",
+                            "maturity_distance": due_day,  # Plan 024: for rollover
+                        }
                     }
-                }
-            )
+                )
 
-    # Create payables from traders to Dealer (per bucket)
-    for idx in range(params.n_agents):
-        dealer_amount, bucket, due_day = trader_to_dealer[idx]
-        if dealer_amount > Decimal("0.01"):  # Skip tiny amounts
-            truncated = Decimal(int(dealer_amount))  # Match int() in apply.py
-            actual_dealer_face[bucket] += truncated
-            from_agent = f"H{idx + 1}"
-            to_agent = f"dealer_{bucket}"
-            initial_actions.append(
-                {
-                    "create_payable": {
-                        "from": from_agent,
-                        "to": to_agent,
-                        "amount": dealer_amount,
-                        "due_day": due_day,
-                        "alias": f"P_{from_agent}_{to_agent}",
-                        "maturity_distance": due_day,  # Plan 024: for rollover
+        # Create payables from traders to Dealer (per bucket)
+        for idx in range(params.n_agents):
+            dealer_amount, bucket, due_day = trader_to_dealer[idx]
+            if dealer_amount > Decimal("0.01"):  # Skip tiny amounts
+                truncated = Decimal(int(dealer_amount))  # Match int() in apply.py
+                actual_dealer_face[bucket] += truncated
+                from_agent = f"H{idx + 1}"
+                to_agent = f"dealer_{bucket}"
+                initial_actions.append(
+                    {
+                        "create_payable": {
+                            "from": from_agent,
+                            "to": to_agent,
+                            "amount": dealer_amount,
+                            "due_day": due_day,
+                            "alias": f"P_{from_agent}_{to_agent}",
+                            "maturity_distance": due_day,  # Plan 024: for rollover
+                        }
                     }
-                }
-            )
+                )
 
     # Compute cash ratio for VBT/Dealer: use kappa-informed prior if available,
     # otherwise fall back to outside_mid_ratio for backward compatibility.
@@ -444,6 +454,10 @@ def compile_ring_explorer_balanced(
         vbt_dealer_cash_scale = Decimal("0.5")  # 50/50 split
     elif mode == "bank_dealer_nbfi":
         vbt_dealer_cash_scale = Decimal("1") / Decimal("3")  # Three-way split
+    elif mode in ("bank_idle", "bank_lend"):
+        vbt_dealer_cash_scale = Decimal("0")  # No VBT/Dealer in bank-only modes
+    elif mode in ("nbfi_idle", "nbfi_lend"):
+        vbt_dealer_cash_scale = Decimal("1")  # VBT/Dealer keep full cash
     else:
         vbt_dealer_cash_scale = Decimal("1")  # Normal modes
 
@@ -477,8 +491,8 @@ def compile_ring_explorer_balanced(
                 }
             )
 
-    # Add non-bank lender agent and cash (lender/nbfi/nbfi_dealer/bank_dealer_nbfi modes)
-    if mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi"):
+    # Add non-bank lender agent and cash (lender/nbfi/nbfi_dealer/bank_dealer_nbfi/nbfi_idle/nbfi_lend modes)
+    if mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi", "nbfi_idle", "nbfi_lend"):
         agents.append(
             {
                 "id": "lender",
@@ -494,6 +508,8 @@ def compile_ring_explorer_balanced(
             lender_cash = total_vbt_dealer_liquidity * Decimal("0.5")  # 50% of VBT+dealer cash
         elif mode == "bank_dealer_nbfi":
             lender_cash = total_vbt_dealer_liquidity / Decimal("3")  # 33% three-way split
+        elif mode in ("nbfi_idle", "nbfi_lend"):
+            lender_cash = base_liquidity * lender_share  # Independent endowment
         else:
             lender_cash = Decimal(0)
         if lender_cash > 0:
@@ -598,7 +614,11 @@ def compile_ring_explorer_balanced(
         initial_actions.extend(deposit_actions)
 
         # 4. Mint reserves to each bank
-        if equalize_capacity:
+        if mode in ("bank_idle", "bank_lend") and reserve_ratio is not None:
+            # Plan 043: bank-only modes use reserve_ratio × total_deposits
+            target_bank_reserves = reserve_ratio * total_deposited
+            reserves_per_bank = int(target_bank_reserves / n_banks)
+        elif equalize_capacity:
             # Capacity equalization: bank reserves = bank's share of the
             # total_vbt_dealer_liquidity pool, so total intermediary capital
             # is the same across all arms.
@@ -655,7 +675,7 @@ def compile_ring_explorer_balanced(
             "quiet_days": params.maturity.days + 1 if rollover_enabled else 2,
             "rollover_enabled": rollover_enabled,  # Plan 024: continuous rollover
             "enable_banking": n_banks > 0,
-            "enable_bank_lending": n_banks > 0 and mode in ("banking", "bank_dealer", "bank_dealer_nbfi"),
+            "enable_bank_lending": n_banks > 0 and mode in ("banking", "bank_dealer", "bank_dealer_nbfi", "bank_lend"),
             "show": {
                 "balances": [agent["id"] for agent in agents],
                 "events": "detailed",
@@ -682,7 +702,7 @@ def compile_ring_explorer_balanced(
             "trader_bank_assignments": trader_bank_assignments if n_banks > 0 else {},
             "infra_bank_assignments": infra_bank_assignments if n_banks > 0 else {},
             "enable_banking": n_banks > 0,
-            "enable_bank_lending": n_banks > 0 and mode in ("banking", "bank_dealer", "bank_dealer_nbfi"),
+            "enable_bank_lending": n_banks > 0 and mode in ("banking", "bank_dealer", "bank_dealer_nbfi", "bank_lend"),
             "Q_total": float(params.Q_total),
             "credit_risk_loading": float(credit_risk_loading),
             "max_borrower_risk": float(max_borrower_risk),
@@ -692,6 +712,7 @@ def compile_ring_explorer_balanced(
             "spread_scale": float(spread_scale),
             "cb_lending_cutoff_day": cb_lending_cutoff_day,
             "equalize_capacity": equalize_capacity,
+            "reserve_ratio": float(reserve_ratio) if reserve_ratio is not None else None,
         },
     }
 
@@ -720,7 +741,7 @@ def compile_ring_explorer_balanced(
         # Emit dealer/balanced_dealer config for modes that need B_Dealer phase.
         # Without these, apply_action_specs cannot initialize the dealer subsystem.
         has_dealer = mode in ("active", "nbfi_dealer", "bank_dealer", "bank_dealer_nbfi")
-        has_passive = mode == "passive"
+        has_passive = mode in ("passive", "nbfi_idle", "nbfi_lend")
         if has_dealer or has_passive:
             scenario["dealer"] = {
                 "enabled": True,
@@ -763,7 +784,8 @@ def _build_action_specs(
 
     Args:
         mode: One of "passive", "active", "lender", "nbfi", "nbfi_dealer",
-              "banking", "bank_dealer", "bank_dealer_nbfi".
+              "banking", "bank_dealer", "bank_dealer_nbfi",
+              "nbfi_idle", "nbfi_lend", "bank_idle", "bank_lend".
         trader_params: Profile params for traders (risk_aversion, planning_horizon, etc.).
         lender_params: Profile params for lender (risk_aversion, profit_target, etc.).
         vbt_params: Profile params for VBT (mid_sensitivity, spread_sensitivity, etc.).
@@ -784,10 +806,12 @@ def _build_action_specs(
 
     # Modes with dealer trading
     has_dealer = mode in ("active", "nbfi_dealer", "bank_dealer", "bank_dealer_nbfi")
-    # Modes with lending
-    has_lending = mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi")
-    # Modes with banking
-    has_banking = mode in ("banking", "bank_dealer", "bank_dealer_nbfi")
+    # Modes with NBFI lending
+    has_lending = mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi", "nbfi_lend")
+    # Modes with bank lending (households can borrow from banks)
+    has_bank_lending = mode in ("banking", "bank_dealer", "bank_dealer_nbfi", "bank_lend")
+    # Modes with banking infrastructure (deposits, but not necessarily lending)
+    has_banking = mode in ("banking", "bank_dealer", "bank_dealer_nbfi", "bank_idle", "bank_lend")
 
     if has_dealer:
         household_actions.extend([
@@ -795,7 +819,7 @@ def _build_action_specs(
             {"action": "buy_ticket", "phase": "B_Dealer", "strategy": "surplus_buyer"},
         ])
 
-    if has_lending or has_banking:
+    if has_lending or has_bank_lending:
         household_actions.append(
             {"action": "borrow", "phase": "B_Lending"},
         )

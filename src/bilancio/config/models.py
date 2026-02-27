@@ -717,9 +717,10 @@ class BalancedDealerConfig(BaseModel):
     mode: Literal[
         "passive", "active", "lender", "nbfi", "nbfi_dealer",
         "banking", "bank_dealer", "bank_dealer_nbfi",
+        "nbfi_idle", "nbfi_lend", "bank_idle", "bank_lend",
     ] = Field(
         default="active",
-        description="passive = C (mimics), active = D (dealers), lender/nbfi/nbfi_dealer = with NBFI lending, banking/bank_dealer/bank_dealer_nbfi = with banks",
+        description="passive = C (mimics), active = D (dealers), lender/nbfi/nbfi_dealer = with NBFI lending, banking/bank_dealer/bank_dealer_nbfi = with banks, nbfi_idle/nbfi_lend = Plan 043 NBFI experiment, bank_idle/bank_lend = Plan 043 bank experiment",
     )
     alpha_vbt: Decimal = Field(
         default=Decimal("0"),
