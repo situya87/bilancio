@@ -306,6 +306,7 @@ class RingSweepRunner:
         trading_motive: str = "liquidity_then_earning",
         lender_mode: bool = False,
         lender_share: Decimal = Decimal("0.10"),
+        lender_min_coverage: Decimal = Decimal("0"),
         balanced_mode_override: str | None = None,
         n_banks: int = 0,
         reserve_multiplier: float = 10.0,
@@ -356,6 +357,7 @@ class RingSweepRunner:
         self.trading_motive = trading_motive
         self.lender_mode = lender_mode
         self.lender_share = lender_share
+        self.lender_min_coverage = lender_min_coverage
         self.balanced_mode_override = balanced_mode_override
         self.n_banks = n_banks
         self.reserve_multiplier = reserve_multiplier
@@ -764,6 +766,7 @@ class RingSweepRunner:
                     "risk_aversion": "0.3",
                     "planning_horizon": 5,
                     "profit_target": "0.05",
+                    "min_coverage_ratio": str(self.lender_min_coverage),
                 }
 
         if self.default_handling:
@@ -1163,6 +1166,7 @@ class RingSweepRunner:
                     "risk_aversion": "0.3",
                     "planning_horizon": 5,
                     "profit_target": "0.05",
+                    "min_coverage_ratio": str(self.lender_min_coverage),
                 }
 
         if self.default_handling:

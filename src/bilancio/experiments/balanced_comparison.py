@@ -646,6 +646,9 @@ class BalancedComparisonConfig(BaseModel):
     )
     lender_maturity_days: int = Field(default=2, description="Loan term in days")
     lender_horizon: int = Field(default=3, description="Look-ahead for upcoming obligations")
+    lender_min_coverage: Decimal = Field(
+        default=Decimal("0.5"), description="NBFI min coverage ratio for borrower assessment"
+    )
 
     # Bank credit risk pricing (Plan 036)
     credit_risk_loading: Decimal = Field(
@@ -1221,6 +1224,7 @@ class BalancedComparisonRunner:
             # NBFI mode: lender enabled, override mode to "nbfi"
             lender_mode=True,
             lender_share=self.config.lender_share,
+            lender_min_coverage=self.config.lender_min_coverage,
             balanced_mode_override="nbfi",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
@@ -1283,6 +1287,7 @@ class BalancedComparisonRunner:
             # Combined mode: both dealer and lender enabled
             lender_mode=True,
             lender_share=self.config.lender_share,
+            lender_min_coverage=self.config.lender_min_coverage,
             balanced_mode_override="nbfi_dealer",  # 50/50 cash split
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
@@ -1452,6 +1457,7 @@ class BalancedComparisonRunner:
             # Combined mode: both dealer and lender enabled, with banks
             lender_mode=True,
             lender_share=self.config.lender_share,
+            lender_min_coverage=self.config.lender_min_coverage,
             balanced_mode_override="bank_dealer_nbfi",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,

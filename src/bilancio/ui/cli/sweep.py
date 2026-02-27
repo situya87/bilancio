@@ -756,6 +756,12 @@ def sweep_comparison(
     help="Bank reserves = reserve_multiplier * face_value (default: 10.0)",
 )
 @click.option(
+    "--lender-min-coverage",
+    type=Decimal,
+    default=Decimal("0.5"),
+    help="NBFI min coverage ratio for borrower assessment (default: 0.5)",
+)
+@click.option(
     "--trading-rounds",
     type=click.IntRange(min=1),
     default=100,
@@ -809,6 +815,7 @@ def sweep_balanced(
     cb_lending_cutoff_day: int | None,
     n_banks: int,
     reserve_multiplier: float,
+    lender_min_coverage: Decimal,
     trading_rounds: int,
     equalize_bank_capacity: bool,
 ) -> None:
@@ -932,6 +939,7 @@ def sweep_balanced(
         bank_reserve_multiplier=bank_reserve_multiplier,
         equalize_bank_capacity=equalize_bank_capacity,
         min_coverage_ratio=min_coverage_ratio,
+        lender_min_coverage=lender_min_coverage,
         cb_lending_cutoff_day=cb_lending_cutoff_day,
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,

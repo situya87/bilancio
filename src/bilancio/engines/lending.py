@@ -45,6 +45,7 @@ class LendingConfig:
     max_ring_maturity: int | None = None  # computed at ring creation time
     risk_assessor: RiskAssessor | None = None  # persists across days for Bayesian learning
     initial_prior: Decimal = Decimal("0.15")  # κ-informed default probability prior
+    min_coverage_ratio: Decimal = Decimal("0")
     # Decision protocol overrides (None = auto-construct from scalar params)
     portfolio_strategy: PortfolioStrategy | None = None
     counterparty_screener: CounterpartyScreener | None = None
@@ -139,7 +140,8 @@ def run_lending_phase(
         if info is not None
         else _get_loan_exposure(system, lender_id)
     )
-    initial_capital = lender_cash + existing_loan_exposure
+    performing_exposure = _get_performing_loan_exposure(system, lender_id)
+    initial_capital = lender_cash + performing_exposure
 
     if initial_capital <= 0:
         return events
@@ -188,10 +190,28 @@ def run_lending_phase(
         if not screener.is_eligible(p_default):
             continue
 
+        # Coverage gate: reject if borrower's balance sheet coverage is too low
+        if config.min_coverage_ratio > 0:
+            coverage = _assess_borrower_nbfi(
+                system, agent_id, min(shortfall, int(config.max_single_exposure * initial_capital)),
+                config.lender_profile.profit_target if config.lender_profile else config.base_rate,
+                current_day, config.horizon,
+            )
+            if coverage < config.min_coverage_ratio:
+                events.append({
+                    "kind": "NonBankLoanRejectedCoverage",
+                    "day": current_day,
+                    "lender_id": lender_id,
+                    "borrower_id": agent_id,
+                    "coverage": str(coverage),
+                    "min_coverage": str(config.min_coverage_ratio),
+                })
+                continue
+
         # If LenderProfile available, use kappa-aware pricing
         if profile is not None:
             # Compute coverage ratio: (cash + receivables) / upcoming_obligations
-            receivables = _get_receivables_due_within(
+            receivables = _quality_adjusted_receivables(
                 system, agent_id, current_day, profile.planning_horizon
             )
             total_resources = max(agent_cash + receivables, 0)
@@ -521,6 +541,78 @@ def _get_receivables_due_within(
         if due_day is not None and current_day <= due_day <= current_day + horizon:
             total += contract.amount
     return total
+
+
+def _quality_adjusted_receivables(
+    system: System, agent_id: str, current_day: int, horizon: int
+) -> int:
+    """Receivables due within horizon, excluding defaulted counterparties."""
+    from bilancio.domain.instruments.base import InstrumentKind
+
+    total = 0
+    agent = system.state.agents.get(agent_id)
+    if agent is None:
+        return 0
+    defaulted = system.state.defaulted_agent_ids
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None or contract.kind != InstrumentKind.PAYABLE:
+            continue
+        due_day = contract.due_day
+        if due_day is not None and current_day <= due_day <= current_day + horizon:
+            if contract.liability_issuer_id not in defaulted:
+                total += contract.amount
+    return total
+
+
+def _get_performing_loan_exposure(system: System, lender_id: str) -> int:
+    """Loan exposure excluding loans to defaulted borrowers."""
+    from bilancio.domain.instruments.base import InstrumentKind
+
+    total = 0
+    agent = system.state.agents.get(lender_id)
+    if agent is None:
+        return 0
+    defaulted = system.state.defaulted_agent_ids
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is not None and contract.kind == InstrumentKind.NON_BANK_LOAN:
+            if contract.liability_issuer_id not in defaulted:
+                total += contract.amount
+    return total
+
+
+def _assess_borrower_nbfi(
+    system: System,
+    agent_id: str,
+    loan_amount: int,
+    rate: Decimal,
+    current_day: int,
+    horizon: int,
+) -> Decimal:
+    """Assess NBFI borrower's repayment capacity via balance sheet analysis.
+
+    Mirrors bank_lending._assess_borrower: projects cash position at repayment
+    by combining liquid assets, quality-adjusted receivables, and obligations.
+
+    Returns coverage ratio: net_resources / loan_repayment.
+    """
+    agent = system.state.agents.get(agent_id)
+    if agent is None:
+        return Decimal("-1")
+
+    loan_repayment = int(Decimal(loan_amount) * (Decimal("1") + rate))
+    if loan_repayment <= 0:
+        return Decimal("999")
+
+    liquid = _get_agent_cash(system, agent_id)
+    quality_receivables = _quality_adjusted_receivables(
+        system, agent_id, current_day, horizon
+    )
+    obligations = _get_upcoming_obligations(system, agent_id, current_day, horizon)
+
+    net_resources = liquid + quality_receivables - obligations
+    return Decimal(net_resources) / Decimal(loan_repayment)
 
 
 def _estimate_default_probs(

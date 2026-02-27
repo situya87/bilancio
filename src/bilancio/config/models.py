@@ -897,6 +897,9 @@ class LenderScenarioConfig(BaseModel):
     info_market_visibility: Literal["none", "noisy", "perfect"] = Field(
         default="none", description="Lender visibility of market prices"
     )
+    min_coverage_ratio: Decimal = Field(
+        default=Decimal("0"), description="Min coverage ratio for borrower assessment (0=disabled)"
+    )
 
 
 class RatingAgencyScenarioConfig(BaseModel):
