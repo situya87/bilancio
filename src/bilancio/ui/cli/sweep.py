@@ -732,6 +732,12 @@ def sweep_comparison(
     help="Reserve multiplier for banking arms (default: 0.5, reserve-constrained)",
 )
 @click.option(
+    "--min-coverage-ratio",
+    type=Decimal,
+    default=Decimal("0"),
+    help="Borrower assessment: min coverage ratio to approve loan (0=disabled, default: 0)",
+)
+@click.option(
     "--cb-lending-cutoff-day",
     type=int,
     default=None,
@@ -799,6 +805,7 @@ def sweep_balanced(
     enable_bank_dealer_nbfi: bool,
     n_banks_for_banking: int,
     bank_reserve_multiplier: float,
+    min_coverage_ratio: Decimal,
     cb_lending_cutoff_day: int | None,
     n_banks: int,
     reserve_multiplier: float,
@@ -924,6 +931,7 @@ def sweep_balanced(
         n_banks_for_banking=n_banks_for_banking,
         bank_reserve_multiplier=bank_reserve_multiplier,
         equalize_bank_capacity=equalize_bank_capacity,
+        min_coverage_ratio=min_coverage_ratio,
         cb_lending_cutoff_day=cb_lending_cutoff_day,
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,
