@@ -595,3 +595,461 @@ class TestOneLoanAtATime:
         loan_events = [e for e in events if e["kind"] == "BankLoanIssued"]
         borrowers = [e["borrower"] for e in loan_events]
         assert "H_1" not in borrowers
+
+
+# ---------------------------------------------------------------------------
+# Plan 045: Settlement forecast & projected reserve check
+# ---------------------------------------------------------------------------
+
+
+def _make_settlement_system(
+    reserves_1: int = 300,
+    reserves_2: int = 300,
+    deposits_1: int = 600,
+    deposits_2: int = 600,
+    firm1_bank: str = "bank_1",
+    firm2_bank: str = "bank_2",
+) -> System:
+    """Create a system with 2 banks and 2 firms, with configurable reserves/deposits.
+
+    Used for testing settlement forecast and projected reserve checks.
+    ``firm1_bank`` / ``firm2_bank`` control where each firm's deposit is created.
+    """
+    system = System(policy=PolicyEngine.default())
+
+    cb = CentralBank(id="cb", name="Central Bank", kind="central_bank")
+    bank1 = Bank(id="bank_1", name="Bank 1", kind="bank")
+    bank2 = Bank(id="bank_2", name="Bank 2", kind="bank")
+    firm1 = Firm(id="H_1", name="Firm 1", kind="firm")
+    firm2 = Firm(id="H_2", name="Firm 2", kind="firm")
+
+    system.add_agent(cb)
+    system.add_agent(bank1)
+    system.add_agent(bank2)
+    system.add_agent(firm1)
+    system.add_agent(firm2)
+
+    # Fund firms and deposit at their assigned banks
+    system.mint_cash(to_agent_id="H_1", amount=deposits_1)
+    system.mint_cash(to_agent_id="H_2", amount=deposits_2)
+    deposit_cash(system, "H_1", firm1_bank, deposits_1)
+    deposit_cash(system, "H_2", firm2_bank, deposits_2)
+
+    # Mint reserves for banks
+    system.mint_reserves(to_bank_id="bank_1", amount=reserves_1)
+    system.mint_reserves(to_bank_id="bank_2", amount=reserves_2)
+
+    return system
+
+
+class TestSettlementForecast:
+    """Tests for compute_settlement_forecasts (Plan 045)."""
+
+    def test_cross_bank_payable_creates_outflow(self):
+        """A payable from H_1→H_2 (different banks) creates outflow for bank_1."""
+        system = _make_settlement_system()
+        profile = BankProfile()
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("0.3"),
+            maturity_days=10,
+            trader_banks={"H_1": ["bank_1"], "H_2": ["bank_2"]},
+        )
+
+        # H_1 (bank_1 client) owes H_2 (bank_2 client) 500 due today
+        payable = Payable(
+            id="PAY_settle",
+            kind=InstrumentKind.PAYABLE,
+            amount=500,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=0,
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+        system.state.agents["H_2"].asset_ids.append(payable.id)
+
+        net = subsystem.compute_settlement_forecasts(system, current_day=0)
+
+        # bank_1 should have outflow of 500 (positive = reserves leave)
+        assert net["bank_1"] == 500
+        # bank_2 should have inflow of 500 (negative = reserves arrive)
+        assert net["bank_2"] == -500
+
+    def test_intra_bank_payable_no_outflow(self):
+        """A payable between two clients of the same bank creates no outflow."""
+        # Both firms deposit at bank_1 so forecast scans find same bank
+        system = _make_settlement_system(firm2_bank="bank_1")
+        profile = BankProfile()
+
+        # Both firms at bank_1
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("1.0"),
+            maturity_days=10,
+            trader_banks={"H_1": ["bank_1"], "H_2": ["bank_1"]},
+        )
+
+        payable = Payable(
+            id="PAY_intra",
+            kind=InstrumentKind.PAYABLE,
+            amount=500,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=0,
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+        system.state.agents["H_2"].asset_ids.append(payable.id)
+
+        net = subsystem.compute_settlement_forecasts(system, current_day=0)
+
+        # Both banks should have zero net — no reserve movement for intra-bank
+        assert net["bank_1"] == 0
+        assert net["bank_2"] == 0
+
+    def test_defaulted_debtor_excluded(self):
+        """Payables from defaulted debtors are excluded from forecast."""
+        system = _make_settlement_system()
+        profile = BankProfile()
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("1.0"),
+            maturity_days=10,
+            trader_banks={"H_1": ["bank_1"], "H_2": ["bank_2"]},
+        )
+
+        system.state.agents["H_1"].defaulted = True
+
+        payable = Payable(
+            id="PAY_def",
+            kind=InstrumentKind.PAYABLE,
+            amount=500,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=0,
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+        system.state.agents["H_2"].asset_ids.append(payable.id)
+
+        net = subsystem.compute_settlement_forecasts(system, current_day=0)
+
+        assert net["bank_1"] == 0
+        assert net["bank_2"] == 0
+
+    def test_future_payable_not_counted(self):
+        """Payables due on a different day are not counted."""
+        system = _make_settlement_system()
+        profile = BankProfile()
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("1.0"),
+            maturity_days=10,
+            trader_banks={"H_1": ["bank_1"], "H_2": ["bank_2"]},
+        )
+
+        payable = Payable(
+            id="PAY_future",
+            kind=InstrumentKind.PAYABLE,
+            amount=500,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=5,  # Not today
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+        system.state.agents["H_2"].asset_ids.append(payable.id)
+
+        net = subsystem.compute_settlement_forecasts(system, current_day=0)
+
+        assert net["bank_1"] == 0
+        assert net["bank_2"] == 0
+
+    def test_effective_creditor_used_for_transferred_payable(self):
+        """Forecast uses effective_creditor (secondary market holder), not asset_holder_id."""
+        # H_1 at bank_1, H_2 at bank_2
+        system = _make_settlement_system()
+        profile = BankProfile()
+
+        # Add a third firm at bank_1 to be the secondary market holder
+        firm3 = Firm(id="H_3", name="Firm 3", kind="firm")
+        system.add_agent(firm3)
+        system.mint_cash(to_agent_id="H_3", amount=100)
+        deposit_cash(system, "H_3", "bank_1", 100)
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("0.3"),
+            maturity_days=10,
+            trader_banks={
+                "H_1": ["bank_1"],
+                "H_2": ["bank_2"],
+                "H_3": ["bank_1"],
+            },
+        )
+
+        # H_1 (bank_1) owes H_2 (bank_2 original creditor),
+        # but payable was transferred to H_3 (bank_1)
+        payable = Payable(
+            id="PAY_transferred",
+            kind=InstrumentKind.PAYABLE,
+            amount=400,
+            denom="USD",
+            asset_holder_id="H_2",  # original creditor at bank_2
+            liability_issuer_id="H_1",
+            due_day=0,
+            holder_id="H_3",  # secondary market holder at bank_1
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+
+        net = subsystem.compute_settlement_forecasts(system, current_day=0)
+
+        # effective_creditor = H_3 (at bank_1), debtor H_1 also at bank_1
+        # → intra-bank, no reserve movement
+        # Without the fix (using asset_holder_id=H_2 at bank_2), this would
+        # show 400 outflow from bank_1 and -400 inflow to bank_2 — wrong.
+        assert net["bank_1"] == 0
+        assert net["bank_2"] == 0
+
+    def test_multi_bank_debtor_splits_payment(self):
+        """When debtor has deposits at two banks, forecast splits by balance."""
+        system = System(policy=PolicyEngine.default())
+
+        cb = CentralBank(id="cb", name="Central Bank", kind="central_bank")
+        bank1 = Bank(id="bank_1", name="Bank 1", kind="bank")
+        bank2 = Bank(id="bank_2", name="Bank 2", kind="bank")
+        firm1 = Firm(id="H_1", name="Firm 1", kind="firm")
+        firm2 = Firm(id="H_2", name="Firm 2", kind="firm")
+
+        system.add_agent(cb)
+        system.add_agent(bank1)
+        system.add_agent(bank2)
+        system.add_agent(firm1)
+        system.add_agent(firm2)
+
+        # H_1 has deposits at BOTH banks: 200 at bank_1, 300 at bank_2
+        system.mint_cash(to_agent_id="H_1", amount=500)
+        deposit_cash(system, "H_1", "bank_1", 200)
+        deposit_cash(system, "H_1", "bank_2", 300)
+
+        # H_2 has deposit at bank_1 only (creditor receives at bank_1)
+        system.mint_cash(to_agent_id="H_2", amount=400)
+        deposit_cash(system, "H_2", "bank_1", 400)
+
+        system.mint_reserves(to_bank_id="bank_1", amount=300)
+        system.mint_reserves(to_bank_id="bank_2", amount=300)
+
+        profile = BankProfile()
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("1.0"),
+            maturity_days=10,
+            trader_banks={"H_1": ["bank_1", "bank_2"], "H_2": ["bank_1"]},
+        )
+
+        # H_1 owes H_2 400 — creditor at bank_1
+        payable = Payable(
+            id="PAY_multi",
+            kind=InstrumentKind.PAYABLE,
+            amount=400,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=0,
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+        system.state.agents["H_2"].asset_ids.append(payable.id)
+
+        net = subsystem.compute_settlement_forecasts(system, current_day=0)
+
+        # After initialize_banking_subsystem:
+        #   bank_1 r_D ≈ 0.003 (more deposits → higher rate)
+        #   bank_2 r_D = 0
+        # Creditor H_2 receives at bank_1 (highest r_D).
+        # Debtor H_1 pays from lowest r_D first:
+        #   bank_2 (r_D=0, balance=300) → 300 cross-bank to bank_1
+        #   bank_1 (r_D=0.003, balance=200) → 100 intra-bank (skipped)
+        assert net["bank_2"] == 300  # outflow: paid 300 cross-bank to bank_1
+        assert net["bank_1"] == -300  # inflow: received 300 from bank_2
+
+
+class TestProjectedReserveCheck:
+    """Tests for the projected reserve check in _bank_can_lend (Plan 045)."""
+
+    def test_bank_refuses_loan_when_settlement_drain_exceeds_reserves(self):
+        """Bank refuses to lend when projected reserves (after settlement drain) are below floor."""
+        # Low reserves, large settlement outflow expected
+        system = _make_settlement_system(reserves_1=300, deposits_1=600)
+        profile = BankProfile()
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("0.3"),
+            maturity_days=10,
+            trader_banks={"H_1": ["bank_1"], "H_2": ["bank_2"]},
+        )
+
+        # Create a large cross-bank payable due today (H_1 → H_2, different banks)
+        # This will drain bank_1's reserves
+        payable = Payable(
+            id="PAY_drain",
+            kind=InstrumentKind.PAYABLE,
+            amount=500,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=0,
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+        system.state.agents["H_2"].asset_ids.append(payable.id)
+
+        # Also create a payable that creates a shortfall for H_1
+        payable2 = Payable(
+            id="PAY_short",
+            kind=InstrumentKind.PAYABLE,
+            amount=2000,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=2,
+        )
+        system.state.contracts[payable2.id] = payable2
+        system.state.agents["H_1"].liability_ids.append(payable2.id)
+        system.state.agents["H_2"].asset_ids.append(payable2.id)
+
+        # Refresh quotes — this now includes settlement forecasts
+        subsystem.refresh_all_quotes(system, current_day=0)
+
+        # Verify bank_1 sees the settlement drain
+        bank_state = subsystem.banks["bank_1"]
+        assert bank_state._settlement_net_outflow == 500
+
+        # min_projected_reserves should be low (reserves=300 minus settlement drain 500 => negative)
+        assert bank_state.min_projected_reserves < 0
+
+        # Run lending phase — bank_1 should refuse to lend to H_1
+        events = run_bank_lending_phase(system, current_day=0, banking=subsystem)
+
+        loan_events = [e for e in events if e["kind"] == "BankLoanIssued"]
+        assert len(loan_events) == 0, (
+            f"Bank should refuse lending when settlement drain exceeds reserves, "
+            f"but {len(loan_events)} loans issued"
+        )
+
+    def test_bank_lends_when_reserves_sufficient_after_settlement(self):
+        """Bank lends when it has ample reserves even after settlement drain."""
+        # High reserves relative to settlement outflow
+        system = _make_settlement_system(reserves_1=5000, deposits_1=1000)
+        profile = BankProfile()
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("2.0"),
+            maturity_days=10,
+            trader_banks={"H_1": ["bank_1"], "H_2": ["bank_2"]},
+        )
+
+        # Small cross-bank payable
+        payable = Payable(
+            id="PAY_small",
+            kind=InstrumentKind.PAYABLE,
+            amount=200,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=0,
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+        system.state.agents["H_2"].asset_ids.append(payable.id)
+
+        # Create shortfall for H_1
+        payable2 = Payable(
+            id="PAY_need",
+            kind=InstrumentKind.PAYABLE,
+            amount=2000,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=2,
+        )
+        system.state.contracts[payable2.id] = payable2
+        system.state.agents["H_1"].liability_ids.append(payable2.id)
+        system.state.agents["H_2"].asset_ids.append(payable2.id)
+
+        # Refresh quotes
+        subsystem.refresh_all_quotes(system, current_day=0)
+
+        bank_state = subsystem.banks["bank_1"]
+        # With 5000 reserves and only 200 outflow, min_projected should be high
+        assert bank_state.min_projected_reserves > 0
+
+        # Run lending phase — bank_1 should lend to H_1
+        events = run_bank_lending_phase(system, current_day=0, banking=subsystem)
+
+        loan_events = [e for e in events if e["kind"] == "BankLoanIssued"]
+        assert len(loan_events) > 0, (
+            "Bank should lend when reserves are ample after settlement drain"
+        )
+
+    def test_settlement_drain_included_in_refresh_quote_path(self):
+        """Verify refresh_quote incorporates settlement drain into path[0]."""
+        system = _make_settlement_system(reserves_1=1000, deposits_1=600)
+        profile = BankProfile()
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("1.0"),
+            maturity_days=10,
+            trader_banks={"H_1": ["bank_1"], "H_2": ["bank_2"]},
+        )
+
+        # Add a cross-bank payable of 800
+        payable = Payable(
+            id="PAY_path",
+            kind=InstrumentKind.PAYABLE,
+            amount=800,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=0,
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+        system.state.agents["H_2"].asset_ids.append(payable.id)
+
+        # Refresh WITHOUT settlement forecast (manually set to 0)
+        bank_state = subsystem.banks["bank_1"]
+        bank_state._settlement_net_outflow = 0
+        bank_state.refresh_quote(system, current_day=0, n_banks=2)
+        min_without = bank_state.min_projected_reserves
+
+        # Now refresh WITH settlement forecast
+        subsystem.refresh_all_quotes(system, current_day=0)
+        min_with = bank_state.min_projected_reserves
+
+        # With settlement drain, projected reserves should be lower
+        assert min_with < min_without, (
+            f"Settlement drain should reduce projected reserves: "
+            f"without={min_without}, with={min_with}"
+        )
