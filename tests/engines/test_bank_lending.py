@@ -22,6 +22,7 @@ from bilancio.engines.bank_lending import (
     _execute_bank_loan,
     _find_eligible_borrowers,
     _increase_deposit,
+    run_bank_lending_phase,
     run_bank_loan_repayments,
 )
 from bilancio.engines.banking_subsystem import (
@@ -405,3 +406,192 @@ class TestIncreaseDeposit:
         system = _make_lending_system()
         # Should not raise
         _increase_deposit(system, "nonexistent", "bank_1", 100)
+
+
+# ---------------------------------------------------------------------------
+# Helpers for lending-discipline tests
+# ---------------------------------------------------------------------------
+
+
+def _setup_lending_scenario():
+    """Create system + subsystem with H_1 having a shortfall (eligible to borrow).
+
+    Returns (system, subsystem) with:
+    - H_1: deposit=1000, payable=2000 due day 2 → shortfall=1000
+    - Banks have quotes refreshed so lending can proceed.
+    """
+    system = _make_lending_system()
+    profile = BankProfile()
+    kappa = Decimal("1.0")
+
+    subsystem = initialize_banking_subsystem(
+        system=system,
+        bank_profile=profile,
+        kappa=kappa,
+        maturity_days=10,
+    )
+
+    # Create a payable that H_1 owes, due within lending horizon
+    payable = Payable(
+        id="PAY_test",
+        kind=InstrumentKind.PAYABLE,
+        amount=2000,  # More than H_1's 1000 deposit → shortfall=1000
+        denom="USD",
+        asset_holder_id="H_2",
+        liability_issuer_id="H_1",
+        due_day=2,
+    )
+    system.state.contracts[payable.id] = payable
+    system.state.agents["H_1"].liability_ids.append(payable.id)
+    system.state.agents["H_2"].asset_ids.append(payable.id)
+
+    # Refresh quotes so banks can lend
+    subsystem.refresh_all_quotes(system, current_day=0)
+
+    return system, subsystem
+
+
+class TestFoolMeOnce:
+    """Tests for the 'fool me once' policy: borrowers who defaulted on a
+    bank loan are permanently blocked from future borrowing."""
+
+    def test_loan_default_populates_defaulted_borrowers(self):
+        """When a borrower defaults on a loan, they are added to defaulted_borrowers."""
+        system = _make_lending_system()
+        profile = BankProfile()
+        kappa = Decimal("1.0")
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=kappa,
+            maturity_days=10,
+        )
+
+        bank_state = subsystem.banks["bank_1"]
+
+        # Issue a loan to H_1
+        loan_id = _execute_bank_loan(
+            system=system,
+            banking=subsystem,
+            bank_state=bank_state,
+            borrower_id="H_1",
+            amount=500,
+            rate=Decimal("0.05"),
+            current_day=0,
+            maturity=3,
+        )
+        assert loan_id is not None
+        assert "H_1" not in subsystem.defaulted_borrowers
+
+        # Drain H_1's deposit so repayment fails (force default)
+        deposit = _get_deposit_at_bank(system, "H_1", "bank_1")
+        # Find the deposit instrument and zero it
+        for cid in list(system.state.agents["H_1"].asset_ids):
+            contract = system.state.contracts.get(cid)
+            if (
+                contract
+                and contract.kind == InstrumentKind.BANK_DEPOSIT
+                and contract.liability_issuer_id == "bank_1"
+            ):
+                contract.amount = 0
+
+        # Run repayments at maturity → should default
+        events = run_bank_loan_repayments(system, current_day=3, banking=subsystem)
+
+        default_events = [e for e in events if e["kind"] == "BankLoanDefault"]
+        assert len(default_events) == 1
+        assert default_events[0]["borrower"] == "H_1"
+
+        # H_1 should now be in defaulted_borrowers
+        assert "H_1" in subsystem.defaulted_borrowers
+
+    def test_defaulted_borrower_blocked_from_lending_phase(self):
+        """A borrower in defaulted_borrowers receives no loan from run_bank_lending_phase."""
+        system, subsystem = _setup_lending_scenario()
+
+        # Pre-populate H_1 as a defaulted borrower
+        subsystem.defaulted_borrowers.add("H_1")
+
+        events = run_bank_lending_phase(system, current_day=0, banking=subsystem)
+
+        loan_events = [e for e in events if e["kind"] == "BankLoanIssued"]
+        borrowers = [e["borrower"] for e in loan_events]
+        assert "H_1" not in borrowers
+
+
+class TestOneLoanAtATime:
+    """Tests for the one-loan-at-a-time policy: borrowers with an outstanding
+    loan at any bank are skipped during the lending phase."""
+
+    def test_has_outstanding_loan_false_initially(self):
+        """has_outstanding_loan returns False when no loans exist."""
+        system = _make_lending_system()
+        profile = BankProfile()
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("1.0"),
+            maturity_days=10,
+        )
+
+        assert not subsystem.has_outstanding_loan("H_1")
+
+    def test_has_outstanding_loan_true_after_loan(self):
+        """has_outstanding_loan returns True after a loan is issued."""
+        system = _make_lending_system()
+        profile = BankProfile()
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("1.0"),
+            maturity_days=10,
+        )
+
+        bank_state = subsystem.banks["bank_1"]
+        loan_id = _execute_bank_loan(
+            system=system,
+            banking=subsystem,
+            bank_state=bank_state,
+            borrower_id="H_1",
+            amount=500,
+            rate=Decimal("0.03"),
+            current_day=0,
+            maturity=5,
+        )
+        assert loan_id is not None
+        assert subsystem.has_outstanding_loan("H_1")
+        # H_2 has no loan
+        assert not subsystem.has_outstanding_loan("H_2")
+
+    def test_borrower_with_outstanding_loan_blocked(self):
+        """A borrower with an outstanding loan receives no second loan."""
+        system, subsystem = _setup_lending_scenario()
+
+        # Issue a loan to H_1 directly (simulating a prior day's lending)
+        bank_state = subsystem.banks["bank_1"]
+        loan_id = _execute_bank_loan(
+            system=system,
+            banking=subsystem,
+            bank_state=bank_state,
+            borrower_id="H_1",
+            amount=200,
+            rate=Decimal("0.03"),
+            current_day=0,
+            maturity=5,
+        )
+        assert loan_id is not None
+        assert subsystem.has_outstanding_loan("H_1")
+
+        # Refresh quotes (the execute above already does, but be explicit)
+        subsystem.refresh_all_quotes(system, current_day=0)
+
+        # Now run the lending phase — H_1 still has a shortfall but
+        # should be blocked by the one-loan-at-a-time rule.
+        events = run_bank_lending_phase(system, current_day=0, banking=subsystem)
+
+        loan_events = [e for e in events if e["kind"] == "BankLoanIssued"]
+        borrowers = [e["borrower"] for e in loan_events]
+        assert "H_1" not in borrowers
