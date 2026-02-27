@@ -258,9 +258,6 @@ def compile_ring_explorer_balanced(
     }
     BUCKETS = ["short", "mid", "long"]
 
-    # Total share going to big entities per bucket
-    vbt_share_per_bucket + dealer_share_per_bucket  # 0.375 total
-
     # Get base payable amounts
     base_payable_amounts = _draw_payables(
         params.n_agents,

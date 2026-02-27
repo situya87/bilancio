@@ -552,8 +552,8 @@ class BankComparisonRunner:
             intermediary_loss_lend=lend.intermediary_loss_total,
             system_loss_idle=idle_system_loss,
             system_loss_lend=lend_system_loss,
-            system_loss_pct_idle=idle.total_loss_pct,
-            system_loss_pct_lend=lend.total_loss_pct,
+            system_loss_pct_idle=idle_system_loss / idle.S_total if idle.S_total > 0 else None,
+            system_loss_pct_lend=lend_system_loss / lend.S_total if lend.S_total > 0 else None,
         )
 
     # ── Execution ────────────────────────────────────────────────────────
