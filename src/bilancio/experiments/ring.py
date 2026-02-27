@@ -310,8 +310,9 @@ class RingSweepRunner:
         equalize_capacity: bool = False,
         credit_risk_loading: Decimal = Decimal("0.5"),
         max_borrower_risk: Decimal = Decimal("0.4"),
-        cb_rate_escalation_slope: Decimal = Decimal("0"),
-        cb_max_outstanding_ratio: Decimal = Decimal("0"),
+        min_coverage_ratio: Decimal = Decimal("0"),
+        cb_rate_escalation_slope: Decimal = Decimal("0.05"),
+        cb_max_outstanding_ratio: Decimal = Decimal("2.0"),
         spread_scale: Decimal = Decimal("1.0"),
         cb_lending_cutoff_day: int | None = None,
         trading_rounds: int = 1,
@@ -358,6 +359,7 @@ class RingSweepRunner:
         self.equalize_capacity = equalize_capacity
         self.credit_risk_loading = credit_risk_loading
         self.max_borrower_risk = max_borrower_risk
+        self.min_coverage_ratio = min_coverage_ratio
         self.cb_rate_escalation_slope = cb_rate_escalation_slope
         self.cb_max_outstanding_ratio = cb_max_outstanding_ratio
         self.spread_scale = spread_scale
@@ -684,6 +686,7 @@ class RingSweepRunner:
                 equalize_capacity=self.equalize_capacity,
                 credit_risk_loading=self.credit_risk_loading,
                 max_borrower_risk=self.max_borrower_risk,
+                min_coverage_ratio=self.min_coverage_ratio,
                 cb_rate_escalation_slope=self.cb_rate_escalation_slope,
                 cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
                 spread_scale=self.spread_scale,
@@ -1080,6 +1083,7 @@ class RingSweepRunner:
                 equalize_capacity=self.equalize_capacity,
                 credit_risk_loading=self.credit_risk_loading,
                 max_borrower_risk=self.max_borrower_risk,
+                min_coverage_ratio=self.min_coverage_ratio,
                 cb_rate_escalation_slope=self.cb_rate_escalation_slope,
                 cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
                 spread_scale=self.spread_scale,

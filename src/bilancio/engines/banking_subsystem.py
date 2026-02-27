@@ -77,15 +77,51 @@ class BankTreynorState:
     outstanding_loans: dict[str, BankLoanRecord] = field(default_factory=dict)
     total_loan_principal: int = 0
 
-    def refresh_quote(self, system: System, current_day: int) -> Quote:
+    # Deposit outflow forecast (W_t^rem per paper Section 6.1)
+    withdrawal_forecast: int = 0  # W_t^c — expected total withdrawals today
+    realized_withdrawals: int = 0  # W_t^real — cumulative realized withdrawals today
+
+    def compute_withdrawal_forecast(self, system: System, n_banks: int) -> int:
+        """Compute expected deposit outflows from loan-origin deposits.
+
+        W_t^c = sum of loan-origin deposits still at this bank × cross_bank_fraction.
+        Cross-bank fraction = (n_banks - 1) / n_banks — the probability that
+        the borrower's next payment goes to a client of another bank.
+        """
+        if n_banks <= 1:
+            return 0
+
+        cross_bank_fraction = Decimal(n_banks - 1) / Decimal(n_banks)
+        total_loan_deposits = 0
+
+        for loan_rec in self.outstanding_loans.values():
+            deposit_at_bank = _get_deposit_at_bank(
+                system, loan_rec.borrower_id, self.bank_id
+            )
+            total_loan_deposits += deposit_at_bank
+
+        return int(total_loan_deposits * cross_bank_fraction)
+
+    def record_withdrawal(self, amount: int) -> None:
+        """Record a realized deposit withdrawal (cross-bank payment outflow)."""
+        self.realized_withdrawals += amount
+
+    def reset_daily_tracking(self) -> None:
+        """Reset intraday withdrawal tracking at start of new day."""
+        self.realized_withdrawals = 0
+        self.withdrawal_forecast = 0
+
+    def refresh_quote(self, system: System, current_day: int, n_banks: int = 1) -> Quote:
         """Recompute (r_D, r_L) from bank's current balance sheet.
 
         Uses a 10-day reserve projection path (per paper Section 6.1.3):
-        1. Build path[t] = current_reserves
+        1. Build path[t] = effective_reserves (after W_t^rem)
         2. For s in 1..10, add scheduled legs (CB loan repayments, bank loan repayments)
         3. Cash-tightness L* = max(0, reserve_floor - min(path)) / reserve_floor
-        4. Risk index rho = L* (simple version, matches simple_risk_index)
-        5. Inventory x = path[t+2] - reserve_target (projected t+2, not current)
+        4. Scale L* by CB pressure (Plan 042): when CB is near its lending cap,
+           the bank cannot assume CB backstop → amplify cash-tightness
+        5. Risk index rho = L* (simple version, matches simple_risk_index)
+        6. Inventory x = path[t+2] - reserve_target (projected t+2, not current)
         """
         from bilancio.domain.instruments.cb_loan import CBLoan
 
@@ -93,9 +129,14 @@ class BankTreynorState:
         reserve_target = self.pricing_params.reserve_target
         reserve_floor = self.pricing_params.reserve_floor
 
+        # --- Deposit outflow forecast (W_t^rem) ---
+        W_t_c = self.compute_withdrawal_forecast(system, n_banks)
+        self.withdrawal_forecast = W_t_c
+        W_t_rem = max(0, W_t_c - self.realized_withdrawals)
+
         # --- Build 10-day reserve projection path ---
         path = [0] * 11  # path[0] = today, path[1..10] = future days
-        path[0] = reserves
+        path[0] = reserves - W_t_rem
 
         for s in range(1, 11):
             proj_day = current_day + s
@@ -114,10 +155,21 @@ class BankTreynorState:
                     ):
                         delta -= contract.repayment_amount
 
-            # Bank loan repayments due on proj_day (inflow: borrowers repay to bank)
-            for loan_rec in self.outstanding_loans.values():
-                if loan_rec.maturity_day == proj_day:
-                    delta += loan_rec.repayment_amount
+            # Bank loan repayments are NOT counted in the reserve projection.
+            #
+            # Rationale: In the paper, the projection counts "old contract legs"
+            # from relatively safe interbank deposits and wholesale funding.
+            # Our bank loans are to stressed Kalecki ring agents who frequently
+            # default (19%+ default rate observed). If we count repayments as
+            # certain inflows, each loan *improves* the projected path, driving
+            # rates to deeply negative values (the broken feedback loop).
+            #
+            # By excluding loan repayments, the bank conservatively prices as if
+            # it won't get repaid. Each new loan only has costs (deposit outflow
+            # via W_t^rem, CB repayment obligations) with no offsetting inflows.
+            # This makes rates rise with lending volume — the correct behavior.
+            # When repayments DO arrive, actual reserves improve, and the next
+            # quote naturally reflects the better position.
 
             path[s] = path[s - 1] + delta
 
@@ -127,6 +179,16 @@ class BankTreynorState:
             cash_tightness = max(Decimal("0"), Decimal(reserve_floor - min_path) / Decimal(reserve_floor))
         else:
             cash_tightness = Decimal("0")
+
+        # --- CB pressure overlay (Plan 042) ---
+        # When the CB is near its lending cap or has frozen, the bank cannot
+        # assume the CB backstop will be available to top up reserves.
+        # Scale L* by (1 + cb_pressure) to reflect this uncertainty.
+        # cb_pressure = 0 when CB is unconstrained → no change (backward compat)
+        # cb_pressure → ∞ when CB is at cap or frozen → L* dominates pricing
+        cb_pressure = _compute_cb_pressure(system)
+        if cb_pressure > 0 and cash_tightness > 0:
+            cash_tightness = cash_tightness * (1 + cb_pressure)
 
         # --- Risk index: rho = L* (simple version) ---
         risk_index = cash_tightness
@@ -226,8 +288,9 @@ class BankingSubsystem:
 
     def refresh_all_quotes(self, system: System, current_day: int) -> None:
         """Refresh quotes for all banks."""
+        n_banks = len(self.banks)
         for bank_state in self.banks.values():
-            bank_state.refresh_quote(system, current_day)
+            bank_state.refresh_quote(system, current_day, n_banks)
 
     def all_outstanding_loans(self) -> list[tuple[str, BankLoanRecord]]:
         """Return all outstanding bank loans across all banks."""
@@ -351,6 +414,72 @@ def _find_central_bank(system: System) -> CentralBank | None:
         if isinstance(agent, CentralBank):
             return agent
     return None
+
+
+def _compute_cb_pressure(system: System) -> Decimal:
+    """Compute CB pressure: how constrained is the CB's lending capacity?
+
+    Returns a non-negative scalar:
+    - 0 when CB is unconstrained (no cap, backward compat)
+    - Rises as CB utilization approaches the cap
+    - Very large when CB lending is frozen
+
+    The formula is:  pressure = utilization^2 / (1 - utilization)
+    This gives:
+    - utilization=0.0 → pressure=0.00 (no stress)
+    - utilization=0.5 → pressure=0.50
+    - utilization=0.8 → pressure=3.20
+    - utilization=0.9 → pressure=8.10
+    - utilization=1.0 → pressure capped at 10.0
+
+    When CB is frozen: pressure = 10.0 (maximum).
+    """
+    # Frozen = maximum pressure
+    if system.state.cb_lending_frozen:
+        return Decimal("10")
+
+    cb = _find_central_bank(system)
+    if cb is None:
+        return Decimal("0")
+
+    # No cap configured → no pressure (backward compat)
+    if cb.max_outstanding_ratio <= 0 or cb.escalation_base_amount <= 0:
+        return Decimal("0")
+
+    cap = cb.max_outstanding_ratio * Decimal(cb.escalation_base_amount)
+    if cap <= 0:
+        return Decimal("0")
+
+    utilization = min(Decimal("1"), Decimal(system.state.cb_loans_outstanding) / cap)
+
+    if utilization >= Decimal("1"):
+        return Decimal("10")
+
+    # u^2 / (1 - u): convex, rises sharply near capacity
+    return utilization * utilization / (Decimal("1") - utilization)
+
+
+def cb_can_backstop(system: System, needed_amount: int) -> bool:
+    """Check if the CB has room to backstop a reserve shortfall of this size.
+
+    Used by banks in lending decisions: before issuing a loan that will
+    create a deposit (and an expected cross-bank reserve outflow), the bank
+    checks whether the CB can cover the resulting reserve drain.
+
+    Returns True when:
+    - CB lending is not frozen, AND
+    - CB has enough room under its lending cap
+
+    Returns True (no constraint) when CB has no cap configured (backward compat).
+    """
+    if system.state.cb_lending_frozen:
+        return False
+
+    cb = _find_central_bank(system)
+    if cb is None:
+        return True  # No CB → no constraint
+
+    return cb.can_lend(system.state.cb_loans_outstanding, needed_amount)
 
 
 def initialize_banking_subsystem(

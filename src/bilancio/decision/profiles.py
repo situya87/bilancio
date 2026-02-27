@@ -219,6 +219,16 @@ class BankProfile:
     # Credit rationing threshold: refuse loan when P_default > max_borrower_risk
     max_borrower_risk: Decimal = Decimal("1.0")  # 1.0 = never refuse (backward compat)
 
+    # Borrower assessment (Plan 042): bank examines borrower's balance sheet
+    # coverage = (liquid + quality_receivables - obligations) / loan_repayment
+    # 0.0 = never reject based on coverage (backward compat)
+    min_coverage_ratio: Decimal = Decimal("0.0")
+
+    # Exposure limits (Plan 042)
+    max_single_exposure_ratio: Decimal = Decimal("0.20")  # Max lending to single borrower as fraction of total loan capacity
+    max_total_exposure_ratio: Decimal = Decimal("1.50")  # Max total loans as multiple of initial reserves
+    max_daily_lending_ratio: Decimal = Decimal("0.50")  # Max new loans per day as fraction of current reserves
+
     def __post_init__(self) -> None:
         if self.r_base < Decimal("0"):
             raise ValueError("r_base must be non-negative")
@@ -240,6 +250,14 @@ class BankProfile:
             raise ValueError("credit_risk_loading must be non-negative")
         if not (Decimal("0") < self.max_borrower_risk <= Decimal("1")):
             raise ValueError("max_borrower_risk must be in (0, 1]")
+        if self.min_coverage_ratio < Decimal("0"):
+            raise ValueError("min_coverage_ratio must be non-negative")
+        if not (Decimal("0") < self.max_single_exposure_ratio <= Decimal("1")):
+            raise ValueError("max_single_exposure_ratio must be in (0, 1]")
+        if self.max_total_exposure_ratio <= Decimal("0"):
+            raise ValueError("max_total_exposure_ratio must be positive")
+        if not (Decimal("0") < self.max_daily_lending_ratio <= Decimal("1")):
+            raise ValueError("max_daily_lending_ratio must be in (0, 1]")
 
     def _stress_factor(self, kappa: Decimal) -> Decimal:
         """Common stress factor: max(0, 1-kappa) / (1+kappa)."""
