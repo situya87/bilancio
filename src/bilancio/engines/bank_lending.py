@@ -75,8 +75,28 @@ def run_bank_lending_phase(
             continue
         r_L = adjusted_rate
 
+        # Borrower balance sheet assessment (Plan 042):
+        # Bank examines borrower's repayment capacity before lending.
+        min_coverage = banking.bank_profile.min_coverage_ratio
+        if min_coverage > 0:
+            coverage = _assess_borrower(
+                system, borrower_id, shortfall, r_L,
+                banking.loan_maturity, current_day,
+            )
+            if coverage < min_coverage:
+                events.append({
+                    "kind": "BankLoanRejectedCoverage",
+                    "day": current_day,
+                    "bank": bank_id,
+                    "borrower": borrower_id,
+                    "shortfall": shortfall,
+                    "coverage": str(coverage),
+                    "min_coverage": str(min_coverage),
+                })
+                continue
+
         # Check bank has lending capacity
-        if not _bank_can_lend(system, bank_state, shortfall):
+        if not _bank_can_lend(system, bank_state, shortfall, borrower_id, banking, current_day):
             continue
 
         # Borrow-vs-sell decision: skip if selling is cheaper
@@ -319,35 +339,162 @@ def _get_agent_liquidity(system: System, agent_id: str) -> int:
     return total
 
 
-def _bank_can_lend(system: System, bank_state: BankTreynorState, amount: int) -> bool:
+def _assess_borrower(
+    system: System,
+    borrower_id: str,
+    amount: int,
+    rate: Decimal,
+    loan_maturity: int,
+    current_day: int,
+) -> Decimal:
+    """Assess a borrower's repayment capacity via balance sheet analysis.
+
+    The bank projects the borrower's cash position at loan maturity:
+    1. Start from current liquid assets (cash + deposits).
+    2. Subtract obligations due before loan maturity (payables, other loans).
+    3. Add quality-adjusted receivables arriving before loan maturity.
+       Receivables from defaulted counterparties are discounted to zero.
+    4. Compare net resources against the loan repayment amount.
+
+    Returns a coverage ratio:
+        coverage = net_resources / loan_repayment
+    where net_resources = liquid - obligations + quality_receivables.
+
+    A coverage > 1 means the borrower can plausibly repay.
+    A coverage < 0 means the borrower is structurally insolvent (even the loan
+    won't help — they'll default on obligations before loan matures).
+    """
+    agent = system.state.agents.get(borrower_id)
+    if agent is None:
+        return Decimal("-1")
+
+    loan_repayment = int(Decimal(amount) * (1 + rate))
+    maturity_day = current_day + loan_maturity
+
+    # --- Current liquid assets ---
+    liquid = _get_agent_liquidity(system, borrower_id)
+
+    # --- Obligations due between now and loan maturity (exclusive of this loan) ---
+    obligations = 0
+    for cid in agent.liability_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None:
+            continue
+        if contract.kind == InstrumentKind.PAYABLE:
+            due_day = getattr(contract, "due_day", None)
+            if due_day is not None and current_day <= due_day <= maturity_day:
+                obligations += contract.amount
+        elif contract.kind in (InstrumentKind.BANK_LOAN, InstrumentKind.NON_BANK_LOAN):
+            mat_day = getattr(contract, "maturity_day", None)
+            if mat_day is not None and current_day <= mat_day <= maturity_day:
+                obligations += getattr(contract, "repayment_amount", contract.amount)
+
+    # --- Quality-adjusted receivables arriving before loan maturity ---
+    # Receivables from defaulted counterparties are worth zero.
+    defaulted = system.state.defaulted_agent_ids
+    quality_receivables = 0
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None or contract.kind != InstrumentKind.PAYABLE:
+            continue
+        due_day = getattr(contract, "due_day", None)
+        if due_day is None or due_day > maturity_day or due_day < current_day:
+            continue
+        # The obligor is the liability_issuer_id on the receivable
+        obligor_id = contract.liability_issuer_id
+        if obligor_id in defaulted:
+            continue  # Worthless receivable
+        quality_receivables += contract.amount
+
+    # --- Coverage ratio ---
+    net_resources = liquid - obligations + quality_receivables
+    if loan_repayment <= 0:
+        return Decimal("999")  # Edge case: zero-cost loan
+
+    return Decimal(net_resources) / Decimal(loan_repayment)
+
+
+def _bank_can_lend(
+    system: System,
+    bank_state: BankTreynorState,
+    amount: int,
+    borrower_id: str,
+    banking: BankingSubsystem,
+    current_day: int,
+) -> bool:
     """Check if bank has capacity to lend this amount.
 
-    A bank can lend if its projected reserves after the loan
-    would remain above the reserve floor. Since bank lending
-    creates deposits (not reserve outflow), we check the
-    reserve-to-deposit ratio won't fall too low.
-
-    After the loan, deposits increase by ``amount`` (money creation) while
-    reserves stay unchanged. The post-loan reserve ratio must remain above
-    half the *current* target ratio (derived from pre-loan deposits).
+    Checks (all must pass):
+        1. Reserve/deposit ratio stays above floor after the loan.
+        2. CB backstop gate (Plan 042): if the loan will cause a reserve
+           drain that the CB can't cover, don't lend. This is the primary
+           economic constraint — the bank internalizes the CB's lending cap.
+        3. Per-borrower exposure limit (safety net).
+        4. Total exposure limit (safety net).
+        5. Daily lending limit (safety net).
     """
-    from bilancio.engines.banking_subsystem import _get_bank_deposits_total, _get_bank_reserves
+    from bilancio.engines.banking_subsystem import (
+        _get_bank_deposits_total,
+        _get_bank_reserves,
+        cb_can_backstop,
+    )
 
     reserves = _get_bank_reserves(system, bank_state.bank_id)
     deposits = _get_bank_deposits_total(system, bank_state.bank_id)
+    profile = banking.bank_profile
 
-    # Current target ratio (from initialization: reserve_target = ratio * deposits)
+    # --- Check 1: Reserve/deposit ratio ---
     target_ratio = Decimal(bank_state.pricing_params.reserve_target) / Decimal(max(1, deposits))
-
-    # After loan: deposits increase by amount (new deposit created)
-    # Reserves unchanged (no reserve movement in money creation)
     new_deposits = deposits + amount
     post_loan_ratio = Decimal(reserves) / Decimal(max(1, new_deposits))
-
-    # Floor: 75% of the target ratio (tighter than the original 50%)
     min_ratio = target_ratio * 3 / 4
 
-    return post_loan_ratio > min_ratio
+    if post_loan_ratio <= min_ratio:
+        return False
+
+    # --- Check 2: CB backstop gate (Plan 042) ---
+    # When a bank issues a loan of `amount`, it creates a deposit.
+    # The borrower will spend this deposit, and ~(n-1)/n leaves cross-bank,
+    # causing a reserve outflow. If the bank's reserves after this outflow
+    # fall below the reserve floor, the bank will need CB backstop lending.
+    # If the CB can't provide it (near cap or frozen), don't lend.
+    n_banks = len(banking.banks)
+    if n_banks > 1:
+        cross_bank_fraction = Decimal(n_banks - 1) / Decimal(n_banks)
+        expected_outflow = int(Decimal(amount) * cross_bank_fraction)
+        post_outflow_reserves = reserves - expected_outflow
+        reserve_floor = bank_state.pricing_params.reserve_floor
+
+        if post_outflow_reserves < reserve_floor:
+            needed_cb = reserve_floor - post_outflow_reserves
+            if not cb_can_backstop(system, needed_cb):
+                return False
+
+    # --- Check 3: Per-borrower exposure limit (safety net) ---
+    max_total_capacity = int(Decimal(reserves) * profile.max_total_exposure_ratio)
+    max_single = int(Decimal(max_total_capacity) * profile.max_single_exposure_ratio)
+
+    existing_to_borrower = sum(
+        loan.principal for loan in bank_state.outstanding_loans.values()
+        if loan.borrower_id == borrower_id
+    )
+    if existing_to_borrower + amount > max_single:
+        return False
+
+    # --- Check 4: Total exposure limit (safety net) ---
+    if bank_state.total_loan_principal + amount > max_total_capacity:
+        return False
+
+    # --- Check 5: Daily lending limit (safety net) ---
+    today_lending = sum(
+        loan.principal for loan in bank_state.outstanding_loans.values()
+        if loan.issuance_day == current_day
+    )
+    max_daily = int(Decimal(reserves) * profile.max_daily_lending_ratio)
+    if today_lending + amount > max_daily:
+        return False
+
+    return True
 
 
 def _prefer_selling(
@@ -462,7 +609,8 @@ def _execute_bank_loan(
     bank_state.total_loan_principal += amount
 
     # 4. Refresh bank's quote (lending changes balance sheet)
-    bank_state.refresh_quote(system, current_day)
+    n_banks = len(banking.banks)
+    bank_state.refresh_quote(system, current_day, n_banks)
 
     system.log(
         "BankLoanIssued",

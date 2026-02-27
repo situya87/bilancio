@@ -655,14 +655,19 @@ class BalancedComparisonConfig(BaseModel):
         default=Decimal("0.4"), description="Max P_default for bank lending (credit rationing threshold)"
     )
 
+    # Borrower balance sheet assessment (Plan 042)
+    min_coverage_ratio: Decimal = Field(
+        default=Decimal("0"), description="Min coverage ratio for borrower assessment (0=disabled)"
+    )
+
     # CB rate escalation (Plan 036)
     cb_rate_escalation_slope: Decimal = Field(
-        default=Decimal("0"), description="CB rate escalation slope (0 = static rate)"
+        default=Decimal("0.05"), description="CB rate escalation slope (0.05 = 5% per unit utilization)"
     )
 
     # CB lending cap (Plan 036)
     cb_max_outstanding_ratio: Decimal = Field(
-        default=Decimal("0"), description="CB max outstanding as fraction of Q_total (0 = no cap)"
+        default=Decimal("2.0"), description="CB max outstanding as fraction of Q_total (2.0 = cap at 2x)"
     )
 
     # Dealer spread scaling (Plan 036)
@@ -1057,6 +1062,7 @@ class BalancedComparisonRunner:
             reserve_multiplier=self.config.reserve_multiplier,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
+            min_coverage_ratio=self.config.min_coverage_ratio,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
@@ -1111,6 +1117,7 @@ class BalancedComparisonRunner:
             reserve_multiplier=self.config.reserve_multiplier,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
+            min_coverage_ratio=self.config.min_coverage_ratio,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
@@ -1162,6 +1169,7 @@ class BalancedComparisonRunner:
             reserve_multiplier=self.config.reserve_multiplier,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
+            min_coverage_ratio=self.config.min_coverage_ratio,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
@@ -1218,6 +1226,7 @@ class BalancedComparisonRunner:
             reserve_multiplier=self.config.reserve_multiplier,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
+            min_coverage_ratio=self.config.min_coverage_ratio,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
@@ -1279,6 +1288,7 @@ class BalancedComparisonRunner:
             reserve_multiplier=self.config.reserve_multiplier,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
+            min_coverage_ratio=self.config.min_coverage_ratio,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
@@ -1330,6 +1340,7 @@ class BalancedComparisonRunner:
             equalize_capacity=self.config.equalize_bank_capacity,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
+            min_coverage_ratio=self.config.min_coverage_ratio,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
@@ -1387,6 +1398,7 @@ class BalancedComparisonRunner:
             equalize_capacity=self.config.equalize_bank_capacity,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
+            min_coverage_ratio=self.config.min_coverage_ratio,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
@@ -1446,6 +1458,7 @@ class BalancedComparisonRunner:
             equalize_capacity=self.config.equalize_bank_capacity,
             credit_risk_loading=self.config.credit_risk_loading,
             max_borrower_risk=self.config.max_borrower_risk,
+            min_coverage_ratio=self.config.min_coverage_ratio,
             cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,

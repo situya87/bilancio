@@ -237,9 +237,11 @@ def run_scenario(
 
             _credit_risk_loading = Decimal(str(_balanced_cfg.get("credit_risk_loading", 0)))
             _max_borrower_risk = Decimal(str(_balanced_cfg.get("max_borrower_risk", "1.0")))
+            _min_coverage_ratio = Decimal(str(_balanced_cfg.get("min_coverage_ratio", 0)))
             bank_profile = BankProfile(
                 credit_risk_loading=_credit_risk_loading,
                 max_borrower_risk=_max_borrower_risk,
+                min_coverage_ratio=_min_coverage_ratio,
             )
             # Get kappa: prefer _balanced_config (written by compiler), then balanced_dealer, then default
             _kappa_str = (
@@ -276,6 +278,10 @@ def run_scenario(
             # Wire CB escalation and cap params
             _cb_escalation_slope = Decimal(str(_balanced_cfg.get("cb_rate_escalation_slope", 0)))
             _cb_max_outstanding = Decimal(str(_balanced_cfg.get("cb_max_outstanding_ratio", 0)))
+            # Auto-activate CB escalation when banking is enabled (Plan 042)
+            if _cb_escalation_slope == 0 and _cb_max_outstanding == 0 and _n_banks > 0:
+                _cb_escalation_slope = Decimal("0.05")
+                _cb_max_outstanding = Decimal("2.0")
             if _cb_escalation_slope > 0 or _cb_max_outstanding > 0:
                 from bilancio.domain.agents.central_bank import CentralBank as _CB
                 for _agent in system.state.agents.values():
