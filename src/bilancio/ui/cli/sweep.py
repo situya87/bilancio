@@ -732,6 +732,12 @@ def sweep_comparison(
     help="Reserve multiplier for banking arms (default: 0.5, reserve-constrained)",
 )
 @click.option(
+    "--min-coverage-ratio",
+    type=Decimal,
+    default=Decimal("0"),
+    help="Borrower assessment: min coverage ratio to approve loan (0=disabled, default: 0)",
+)
+@click.option(
     "--cb-lending-cutoff-day",
     type=int,
     default=None,
@@ -799,6 +805,7 @@ def sweep_balanced(
     enable_bank_dealer_nbfi: bool,
     n_banks_for_banking: int,
     bank_reserve_multiplier: float,
+    min_coverage_ratio: Decimal,
     cb_lending_cutoff_day: int | None,
     n_banks: int,
     reserve_multiplier: float,
@@ -924,6 +931,7 @@ def sweep_balanced(
         n_banks_for_banking=n_banks_for_banking,
         bank_reserve_multiplier=bank_reserve_multiplier,
         equalize_bank_capacity=equalize_bank_capacity,
+        min_coverage_ratio=min_coverage_ratio,
         cb_lending_cutoff_day=cb_lending_cutoff_day,
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,
@@ -1078,3 +1086,243 @@ def sweep_dealer_usage(experiment: Path, verbose: bool) -> None:
         console.print(f"[green]OK[/green] Dealer usage summary: {output_path}")
     else:
         console.print("[yellow]No output generated - check that required CSV files exist[/yellow]")
+
+
+# ── Plan 043: sweep nbfi ──────────────────────────────────────────────────────
+
+
+@sweep.command("nbfi")
+@click.option("--out-dir", required=True, type=click.Path(path_type=Path), help="Output directory")
+@click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
+@click.option("--cloud", is_flag=True, help="Run on Modal cloud")
+@click.option("--n-agents", type=int, default=100, help="Number of firms in ring")
+@click.option("--maturity-days", type=int, default=10, help="Payment horizon in days")
+@click.option("--q-total", type=int, default=10000, help="Total debt amount")
+@click.option("--base-seed", type=int, default=42, help="Random seed")
+@click.option("--n-replicates", type=int, default=1, help="Number of replicate seeds per combo")
+@click.option("--kappas", type=str, default="0.3,0.5,1.0,2.0", help="Comma-separated liquidity ratios")
+@click.option("--concentrations", type=str, default="1", help="Comma-separated debt concentration values")
+@click.option("--mus", type=str, default="0", help="Comma-separated maturity skew values")
+@click.option("--outside-mid-ratios", type=str, default="0.90", help="Comma-separated outside money ratios")
+@click.option("--face-value", type=Decimal, default=Decimal("20"), help="Face value per ticket")
+@click.option("--rollover/--no-rollover", default=True, help="Enable continuous rollover")
+@click.option("--quiet/--no-quiet", default=True, help="Suppress per-event output")
+@click.option("--nbfi-share", type=Decimal, default=Decimal("0.10"), help="NBFI cash as fraction of base liquidity")
+@click.option("--default-handling", type=str, default="expel-agent", help="Default handling mode")
+def sweep_nbfi(
+    out_dir: Path,
+    job_id: str | None,
+    cloud: bool,
+    n_agents: int,
+    maturity_days: int,
+    q_total: int,
+    base_seed: int,
+    n_replicates: int,
+    kappas: str,
+    concentrations: str,
+    mus: str,
+    outside_mid_ratios: str,
+    face_value: Decimal,
+    rollover: bool,
+    quiet: bool,
+    nbfi_share: Decimal,
+    default_handling: str,
+) -> None:
+    """Run NBFI lending experiment (Plan 043).
+
+    Compares nbfi_idle (NBFI present, not lending) vs nbfi_lend (NBFI lending).
+    VBT/Dealer keep full cash in both arms. Isolates the NBFI lending effect.
+
+    Output:
+      - nbfi_idle/: Baseline runs (NBFI idle)
+      - nbfi_lend/: Treatment runs (NBFI lending)
+      - aggregate/comparison.csv: Idle vs Lend metrics
+    """
+    from bilancio.experiments.nbfi_comparison import (
+        NBFIComparisonConfig,
+        NBFIComparisonRunner,
+    )
+
+    out_dir = Path(out_dir)
+
+    if job_id is None:
+        job_id = generate_job_id()
+
+    executor = None
+    if cloud:
+        from bilancio.runners import CloudExecutor
+
+        executor = CloudExecutor(
+            experiment_id=job_id,
+            download_artifacts=False,
+            local_output_dir=out_dir,
+            job_id=job_id,
+        )
+        click.echo("Cloud execution enabled")
+
+    config = NBFIComparisonConfig(
+        name_prefix=job_id,
+        n_agents=n_agents,
+        maturity_days=maturity_days,
+        Q_total=q_total,
+        base_seed=base_seed,
+        n_replicates=n_replicates,
+        kappas=_decimal_list(kappas),
+        concentrations=_decimal_list(concentrations),
+        mus=_decimal_list(mus),
+        outside_mid_ratios=_decimal_list(outside_mid_ratios),
+        face_value=face_value,
+        rollover_enabled=rollover,
+        quiet=quiet,
+        default_handling=default_handling,
+        lender_share=nbfi_share,
+    )
+
+    runner = NBFIComparisonRunner(config=config, out_dir=out_dir, executor=executor, job_id=job_id, enable_supabase=cloud)
+
+    click.echo(f"Job ID: {job_id}")
+
+    kappas_list = _decimal_list(kappas)
+    n_combos = len(kappas_list) * len(_decimal_list(concentrations)) * len(_decimal_list(mus)) * len(_decimal_list(outside_mid_ratios))
+    n_runs = n_combos * 2  # idle + lend
+    click.echo(f"Preparing {n_runs} runs ({n_combos} combos × 2 arms)...")
+
+    results = runner.run_all()
+
+    completed = sum(1 for r in results if r.lending_effect is not None)
+    improved = sum(1 for r in results if r.lending_effect and r.lending_effect > 0)
+
+    click.echo(f"\nNBFI comparison complete!")
+    click.echo(f"  Total combos: {len(results)}")
+    click.echo(f"  Completed: {completed}")
+    click.echo(f"  Lending helped: {improved}")
+    click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
+
+
+# ── Plan 043: sweep bank ──────────────────────────────────────────────────────
+
+
+@sweep.command("bank")
+@click.option("--out-dir", required=True, type=click.Path(path_type=Path), help="Output directory")
+@click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
+@click.option("--cloud", is_flag=True, help="Run on Modal cloud")
+@click.option("--n-agents", type=int, default=100, help="Number of firms in ring")
+@click.option("--maturity-days", type=int, default=10, help="Payment horizon in days")
+@click.option("--q-total", type=int, default=10000, help="Total debt amount")
+@click.option("--base-seed", type=int, default=42, help="Random seed")
+@click.option("--n-replicates", type=int, default=1, help="Number of replicate seeds per combo")
+@click.option("--kappas", type=str, default="0.3,0.5,1.0,2.0", help="Comma-separated liquidity ratios")
+@click.option("--concentrations", type=str, default="1", help="Comma-separated debt concentration values")
+@click.option("--mus", type=str, default="0", help="Comma-separated maturity skew values")
+@click.option("--outside-mid-ratios", type=str, default="0.90", help="Comma-separated outside money ratios")
+@click.option("--face-value", type=Decimal, default=Decimal("20"), help="Face value per ticket")
+@click.option("--rollover/--no-rollover", default=True, help="Enable continuous rollover")
+@click.option("--quiet/--no-quiet", default=True, help="Suppress per-event output")
+@click.option("--n-banks", type=int, default=5, help="Number of banks")
+@click.option("--reserve-ratio", type=Decimal, default=Decimal("0.50"), help="Initial reserves / total deposits")
+@click.option("--credit-risk-loading", type=Decimal, default=Decimal("0"), help="Bank sensitivity to borrower risk")
+@click.option("--max-borrower-risk", type=Decimal, default=Decimal("1.0"), help="Credit rationing threshold")
+@click.option("--min-coverage-ratio", type=Decimal, default=Decimal("0"), help="Min coverage ratio for loan approval")
+@click.option("--cb-rate-escalation-slope", type=Decimal, default=Decimal("0.05"), help="CB cost pressure slope")
+@click.option("--cb-max-outstanding-ratio", type=Decimal, default=Decimal("2.0"), help="CB lending cap")
+@click.option("--default-handling", type=str, default="expel-agent", help="Default handling mode")
+def sweep_bank(
+    out_dir: Path,
+    job_id: str | None,
+    cloud: bool,
+    n_agents: int,
+    maturity_days: int,
+    q_total: int,
+    base_seed: int,
+    n_replicates: int,
+    kappas: str,
+    concentrations: str,
+    mus: str,
+    outside_mid_ratios: str,
+    face_value: Decimal,
+    rollover: bool,
+    quiet: bool,
+    n_banks: int,
+    reserve_ratio: Decimal,
+    credit_risk_loading: Decimal,
+    max_borrower_risk: Decimal,
+    min_coverage_ratio: Decimal,
+    cb_rate_escalation_slope: Decimal,
+    cb_max_outstanding_ratio: Decimal,
+    default_handling: str,
+) -> None:
+    """Run bank lending experiment (Plan 043).
+
+    Compares bank_idle (banks present, no lending) vs bank_lend (banks lending).
+    No VBT/Dealer — traders hold 100% of claims. Isolates bank lending effect.
+
+    Output:
+      - bank_idle/: Baseline runs (banks idle)
+      - bank_lend/: Treatment runs (banks lending)
+      - aggregate/comparison.csv: Idle vs Lend metrics
+    """
+    from bilancio.experiments.bank_comparison import (
+        BankComparisonConfig,
+        BankComparisonRunner,
+    )
+
+    out_dir = Path(out_dir)
+
+    if job_id is None:
+        job_id = generate_job_id()
+
+    executor = None
+    if cloud:
+        from bilancio.runners import CloudExecutor
+
+        executor = CloudExecutor(
+            experiment_id=job_id,
+            download_artifacts=False,
+            local_output_dir=out_dir,
+            job_id=job_id,
+        )
+        click.echo("Cloud execution enabled")
+
+    config = BankComparisonConfig(
+        name_prefix=job_id,
+        n_agents=n_agents,
+        maturity_days=maturity_days,
+        Q_total=q_total,
+        base_seed=base_seed,
+        n_replicates=n_replicates,
+        kappas=_decimal_list(kappas),
+        concentrations=_decimal_list(concentrations),
+        mus=_decimal_list(mus),
+        outside_mid_ratios=_decimal_list(outside_mid_ratios),
+        face_value=face_value,
+        rollover_enabled=rollover,
+        quiet=quiet,
+        default_handling=default_handling,
+        n_banks=n_banks,
+        reserve_ratio=reserve_ratio,
+        credit_risk_loading=credit_risk_loading,
+        max_borrower_risk=max_borrower_risk,
+        min_coverage_ratio=min_coverage_ratio,
+        cb_rate_escalation_slope=cb_rate_escalation_slope,
+        cb_max_outstanding_ratio=cb_max_outstanding_ratio,
+    )
+
+    runner = BankComparisonRunner(config=config, out_dir=out_dir, executor=executor, job_id=job_id, enable_supabase=cloud)
+
+    click.echo(f"Job ID: {job_id}")
+
+    kappas_list = _decimal_list(kappas)
+    n_combos = len(kappas_list) * len(_decimal_list(concentrations)) * len(_decimal_list(mus)) * len(_decimal_list(outside_mid_ratios))
+    n_runs = n_combos * 2  # idle + lend
+    click.echo(f"Preparing {n_runs} runs ({n_combos} combos × 2 arms)...")
+
+    results = runner.run_all()
+
+    completed = sum(1 for r in results if r.bank_lending_effect is not None)
+    improved = sum(1 for r in results if r.bank_lending_effect and r.bank_lending_effect > 0)
+
+    click.echo(f"\nBank lending comparison complete!")
+    click.echo(f"  Total combos: {len(results)}")
+    click.echo(f"  Completed: {completed}")
+    click.echo(f"  Lending helped: {improved}")
+    click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")

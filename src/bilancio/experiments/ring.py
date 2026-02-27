@@ -83,6 +83,8 @@ class RingRunSummary:
     initial_dealer_vbt_cash: float = 0.0
     initial_lender_cash: float = 0.0
     initial_bank_reserves: float = 0.0
+    # Total debt (denominator for loss percentages)
+    S_total: float = 0.0
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -316,6 +318,7 @@ class RingSweepRunner:
         spread_scale: Decimal = Decimal("1.0"),
         cb_lending_cutoff_day: int | None = None,
         trading_rounds: int = 1,
+        reserve_ratio: Decimal | None = None,
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -365,6 +368,7 @@ class RingSweepRunner:
         self.spread_scale = spread_scale
         self.cb_lending_cutoff_day = cb_lending_cutoff_day
         self.trading_rounds = trading_rounds
+        self.reserve_ratio = reserve_ratio
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -691,6 +695,7 @@ class RingSweepRunner:
                 cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
                 spread_scale=self.spread_scale,
                 cb_lending_cutoff_day=self.cb_lending_cutoff_day,
+                reserve_ratio=self.reserve_ratio,
                 source_path=None,
             )
         else:
@@ -960,6 +965,7 @@ class RingSweepRunner:
             payable_default_loss=payable_default_loss,
             total_loss=total_loss,
             total_loss_pct=total_loss_pct,
+            S_total=S_total,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
             cb_backstop_loss=int(bundle.summary.get("cb_backstop_loss", 0)),
@@ -1088,6 +1094,7 @@ class RingSweepRunner:
                 cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
                 spread_scale=self.spread_scale,
                 cb_lending_cutoff_day=self.cb_lending_cutoff_day,
+                reserve_ratio=self.reserve_ratio,
                 source_path=None,
             )
         else:
@@ -1308,6 +1315,7 @@ class RingSweepRunner:
                 payable_default_loss=int(result.metrics.get("payable_default_loss", 0)),
                 total_loss=int(result.metrics.get("total_loss", 0)),
                 total_loss_pct=result.metrics.get("total_loss_pct"),
+                S_total=float(result.metrics.get("S_total", 0)),
                 nbfi_loan_loss=int(result.metrics.get("nbfi_loan_loss", 0)),
                 bank_credit_loss=int(result.metrics.get("bank_credit_loss", 0)),
                 cb_backstop_loss=int(result.metrics.get("cb_backstop_loss", 0)),
@@ -1408,6 +1416,7 @@ class RingSweepRunner:
                 int(bundle.summary.get("total_loss", 0)) / float(bundle.summary.get("S_total", 0))
                 if float(bundle.summary.get("S_total", 0)) > 0 else None
             ),
+            S_total=float(bundle.summary.get("S_total", 0)),
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
             cb_backstop_loss=int(bundle.summary.get("cb_backstop_loss", 0)),
