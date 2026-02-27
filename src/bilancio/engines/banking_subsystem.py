@@ -81,6 +81,12 @@ class BankTreynorState:
     withdrawal_forecast: int = 0  # W_t^c — expected total withdrawals today
     realized_withdrawals: int = 0  # W_t^real — cumulative realized withdrawals today
 
+    # Settlement outflow forecast (set by BankingSubsystem before refresh_quote)
+    _settlement_net_outflow: int = 0  # net cross-bank outflow from ring settlements today
+
+    # Reserve projection cache (set by refresh_quote)
+    min_projected_reserves: int = 0  # min(path) from last refresh_quote
+
     def compute_withdrawal_forecast(self, system: System, n_banks: int) -> int:
         """Compute expected deposit outflows from loan-origin deposits.
 
@@ -141,8 +147,11 @@ class BankTreynorState:
         W_t_rem = max(0, W_t_c - self.realized_withdrawals)
 
         # --- Build 10-day reserve projection path ---
+        # Include settlement outflow: net cross-bank drain from ring payments
+        # due today. This is the dominant reserve drain at low κ.
+        settlement_drain = max(0, self._settlement_net_outflow)
         path = [0] * 11  # path[0] = today, path[1..10] = future days
-        path[0] = reserves - W_t_rem
+        path[0] = reserves - W_t_rem - settlement_drain
 
         for s in range(1, 11):
             proj_day = current_day + s
@@ -181,6 +190,7 @@ class BankTreynorState:
 
         # --- Cash-tightness: L* = max(0, reserve_floor - min(path)) / reserve_floor ---
         min_path = min(path)
+        self.min_projected_reserves = min_path
         if reserve_floor > 0:
             cash_tightness = max(Decimal("0"), Decimal(reserve_floor - min_path) / Decimal(reserve_floor))
         else:
@@ -298,8 +308,65 @@ class BankingSubsystem:
     def refresh_all_quotes(self, system: System, current_day: int) -> None:
         """Refresh quotes for all banks."""
         n_banks = len(self.banks)
+        # Compute settlement forecasts first so refresh_quote can use them
+        settlement = self.compute_settlement_forecasts(system, current_day)
         for bank_state in self.banks.values():
+            bank_state._settlement_net_outflow = settlement.get(bank_state.bank_id, 0)
             bank_state.refresh_quote(system, current_day, n_banks)
+
+    def compute_settlement_forecasts(
+        self, system: System, current_day: int
+    ) -> dict[str, int]:
+        """Estimate net reserve outflow per bank from upcoming ring settlements.
+
+        For each payable due today, determine the debtor's bank and creditor's
+        bank. If they differ, reserves will flow from debtor-bank to
+        creditor-bank during interbank clearing.
+
+        Returns {bank_id: net_outflow} where positive = reserves leave.
+        """
+        net: dict[str, int] = {bid: 0 for bid in self.banks}
+
+        for contract in system.state.contracts.values():
+            if contract.kind != InstrumentKind.PAYABLE:
+                continue
+            due_day = getattr(contract, "due_day", None)
+            if due_day is None or due_day != current_day:
+                continue
+
+            debtor_id = contract.liability_issuer_id
+            creditor_id = contract.asset_holder_id
+            amount = contract.amount
+
+            # Skip if either party is defaulted/missing
+            debtor = system.state.agents.get(debtor_id)
+            if debtor is None or debtor.defaulted:
+                continue
+
+            debtor_bank = self._get_primary_bank(debtor_id)
+            creditor_bank = self._get_primary_bank(creditor_id)
+
+            if debtor_bank is None or creditor_bank is None:
+                continue
+            if debtor_bank == creditor_bank:
+                continue  # intra-bank, no reserve movement
+
+            # Reserve outflow from debtor's bank, inflow to creditor's bank
+            if debtor_bank in net:
+                net[debtor_bank] += amount
+            if creditor_bank in net:
+                net[creditor_bank] -= amount
+
+        return net
+
+    def _get_primary_bank(self, agent_id: str) -> str | None:
+        """Get the primary (first) bank for an agent."""
+        if agent_id in self.trader_banks:
+            banks = self.trader_banks[agent_id]
+            return banks[0] if banks else None
+        if agent_id in self.infra_banks:
+            return self.infra_banks[agent_id]
+        return None
 
     def has_outstanding_loan(self, borrower_id: str) -> bool:
         """Check if a borrower has any outstanding loan at any bank."""

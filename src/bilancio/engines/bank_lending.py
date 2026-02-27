@@ -447,7 +447,6 @@ def _bank_can_lend(
     from bilancio.engines.banking_subsystem import (
         _get_bank_deposits_total,
         _get_bank_reserves,
-        cb_can_backstop,
     )
 
     reserves = _get_bank_reserves(system, bank_state.bank_id)
@@ -463,23 +462,22 @@ def _bank_can_lend(
     if post_loan_ratio <= min_ratio:
         return False
 
-    # --- Check 2: CB backstop gate (Plan 042) ---
-    # When a bank issues a loan of `amount`, it creates a deposit.
-    # The borrower will spend this deposit, and ~(n-1)/n leaves cross-bank,
-    # causing a reserve outflow. If the bank's reserves after this outflow
-    # fall below the reserve floor, the bank will need CB backstop lending.
-    # If the CB can't provide it (near cap or frozen), don't lend.
+    # --- Check 2: Projected reserve check (Plan 045) ---
+    # The bank's refresh_quote already computed a 10-day reserve path
+    # including settlement outflows from ring payments. Use that projection
+    # as the baseline, then subtract this loan's marginal cross-bank outflow.
+    # If the result drops below the reserve floor, don't lend — the bank
+    # would need CB backstop, which it should avoid.
     n_banks = len(banking.banks)
     if n_banks > 1:
         cross_bank_fraction = Decimal(n_banks - 1) / Decimal(n_banks)
         expected_outflow = int(Decimal(amount) * cross_bank_fraction)
-        post_outflow_reserves = reserves - expected_outflow
         reserve_floor = bank_state.pricing_params.reserve_floor
 
-        if post_outflow_reserves < reserve_floor:
-            needed_cb = reserve_floor - post_outflow_reserves
-            if not cb_can_backstop(system, needed_cb):
-                return False
+        # Use the projected min from refresh_quote (includes settlement drain)
+        projected_min = bank_state.min_projected_reserves - expected_outflow
+        if projected_min < reserve_floor:
+            return False
 
     # --- Check 3: Per-borrower exposure limit (safety net) ---
     max_total_capacity = int(Decimal(reserves) * profile.max_total_exposure_ratio)
