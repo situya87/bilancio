@@ -319,9 +319,12 @@ class BankingSubsystem:
     ) -> dict[str, int]:
         """Estimate net reserve outflow per bank from upcoming ring settlements.
 
-        For each payable due today, determine the debtor's bank and creditor's
-        bank. If they differ, reserves will flow from debtor-bank to
-        creditor-bank during interbank clearing.
+        Mirrors the actual settlement routing in ``_pay_with_deposits``:
+        - Debtor pays from banks sorted by ascending r_D (cheapest first),
+          split by actual deposit balance at each bank.
+        - Creditor receives at bank with highest r_D.
+        - Uses ``effective_creditor`` for payables transferred in secondary
+          market (matches settlement's use of ``payable.effective_creditor``).
 
         Returns {bank_id: net_outflow} where positive = reserves leave.
         """
@@ -335,38 +338,123 @@ class BankingSubsystem:
                 continue
 
             debtor_id = contract.liability_issuer_id
-            creditor_id = contract.asset_holder_id
+            creditor_id = contract.effective_creditor
             amount = contract.amount
 
-            # Skip if either party is defaulted/missing
+            # Skip if debtor is defaulted/missing
             debtor = system.state.agents.get(debtor_id)
             if debtor is None or debtor.defaulted:
                 continue
 
-            debtor_bank = self._get_primary_bank(debtor_id)
-            creditor_bank = self._get_primary_bank(creditor_id)
-
-            if debtor_bank is None or creditor_bank is None:
+            # Creditor bank: highest r_D (mirrors _select_receive_bank)
+            creditor_bank = self._forecast_creditor_bank(system, creditor_id)
+            if creditor_bank is None:
                 continue
-            if debtor_bank == creditor_bank:
-                continue  # intra-bank, no reserve movement
 
-            # Reserve outflow from debtor's bank, inflow to creditor's bank
-            if debtor_bank in net:
-                net[debtor_bank] += amount
-            if creditor_bank in net:
-                net[creditor_bank] -= amount
+            # Debtor bank splits: ascending r_D (mirrors _pay_with_deposits)
+            debtor_splits = self._forecast_debtor_bank_splits(
+                system, debtor_id, amount
+            )
+            if not debtor_splits:
+                continue
+
+            # Record reserve flows for each split chunk
+            for pay_bank, chunk in debtor_splits:
+                if pay_bank == creditor_bank:
+                    continue  # intra-bank, no reserve movement
+                if pay_bank in net:
+                    net[pay_bank] += chunk
+                if creditor_bank in net:
+                    net[creditor_bank] -= chunk
 
         return net
 
-    def _get_primary_bank(self, agent_id: str) -> str | None:
-        """Get the primary (first) bank for an agent."""
-        if agent_id in self.trader_banks:
-            banks = self.trader_banks[agent_id]
-            return banks[0] if banks else None
-        if agent_id in self.infra_banks:
-            return self.infra_banks[agent_id]
-        return None
+    def _forecast_creditor_bank(
+        self, system: System, creditor_id: str
+    ) -> str | None:
+        """Select creditor's receive bank (highest r_D).
+
+        Mirrors ``_select_receive_bank`` in settlement: scans the creditor's
+        actual BANK_DEPOSIT contracts and picks the issuing bank with the
+        highest deposit rate.  Falls back to the ``trader_banks`` mapping
+        if the creditor has no deposit contracts.
+        """
+        agent = system.state.agents.get(creditor_id)
+        if agent is None:
+            return None
+
+        best_rate = Decimal("-1")
+        best_bank: str | None = None
+
+        for cid in agent.asset_ids:
+            contract = system.state.contracts.get(cid)
+            if contract is None or contract.kind != InstrumentKind.BANK_DEPOSIT:
+                continue
+            bid = contract.liability_issuer_id
+            bank_state = self.banks.get(bid)
+            r_d = Decimal("0")
+            if bank_state and bank_state.current_quote:
+                r_d = bank_state.current_quote.deposit_rate
+            if r_d > best_rate:
+                best_rate = r_d
+                best_bank = bid
+
+        if best_bank is not None:
+            return best_bank
+
+        # Fallback: use bank assignment mapping
+        return self.best_deposit_bank(creditor_id)
+
+    def _forecast_debtor_bank_splits(
+        self, system: System, debtor_id: str, amount: int
+    ) -> list[tuple[str, int]]:
+        """Estimate how settlement splits a payment across debtor's banks.
+
+        Mirrors ``_pay_with_deposits``: groups the debtor's deposit contracts
+        by issuing bank, sorts by ascending r_D (cheapest to withdraw first),
+        and splits the payment amount across banks in that order.
+
+        Returns list of ``(bank_id, chunk)`` tuples.
+        """
+        agent = system.state.agents.get(debtor_id)
+        if agent is None:
+            return []
+
+        # Group deposit balances by bank
+        bank_balances: dict[str, int] = {}
+        for cid in agent.asset_ids:
+            contract = system.state.contracts.get(cid)
+            if contract is None or contract.kind != InstrumentKind.BANK_DEPOSIT:
+                continue
+            bid = contract.liability_issuer_id
+            bank_balances[bid] = bank_balances.get(bid, 0) + contract.amount
+
+        if not bank_balances:
+            return []
+
+        # Sort by ascending r_D (cheapest to withdraw first)
+        sorted_banks: list[tuple[Decimal, str, int]] = []
+        for bid, balance in bank_balances.items():
+            if balance <= 0:
+                continue
+            bank_state = self.banks.get(bid)
+            r_d = Decimal("0")
+            if bank_state and bank_state.current_quote:
+                r_d = bank_state.current_quote.deposit_rate
+            sorted_banks.append((r_d, bid, balance))
+        sorted_banks.sort(key=lambda x: x[0])
+
+        # Split payment across banks
+        splits: list[tuple[str, int]] = []
+        remaining = amount
+        for _, bid, balance in sorted_banks:
+            if remaining <= 0:
+                break
+            chunk = min(balance, remaining)
+            splits.append((bid, chunk))
+            remaining -= chunk
+
+        return splits
 
     def has_outstanding_loan(self, borrower_id: str) -> bool:
         """Check if a borrower has any outstanding loan at any bank."""

@@ -607,10 +607,13 @@ def _make_settlement_system(
     reserves_2: int = 300,
     deposits_1: int = 600,
     deposits_2: int = 600,
+    firm1_bank: str = "bank_1",
+    firm2_bank: str = "bank_2",
 ) -> System:
     """Create a system with 2 banks and 2 firms, with configurable reserves/deposits.
 
     Used for testing settlement forecast and projected reserve checks.
+    ``firm1_bank`` / ``firm2_bank`` control where each firm's deposit is created.
     """
     system = System(policy=PolicyEngine.default())
 
@@ -626,11 +629,11 @@ def _make_settlement_system(
     system.add_agent(firm1)
     system.add_agent(firm2)
 
-    # Fund firms and deposit at banks
+    # Fund firms and deposit at their assigned banks
     system.mint_cash(to_agent_id="H_1", amount=deposits_1)
     system.mint_cash(to_agent_id="H_2", amount=deposits_2)
-    deposit_cash(system, "H_1", "bank_1", deposits_1)
-    deposit_cash(system, "H_2", "bank_2", deposits_2)
+    deposit_cash(system, "H_1", firm1_bank, deposits_1)
+    deposit_cash(system, "H_2", firm2_bank, deposits_2)
 
     # Mint reserves for banks
     system.mint_reserves(to_bank_id="bank_1", amount=reserves_1)
@@ -678,7 +681,8 @@ class TestSettlementForecast:
 
     def test_intra_bank_payable_no_outflow(self):
         """A payable between two clients of the same bank creates no outflow."""
-        system = _make_settlement_system()
+        # Both firms deposit at bank_1 so forecast scans find same bank
+        system = _make_settlement_system(firm2_bank="bank_1")
         profile = BankProfile()
 
         # Both firms at bank_1
@@ -772,6 +776,117 @@ class TestSettlementForecast:
 
         assert net["bank_1"] == 0
         assert net["bank_2"] == 0
+
+    def test_effective_creditor_used_for_transferred_payable(self):
+        """Forecast uses effective_creditor (secondary market holder), not asset_holder_id."""
+        # H_1 at bank_1, H_2 at bank_2
+        system = _make_settlement_system()
+        profile = BankProfile()
+
+        # Add a third firm at bank_1 to be the secondary market holder
+        firm3 = Firm(id="H_3", name="Firm 3", kind="firm")
+        system.add_agent(firm3)
+        system.mint_cash(to_agent_id="H_3", amount=100)
+        deposit_cash(system, "H_3", "bank_1", 100)
+
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("0.3"),
+            maturity_days=10,
+            trader_banks={
+                "H_1": ["bank_1"],
+                "H_2": ["bank_2"],
+                "H_3": ["bank_1"],
+            },
+        )
+
+        # H_1 (bank_1) owes H_2 (bank_2 original creditor),
+        # but payable was transferred to H_3 (bank_1)
+        payable = Payable(
+            id="PAY_transferred",
+            kind=InstrumentKind.PAYABLE,
+            amount=400,
+            denom="USD",
+            asset_holder_id="H_2",  # original creditor at bank_2
+            liability_issuer_id="H_1",
+            due_day=0,
+            holder_id="H_3",  # secondary market holder at bank_1
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+
+        net = subsystem.compute_settlement_forecasts(system, current_day=0)
+
+        # effective_creditor = H_3 (at bank_1), debtor H_1 also at bank_1
+        # → intra-bank, no reserve movement
+        # Without the fix (using asset_holder_id=H_2 at bank_2), this would
+        # show 400 outflow from bank_1 and -400 inflow to bank_2 — wrong.
+        assert net["bank_1"] == 0
+        assert net["bank_2"] == 0
+
+    def test_multi_bank_debtor_splits_payment(self):
+        """When debtor has deposits at two banks, forecast splits by balance."""
+        system = System(policy=PolicyEngine.default())
+
+        cb = CentralBank(id="cb", name="Central Bank", kind="central_bank")
+        bank1 = Bank(id="bank_1", name="Bank 1", kind="bank")
+        bank2 = Bank(id="bank_2", name="Bank 2", kind="bank")
+        firm1 = Firm(id="H_1", name="Firm 1", kind="firm")
+        firm2 = Firm(id="H_2", name="Firm 2", kind="firm")
+
+        system.add_agent(cb)
+        system.add_agent(bank1)
+        system.add_agent(bank2)
+        system.add_agent(firm1)
+        system.add_agent(firm2)
+
+        # H_1 has deposits at BOTH banks: 200 at bank_1, 300 at bank_2
+        system.mint_cash(to_agent_id="H_1", amount=500)
+        deposit_cash(system, "H_1", "bank_1", 200)
+        deposit_cash(system, "H_1", "bank_2", 300)
+
+        # H_2 has deposit at bank_1 only (creditor receives at bank_1)
+        system.mint_cash(to_agent_id="H_2", amount=400)
+        deposit_cash(system, "H_2", "bank_1", 400)
+
+        system.mint_reserves(to_bank_id="bank_1", amount=300)
+        system.mint_reserves(to_bank_id="bank_2", amount=300)
+
+        profile = BankProfile()
+        subsystem = initialize_banking_subsystem(
+            system=system,
+            bank_profile=profile,
+            kappa=Decimal("1.0"),
+            maturity_days=10,
+            trader_banks={"H_1": ["bank_1", "bank_2"], "H_2": ["bank_1"]},
+        )
+
+        # H_1 owes H_2 400 — creditor at bank_1
+        payable = Payable(
+            id="PAY_multi",
+            kind=InstrumentKind.PAYABLE,
+            amount=400,
+            denom="USD",
+            asset_holder_id="H_2",
+            liability_issuer_id="H_1",
+            due_day=0,
+        )
+        system.state.contracts[payable.id] = payable
+        system.state.agents["H_1"].liability_ids.append(payable.id)
+        system.state.agents["H_2"].asset_ids.append(payable.id)
+
+        net = subsystem.compute_settlement_forecasts(system, current_day=0)
+
+        # After initialize_banking_subsystem:
+        #   bank_1 r_D ≈ 0.003 (more deposits → higher rate)
+        #   bank_2 r_D = 0
+        # Creditor H_2 receives at bank_1 (highest r_D).
+        # Debtor H_1 pays from lowest r_D first:
+        #   bank_2 (r_D=0, balance=300) → 300 cross-bank to bank_1
+        #   bank_1 (r_D=0.003, balance=200) → 100 intra-bank (skipped)
+        assert net["bank_2"] == 300  # outflow: paid 300 cross-bank to bank_1
+        assert net["bank_1"] == -300  # inflow: received 300 from bank_2
 
 
 class TestProjectedReserveCheck:
