@@ -49,6 +49,14 @@ def run_bank_lending_phase(
     eligible = _find_eligible_borrowers(system, banking, current_day)
 
     for borrower_id, shortfall in eligible:
+        # "Fool me once" — skip borrowers who defaulted on a prior loan
+        if borrower_id in banking.defaulted_borrowers:
+            continue
+
+        # One-loan-at-a-time — skip borrowers with an outstanding loan
+        if banking.has_outstanding_loan(borrower_id):
+            continue
+
         # Find cheapest bank
         bank_id = banking.cheapest_loan_bank(borrower_id)
         if bank_id is None:
@@ -198,6 +206,9 @@ def run_bank_loan_repayments(
                     "loan_id": loan_id,
                 })
                 repaid_loan_ids.append(loan_id)
+
+                # "Fool me once" — block future lending to this borrower
+                banking.defaulted_borrowers.add(borrower_id)
 
         # Remove repaid/defaulted loans from book
         for loan_id in repaid_loan_ids:
@@ -612,15 +623,8 @@ def _execute_bank_loan(
     n_banks = len(banking.banks)
     bank_state.refresh_quote(system, current_day, n_banks)
 
-    system.log(
-        "BankLoanIssued",
-        bank=bid,
-        borrower=borrower_id,
-        amount=amount,
-        rate=str(rate),
-        maturity_day=current_day + maturity,
-        loan_id=loan_id,
-    )
+    # NOTE: caller (run_bank_lending_phase) already appends BankLoanIssued
+    # to the returned events list — don't double-log via system.log().
 
     return loan_id
 
