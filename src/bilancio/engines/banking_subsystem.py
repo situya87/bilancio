@@ -94,7 +94,13 @@ class BankTreynorState:
         cross_bank_fraction = Decimal(n_banks - 1) / Decimal(n_banks)
         total_loan_deposits = 0
 
+        # Deduplicate by borrower: a borrower with multiple loans still has
+        # only one deposit balance, so count each borrower's deposit once.
+        seen_borrowers: set[str] = set()
         for loan_rec in self.outstanding_loans.values():
+            if loan_rec.borrower_id in seen_borrowers:
+                continue
+            seen_borrowers.add(loan_rec.borrower_id)
             deposit_at_bank = _get_deposit_at_bank(
                 system, loan_rec.borrower_id, self.bank_id
             )
@@ -321,6 +327,14 @@ class BankingSubsystem:
             n_total = len(system.state.agents)
             n_defaulted = len(system.state.defaulted_agent_ids)
             r_floor, r_ceiling = cb.compute_corridor(n_defaulted, n_total)
+            for bank_state in self.banks.values():
+                bank_state.pricing_params.reserve_remuneration_rate = r_floor
+                bank_state.pricing_params.cb_borrowing_rate = r_ceiling
+        else:
+            # No kappa prior — reset to BankProfile's base corridor each day
+            # to prevent escalation from compounding across calls.
+            r_floor = self.bank_profile.r_floor(self.kappa)
+            r_ceiling = self.bank_profile.r_ceiling(self.kappa)
             for bank_state in self.banks.values():
                 bank_state.pricing_params.reserve_remuneration_rate = r_floor
                 bank_state.pricing_params.cb_borrowing_rate = r_ceiling
