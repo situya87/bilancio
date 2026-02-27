@@ -728,6 +728,7 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 planning_horizon=config.lender.planning_horizon,
                 profit_target=config.lender.profit_target,
                 max_loan_maturity=config.lender.max_loan_maturity or config.lender.maturity_days,
+                min_coverage_ratio=config.lender.min_coverage_ratio,
             )
 
         # Create NBFI RiskAssessor when profile has risk_assessment_params
@@ -776,6 +777,7 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
             max_ring_maturity=max_ring_maturity,
             risk_assessor=nbfi_risk_assessor,
             initial_prior=lending_initial_prior,
+            min_coverage_ratio=config.lender.min_coverage_ratio,
         )
 
     # Set up rating agency config if present in scenario

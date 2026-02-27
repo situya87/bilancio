@@ -152,6 +152,7 @@ class LenderProfile:
     max_loan_maturity: int = 10
     risk_assessment_params: RiskAssessmentParams | None = None  # None = disable (backward compat)
     warmup_observations: int = 10  # data points before Bayesian dominates coverage
+    min_coverage_ratio: Decimal = Decimal("0.5")  # balance-sheet coverage gate (Plan 044)
 
     def __post_init__(self) -> None:
         if self.kappa <= Decimal("0"):
