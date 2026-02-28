@@ -737,6 +737,15 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 profit_target=config.lender.profit_target,
                 max_loan_maturity=config.lender.max_loan_maturity or config.lender.maturity_days,
                 min_coverage_ratio=config.lender.min_coverage_ratio,
+                maturity_matching=config.lender.maturity_matching,
+                min_loan_maturity=config.lender.min_loan_maturity,
+                max_loans_per_borrower_per_day=config.lender.max_loans_per_borrower_per_day,
+                ranking_mode=config.lender.ranking_mode,
+                cascade_weight=config.lender.cascade_weight,
+                coverage_mode=config.lender.coverage_mode,
+                coverage_penalty_scale=config.lender.coverage_penalty_scale,
+                preventive_lending=config.lender.preventive_lending,
+                prevention_threshold=config.lender.prevention_threshold,
             )
 
         # Create NBFI RiskAssessor when profile has risk_assessment_params
@@ -786,6 +795,15 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
             risk_assessor=nbfi_risk_assessor,
             initial_prior=lending_initial_prior,
             min_coverage_ratio=config.lender.min_coverage_ratio,
+            maturity_matching=config.lender.maturity_matching,
+            min_loan_maturity=config.lender.min_loan_maturity,
+            max_loans_per_borrower_per_day=config.lender.max_loans_per_borrower_per_day,
+            ranking_mode=config.lender.ranking_mode,
+            cascade_weight=config.lender.cascade_weight,
+            coverage_mode=config.lender.coverage_mode,
+            coverage_penalty_scale=config.lender.coverage_penalty_scale,
+            preventive_lending=config.lender.preventive_lending,
+            prevention_threshold=config.lender.prevention_threshold,
         )
 
     # Set up rating agency config if present in scenario
@@ -1069,6 +1087,50 @@ def _init_lending_from_action_specs(
 
         lending_initial_prior = kappa_informed_prior(_lender_kappa)
 
+    # Resolve Plan 044/046 fields: prefer lc (scenario config), then lender_profile, then defaults
+    _lp = lender_profile  # shorthand
+
+    min_coverage_ratio = (
+        lc.min_coverage_ratio if lc else
+        (_lp.min_coverage_ratio if _lp and hasattr(_lp, "min_coverage_ratio") else Decimal("0"))
+    )
+    maturity_matching = (
+        lc.maturity_matching if lc else
+        (_lp.maturity_matching if _lp and hasattr(_lp, "maturity_matching") else False)
+    )
+    min_loan_maturity = (
+        lc.min_loan_maturity if lc else
+        (_lp.min_loan_maturity if _lp and hasattr(_lp, "min_loan_maturity") else 2)
+    )
+    max_loans_per_borrower_per_day = (
+        lc.max_loans_per_borrower_per_day if lc else
+        (_lp.max_loans_per_borrower_per_day if _lp and hasattr(_lp, "max_loans_per_borrower_per_day") else 0)
+    )
+    ranking_mode = (
+        lc.ranking_mode if lc else
+        (_lp.ranking_mode if _lp and hasattr(_lp, "ranking_mode") else "profit")
+    )
+    cascade_weight = (
+        lc.cascade_weight if lc else
+        (_lp.cascade_weight if _lp and hasattr(_lp, "cascade_weight") else Decimal("0.5"))
+    )
+    coverage_mode = (
+        lc.coverage_mode if lc else
+        (_lp.coverage_mode if _lp and hasattr(_lp, "coverage_mode") else "gate")
+    )
+    coverage_penalty_scale = (
+        lc.coverage_penalty_scale if lc else
+        (_lp.coverage_penalty_scale if _lp and hasattr(_lp, "coverage_penalty_scale") else Decimal("0.10"))
+    )
+    preventive_lending = (
+        lc.preventive_lending if lc else
+        (_lp.preventive_lending if _lp and hasattr(_lp, "preventive_lending") else False)
+    )
+    prevention_threshold = (
+        lc.prevention_threshold if lc else
+        (_lp.prevention_threshold if _lp and hasattr(_lp, "prevention_threshold") else Decimal("0.3"))
+    )
+
     system.state.lender_config = LendingConfig(
         base_rate=base_rate,
         risk_premium_scale=risk_premium_scale,
@@ -1081,6 +1143,16 @@ def _init_lending_from_action_specs(
         max_ring_maturity=max_ring_maturity,
         risk_assessor=nbfi_risk_assessor,
         initial_prior=lending_initial_prior,
+        min_coverage_ratio=min_coverage_ratio,
+        maturity_matching=maturity_matching,
+        min_loan_maturity=min_loan_maturity,
+        max_loans_per_borrower_per_day=max_loans_per_borrower_per_day,
+        ranking_mode=ranking_mode,
+        cascade_weight=cascade_weight,
+        coverage_mode=coverage_mode,
+        coverage_penalty_scale=coverage_penalty_scale,
+        preventive_lending=preventive_lending,
+        prevention_threshold=prevention_threshold,
     )
 
 

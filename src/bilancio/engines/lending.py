@@ -46,6 +46,15 @@ class LendingConfig:
     risk_assessor: RiskAssessor | None = None  # persists across days for Bayesian learning
     initial_prior: Decimal = Decimal("0.15")  # κ-informed default probability prior
     min_coverage_ratio: Decimal = Decimal("0")
+    maturity_matching: bool = False
+    min_loan_maturity: int = 2
+    max_loans_per_borrower_per_day: int = 0  # 0 = unlimited; caps outstanding loans per borrower
+    ranking_mode: str = "profit"  # "profit" | "cascade" | "blended"
+    cascade_weight: Decimal = Decimal("0.5")
+    coverage_mode: str = "gate"  # "gate" | "graduated"
+    coverage_penalty_scale: Decimal = Decimal("0.10")
+    preventive_lending: bool = False
+    prevention_threshold: Decimal = Decimal("0.3")
     # Decision protocol overrides (None = auto-construct from scalar params)
     portfolio_strategy: PortfolioStrategy | None = None
     counterparty_screener: CounterpartyScreener | None = None
@@ -190,14 +199,21 @@ def run_lending_phase(
         if not screener.is_eligible(p_default):
             continue
 
-        # Coverage gate: reject if borrower's balance sheet coverage is too low
+        # Coverage gate: reject or penalize based on coverage_mode (Plan 046)
+        coverage_rate_penalty = Decimal("0")
         if config.min_coverage_ratio > 0:
             coverage = _assess_borrower_nbfi(
                 system, agent_id, min(shortfall, int(config.max_single_exposure * initial_capital)),
                 config.lender_profile.profit_target if config.lender_profile else config.base_rate,
                 current_day, config.horizon,
             )
-            if coverage < config.min_coverage_ratio:
+            if config.coverage_mode == "graduated" and coverage >= Decimal("-1"):
+                # Graduated: penalize rate instead of rejecting
+                if coverage < config.min_coverage_ratio:
+                    coverage_rate_penalty = config.coverage_penalty_scale * (
+                        config.min_coverage_ratio - coverage
+                    )
+            elif coverage < config.min_coverage_ratio:
                 events.append({
                     "kind": "NonBankLoanRejectedCoverage",
                     "day": current_day,
@@ -256,6 +272,10 @@ def run_lending_phase(
             base_rate = portfolio.target_return()
             rate = pricer.price(base_rate, p_default)
 
+        # Apply graduated coverage penalty (Plan 046 Phase 3)
+        if coverage_rate_penalty > 0:
+            rate = rate + coverage_rate_penalty
+
         # Anchor rate to CB corridor when banking subsystem is active
         banking_sub = getattr(system.state, "banking_subsystem", None)
         if banking_sub is not None:
@@ -288,6 +308,10 @@ def run_lending_phase(
         # Expected profit for ranking
         expected_profit = float(rate) * (1.0 - float(p_default))
 
+        # Compute cascade ranking data (Plan 046 Phase 2)
+        downstream = _downstream_obligation_total(system, agent_id, current_day)
+        coverage_ratio = Decimal(str(max(agent_cash, 0))) / Decimal(str(max(upcoming_due, 1)))
+
         opportunities.append(
             {
                 "borrower_id": agent_id,
@@ -296,11 +320,33 @@ def run_lending_phase(
                 "p_default": p_default,
                 "expected_profit": expected_profit,
                 "shortfall": shortfall,
+                "downstream": downstream,
+                "coverage_ratio": coverage_ratio,
             }
         )
 
-    # Rank by expected profit descending
-    opportunities.sort(key=lambda x: x["expected_profit"], reverse=True)
+    # Rank opportunities (Plan 046 Phase 2: cascade-aware ranking)
+    if config.ranking_mode == "cascade":
+        # Rank by downstream damage potential
+        max_downstream = max((o.get("downstream", 0) for o in opportunities), default=1) or 1
+        for opp in opportunities:
+            norm_downstream = opp.get("downstream", 0) / max_downstream
+            coverage = opp.get("coverage_ratio", Decimal("0.5"))
+            opp["cascade_score"] = float(coverage) * norm_downstream * (1.0 - float(opp["p_default"]))
+        opportunities.sort(key=lambda x: x["cascade_score"], reverse=True)
+    elif config.ranking_mode == "blended":
+        max_downstream = max((o.get("downstream", 0) for o in opportunities), default=1) or 1
+        w = float(config.cascade_weight)
+        for opp in opportunities:
+            norm_downstream = opp.get("downstream", 0) / max_downstream
+            coverage = opp.get("coverage_ratio", Decimal("0.5"))
+            cascade_score = float(coverage) * norm_downstream * (1.0 - float(opp["p_default"]))
+            profit_score = opp["expected_profit"]
+            opp["blended_score"] = w * cascade_score + (1 - w) * profit_score
+        opportunities.sort(key=lambda x: x["blended_score"], reverse=True)
+    else:
+        # Default: rank by expected profit descending
+        opportunities.sort(key=lambda x: x["expected_profit"], reverse=True)
 
     # Execute loans
     remaining_capital = available
@@ -312,14 +358,48 @@ def run_lending_phase(
         if loan_amount <= 0:
             continue
 
+        # Phase 1B: Concentration limit — cap outstanding loans per borrower (Plan 046)
+        if config.max_loans_per_borrower_per_day > 0:
+            borrower_id = opp["borrower_id"]
+            count = _count_existing_loans(system, lender_id, borrower_id)
+            if count >= config.max_loans_per_borrower_per_day:
+                events.append({
+                    "kind": "NonBankLoanRejectedConcentration",
+                    "day": current_day,
+                    "lender_id": lender_id,
+                    "borrower_id": borrower_id,
+                    "count": count,
+                    "limit": config.max_loans_per_borrower_per_day,
+                })
+                continue
+
         try:
             effective_maturity = selector.select_maturity()
             if profile is not None and config.max_ring_maturity is not None:
                 effective_maturity = min(profile.max_loan_maturity, config.max_ring_maturity)
+            # Phase 1A: Maturity matching (Plan 046)
+            if config.maturity_matching and profile is not None:
+                nearest_day = _nearest_receivable_day(
+                    system, opp["borrower_id"], current_day,
+                    profile.max_loan_maturity,
+                )
+                if nearest_day is not None:
+                    matched = nearest_day - current_day + 1  # +1 to cover the receivable day
+                    effective_maturity = max(
+                        config.min_loan_maturity,
+                        min(matched, profile.max_loan_maturity),
+                    )
+                    # Term premium: compensate for longer exposure
+                    if effective_maturity > 2:
+                        opp["rate"] = opp["rate"] * (
+                            Decimal("1") + Decimal("0.01") * Decimal(str(effective_maturity - 2))
+                        )
             # Align NBFI loan maturity with bank loan maturity when banking is active
-            banking_sub_mat = getattr(system.state, "banking_subsystem", None)
-            if banking_sub_mat is not None:
-                effective_maturity = banking_sub_mat.loan_maturity
+            # (banking override only if maturity matching is NOT enabled)
+            if not config.maturity_matching:
+                banking_sub_mat = getattr(system.state, "banking_subsystem", None)
+                if banking_sub_mat is not None:
+                    effective_maturity = banking_sub_mat.loan_maturity
             loan_id = system.nonbank_lend(
                 lender_id=lender_id,
                 borrower_id=opp["borrower_id"],
@@ -351,6 +431,135 @@ def run_lending_phase(
         except (ValidationError, ValueError, KeyError) as e:
             logger.warning("Failed to create loan to %s: %s", opp["borrower_id"], e)
             continue
+
+    # Phase 4: Preventive lending (Plan 046)
+    if config.preventive_lending and remaining_capital > 0 and profile is not None:
+        preventive_opps: list[dict[str, Any]] = []
+        for agent_id, agent in system.state.agents.items():
+            if agent.defaulted:
+                continue
+            if agent.kind not in (AgentKind.HOUSEHOLD, AgentKind.FIRM):
+                continue
+
+            # Skip agents with existing shortfalls (already handled above)
+            if info is not None:
+                upcoming_due = info.get_counterparty_obligations(agent_id, current_day, config.horizon)
+                if upcoming_due is None:
+                    continue
+                agent_cash = info.get_counterparty_cash(agent_id, current_day)
+                if agent_cash is None:
+                    agent_cash = 0
+            else:
+                upcoming_due = _get_upcoming_obligations(system, agent_id, current_day, config.horizon)
+                agent_cash = _get_agent_cash(system, agent_id)
+
+            shortfall = upcoming_due - agent_cash
+            if shortfall >= config.min_shortfall:
+                continue  # Already has shortfall, handled in main loop
+
+            # Check if receivables are at risk
+            at_risk = _receivables_at_risk(
+                system, agent_id, current_day, config.horizon,
+                default_probs, config.prevention_threshold,
+                info=info,
+            )
+            if at_risk <= 0:
+                continue
+
+            # Risk assessment for this agent
+            if info is not None:
+                p_default = info.get_default_probability(agent_id, current_day)
+                if p_default is None:
+                    p_default = config.initial_prior
+            else:
+                assert default_probs is not None
+                p_default = default_probs.get(agent_id, config.initial_prior)
+            if not screener.is_eligible(p_default):
+                continue
+
+            # Preemptive loan amount: cover the at-risk receivables
+            if info is not None:
+                borrower_existing = info.get_borrower_exposure(lender_id, agent_id)
+            else:
+                borrower_existing = _get_borrower_exposure(system, lender_id, agent_id)
+            max_single = int(config.max_single_exposure * initial_capital)
+            max_to_this = max_single - borrower_existing
+            if max_to_this <= 0:
+                continue
+
+            loan_amount = min(at_risk, max_to_this)
+
+            # Price the preventive loan
+            base_rate = profile.profit_target
+            rate = base_rate + profile.risk_premium_scale * p_default
+
+            # Concentration limit check — cap outstanding loans per borrower
+            if config.max_loans_per_borrower_per_day > 0:
+                count = _count_existing_loans(system, lender_id, agent_id)
+                if count >= config.max_loans_per_borrower_per_day:
+                    continue
+
+            preventive_opps.append({
+                "borrower_id": agent_id,
+                "amount": loan_amount,
+                "rate": rate,
+                "p_default": p_default,
+                "expected_profit": float(rate) * (1.0 - float(p_default)),
+                "shortfall": 0,
+                "downstream": _downstream_obligation_total(system, agent_id, current_day),
+                "coverage_ratio": Decimal(str(max(agent_cash, 0))) / Decimal(str(max(upcoming_due, 1))),
+                "preventive": True,
+            })
+
+        # Rank preventive opportunities by downstream damage
+        preventive_opps.sort(
+            key=lambda x: x.get("downstream", 0) * (1.0 - float(x["p_default"])),
+            reverse=True,
+        )
+
+        for opp in preventive_opps:
+            if remaining_capital <= 0:
+                break
+            loan_amount = min(opp["amount"], remaining_capital)
+            if loan_amount <= 0:
+                continue
+
+            try:
+                effective_maturity = profile.max_loan_maturity
+                if config.maturity_matching:
+                    nearest_day = _nearest_receivable_day(
+                        system, opp["borrower_id"], current_day,
+                        profile.max_loan_maturity,
+                    )
+                    if nearest_day is not None:
+                        matched = nearest_day - current_day + 1
+                        effective_maturity = max(
+                            config.min_loan_maturity,
+                            min(matched, profile.max_loan_maturity),
+                        )
+                loan_id = system.nonbank_lend(
+                    lender_id=lender_id,
+                    borrower_id=opp["borrower_id"],
+                    amount=loan_amount,
+                    rate=opp["rate"],
+                    day=current_day,
+                    maturity_days=effective_maturity,
+                )
+                remaining_capital -= loan_amount
+                events.append({
+                    "kind": "NonBankLoanCreatedPreventive",
+                    "day": current_day,
+                    "lender_id": lender_id,
+                    "borrower_id": opp["borrower_id"],
+                    "amount": loan_amount,
+                    "rate": str(opp["rate"]),
+                    "loan_id": loan_id,
+                    "p_default": str(opp["p_default"]),
+                    "at_risk_receivables": opp["amount"],
+                })
+            except (ValidationError, ValueError, KeyError) as e:
+                logger.warning("Preventive loan failed for %s: %s", opp["borrower_id"], e)
+                continue
 
     return events
 
@@ -399,6 +608,32 @@ def run_loan_repayments(system: System, current_day: int) -> list[dict[str, Any]
 
 
 # ── Helper functions ─────────────────────────────────────────────────
+
+
+def _count_existing_loans(system: System, lender_id: str, borrower_id: str) -> int:
+    """Count outstanding (non-repaid) loans from lender to borrower.
+
+    Iterates over the lender's assets looking for NON_BANK_LOAN instruments
+    whose liability_issuer_id matches the borrower.  Settled/repaid loans
+    are removed from asset_ids by the repayment flow, so every contract
+    found here is still active.
+    """
+    from bilancio.domain.instruments.base import InstrumentKind
+
+    count = 0
+    lender = system.state.agents.get(lender_id)
+    if lender is None:
+        return 0
+    for cid in lender.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None:
+            continue
+        if (
+            contract.kind == InstrumentKind.NON_BANK_LOAN
+            and contract.liability_issuer_id == borrower_id
+        ):
+            count += 1
+    return count
 
 
 def _get_agent_cash(system: System, agent_id: str) -> int:
@@ -742,3 +977,99 @@ def _default_prob_heuristic(
                 min(Decimal("0.99"), base_rate + Decimal("0.05")),
             )
     return probs
+
+
+def _nearest_receivable_day(
+    system: System, agent_id: str, current_day: int, max_horizon: int
+) -> int | None:
+    """Earliest day a non-defaulted receivable is due for this agent.
+
+    Returns the due_day of the nearest future receivable from a non-defaulted
+    issuer, or None if no qualifying receivable exists within the horizon.
+    """
+    from bilancio.domain.instruments.base import InstrumentKind
+
+    agent = system.state.agents.get(agent_id)
+    if agent is None:
+        return None
+    defaulted = system.state.defaulted_agent_ids
+    nearest: int | None = None
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None or contract.kind != InstrumentKind.PAYABLE:
+            continue
+        due_day = contract.due_day
+        if due_day is None or due_day <= current_day:
+            continue
+        if due_day > current_day + max_horizon:
+            continue
+        if contract.liability_issuer_id in defaulted:
+            continue
+        if nearest is None or due_day < nearest:
+            nearest = due_day
+    return nearest
+
+
+def _downstream_obligation_total(
+    system: System, agent_id: str, current_day: int
+) -> int:
+    """Sum of payables this agent OWES (liabilities).
+
+    If this agent defaults, its creditors lose these receivables.
+    Used for cascade-aware ranking.
+    """
+    from bilancio.domain.instruments.base import InstrumentKind
+
+    total = 0
+    agent = system.state.agents.get(agent_id)
+    if agent is None:
+        return 0
+    for cid in agent.liability_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None or contract.kind != InstrumentKind.PAYABLE:
+            continue
+        due_day = contract.due_day
+        if due_day is not None and due_day > current_day:
+            total += contract.amount
+    return total
+
+
+def _receivables_at_risk(
+    system: System,
+    agent_id: str,
+    current_day: int,
+    horizon: int,
+    default_probs: dict[str, Decimal] | None,
+    threshold: Decimal,
+    info: Any | None = None,
+) -> int:
+    """Sum of receivables where issuer's default probability exceeds threshold.
+
+    Used for preventive lending: identifies agents whose income stream
+    is threatened by counterparty stress.
+    """
+    from bilancio.domain.instruments.base import InstrumentKind
+
+    total = 0
+    agent = system.state.agents.get(agent_id)
+    if agent is None:
+        return 0
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None or contract.kind != InstrumentKind.PAYABLE:
+            continue
+        due_day = contract.due_day
+        if due_day is None or due_day <= current_day or due_day > current_day + horizon:
+            continue
+        issuer_id = contract.liability_issuer_id
+        if default_probs is not None:
+            p = default_probs.get(issuer_id, Decimal("0.15"))
+        elif info is not None:
+            p = info.get_default_probability(issuer_id, current_day)
+            if p is None:
+                p = Decimal("0.15")
+        else:
+            p = Decimal("0.15")
+        if p >= threshold:
+            total += contract.amount
+    return total

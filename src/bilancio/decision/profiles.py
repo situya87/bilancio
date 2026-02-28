@@ -154,6 +154,25 @@ class LenderProfile:
     warmup_observations: int = 10  # data points before Bayesian dominates coverage
     min_coverage_ratio: Decimal = Decimal("0.5")  # balance-sheet coverage gate (Plan 044)
 
+    # Phase 1A: Maturity matching (Plan 046)
+    maturity_matching: bool = False  # match loan maturity to borrower's next receivable
+    min_loan_maturity: int = 2  # floor for loan maturity when matching
+
+    # Phase 1B: Concentration limits (Plan 046)
+    max_loans_per_borrower_per_day: int = 0  # 0 = unlimited (backward compat)
+
+    # Phase 2: Cascade-aware ranking (Plan 046)
+    ranking_mode: str = "profit"  # "profit" | "cascade" | "blended"
+    cascade_weight: Decimal = Decimal("0.5")  # weight in blended mode
+
+    # Phase 3: Graduated coverage gate (Plan 046)
+    coverage_mode: str = "gate"  # "gate" | "graduated"
+    coverage_penalty_scale: Decimal = Decimal("0.10")  # rate premium per unit below threshold
+
+    # Phase 4: Preventive lending (Plan 046)
+    preventive_lending: bool = False
+    prevention_threshold: Decimal = Decimal("0.3")  # min issuer p_default to trigger
+
     def __post_init__(self) -> None:
         if self.kappa <= Decimal("0"):
             raise ValueError("kappa must be positive")
@@ -167,6 +186,20 @@ class LenderProfile:
             raise ValueError("max_loan_maturity must be >= 1")
         if self.warmup_observations < 1:
             raise ValueError("warmup_observations must be >= 1")
+        if self.min_loan_maturity < 1:
+            raise ValueError("min_loan_maturity must be >= 1")
+        if self.max_loans_per_borrower_per_day < 0:
+            raise ValueError("max_loans_per_borrower_per_day must be >= 0")
+        if self.ranking_mode not in ("profit", "cascade", "blended"):
+            raise ValueError("ranking_mode must be one of: profit, cascade, blended")
+        if not (Decimal("0") <= self.cascade_weight <= Decimal("1")):
+            raise ValueError("cascade_weight must be between 0 and 1")
+        if self.coverage_mode not in ("gate", "graduated"):
+            raise ValueError("coverage_mode must be one of: gate, graduated")
+        if self.coverage_penalty_scale < Decimal("0"):
+            raise ValueError("coverage_penalty_scale must be non-negative")
+        if not (Decimal("0") < self.prevention_threshold < Decimal("1")):
+            raise ValueError("prevention_threshold must be in (0, 1)")
 
     @property
     def base_default_estimate(self) -> Decimal:

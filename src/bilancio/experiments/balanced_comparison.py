@@ -649,6 +649,33 @@ class BalancedComparisonConfig(BaseModel):
     lender_min_coverage: Decimal = Field(
         default=Decimal("0.5"), description="NBFI min coverage ratio for borrower assessment"
     )
+    lender_maturity_matching: bool = Field(
+        default=False, description="Match NBFI loan maturity to borrower's next receivable"
+    )
+    lender_min_loan_maturity: int = Field(
+        default=2, description="Floor for NBFI loan maturity when matching"
+    )
+    lender_max_loans_per_borrower_per_day: int = Field(
+        default=0, description="Max NBFI loans per borrower per day (0=unlimited)"
+    )
+    lender_ranking_mode: str = Field(
+        default="profit", description="NBFI ranking mode: profit, cascade, or blended"
+    )
+    lender_cascade_weight: Decimal = Field(
+        default=Decimal("0.5"), description="Weight for cascade score in blended ranking"
+    )
+    lender_coverage_mode: str = Field(
+        default="gate", description="NBFI coverage gate mode: gate or graduated"
+    )
+    lender_coverage_penalty_scale: Decimal = Field(
+        default=Decimal("0.10"), description="Rate premium per unit below coverage threshold"
+    )
+    lender_preventive_lending: bool = Field(
+        default=False, description="Enable NBFI proactive lending to at-risk agents"
+    )
+    lender_prevention_threshold: Decimal = Field(
+        default=Decimal("0.3"), description="Min issuer default probability to trigger preventive lending"
+    )
 
     # Bank credit risk pricing (Plan 036)
     credit_risk_loading: Decimal = Field(
@@ -1190,6 +1217,15 @@ class BalancedComparisonRunner:
             lender_mode=True,
             lender_share=self.config.lender_share,
             lender_min_coverage=self.config.lender_min_coverage,
+            lender_maturity_matching=self.config.lender_maturity_matching,
+            lender_min_loan_maturity=self.config.lender_min_loan_maturity,
+            lender_max_loans_per_borrower_per_day=self.config.lender_max_loans_per_borrower_per_day,
+            lender_ranking_mode=self.config.lender_ranking_mode,
+            lender_cascade_weight=self.config.lender_cascade_weight,
+            lender_coverage_mode=self.config.lender_coverage_mode,
+            lender_coverage_penalty_scale=self.config.lender_coverage_penalty_scale,
+            lender_preventive_lending=self.config.lender_preventive_lending,
+            lender_prevention_threshold=self.config.lender_prevention_threshold,
             balanced_mode_override="lender",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
@@ -1251,6 +1287,15 @@ class BalancedComparisonRunner:
             lender_mode=True,
             lender_share=self.config.lender_share,
             lender_min_coverage=self.config.lender_min_coverage,
+            lender_maturity_matching=self.config.lender_maturity_matching,
+            lender_min_loan_maturity=self.config.lender_min_loan_maturity,
+            lender_max_loans_per_borrower_per_day=self.config.lender_max_loans_per_borrower_per_day,
+            lender_ranking_mode=self.config.lender_ranking_mode,
+            lender_cascade_weight=self.config.lender_cascade_weight,
+            lender_coverage_mode=self.config.lender_coverage_mode,
+            lender_coverage_penalty_scale=self.config.lender_coverage_penalty_scale,
+            lender_preventive_lending=self.config.lender_preventive_lending,
+            lender_prevention_threshold=self.config.lender_prevention_threshold,
             balanced_mode_override="nbfi",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
@@ -1317,6 +1362,15 @@ class BalancedComparisonRunner:
             lender_mode=True,
             lender_share=self.config.lender_share,
             lender_min_coverage=self.config.lender_min_coverage,
+            lender_maturity_matching=self.config.lender_maturity_matching,
+            lender_min_loan_maturity=self.config.lender_min_loan_maturity,
+            lender_max_loans_per_borrower_per_day=self.config.lender_max_loans_per_borrower_per_day,
+            lender_ranking_mode=self.config.lender_ranking_mode,
+            lender_cascade_weight=self.config.lender_cascade_weight,
+            lender_coverage_mode=self.config.lender_coverage_mode,
+            lender_coverage_penalty_scale=self.config.lender_coverage_penalty_scale,
+            lender_preventive_lending=self.config.lender_preventive_lending,
+            lender_prevention_threshold=self.config.lender_prevention_threshold,
             balanced_mode_override="nbfi_dealer",  # 50/50 cash split
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
@@ -1496,6 +1550,15 @@ class BalancedComparisonRunner:
             lender_mode=True,
             lender_share=self.config.lender_share,
             lender_min_coverage=self.config.lender_min_coverage,
+            lender_maturity_matching=self.config.lender_maturity_matching,
+            lender_min_loan_maturity=self.config.lender_min_loan_maturity,
+            lender_max_loans_per_borrower_per_day=self.config.lender_max_loans_per_borrower_per_day,
+            lender_ranking_mode=self.config.lender_ranking_mode,
+            lender_cascade_weight=self.config.lender_cascade_weight,
+            lender_coverage_mode=self.config.lender_coverage_mode,
+            lender_coverage_penalty_scale=self.config.lender_coverage_penalty_scale,
+            lender_preventive_lending=self.config.lender_preventive_lending,
+            lender_prevention_threshold=self.config.lender_prevention_threshold,
             balanced_mode_override="bank_dealer_nbfi",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,
