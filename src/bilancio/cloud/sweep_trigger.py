@@ -60,7 +60,7 @@ def run_corrected_risk_sweep() -> dict[str, Any]:
         risk_assessment_enabled=True,
         risk_assessment_config={
             "base_risk_premium": "0.02",
-            "urgency_sensitivity": "0.10",
+            "urgency_sensitivity": "0.30",
             "buy_premium_multiplier": "1.0",
             "lookback_window": 5,
         },

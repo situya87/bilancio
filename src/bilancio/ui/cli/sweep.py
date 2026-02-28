@@ -631,8 +631,8 @@ def sweep_comparison(
 @click.option(
     "--risk-urgency",
     type=Decimal,
-    default=Decimal("0.10"),
-    help="Urgency sensitivity (default: 0.10)",
+    default=Decimal("0.30"),
+    help="Urgency sensitivity (default: 0.30)",
 )
 @click.option(
     "--alpha-vbt",

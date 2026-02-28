@@ -628,7 +628,7 @@ Present the following table to the user. Show the **current value** (from CLI ar
 |-----------|---------|---------|-------------|
 | `risk_assessment` | True | ? | Enable risk-based trade decisions |
 | `risk_premium` | 0.02 | ? | Base risk premium (sellers) |
-| `risk_urgency` | 0.10 | ? | Urgency sensitivity (how much stress lowers threshold) |
+| `risk_urgency` | 0.30 | ? | Urgency sensitivity (how much stress lowers threshold) |
 | `initial_prior` | 0.15 | ? | No-history default probability |
 | `alpha_vbt` | 0 | ? | VBT informedness (0=naive, 1=kappa-informed) |
 | `alpha_trader` | 0 | ? | Trader informedness (0=naive, 1=kappa-informed) |
@@ -796,7 +796,7 @@ Cloud:    [yes/no]
   vbt_mid_sensitivity=1.0  vbt_spread_sensitivity=0.0
 
 ─── E. Risk Assessment ──────────────────────────────
-  risk_premium=0.02  urgency=0.10  initial_prior=0.15
+  risk_premium=0.02  urgency=0.30  initial_prior=0.15
   alpha_vbt=0  alpha_trader=0
 
 ─── F. Lending (if applicable) ──────────────────────

@@ -690,7 +690,7 @@ class TestRiskAssessmentConfig:
         assert ra.lookback_window == 5
         assert ra.smoothing_alpha == Decimal("1.0")
         assert ra.base_risk_premium == Decimal("0.02")
-        assert ra.urgency_sensitivity == Decimal("0.10")
+        assert ra.urgency_sensitivity == Decimal("0.30")
         assert ra.use_issuer_specific is False
         assert ra.buy_premium_multiplier == Decimal("1.0")
 
