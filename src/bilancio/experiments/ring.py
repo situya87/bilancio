@@ -320,6 +320,8 @@ class RingSweepRunner:
         cb_lending_cutoff_day: int | None = None,
         trading_rounds: int = 1,
         issuer_specific_pricing: bool = False,
+        flow_sensitivity: Decimal = Decimal("0.0"),
+        dealer_concentration_limit: Decimal = Decimal("0"),
         reserve_ratio: Decimal | None = None,
     ) -> None:
         self.base_dir = out_dir
@@ -372,6 +374,8 @@ class RingSweepRunner:
         self.cb_lending_cutoff_day = cb_lending_cutoff_day
         self.trading_rounds = trading_rounds
         self.issuer_specific_pricing = issuer_specific_pricing
+        self.flow_sensitivity = flow_sensitivity
+        self.dealer_concentration_limit = dealer_concentration_limit
         self.reserve_ratio = reserve_ratio
 
         # Use provided registry store or create default file-based store
@@ -754,6 +758,8 @@ class RingSweepRunner:
                     "spread_scale": str(self.spread_scale),
                     "trading_rounds": self.trading_rounds,
                     "issuer_specific_pricing": self.issuer_specific_pricing,
+                    "flow_sensitivity": str(self.flow_sensitivity),
+                    "dealer_concentration_limit": str(self.dealer_concentration_limit),
                 }
 
             if self.lender_mode:
@@ -1155,6 +1161,8 @@ class RingSweepRunner:
                     "spread_scale": str(self.spread_scale),
                     "trading_rounds": self.trading_rounds,
                     "issuer_specific_pricing": self.issuer_specific_pricing,
+                    "flow_sensitivity": str(self.flow_sensitivity),
+                    "dealer_concentration_limit": str(self.dealer_concentration_limit),
                 }
 
             if self.lender_mode:

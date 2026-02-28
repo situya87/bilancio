@@ -800,6 +800,18 @@ class BalancedDealerConfig(BaseModel):
         default=False,
         description="Enable per-issuer risk pricing (lower bids for riskier issuers)",
     )
+    flow_sensitivity: Decimal = Field(
+        default=Decimal("0.0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="VBT flow-aware ask widening (0=disabled, 1=max)",
+    )
+    dealer_concentration_limit: Decimal = Field(
+        default=Decimal("0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="Max fraction of dealer inventory from single issuer (0=disabled)",
+    )
 
     @field_validator("trading_motive")
     @classmethod

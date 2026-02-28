@@ -47,6 +47,26 @@ def _get_issuer_price_adjustment(subsystem: DealerSubsystem, issuer_id: str) -> 
     return max(Decimal(0), Decimal(1) - adjustment)
 
 
+def _check_concentration_limit(
+    subsystem: DealerSubsystem, ticket: Ticket,
+) -> bool:
+    """Return True if accepting ticket would breach issuer concentration limit."""
+    limit = subsystem.dealer_concentration_limit
+    if limit <= 0:
+        return False
+    # Check across ALL dealer buckets (global exposure)
+    issuer_count = 0
+    total_count = 0
+    for d in subsystem.dealers.values():
+        for t in d.inventory:
+            total_count += 1
+            if t.issuer_id == ticket.issuer_id:
+                issuer_count += 1
+    post_total = total_count + 1
+    post_issuer = issuer_count + 1
+    return (Decimal(post_issuer) / Decimal(post_total)) > limit
+
+
 def _compute_trader_safety_margin(subsystem: DealerSubsystem, trader_id: str) -> Decimal:
     """Compute safety margin for a specific trader."""
     trader = subsystem.traders.get(trader_id)
@@ -265,6 +285,27 @@ def _execute_sell_trade(
     result = subsystem.executor.execute_customer_sell(dealer, vbt, ticket, check_assertions=False)
 
     if result.executed:
+        # Concentration limit check (Feature 3) — only for interior dealer
+        # buys (not passthrough).  Passthrough sells land in VBT inventory,
+        # so dealer concentration is unaffected.
+        if not result.is_passthrough and _check_concentration_limit(subsystem, ticket):
+            # Undo the kernel execution: reverse the interior buy.
+            # Kernel did: dealer.inventory.append(ticket), dealer.cash -= price,
+            # ticket.owner_id = dealer.agent_id.
+            dealer.inventory.remove(ticket)
+            dealer.cash += result.price
+            ticket.owner_id = trader_id
+            recompute_dealer_state(dealer, vbt, subsystem.params)
+            events.append({
+                "kind": "sell_rejected_concentration",
+                "day": current_day,
+                "trader_id": trader_id,
+                "bucket_id": bucket_id,
+                "issuer_id": ticket.issuer_id,
+                "limit": str(subsystem.dealer_concentration_limit),
+            })
+            return Decimal(0)
+
         # Apply issuer-specific price adjustment (Feature 1)
         price_factor = _get_issuer_price_adjustment(subsystem, ticket.issuer_id)
         adjusted_price = result.price * price_factor

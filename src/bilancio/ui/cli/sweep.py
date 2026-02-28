@@ -773,6 +773,18 @@ def sweep_comparison(
     help="Enable per-issuer risk pricing (lower bids for riskier issuers, default: disabled)",
 )
 @click.option(
+    "--flow-sensitivity",
+    type=Decimal,
+    default=Decimal("0.0"),
+    help="VBT flow-aware ask widening (0=disabled, 1=max, default: 0)",
+)
+@click.option(
+    "--dealer-concentration-limit",
+    type=Decimal,
+    default=Decimal("0"),
+    help="Max fraction of dealer inventory from single issuer (0=disabled, default: 0)",
+)
+@click.option(
     "--equalize-bank-capacity/--no-equalize-bank-capacity",
     default=True,
     help="Equalize bank reserves to match non-bank intermediary capital (default: True)",
@@ -823,6 +835,8 @@ def sweep_balanced(
     lender_min_coverage: Decimal,
     trading_rounds: int,
     issuer_specific_pricing: bool,
+    flow_sensitivity: Decimal,
+    dealer_concentration_limit: Decimal,
     equalize_bank_capacity: bool,
 ) -> None:
     """
@@ -951,6 +965,8 @@ def sweep_balanced(
         reserve_multiplier=reserve_multiplier,
         trading_rounds=trading_rounds,
         issuer_specific_pricing=issuer_specific_pricing,
+        flow_sensitivity=flow_sensitivity,
+        dealer_concentration_limit=dealer_concentration_limit,
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)
