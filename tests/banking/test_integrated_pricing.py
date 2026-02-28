@@ -254,3 +254,46 @@ class TestIntegratedRateMatchesManualAverage:
         )
 
         assert integrated_r_L == three_ticket_r_L
+
+    def test_odd_ticket_size_fractional_midpoint(self):
+        """Regression: odd ticket_size with even count produces fractional midpoint.
+
+        ticket_size=3, amount=6, direction=-1 → 2 tickets, midpoint shift = -1.5.
+        Previously int() truncated to -1, biasing the rate.
+        """
+        odd_params = PricingParams(
+            reserve_remuneration_rate=Decimal("0.01"),
+            cb_borrowing_rate=Decimal("0.03"),
+            reserve_target=100000,
+            symmetric_capacity=50000,
+            ticket_size=3,
+            reserve_floor=10000,
+        )
+
+        inventory = 100
+        ct = Decimal("0.1")
+        ri = Decimal("0.05")
+        n_tickets = 2  # amount=6, ticket_size=3
+
+        # Manual tick-by-tick average
+        manual_r_L_sum = Decimal("0")
+        for i in range(n_tickets):
+            tick_inv = inventory + (-1) * i * odd_params.ticket_size
+            midline = compute_tilted_midline(tick_inv, ct, ri, odd_params)
+            manual_r_L_sum += midline + odd_params.inside_width / 2
+
+        manual_avg_r_L = manual_r_L_sum / n_tickets
+
+        # Integrated (closed-form with Decimal midpoint)
+        _, integrated_r_L = compute_integrated_rate(
+            current_inventory=inventory,
+            amount=6,
+            direction=-1,
+            cash_tightness=ct,
+            risk_index=ri,
+            params=odd_params,
+        )
+
+        # Allow last-digit Decimal rounding from different evaluation order
+        # (sum-then-divide vs evaluate-at-midpoint differ in ~28th decimal place)
+        assert abs(integrated_r_L - manual_avg_r_L) < Decimal("1e-20")

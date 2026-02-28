@@ -95,7 +95,7 @@ class PricingParams:
         return (self.reserve_remuneration_rate + self.cb_borrowing_rate) / 2
 
 
-def compute_midline(inventory: int, params: PricingParams) -> Decimal:
+def compute_midline(inventory: int | Decimal, params: PricingParams) -> Decimal:
     """
     Compute the symmetric linear midline on the 2-day funding plane.
 
@@ -119,7 +119,7 @@ def compute_midline(inventory: int, params: PricingParams) -> Decimal:
 
 
 def compute_tilted_midline(
-    inventory: int,
+    inventory: int | Decimal,
     cash_tightness: Decimal,
     risk_index: Decimal,
     params: PricingParams,
@@ -245,9 +245,12 @@ def compute_integrated_rate(
     total_walk = (n_tickets - 1) * params.ticket_size
     midpoint_shift = Decimal(direction * total_walk) / 2
 
-    midpoint_inventory = current_inventory + int(midpoint_shift)
+    # Keep as Decimal to avoid truncation bias on fractional midpoints
+    # (e.g. even ticket count with odd ticket_size).
+    midpoint_inventory = Decimal(current_inventory) + midpoint_shift
 
-    # Compute tilted midline at the midpoint position
+    # Compute tilted midline at the midpoint position.
+    # compute_midline accepts Decimal inventory via slope * inventory arithmetic.
     midline = compute_tilted_midline(
         midpoint_inventory, cash_tightness, risk_index, params,
     )
