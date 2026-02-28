@@ -216,13 +216,13 @@ For each eligible borrower:
 
 | Parameter | CLI default | BankComparisonConfig default | BankProfile default | Meaning |
 |-----------|------------|------------------------------|---------------------|---------|
-| `credit_risk_loading` | **0** | 0.5 | 0 | Rate adder per unit P_default |
-| `max_borrower_risk` | **1.0** | 0.4 | 1.0 | Credit rationing threshold |
+| `credit_risk_loading` | **0.5** | 0.5 | 0 | Rate adder per unit P_default |
+| `max_borrower_risk` | **0.4** | 0.4 | 1.0 | Credit rationing threshold |
 | `min_coverage_ratio` | 0 | 0 | 0 | Balance sheet coverage floor |
 
-**Important**: Three layers of defaults exist. The CLI defaults (used when no flag is passed) match `BankProfile` defaults: **no credit risk pricing and no credit rationing**. `BankComparisonConfig` has more aggressive defaults (0.5 loading, 0.4 threshold) but the CLI overrides these. To activate credit sensitivity, pass `--credit-risk-loading 0.5 --max-borrower-risk 0.4` explicitly.
+**Important**: Three layers of defaults exist. The CLI defaults now match `BankComparisonConfig` defaults: **credit_risk_loading=0.5, max_borrower_risk=0.4** (credit-sensitive pricing enabled by default). `BankProfile` raw defaults remain 0 / 1.0 for backward compatibility, but both the CLI and `BankComparisonConfig` override these to enable credit risk pricing out of the box.
 
-**Feb 2025 wide sweep** ran with CLI defaults: credit_risk_loading=0, max_borrower_risk=1.0. The bank lends to all borrowers at a flat Treynor rate regardless of default risk.
+**Feb 2025 wide sweep** ran with the OLD CLI defaults (credit_risk_loading=0, max_borrower_risk=1.0). In that configuration, the bank lent to all borrowers at a flat Treynor rate regardless of default risk. Current CLI defaults now include credit risk pricing.
 
 ### Default probability estimation
 
@@ -231,6 +231,8 @@ The bank uses a shared `RiskAssessor` with Bayesian updating:
 - **Initial prior**: P_default = 0.15 (no-history default).
 - **Updates**: Each observed default increases the posterior for that agent.
 - **Informedness**: controlled by `default_observability` (default: 1.0 = sees all defaults).
+
+**Kappa-informed priors**: When `credit_risk_loading > 0`, the bank borrows the dealer subsystem's `RiskAssessor` which uses `kappa_informed_prior`: initial_prior = 1/(1+κ). This means priors automatically scale with system stress — at κ=0.3, P_0 ≈ 0.77; at κ=1.0, P_0 = 0.50; at κ=2.0, P_0 ≈ 0.33. The wiring is in `run.py:272-277`. When `credit_risk_loading = 0`, the prior is irrelevant (it multiplies zero).
 
 ### Bank capacity constraints
 
@@ -299,7 +301,7 @@ For each day 0..maturity_days:
 | CB corridor width | Ω = 0.01 + 0.02 × max(0,1−κ)/(1+κ) |
 | Inside spread (Treynor) | I = λ × Ω (wider corridor → wider spread) |
 | Bank loan rate | r_L = midline + I/2 (higher at low κ) |
-| Default probability prior | Independent of κ (fixed at 0.15) |
+| Default probability prior | With credit_risk_loading > 0: kappa-informed prior P_0 = 1/(1+κ). With credit_risk_loading = 0: fixed at 0.15 (irrelevant since it multiplies zero). |
 
 ### Parameters fixed across all runs
 
@@ -310,7 +312,7 @@ For each day 0..maturity_days:
 | Treynor kernel | r_base=0.01, r_stress=0.04, omega_base=0.01, omega_stress=0.02 |
 | Treynor internal | reserve_target_ratio=0.10, symmetric_capacity_ratio=2.0, α=0.005, γ=0.002 |
 | Loan terms | loan_maturity_fraction=0.50, interest_period=2 |
-| Credit risk | credit_risk_loading=0, max_borrower_risk=1.0, min_coverage_ratio=0 (CLI defaults; no risk pricing) |
+| Credit risk | credit_risk_loading=0.5, max_borrower_risk=0.4, min_coverage_ratio=0 (CLI defaults; credit-sensitive pricing) |
 | Capacity limits | max_single=20%, max_total=150%, max_daily=50% |
 | CB backstop | escalation_slope=0.05, max_outstanding=2.0 |
 | Risk assessment | initial_prior=0.15, default_observability=1.0 |
@@ -348,7 +350,8 @@ Bank lending reduces defaults (δ) but **increases** system losses across all te
 ## CLI
 
 ```bash
-# Feb 2025 wide sweep (CLI defaults: no credit risk pricing)
+# Feb 2025 wide sweep (used OLD CLI defaults: credit_risk_loading=0, max_borrower_risk=1.0)
+# Note: current CLI defaults now include credit risk pricing (0.5 / 0.4).
 uv run bilancio sweep bank \
   --out-dir out/bank_sweep_043_wide \
   --n-agents 100 \
@@ -360,12 +363,13 @@ uv run bilancio sweep bank \
   --base-seed 42 \
   --n-replicates 3
 
-# With credit risk pricing enabled
+# Current defaults already include credit risk pricing (credit_risk_loading=0.5, max_borrower_risk=0.4).
+# To reproduce the old no-risk-pricing behavior, pass zeros explicitly:
 uv run bilancio sweep bank \
-  --out-dir out/bank_sweep_credit_risk \
+  --out-dir out/bank_sweep_no_credit_risk \
   --kappas "0.3,0.5,1.0,1.5,2.0" \
-  --credit-risk-loading 0.5 \
-  --max-borrower-risk 0.4 \
+  --credit-risk-loading 0 \
+  --max-borrower-risk 1.0 \
   --base-seed 42 \
   --n-replicates 3
 ```

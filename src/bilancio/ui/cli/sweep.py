@@ -585,7 +585,7 @@ def sweep_comparison(
 @click.option(
     "--outside-mid-ratios",
     type=str,
-    default="1.0",
+    default="0.90",
     help="Comma-separated M/S ratios to sweep (VBT pricing now uses kappa-informed prior)",
 )
 @click.option(
@@ -1321,8 +1321,8 @@ def sweep_nbfi(
 @click.option("--quiet/--no-quiet", default=True, help="Suppress per-event output")
 @click.option("--n-banks", type=int, default=5, help="Number of banks")
 @click.option("--reserve-ratio", type=Decimal, default=Decimal("0.50"), help="Initial reserves / total deposits")
-@click.option("--credit-risk-loading", type=Decimal, default=Decimal("0"), help="Bank sensitivity to borrower risk")
-@click.option("--max-borrower-risk", type=Decimal, default=Decimal("1.0"), help="Credit rationing threshold")
+@click.option("--credit-risk-loading", type=Decimal, default=Decimal("0.5"), help="Bank sensitivity to borrower risk (0=flat rate, 0.5=credit-sensitive)")
+@click.option("--max-borrower-risk", type=Decimal, default=Decimal("0.4"), help="Credit rationing threshold (reject if P_default > this)")
 @click.option("--min-coverage-ratio", type=Decimal, default=Decimal("0"), help="Min coverage ratio for loan approval")
 @click.option("--cb-rate-escalation-slope", type=Decimal, default=Decimal("0.05"), help="CB cost pressure slope")
 @click.option("--cb-max-outstanding-ratio", type=Decimal, default=Decimal("2.0"), help="CB lending cap")

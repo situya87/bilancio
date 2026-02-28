@@ -45,7 +45,7 @@ or **buy** receivables from the dealer (to earn the face-par spread).
 | `aggressiveness` | Decimal | 1.0 | `--aggressiveness` | Lower → higher surplus needed to buy. Threshold = `face × (1 - agg)` |
 | `default_observability` | Decimal | 1.0 | `--default-observability` | Lower → agents slower to update beliefs from observed defaults |
 | `buy_reserve_fraction` | Decimal | 0.5 | `--buy-reserve-fraction` | Fraction of upcoming dues reserved before buying |
-| `trading_motive` | str | "liquidity_only" | `--trading-motive` | `liquidity_only` / `liquidity_then_earning` / `unrestricted` |
+| `trading_motive` | str | "liquidity_then_earning" | `--trading-motive` | `liquidity_only` / `liquidity_then_earning` / `unrestricted` |
 
 ### Computed (not independently tunable)
 
@@ -129,13 +129,15 @@ When `mid_sensitivity = 1`: M fully tracks the observed default rate.
 
 Per-bucket outside spreads (`O`) are set at initialization:
 
-| Bucket | Base Spread |
-|--------|-------------|
-| short (1-3 days) | 0.20 |
-| mid (4-6 days) | 0.30 |
-| long (7+ days) | 0.40 |
+| Bucket | Base Spread | Effective at P=0.15 |
+|--------|-------------|---------------------|
+| short (1-3 days) | 0.04 | ~0.13 |
+| mid (4-6 days) | 0.08 | ~0.17 |
+| long (7+ days) | 0.12 | ~0.21 |
 
 These are multiplied by `spread_scale` and then adjusted by `spread_sensitivity`.
+Effective spreads at a given default probability P are: `O_base + 0.6 × P` (the
+credit-sensitive corridor formula).
 
 ---
 
@@ -160,6 +162,11 @@ inventory position.
 | `issuer_specific_pricing` | False | `--issuer-specific-pricing` | Per-issuer bid/ask adjustments |
 | `dealer_concentration_limit` | 0 | `--dealer-concentration-limit` | Max fraction of bucket from single issuer |
 | `trading_rounds` | 1 | `--trading-rounds` | Sub-rounds per day (more = more trades) |
+
+> **Note:** The `VBTProfile` dataclass declares `vbt_share_per_bucket` with a default of
+> `Decimal("0.25")`, but the NBFI comparison config (`BalancedComparisonConfig`) overrides
+> this to **0.20** at sweep construction time. The values in the table above (0.05 dealer,
+> 0.20 VBT) reflect the effective NBFI sweep defaults, matching the scenario model defaults.
 
 ### Structural (not CLI-wired)
 
