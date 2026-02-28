@@ -331,8 +331,8 @@ class TestPositionAssessor:
         )
         # wealth = 40 + 60 = 100
         # urgency_ratio = 10 / 100 = 0.1
-        # threshold = 0 - 0.10 * 0.1 = -0.01
-        assert threshold == Decimal("0") - Decimal("0.10") * Decimal("0.1")
+        # threshold = 0 - 0.30 * 0.1 = -0.03
+        assert threshold == Decimal("0") - Decimal("0.30") * Decimal("0.1")
         assert threshold < Decimal("0")
 
     def test_zero_wealth_returns_desperate(self, assessor):
@@ -407,8 +407,8 @@ class TestPositionAssessor:
             shortfall=Decimal("50"),
             asset_value=Decimal("50"),
         )
-        # wealth=100, urgency=0.5, threshold=0.05 - 0.10*0.5 = 0
-        assert t_shortfall == Decimal("0.05") - Decimal("0.10") * Decimal("0.5")
+        # wealth=100, urgency=0.5, threshold=0.05 - 0.30*0.5 = -0.10
+        assert t_shortfall == Decimal("0.05") - Decimal("0.30") * Decimal("0.5")
 
 
 # ===========================================================================
@@ -478,9 +478,9 @@ class TestTradeGate:
             trader_shortfall=Decimal("30"),
             trader_asset_value=Decimal("40"),
         )
-        # wealth=50, urgency=30/50=0.6, threshold = 0 - 0.10*0.6 = -0.06
-        # threshold_absolute = -0.06 * 20 = -1.2
-        # Need: 16.8 >= 17 + (-1.2) = 15.8 => True
+        # wealth=50, urgency=30/50=0.6, threshold = 0 - 0.30*0.6 = -0.18
+        # threshold_absolute = -0.18 * 20 = -3.6
+        # Need: 16.8 >= 17 + (-3.6) = 13.4 => True
         assert urgent is True
 
     def test_sell_with_positive_base_premium(self, ticket):
@@ -704,8 +704,8 @@ class TestRiskAssessorWrapper:
             shortfall=Decimal("10"),
             asset_value=Decimal("60"),
         )
-        # Direct computation: wealth=100, urgency=0.1, threshold = 0 - 0.10*0.1 = -0.01
-        expected = Decimal("0") - Decimal("0.10") * Decimal("0.1")
+        # Direct computation: wealth=100, urgency=0.1, threshold = 0 - 0.30*0.1 = -0.03
+        expected = Decimal("0") - Decimal("0.30") * Decimal("0.1")
         assert threshold == expected
 
     def test_wrapper_delegates_to_trade_gate_sell(self, assessor, ticket):
@@ -950,7 +950,7 @@ class TestBackwardCompatValues:
         assert ev == Decimal(5) / Decimal(7) * Decimal("20")
 
     def test_shortfall_urgency_arithmetic(self):
-        """shortfall=10, cash=40, asset=60: urgency=0.1, threshold=-0.01."""
+        """shortfall=10, cash=40, asset=60: urgency=0.1, threshold=-0.03."""
         ra = RiskAssessor(RiskAssessmentParams())
         t = ra.compute_effective_threshold(
             cash=Decimal("40"),
@@ -958,8 +958,8 @@ class TestBackwardCompatValues:
             asset_value=Decimal("60"),
         )
         # wealth=100, urgency=10/100=0.1
-        # threshold = 0 - 0.10 * 0.1 = -0.01
-        assert t == Decimal("-0.01")
+        # threshold = 0 - 0.30 * 0.1 = -0.03
+        assert t == Decimal("-0.03")
 
     def test_no_shortfall_threshold(self):
         """No shortfall: threshold = base_risk_premium = 0."""

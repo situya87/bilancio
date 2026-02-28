@@ -62,7 +62,7 @@ class RiskAssessmentParams:
     base_risk_premium: Decimal = Decimal(
         "0"
     )  # Seller premium: 0 (selling converts uncertainty to certainty)
-    urgency_sensitivity: Decimal = Decimal("0.10")  # 10% sensitivity
+    urgency_sensitivity: Decimal = Decimal("0.30")  # 30% sensitivity
     use_issuer_specific: bool = False
     buy_premium_multiplier: Decimal = Decimal("1.0")  # Buyers use same premium as sellers
     buy_risk_premium: Decimal = Decimal("0.01")  # Buyer premium: 1%
@@ -352,7 +352,7 @@ class PositionAssessor:
     def __init__(
         self,
         base_risk_premium: Decimal = Decimal("0"),
-        urgency_sensitivity: Decimal = Decimal("0.10"),
+        urgency_sensitivity: Decimal = Decimal("0.30"),
     ):
         self.base_risk_premium = base_risk_premium
         self.urgency_sensitivity = urgency_sensitivity

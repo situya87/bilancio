@@ -581,7 +581,7 @@ class RiskAssessmentConfig(BaseModel):
         Decimal("0.02"), description="Base risk premium (threshold for trading)"
     )
     urgency_sensitivity: Decimal = Field(
-        Decimal("0.10"), description="How much liquidity urgency reduces threshold"
+        Decimal("0.30"), description="How much liquidity urgency reduces threshold"
     )
     use_issuer_specific: bool = Field(
         False, description="Use per-issuer vs system-wide default rates"

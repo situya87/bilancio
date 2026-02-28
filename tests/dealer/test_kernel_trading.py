@@ -838,7 +838,7 @@ class TestRiskAssessmentParamsDefaults:
         assert p.lookback_window == 5
         assert p.smoothing_alpha == Decimal("1.0")
         assert p.base_risk_premium == Decimal("0")  # Seller premium = 0
-        assert p.urgency_sensitivity == Decimal("0.10")
+        assert p.urgency_sensitivity == Decimal("0.30")
         assert p.use_issuer_specific is False
         assert p.buy_premium_multiplier == Decimal("1.0")
         assert p.buy_risk_premium == Decimal("0.01")  # Buyer premium = 0.01

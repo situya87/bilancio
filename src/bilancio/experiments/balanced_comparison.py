@@ -559,7 +559,7 @@ class BalancedComparisonConfig(BaseModel):
     risk_assessment_config: dict[str, Any] = Field(
         default_factory=lambda: {
             "base_risk_premium": "0.02",
-            "urgency_sensitivity": "0.10",
+            "urgency_sensitivity": "0.30",
             "buy_premium_multiplier": "1.0",
             "lookback_window": 5,
         },
