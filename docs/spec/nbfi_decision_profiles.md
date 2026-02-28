@@ -7,17 +7,24 @@ unless code is changed).
 
 ## Architecture Overview
 
-The balanced comparison sweep runs up to four arms, each adding one intermediary:
+The NBFI comparison sweep runs **two arms only**: passive (baseline) and lender (NBFI).
+The active dealer arm is excluded because dealer trading dominates the lending effect
+(+16.9pp vs +5.8pp at κ=0.3), making it impossible to isolate and measure NBFI impact
+when both are present. The combined dealer+lender arm showed no additive benefit over
+dealer alone at κ≥0.5.
 
-| Arm | Intermediaries | What it measures |
-|-----|---------------|------------------|
-| **Passive** | None | Pure settlement baseline |
-| **Active** | Dealer + VBT | Secondary market impact |
-| **Lender** | NBFI | Credit provision impact |
-| **Dealer+Lender** | Dealer + VBT + NBFI | Combined effect |
+| Arm | Intermediaries | What it measures | Included |
+|-----|---------------|------------------|----------|
+| **Passive** | None | Pure settlement baseline | Yes |
+| **Active** | Dealer + VBT | Secondary market impact | **No** — use dealer spec instead |
+| **Lender** | NBFI | Credit provision impact | Yes |
+| **Dealer+Lender** | Dealer + VBT + NBFI | Combined effect | **No** — dealer dominates |
 
 All arms share the same ring topology (agents, payables, cash endowments) seeded
 identically. The only difference is which intermediaries are active.
+
+**To measure dealer impact**: use the dealer specification at `docs/specs/dealer_passive_vs_active.md`.
+**To measure NBFI impact**: use this specification (passive vs lender only).
 
 ---
 
