@@ -280,23 +280,32 @@ def _execute_sell_trade(
     ):
         return Decimal(0)
 
-    # Concentration limit check (Feature 3)
-    if _check_concentration_limit(subsystem, ticket):
-        events.append({
-            "type": "sell_rejected_concentration",
-            "day": current_day,
-            "trader_id": trader_id,
-            "bucket_id": bucket_id,
-            "issuer_id": ticket.issuer_id,
-            "limit": str(subsystem.dealer_concentration_limit),
-        })
-        return Decimal(0)
-
     # Execute customer sell
     assert subsystem.executor is not None
     result = subsystem.executor.execute_customer_sell(dealer, vbt, ticket, check_assertions=False)
 
     if result.executed:
+        # Concentration limit check (Feature 3) — only for interior dealer
+        # buys (not passthrough).  Passthrough sells land in VBT inventory,
+        # so dealer concentration is unaffected.
+        if not result.is_passthrough and _check_concentration_limit(subsystem, ticket):
+            # Undo the kernel execution: reverse the interior buy.
+            # Kernel did: dealer.inventory.append(ticket), dealer.cash -= price,
+            # ticket.owner_id = dealer.agent_id.
+            dealer.inventory.remove(ticket)
+            dealer.cash += result.price
+            ticket.owner_id = trader_id
+            recompute_dealer_state(dealer, vbt, subsystem.params)
+            events.append({
+                "kind": "sell_rejected_concentration",
+                "day": current_day,
+                "trader_id": trader_id,
+                "bucket_id": bucket_id,
+                "issuer_id": ticket.issuer_id,
+                "limit": str(subsystem.dealer_concentration_limit),
+            })
+            return Decimal(0)
+
         # Apply issuer-specific price adjustment (Feature 1)
         price_factor = _get_issuer_price_adjustment(subsystem, ticket.issuer_id)
         adjusted_price = result.price * price_factor
