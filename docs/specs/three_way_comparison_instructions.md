@@ -29,7 +29,7 @@ All three sweeps use identical grid parameters:
 | Concentration | c | 0.5, 1, 2 | 3 |
 | Maturity skew | μ | 0, 0.5 | 2 |
 | Outside money ratio | ρ | 0.90 | 1 |
-| Seeds | — | 42, 123, 456 | 3 |
+| Replicates | — | 3 (base_seed=42) | 3 |
 
 **Grid size**: 7 × 3 × 2 × 1 × 3 = **126 parameter combos** × 2 arms = **252 runs per sweep**
 
@@ -57,7 +57,7 @@ uv run bilancio sweep balanced --cloud \
   --n-agents 100 --maturity-days 10 \
   --kappas "0.25,0.3,0.5,1.0,1.5,2.0,4.0" \
   --concentrations "0.5,1,2" --mus "0,0.5" \
-  --outside-mid-ratios "0.90" --seeds "42,123,456" \
+  --outside-mid-ratios "0.90" --base-seed 42 --n-replicates 3 \
   --out-dir out/three_way/dealer
 ```
 
@@ -68,7 +68,7 @@ uv run bilancio sweep nbfi --cloud \
   --n-agents 100 --maturity-days 10 \
   --kappas "0.25,0.3,0.5,1.0,1.5,2.0,4.0" \
   --concentrations "0.5,1,2" --mus "0,0.5" \
-  --outside-mid-ratios "0.90" --seeds "42,123,456" \
+  --outside-mid-ratios "0.90" --base-seed 42 --n-replicates 3 \
   --out-dir out/three_way/nbfi
 ```
 
@@ -79,7 +79,7 @@ uv run bilancio sweep bank --cloud \
   --n-agents 100 --maturity-days 10 \
   --kappas "0.25,0.3,0.5,1.0,1.5,2.0,4.0" \
   --concentrations "0.5,1,2" --mus "0,0.5" \
-  --outside-mid-ratios "0.90" --seeds "42,123,456" \
+  --outside-mid-ratios "0.90" --base-seed 42 --n-replicates 3 \
   --out-dir out/three_way/bank
 ```
 
@@ -199,7 +199,7 @@ After all three sweeps complete:
 All defaults are now spec-aligned. To reproduce:
 
 1. Use the exact CLI commands above (no extra flags needed)
-2. The three seeds (42, 123, 456) ensure statistical robustness
+2. `--n-replicates 3` generates seeds 42, 43, 44 (base_seed + 0..n-1) for statistical robustness
 3. Each parameter combo produces 3 replicates — report mean ± std
 
 To verify defaults propagated correctly, inspect any output scenario YAML:
