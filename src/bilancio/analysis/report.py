@@ -235,7 +235,15 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
                 deposit_loss_gross += amt
 
         # Payable default losses (real-economy loss channel)
-        if kind == "ObligationWrittenOff":
+        # ObligationDefaulted captures the trigger contract's shortfall
+        # (the contract that caused the default — already removed before
+        # _write_off_liabilities runs, so no WrittenOff event is emitted).
+        # ObligationWrittenOff captures remaining payables of the expelled agent.
+        if kind == "ObligationDefaulted":
+            ck = str(e.get("contract_kind", ""))
+            if ck == "payable":
+                payable_default_loss += int(e.get("shortfall", 0))
+        elif kind == "ObligationWrittenOff":
             ck = str(e.get("contract_kind", ""))
             if ck == "payable":
                 payable_default_loss += amt
