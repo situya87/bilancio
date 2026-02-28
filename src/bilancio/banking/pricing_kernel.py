@@ -95,7 +95,7 @@ class PricingParams:
         return (self.reserve_remuneration_rate + self.cb_borrowing_rate) / 2
 
 
-def compute_midline(inventory: int, params: PricingParams) -> Decimal:
+def compute_midline(inventory: int | Decimal, params: PricingParams) -> Decimal:
     """
     Compute the symmetric linear midline on the 2-day funding plane.
 
@@ -119,7 +119,7 @@ def compute_midline(inventory: int, params: PricingParams) -> Decimal:
 
 
 def compute_tilted_midline(
-    inventory: int,
+    inventory: int | Decimal,
     cash_tightness: Decimal,
     risk_index: Decimal,
     params: PricingParams,
@@ -205,6 +205,66 @@ def compute_quotes(
         risk_index=risk_index,
         midline=midline,
     )
+
+
+def compute_integrated_rate(
+    current_inventory: int,
+    amount: int,
+    direction: int,
+    cash_tightness: Decimal,
+    risk_index: Decimal,
+    params: PricingParams,
+) -> tuple[Decimal, Decimal]:
+    """Compute integrated (r_D, r_L) for a multi-ticket transaction.
+
+    The bank internally counts ceil(amount / ticket_size) tickets.
+    Each ticket shifts inventory by ``direction * ticket_size``.
+    Because the midline is linear, the average rate equals the rate
+    at the midpoint of the inventory walk.
+
+    Args:
+        current_inventory: x = R_{t+2} - R^tar (current position on funding plane)
+        amount: Transaction size in minor units
+        direction: -1 for loans/withdrawals (inventory decreases),
+                   +1 for deposit inflows (inventory increases)
+        cash_tightness: L* (10-day shortfall metric)
+        risk_index: ρ (shortfall risk + book-gap index)
+        params: Pricing parameters including ticket_size
+
+    Returns:
+        (integrated_r_D, integrated_r_L) — the average deposit and loan
+        rates across all ticket positions in the walk.
+    """
+    import math
+
+    n_tickets = max(1, math.ceil(amount / params.ticket_size))
+
+    # Total inventory walk across all tickets (excluding the starting position).
+    # Ticket i is priced at current_inventory + direction * i * ticket_size.
+    # The midpoint of positions 0 .. n-1 is at index (n-1)/2.
+    total_walk = (n_tickets - 1) * params.ticket_size
+    midpoint_shift = Decimal(direction * total_walk) / 2
+
+    # Keep as Decimal to avoid truncation bias on fractional midpoints
+    # (e.g. even ticket count with odd ticket_size).
+    midpoint_inventory = Decimal(current_inventory) + midpoint_shift
+
+    # Compute tilted midline at the midpoint position.
+    # compute_midline accepts Decimal inventory via slope * inventory arithmetic.
+    midline = compute_tilted_midline(
+        midpoint_inventory, cash_tightness, risk_index, params,
+    )
+
+    half_width = params.inside_width / 2
+
+    r_bid = midline - half_width
+    r_ask = midline + half_width
+
+    # Ceiling discipline on deposits (same as compute_quotes)
+    r_deposit = min(r_bid, params.cb_borrowing_rate)
+    r_deposit = max(r_deposit, Decimal("0"))
+
+    return r_deposit, r_ask
 
 
 def compute_inventory(
