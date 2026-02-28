@@ -145,8 +145,8 @@ class NBFIComparisonConfig(BaseModel):
 
     # Balanced dealer parameters (VBT/Dealer hold inventory passively in both arms)
     face_value: Decimal = Field(default=Decimal("20"), description="Face value per ticket")
-    vbt_share_per_bucket: Decimal = Field(default=Decimal("0.25"), description="VBT claim share per bucket")
-    dealer_share_per_bucket: Decimal = Field(default=Decimal("0.125"), description="Dealer claim share per bucket")
+    vbt_share_per_bucket: Decimal = Field(default=Decimal("0.20"), description="VBT claim share per bucket")
+    dealer_share_per_bucket: Decimal = Field(default=Decimal("0.05"), description="Dealer claim share per bucket")
 
     # NBFI lender parameters
     lender_share: Decimal = Field(default=Decimal("0.10"), description="Lender capital fraction")

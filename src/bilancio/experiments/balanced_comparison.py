@@ -528,7 +528,7 @@ class BalancedComparisonConfig(BaseModel):
         default=Decimal("20"), description="Face value S (cashflow at maturity)"
     )
     outside_mid_ratios: list[Decimal] = Field(
-        default_factory=lambda: [Decimal("1.0")],
+        default_factory=lambda: [Decimal("0.90")],
         description="M/S ratios to sweep (kept for backward compat; VBT pricing now uses kappa-informed prior)",
     )
     big_entity_share: Decimal = Field(
