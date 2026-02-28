@@ -737,6 +737,15 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 profit_target=config.lender.profit_target,
                 max_loan_maturity=config.lender.max_loan_maturity or config.lender.maturity_days,
                 min_coverage_ratio=config.lender.min_coverage_ratio,
+                maturity_matching=config.lender.maturity_matching,
+                min_loan_maturity=config.lender.min_loan_maturity,
+                max_loans_per_borrower_per_day=config.lender.max_loans_per_borrower_per_day,
+                ranking_mode=config.lender.ranking_mode,
+                cascade_weight=config.lender.cascade_weight,
+                coverage_mode=config.lender.coverage_mode,
+                coverage_penalty_scale=config.lender.coverage_penalty_scale,
+                preventive_lending=config.lender.preventive_lending,
+                prevention_threshold=config.lender.prevention_threshold,
             )
 
         # Create NBFI RiskAssessor when profile has risk_assessment_params
@@ -786,6 +795,15 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
             risk_assessor=nbfi_risk_assessor,
             initial_prior=lending_initial_prior,
             min_coverage_ratio=config.lender.min_coverage_ratio,
+            maturity_matching=config.lender.maturity_matching,
+            min_loan_maturity=config.lender.min_loan_maturity,
+            max_loans_per_borrower_per_day=config.lender.max_loans_per_borrower_per_day,
+            ranking_mode=config.lender.ranking_mode,
+            cascade_weight=config.lender.cascade_weight,
+            coverage_mode=config.lender.coverage_mode,
+            coverage_penalty_scale=config.lender.coverage_penalty_scale,
+            preventive_lending=config.lender.preventive_lending,
+            prevention_threshold=config.lender.prevention_threshold,
         )
 
     # Set up rating agency config if present in scenario

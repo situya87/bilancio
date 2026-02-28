@@ -307,6 +307,15 @@ class RingSweepRunner:
         lender_mode: bool = False,
         lender_share: Decimal = Decimal("0.10"),
         lender_min_coverage: Decimal = Decimal("0.5"),
+        lender_maturity_matching: bool = False,
+        lender_min_loan_maturity: int = 2,
+        lender_max_loans_per_borrower_per_day: int = 0,
+        lender_ranking_mode: str = "profit",
+        lender_cascade_weight: Decimal = Decimal("0.5"),
+        lender_coverage_mode: str = "gate",
+        lender_coverage_penalty_scale: Decimal = Decimal("0.10"),
+        lender_preventive_lending: bool = False,
+        lender_prevention_threshold: Decimal = Decimal("0.3"),
         balanced_mode_override: str | None = None,
         n_banks: int = 0,
         reserve_multiplier: float = 10.0,
@@ -361,6 +370,15 @@ class RingSweepRunner:
         self.lender_mode = lender_mode
         self.lender_share = lender_share
         self.lender_min_coverage = lender_min_coverage
+        self.lender_maturity_matching = lender_maturity_matching
+        self.lender_min_loan_maturity = lender_min_loan_maturity
+        self.lender_max_loans_per_borrower_per_day = lender_max_loans_per_borrower_per_day
+        self.lender_ranking_mode = lender_ranking_mode
+        self.lender_cascade_weight = lender_cascade_weight
+        self.lender_coverage_mode = lender_coverage_mode
+        self.lender_coverage_penalty_scale = lender_coverage_penalty_scale
+        self.lender_preventive_lending = lender_preventive_lending
+        self.lender_prevention_threshold = lender_prevention_threshold
         self.balanced_mode_override = balanced_mode_override
         self.n_banks = n_banks
         self.reserve_multiplier = reserve_multiplier
@@ -776,6 +794,15 @@ class RingSweepRunner:
                     "planning_horizon": 5,
                     "profit_target": "0.05",
                     "min_coverage_ratio": str(self.lender_min_coverage),
+                    "maturity_matching": self.lender_maturity_matching,
+                    "min_loan_maturity": self.lender_min_loan_maturity,
+                    "max_loans_per_borrower_per_day": self.lender_max_loans_per_borrower_per_day,
+                    "ranking_mode": self.lender_ranking_mode,
+                    "cascade_weight": str(self.lender_cascade_weight),
+                    "coverage_mode": self.lender_coverage_mode,
+                    "coverage_penalty_scale": str(self.lender_coverage_penalty_scale),
+                    "preventive_lending": self.lender_preventive_lending,
+                    "prevention_threshold": str(self.lender_prevention_threshold),
                 }
 
         if self.default_handling:
@@ -1179,6 +1206,15 @@ class RingSweepRunner:
                     "planning_horizon": 5,
                     "profit_target": "0.05",
                     "min_coverage_ratio": str(self.lender_min_coverage),
+                    "maturity_matching": self.lender_maturity_matching,
+                    "min_loan_maturity": self.lender_min_loan_maturity,
+                    "max_loans_per_borrower_per_day": self.lender_max_loans_per_borrower_per_day,
+                    "ranking_mode": self.lender_ranking_mode,
+                    "cascade_weight": str(self.lender_cascade_weight),
+                    "coverage_mode": self.lender_coverage_mode,
+                    "coverage_penalty_scale": str(self.lender_coverage_penalty_scale),
+                    "preventive_lending": self.lender_preventive_lending,
+                    "prevention_threshold": str(self.lender_prevention_threshold),
                 }
 
         if self.default_handling:

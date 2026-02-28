@@ -917,6 +917,43 @@ class LenderScenarioConfig(BaseModel):
         default=Decimal("0"), description="Min coverage ratio for borrower assessment (0=disabled)"
     )
 
+    # Phase 1A: Maturity matching (Plan 046)
+    maturity_matching: bool = Field(
+        default=False, description="Match loan maturity to borrower's next receivable"
+    )
+    min_loan_maturity: int = Field(
+        default=2, description="Floor for loan maturity when matching"
+    )
+
+    # Phase 1B: Concentration limits (Plan 046)
+    max_loans_per_borrower_per_day: int = Field(
+        default=0, description="Max loans per borrower per day (0=unlimited)"
+    )
+
+    # Phase 2: Cascade-aware ranking (Plan 046)
+    ranking_mode: str = Field(
+        default="profit", description="Ranking mode: profit, cascade, or blended"
+    )
+    cascade_weight: Decimal = Field(
+        default=Decimal("0.5"), description="Weight for cascade score in blended mode"
+    )
+
+    # Phase 3: Graduated coverage gate (Plan 046)
+    coverage_mode: str = Field(
+        default="gate", description="Coverage gate mode: gate or graduated"
+    )
+    coverage_penalty_scale: Decimal = Field(
+        default=Decimal("0.10"), description="Rate premium per unit below coverage threshold"
+    )
+
+    # Phase 4: Preventive lending (Plan 046)
+    preventive_lending: bool = Field(
+        default=False, description="Enable proactive lending to at-risk agents"
+    )
+    prevention_threshold: Decimal = Field(
+        default=Decimal("0.3"), description="Min issuer default probability to trigger preventive lending"
+    )
+
 
 class RatingAgencyScenarioConfig(BaseModel):
     """Rating agency configuration within a scenario."""

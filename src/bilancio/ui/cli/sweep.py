@@ -762,6 +762,58 @@ def sweep_comparison(
     help="NBFI min coverage ratio for borrower assessment (default: 0.5)",
 )
 @click.option(
+    "--lender-maturity-matching/--no-lender-maturity-matching",
+    default=False,
+    help="Match NBFI loan maturity to borrower's next receivable (default: disabled)",
+)
+@click.option(
+    "--lender-min-loan-maturity",
+    type=int,
+    default=2,
+    help="Floor for NBFI loan maturity when matching (default: 2)",
+)
+@click.option(
+    "--lender-max-loans-per-borrower-per-day",
+    type=int,
+    default=0,
+    help="Max NBFI loans per borrower per day, 0=unlimited (default: 0)",
+)
+@click.option(
+    "--lender-ranking-mode",
+    type=click.Choice(["profit", "cascade", "blended"]),
+    default="profit",
+    help="NBFI ranking mode (default: profit)",
+)
+@click.option(
+    "--lender-cascade-weight",
+    type=Decimal,
+    default=Decimal("0.5"),
+    help="Weight for cascade score in blended ranking (default: 0.5)",
+)
+@click.option(
+    "--lender-coverage-mode",
+    type=click.Choice(["gate", "graduated"]),
+    default="gate",
+    help="NBFI coverage gate mode (default: gate)",
+)
+@click.option(
+    "--lender-coverage-penalty-scale",
+    type=Decimal,
+    default=Decimal("0.10"),
+    help="Rate premium per unit below coverage threshold (default: 0.10)",
+)
+@click.option(
+    "--lender-preventive-lending/--no-lender-preventive-lending",
+    default=False,
+    help="Enable NBFI proactive lending to at-risk agents (default: disabled)",
+)
+@click.option(
+    "--lender-prevention-threshold",
+    type=Decimal,
+    default=Decimal("0.3"),
+    help="Min issuer default probability to trigger preventive lending (default: 0.3)",
+)
+@click.option(
     "--trading-rounds",
     type=click.IntRange(min=1),
     default=100,
@@ -833,6 +885,15 @@ def sweep_balanced(
     n_banks: int,
     reserve_multiplier: float,
     lender_min_coverage: Decimal,
+    lender_maturity_matching: bool,
+    lender_min_loan_maturity: int,
+    lender_max_loans_per_borrower_per_day: int,
+    lender_ranking_mode: str,
+    lender_cascade_weight: Decimal,
+    lender_coverage_mode: str,
+    lender_coverage_penalty_scale: Decimal,
+    lender_preventive_lending: bool,
+    lender_prevention_threshold: Decimal,
     trading_rounds: int,
     issuer_specific_pricing: bool,
     flow_sensitivity: Decimal,
@@ -960,6 +1021,15 @@ def sweep_balanced(
         equalize_bank_capacity=equalize_bank_capacity,
         min_coverage_ratio=min_coverage_ratio,
         lender_min_coverage=lender_min_coverage,
+        lender_maturity_matching=lender_maturity_matching,
+        lender_min_loan_maturity=lender_min_loan_maturity,
+        lender_max_loans_per_borrower_per_day=lender_max_loans_per_borrower_per_day,
+        lender_ranking_mode=lender_ranking_mode,
+        lender_cascade_weight=lender_cascade_weight,
+        lender_coverage_mode=lender_coverage_mode,
+        lender_coverage_penalty_scale=lender_coverage_penalty_scale,
+        lender_preventive_lending=lender_preventive_lending,
+        lender_prevention_threshold=lender_prevention_threshold,
         cb_lending_cutoff_day=cb_lending_cutoff_day,
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,
