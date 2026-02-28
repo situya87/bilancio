@@ -259,6 +259,20 @@ def _update_vbt_credit_mids(
     # Use system-wide default estimate (no specific issuer)
     p_default = subsystem.risk_assessor.estimate_default_prob("_system_", current_day)
 
+    # Store system-wide default prob (needed for issuer-specific adjustment delta)
+    subsystem.system_default_prob = p_default
+
+    # Compute per-issuer default probs when issuer-specific pricing is enabled
+    if subsystem.issuer_specific_pricing:
+        subsystem.issuer_default_probs.clear()
+        seen_issuers: set[str] = set()
+        for ticket in subsystem.tickets.values():
+            if ticket.issuer_id not in seen_issuers:
+                seen_issuers.add(ticket.issuer_id)
+                subsystem.issuer_default_probs[ticket.issuer_id] = (
+                    subsystem.risk_assessor.estimate_default_prob(ticket.issuer_id, current_day)
+                )
+
     pricing_model = subsystem.vbt_pricing_model
 
     if pricing_model is not None:

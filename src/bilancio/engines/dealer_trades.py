@@ -28,6 +28,25 @@ from bilancio.dealer.models import (
 )
 
 
+def _get_issuer_price_adjustment(subsystem: DealerSubsystem, issuer_id: str) -> Decimal:
+    """Returns price multiplier for issuer-specific pricing.
+
+    adjustment_i = P_i - P_system (issuer excess risk)
+    multiplier = max(0, 1 - adjustment_i)
+
+    When P_i = P_system, multiplier = 1 (no change).
+    When P_i > P_system, multiplier < 1 (riskier issuer, lower price).
+    When P_i < P_system, multiplier > 1 (safer issuer, higher price, bounded by probability range).
+    """
+    if not subsystem.issuer_specific_pricing:
+        return Decimal(1)
+    p_system = subsystem.system_default_prob
+    p_issuer = subsystem.issuer_default_probs.get(issuer_id, p_system)
+    adjustment = p_issuer - p_system
+    # Floor at 0 to prevent negative prices; natural ceiling is ~1+P_system
+    return max(Decimal(0), Decimal(1) - adjustment)
+
+
 def _compute_trader_safety_margin(subsystem: DealerSubsystem, trader_id: str) -> Decimal:
     """Compute safety margin for a specific trader."""
     trader = subsystem.traders.get(trader_id)
@@ -246,9 +265,13 @@ def _execute_sell_trade(
     result = subsystem.executor.execute_customer_sell(dealer, vbt, ticket, check_assertions=False)
 
     if result.executed:
+        # Apply issuer-specific price adjustment (Feature 1)
+        price_factor = _get_issuer_price_adjustment(subsystem, ticket.issuer_id)
+        adjusted_price = result.price * price_factor
+
         # Scale price by ticket face value
         # The dealer module returns unit price (per S=1), but our tickets have actual face values
-        scaled_price = result.price * ticket.face
+        scaled_price = adjusted_price * ticket.face
 
         # Update trader state
         trader.tickets_owned.remove(ticket)
@@ -265,7 +288,7 @@ def _execute_sell_trade(
             bucket_id,
             current_day,
             scaled_price,
-            result.price,
+            adjusted_price,
             result.is_passthrough,
             is_liquidity_driven,
             pre_dealer_inventory,
@@ -558,8 +581,12 @@ def _execute_buy_trade(
                 recompute_dealer_state(dealer, vbt, subsystem.params)
                 continue
 
+            # Apply issuer-specific price adjustment (Feature 1)
+            price_factor = _get_issuer_price_adjustment(subsystem, result.ticket.issuer_id)
+            adjusted_price = result.price * price_factor
+
             # Scale price by ticket face value
-            scaled_price = result.price * result.ticket.face
+            scaled_price = adjusted_price * result.ticket.face
 
             # Pre-trade solvency check: trader must be able to afford scaled price
             if trader.cash < scaled_price:
@@ -619,7 +646,7 @@ def _execute_buy_trade(
                 bucket_id,
                 current_day,
                 scaled_price,
-                result.price,
+                adjusted_price,
                 result.is_passthrough,
                 pre_dealer_inventory,
                 pre_dealer_cash,
