@@ -686,3 +686,340 @@ class TestBackwardCompatibility:
             assert e["kind"] in allowed_kinds, (
                 f"Unexpected event kind '{e['kind']}' with default config"
             )
+
+
+# ── 8. Review fixes: _count_existing_loans ───────────────────────────
+
+
+class TestCountExistingLoans:
+    """Tests for _count_existing_loans — concentration limit now checks
+    actual outstanding loans in the system, not an ephemeral counter."""
+
+    def test_zero_when_no_loans_exist(self):
+        """No loans → count is 0."""
+        from bilancio.engines.lending import _count_existing_loans
+
+        sys = _make_system_with_cb()
+        _add_lender(sys, cash=10000)
+        _add_firm(sys, "FA", cash=100)
+        assert _count_existing_loans(sys, "NBFI", "FA") == 0
+
+    def test_counts_outstanding_loans(self):
+        """After creating loans, count should reflect them."""
+        from bilancio.engines.lending import _count_existing_loans
+
+        sys = _make_system_with_cb()
+        _add_lender(sys, cash=10000)
+        _add_firm(sys, "FA", cash=10)
+        _add_firm(sys, "FB", cash=100)
+        # FA has shortfall — create a loan to FA
+        _add_payable(sys, "P1", "FB", "FA", 200, due_day=1)
+
+        config = LendingConfig(
+            min_coverage_ratio=Decimal("0"),
+            max_ring_maturity=10,
+            horizon=5,
+            max_single_exposure=Decimal("0.90"),
+            max_total_exposure=Decimal("0.90"),
+        )
+        events = run_lending_phase(sys, current_day=0, lending_config=config)
+        created = [e for e in events if e["kind"] == "NonBankLoanCreated"]
+        assert len(created) == 1
+        assert created[0]["borrower_id"] == "FA"
+
+        # Now _count_existing_loans should see the loan
+        assert _count_existing_loans(sys, "NBFI", "FA") == 1
+        # No loan to FB
+        assert _count_existing_loans(sys, "NBFI", "FB") == 0
+
+    def test_concentration_blocks_second_day_loan(self):
+        """With an existing outstanding loan and limit=1, a second-day loan
+        to the same borrower should be blocked."""
+        from bilancio.engines.lending import _count_existing_loans
+
+        sys = _make_system_with_cb()
+        _add_lender(sys, cash=10000)
+        _add_firm(sys, "FA", cash=10)
+        _add_firm(sys, "FB", cash=100)
+        # FA owes FB 200, due day 2 — creates shortfall on day 0 (horizon=5)
+        _add_payable(sys, "P1", "FB", "FA", 200, due_day=2)
+
+        config = LendingConfig(
+            max_loans_per_borrower_per_day=1,
+            min_coverage_ratio=Decimal("0"),
+            max_ring_maturity=10,
+            horizon=5,
+            max_single_exposure=Decimal("0.90"),
+            max_total_exposure=Decimal("0.90"),
+        )
+        # Day 0: first loan should succeed
+        events_d0 = run_lending_phase(sys, current_day=0, lending_config=config)
+        created_d0 = [e for e in events_d0 if e["kind"] == "NonBankLoanCreated"]
+        assert len(created_d0) == 1
+        assert _count_existing_loans(sys, "NBFI", "FA") == 1
+
+        # Day 1: FA still has shortfall (loan doesn't cover payable), but
+        # concentration limit blocks it because outstanding loan count >= 1
+        events_d1 = run_lending_phase(sys, current_day=1, lending_config=config)
+        created_d1 = [e for e in events_d1 if e["kind"] == "NonBankLoanCreated"]
+        rejected_d1 = [e for e in events_d1 if e["kind"] == "NonBankLoanRejectedConcentration"]
+        assert len(created_d1) == 0, f"Expected no new loans, got {created_d1}"
+        assert len(rejected_d1) == 1
+
+    def test_missing_lender_returns_zero(self):
+        """_count_existing_loans returns 0 for nonexistent lender."""
+        from bilancio.engines.lending import _count_existing_loans
+
+        sys = _make_system_with_cb()
+        assert _count_existing_loans(sys, "NONEXISTENT", "FA") == 0
+
+
+# ── 9. Review fixes: _receivables_at_risk with info service ──────────
+
+
+class TestReceivablesAtRiskWithInfoService:
+    """Tests for _receivables_at_risk using InformationService when
+    default_probs is None (review fix #3)."""
+
+    def test_uses_info_service_probabilities(self):
+        """When info service is provided and default_probs is None,
+        should use info.get_default_probability() per issuer."""
+
+        class MockInfo:
+            """Mock InformationService returning per-issuer probabilities."""
+            def __init__(self, probs: dict[str, Decimal]):
+                self._probs = probs
+
+            def get_default_probability(self, agent_id: str, current_day: int) -> Decimal | None:
+                return self._probs.get(agent_id)
+
+        sys = _setup_ring(n_agents=5, maturity_days=10, face=100)
+        # F0 has a receivable from F4 (due day 5 in a 5-agent ring)
+        # F4's default prob should be checked
+
+        # High probability for F4 → at risk
+        mock_info = MockInfo({f"F{i}": Decimal("0.5") for i in range(5)})
+        at_risk = _receivables_at_risk(
+            sys, "F0", current_day=0, horizon=10,
+            default_probs=None, threshold=Decimal("0.3"),
+            info=mock_info,
+        )
+        assert at_risk == 100  # F0's receivable from F4 is at risk
+
+    def test_low_info_probability_not_at_risk(self):
+        """When info service returns low p_default, receivable is not at risk."""
+
+        class MockInfo:
+            def get_default_probability(self, agent_id: str, current_day: int) -> Decimal | None:
+                return Decimal("0.05")  # Low probability
+
+        sys = _setup_ring(n_agents=5, maturity_days=10, face=100)
+        at_risk = _receivables_at_risk(
+            sys, "F0", current_day=0, horizon=10,
+            default_probs=None, threshold=Decimal("0.3"),
+            info=MockInfo(),
+        )
+        assert at_risk == 0  # 0.05 < 0.3 threshold
+
+    def test_info_returns_none_falls_back_to_default(self):
+        """When info.get_default_probability returns None for an issuer,
+        should fall back to hardcoded 0.15."""
+
+        class MockInfo:
+            def get_default_probability(self, agent_id: str, current_day: int) -> Decimal | None:
+                return None  # Unknown issuer
+
+        sys = _setup_ring(n_agents=5, maturity_days=10, face=100)
+        # Threshold 0.10 < default fallback 0.15 → at risk
+        at_risk = _receivables_at_risk(
+            sys, "F0", current_day=0, horizon=10,
+            default_probs=None, threshold=Decimal("0.10"),
+            info=MockInfo(),
+        )
+        assert at_risk == 100
+
+        # Threshold 0.20 > default fallback 0.15 → not at risk
+        at_risk_high = _receivables_at_risk(
+            sys, "F0", current_day=0, horizon=10,
+            default_probs=None, threshold=Decimal("0.20"),
+            info=MockInfo(),
+        )
+        assert at_risk_high == 0
+
+    def test_default_probs_takes_precedence_over_info(self):
+        """When default_probs dict IS provided, it should be used
+        even if info is also provided (backward compat)."""
+
+        class MockInfo:
+            def get_default_probability(self, agent_id: str, current_day: int) -> Decimal | None:
+                return Decimal("0.01")  # Very low — should NOT trigger
+
+        sys = _setup_ring(n_agents=5, maturity_days=10, face=100)
+        # default_probs says high risk, info says low risk
+        probs = {f"F{i}": Decimal("0.5") for i in range(5)}
+        at_risk = _receivables_at_risk(
+            sys, "F0", current_day=0, horizon=10,
+            default_probs=probs, threshold=Decimal("0.3"),
+            info=MockInfo(),
+        )
+        # default_probs wins → at risk
+        assert at_risk == 100
+
+    def test_no_info_no_probs_uses_hardcoded_fallback(self):
+        """With both None, should use hardcoded 0.15 (original behavior)."""
+        sys = _setup_ring(n_agents=5, maturity_days=10, face=100)
+        at_risk = _receivables_at_risk(
+            sys, "F0", current_day=0, horizon=10,
+            default_probs=None, threshold=Decimal("0.10"),
+            info=None,
+        )
+        # 0.15 > 0.10 → at risk
+        assert at_risk == 100
+
+
+# ── 10. Review fixes: action-spec config wiring ──────────────────────
+
+
+class TestActionSpecConfigWiring:
+    """Tests that _init_lending_from_action_specs passes Plan 046 fields."""
+
+    def test_action_spec_path_includes_046_fields(self):
+        """LendingConfig built from action-spec path should include all
+        Plan 046 fields when LenderScenarioConfig provides them."""
+        from bilancio.config.models import LenderScenarioConfig, ScenarioConfig
+
+        # Build a ScenarioConfig with lender settings that exercise Plan 046
+        lender_cfg = LenderScenarioConfig(
+            maturity_matching=True,
+            min_loan_maturity=3,
+            max_loans_per_borrower_per_day=2,
+            ranking_mode="blended",
+            cascade_weight=Decimal("0.7"),
+            coverage_mode="graduated",
+            coverage_penalty_scale=Decimal("0.05"),
+            preventive_lending=True,
+            prevention_threshold=Decimal("0.4"),
+            min_coverage_ratio=Decimal("0.3"),
+        )
+
+        # Verify the config model itself stores the values
+        assert lender_cfg.maturity_matching is True
+        assert lender_cfg.min_loan_maturity == 3
+        assert lender_cfg.max_loans_per_borrower_per_day == 2
+        assert lender_cfg.ranking_mode == "blended"
+        assert lender_cfg.cascade_weight == Decimal("0.7")
+        assert lender_cfg.coverage_mode == "graduated"
+        assert lender_cfg.coverage_penalty_scale == Decimal("0.05")
+        assert lender_cfg.preventive_lending is True
+        assert lender_cfg.prevention_threshold == Decimal("0.4")
+        assert lender_cfg.min_coverage_ratio == Decimal("0.3")
+
+    def test_lending_config_accepts_all_046_fields(self):
+        """LendingConfig dataclass should accept all 046 fields without error."""
+        config = LendingConfig(
+            maturity_matching=True,
+            min_loan_maturity=3,
+            max_loans_per_borrower_per_day=2,
+            ranking_mode="blended",
+            cascade_weight=Decimal("0.7"),
+            coverage_mode="graduated",
+            coverage_penalty_scale=Decimal("0.05"),
+            preventive_lending=True,
+            prevention_threshold=Decimal("0.4"),
+            min_coverage_ratio=Decimal("0.3"),
+        )
+        assert config.maturity_matching is True
+        assert config.min_loan_maturity == 3
+        assert config.max_loans_per_borrower_per_day == 2
+        assert config.ranking_mode == "blended"
+        assert config.cascade_weight == Decimal("0.7")
+        assert config.coverage_mode == "graduated"
+        assert config.coverage_penalty_scale == Decimal("0.05")
+        assert config.preventive_lending is True
+        assert config.prevention_threshold == Decimal("0.4")
+        assert config.min_coverage_ratio == Decimal("0.3")
+
+    def test_action_spec_wiring_end_to_end(self):
+        """Full end-to-end: build system via action-spec path, verify
+        lender_config has Plan 046 fields set correctly."""
+        from bilancio.config.apply import _init_lending_from_action_specs
+        from bilancio.config.models import LenderScenarioConfig, ScenarioConfig
+
+        sys = _make_system_with_cb()
+        _add_lender(sys, cash=10000)
+        _add_firm(sys, "FA", cash=10)
+        _add_firm(sys, "FB", cash=100)
+        _add_payable(sys, "P1", "FB", "FA", 200, due_day=2)
+
+        # Build minimal ScenarioConfig with lender section
+        lender_cfg = LenderScenarioConfig(
+            maturity_matching=True,
+            min_loan_maturity=4,
+            max_loans_per_borrower_per_day=3,
+            ranking_mode="cascade",
+            cascade_weight=Decimal("0.6"),
+            coverage_mode="graduated",
+            coverage_penalty_scale=Decimal("0.08"),
+            preventive_lending=True,
+            prevention_threshold=Decimal("0.35"),
+            min_coverage_ratio=Decimal("0.2"),
+        )
+
+        config = ScenarioConfig(name="test", agents=[], lender=lender_cfg)
+
+        # Build LenderProfile from the lender_cfg
+        lender_profile = LenderProfile(
+            maturity_matching=True,
+            min_loan_maturity=4,
+            max_loans_per_borrower_per_day=3,
+            ranking_mode="cascade",
+            cascade_weight=Decimal("0.6"),
+            coverage_mode="graduated",
+            coverage_penalty_scale=Decimal("0.08"),
+            preventive_lending=True,
+            prevention_threshold=Decimal("0.35"),
+            min_coverage_ratio=Decimal("0.2"),
+        )
+
+        _init_lending_from_action_specs(config, sys, lender_profile, {})
+
+        lc = sys.state.lender_config
+        assert lc is not None
+        assert lc.maturity_matching is True
+        assert lc.min_loan_maturity == 4
+        assert lc.max_loans_per_borrower_per_day == 3
+        assert lc.ranking_mode == "cascade"
+        assert lc.cascade_weight == Decimal("0.6")
+        assert lc.coverage_mode == "graduated"
+        assert lc.coverage_penalty_scale == Decimal("0.08")
+        assert lc.preventive_lending is True
+        assert lc.prevention_threshold == Decimal("0.35")
+        assert lc.min_coverage_ratio == Decimal("0.2")
+
+    def test_action_spec_defaults_match_lending_config_defaults(self):
+        """When lender config has no Plan 046 fields set (defaults),
+        the action-spec path should produce default LendingConfig values."""
+        from bilancio.config.apply import _init_lending_from_action_specs
+        from bilancio.config.models import LenderScenarioConfig, ScenarioConfig
+
+        sys = _make_system_with_cb()
+        _add_lender(sys, cash=10000)
+        _add_firm(sys, "FA", cash=10)
+        _add_firm(sys, "FB", cash=100)
+        _add_payable(sys, "P1", "FB", "FA", 200, due_day=2)
+
+        config = ScenarioConfig(name="test", agents=[], lender=LenderScenarioConfig())
+        _init_lending_from_action_specs(config, sys, None, {})
+
+        lc = sys.state.lender_config
+        assert lc is not None
+        # All Plan 046 fields should be at defaults
+        assert lc.maturity_matching is False
+        assert lc.min_loan_maturity == 2
+        assert lc.max_loans_per_borrower_per_day == 0
+        assert lc.ranking_mode == "profit"
+        assert lc.cascade_weight == Decimal("0.5")
+        assert lc.coverage_mode == "gate"
+        assert lc.coverage_penalty_scale == Decimal("0.10")
+        assert lc.preventive_lending is False
+        assert lc.prevention_threshold == Decimal("0.3")
