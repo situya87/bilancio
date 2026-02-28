@@ -688,6 +688,18 @@ class BalancedComparisonConfig(BaseModel):
         default=False,
         description="Enable per-issuer risk pricing overlay",
     )
+    flow_sensitivity: Decimal = Field(
+        default=Decimal("0.0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="VBT flow-aware ask widening (0=disabled, 1=max)",
+    )
+    dealer_concentration_limit: Decimal = Field(
+        default=Decimal("0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="Max fraction of dealer inventory from single issuer (0=disabled)",
+    )
 
 
 class BalancedComparisonRunner:
@@ -1075,6 +1087,8 @@ class BalancedComparisonRunner:
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
             issuer_specific_pricing=self.config.issuer_specific_pricing,
+            flow_sensitivity=self.config.flow_sensitivity,
+            dealer_concentration_limit=self.config.dealer_concentration_limit,
         )
 
     def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1131,6 +1145,8 @@ class BalancedComparisonRunner:
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
             issuer_specific_pricing=self.config.issuer_specific_pricing,
+            flow_sensitivity=self.config.flow_sensitivity,
+            dealer_concentration_limit=self.config.dealer_concentration_limit,
         )
 
     def _get_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1185,6 +1201,8 @@ class BalancedComparisonRunner:
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
             issuer_specific_pricing=self.config.issuer_specific_pricing,
+            flow_sensitivity=self.config.flow_sensitivity,
+            dealer_concentration_limit=self.config.dealer_concentration_limit,
         )
 
     def _get_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1244,6 +1262,8 @@ class BalancedComparisonRunner:
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
             issuer_specific_pricing=self.config.issuer_specific_pricing,
+            flow_sensitivity=self.config.flow_sensitivity,
+            dealer_concentration_limit=self.config.dealer_concentration_limit,
         )
 
     def _get_dealer_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1308,6 +1328,8 @@ class BalancedComparisonRunner:
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
             issuer_specific_pricing=self.config.issuer_specific_pricing,
+            flow_sensitivity=self.config.flow_sensitivity,
+            dealer_concentration_limit=self.config.dealer_concentration_limit,
         )
 
     def _get_bank_passive_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1362,6 +1384,8 @@ class BalancedComparisonRunner:
             cb_lending_cutoff_day=effective_cutoff,
             trading_rounds=self.config.trading_rounds,
             issuer_specific_pricing=self.config.issuer_specific_pricing,
+            flow_sensitivity=self.config.flow_sensitivity,
+            dealer_concentration_limit=self.config.dealer_concentration_limit,
         )
 
     def _get_bank_dealer_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1421,6 +1445,8 @@ class BalancedComparisonRunner:
             cb_lending_cutoff_day=effective_cutoff,
             trading_rounds=self.config.trading_rounds,
             issuer_specific_pricing=self.config.issuer_specific_pricing,
+            flow_sensitivity=self.config.flow_sensitivity,
+            dealer_concentration_limit=self.config.dealer_concentration_limit,
         )
 
     def _get_bank_dealer_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1483,6 +1509,8 @@ class BalancedComparisonRunner:
             cb_lending_cutoff_day=effective_cutoff,
             trading_rounds=self.config.trading_rounds,
             issuer_specific_pricing=self.config.issuer_specific_pricing,
+            flow_sensitivity=self.config.flow_sensitivity,
+            dealer_concentration_limit=self.config.dealer_concentration_limit,
         )
 
     def run_all(self) -> list[BalancedComparisonResult]:

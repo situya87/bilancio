@@ -693,6 +693,7 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 mid_sensitivity=config.balanced_dealer.vbt_mid_sensitivity,
                 spread_sensitivity=config.balanced_dealer.vbt_spread_sensitivity,
                 spread_scale=config.balanced_dealer.spread_scale,
+                flow_sensitivity=config.balanced_dealer.flow_sensitivity,
             )
 
             system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
@@ -713,6 +714,7 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
             )
             system.state.dealer_subsystem.trading_rounds = config.balanced_dealer.trading_rounds
             system.state.dealer_subsystem.issuer_specific_pricing = config.balanced_dealer.issuer_specific_pricing
+            system.state.dealer_subsystem.dealer_concentration_limit = config.balanced_dealer.dealer_concentration_limit
         else:
             system.state.dealer_subsystem = initialize_dealer_subsystem(
                 system, dealer_ring_config, risk_params=risk_params
@@ -912,11 +914,6 @@ def _init_dealer_from_action_specs(
     from bilancio.dealer.simulation import DealerRingConfig
     from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
 
-    if trader_profile is None:
-        trader_profile = TraderProfile()
-    if vbt_profile is None:
-        vbt_profile = VBTProfile()
-
     # balanced_dealer config is required for dealer initialization —
     # it carries topology parameters (face_value, outside_mid_ratio, etc.)
     # that cannot be defaulted from action_specs alone.
@@ -926,6 +923,16 @@ def _init_dealer_from_action_specs(
             "action_specs request B_Dealer phase but no balanced_dealer config is present. "
             "Include a balanced_dealer section with enabled=true in the scenario, "
             "or use the ring compiler with emit_action_specs=True which emits both."
+        )
+
+    if trader_profile is None:
+        trader_profile = TraderProfile()
+    if vbt_profile is None:
+        vbt_profile = VBTProfile(
+            mid_sensitivity=bd.vbt_mid_sensitivity,
+            spread_sensitivity=bd.vbt_spread_sensitivity,
+            spread_scale=bd.spread_scale,
+            flow_sensitivity=bd.flow_sensitivity,
         )
 
     # Read risk_assessment from dealer config
@@ -996,6 +1003,7 @@ def _init_dealer_from_action_specs(
     )
     system.state.dealer_subsystem.trading_rounds = bd.trading_rounds
     system.state.dealer_subsystem.issuer_specific_pricing = bd.issuer_specific_pricing
+    system.state.dealer_subsystem.dealer_concentration_limit = bd.dealer_concentration_limit
 
 
 def _init_lending_from_action_specs(

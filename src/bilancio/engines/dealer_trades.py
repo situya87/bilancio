@@ -47,6 +47,26 @@ def _get_issuer_price_adjustment(subsystem: DealerSubsystem, issuer_id: str) -> 
     return max(Decimal(0), Decimal(1) - adjustment)
 
 
+def _check_concentration_limit(
+    subsystem: DealerSubsystem, ticket: Ticket,
+) -> bool:
+    """Return True if accepting ticket would breach issuer concentration limit."""
+    limit = subsystem.dealer_concentration_limit
+    if limit <= 0:
+        return False
+    # Check across ALL dealer buckets (global exposure)
+    issuer_count = 0
+    total_count = 0
+    for d in subsystem.dealers.values():
+        for t in d.inventory:
+            total_count += 1
+            if t.issuer_id == ticket.issuer_id:
+                issuer_count += 1
+    post_total = total_count + 1
+    post_issuer = issuer_count + 1
+    return (Decimal(post_issuer) / Decimal(post_total)) > limit
+
+
 def _compute_trader_safety_margin(subsystem: DealerSubsystem, trader_id: str) -> Decimal:
     """Compute safety margin for a specific trader."""
     trader = subsystem.traders.get(trader_id)
@@ -258,6 +278,18 @@ def _execute_sell_trade(
         current_day,
         events,
     ):
+        return Decimal(0)
+
+    # Concentration limit check (Feature 3)
+    if _check_concentration_limit(subsystem, ticket):
+        events.append({
+            "type": "sell_rejected_concentration",
+            "day": current_day,
+            "trader_id": trader_id,
+            "bucket_id": bucket_id,
+            "issuer_id": ticket.issuer_id,
+            "limit": str(subsystem.dealer_concentration_limit),
+        })
         return Decimal(0)
 
     # Execute customer sell

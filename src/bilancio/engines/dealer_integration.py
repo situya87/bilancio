@@ -198,6 +198,10 @@ class DealerSubsystem:
     issuer_default_probs: dict[str, Decimal] = field(default_factory=dict)
     system_default_prob: Decimal = Decimal(0)
 
+    # Concentration limit (Feature 3): max fraction of total dealer inventory
+    # from a single issuer.  0 = disabled (no limit).
+    dealer_concentration_limit: Decimal = Decimal(0)
+
 
 
 def get_trader_assessor(subsystem: DealerSubsystem, trader_id: AgentId) -> RiskAssessor | None:
