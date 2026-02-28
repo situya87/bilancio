@@ -48,7 +48,7 @@ class LendingConfig:
     min_coverage_ratio: Decimal = Decimal("0")
     maturity_matching: bool = False
     min_loan_maturity: int = 2
-    max_loans_per_borrower_per_day: int = 0  # 0 = unlimited
+    max_loans_per_borrower_per_day: int = 0  # 0 = unlimited; caps outstanding loans per borrower
     ranking_mode: str = "profit"  # "profit" | "cascade" | "blended"
     cascade_weight: Decimal = Decimal("0.5")
     coverage_mode: str = "gate"  # "gate" | "graduated"
@@ -120,7 +120,6 @@ def run_lending_phase(
     profile = config.lender_profile
     portfolio, screener, selector, pricer = _resolve_protocols(config)
     events: list[dict[str, Any]] = []
-    daily_loan_count: dict[str, int] = {}  # Plan 046: concentration limit tracking
 
     # Find the lender
     lender_id = None
@@ -359,10 +358,10 @@ def run_lending_phase(
         if loan_amount <= 0:
             continue
 
-        # Phase 1B: Concentration limit (Plan 046)
+        # Phase 1B: Concentration limit — cap outstanding loans per borrower (Plan 046)
         if config.max_loans_per_borrower_per_day > 0:
             borrower_id = opp["borrower_id"]
-            count = daily_loan_count.get(borrower_id, 0)
+            count = _count_existing_loans(system, lender_id, borrower_id)
             if count >= config.max_loans_per_borrower_per_day:
                 events.append({
                     "kind": "NonBankLoanRejectedConcentration",
@@ -410,7 +409,6 @@ def run_lending_phase(
                 maturity_days=effective_maturity,
             )
             remaining_capital -= loan_amount
-            daily_loan_count[opp["borrower_id"]] = daily_loan_count.get(opp["borrower_id"], 0) + 1
             events.append(
                 {
                     "kind": "NonBankLoanCreated",
@@ -463,6 +461,7 @@ def run_lending_phase(
             at_risk = _receivables_at_risk(
                 system, agent_id, current_day, config.horizon,
                 default_probs, config.prevention_threshold,
+                info=info,
             )
             if at_risk <= 0:
                 continue
@@ -494,9 +493,9 @@ def run_lending_phase(
             base_rate = profile.profit_target
             rate = base_rate + profile.risk_premium_scale * p_default
 
-            # Concentration limit check
+            # Concentration limit check — cap outstanding loans per borrower
             if config.max_loans_per_borrower_per_day > 0:
-                count = daily_loan_count.get(agent_id, 0)
+                count = _count_existing_loans(system, lender_id, agent_id)
                 if count >= config.max_loans_per_borrower_per_day:
                     continue
 
@@ -547,7 +546,6 @@ def run_lending_phase(
                     maturity_days=effective_maturity,
                 )
                 remaining_capital -= loan_amount
-                daily_loan_count[opp["borrower_id"]] = daily_loan_count.get(opp["borrower_id"], 0) + 1
                 events.append({
                     "kind": "NonBankLoanCreatedPreventive",
                     "day": current_day,
@@ -610,6 +608,32 @@ def run_loan_repayments(system: System, current_day: int) -> list[dict[str, Any]
 
 
 # ── Helper functions ─────────────────────────────────────────────────
+
+
+def _count_existing_loans(system: System, lender_id: str, borrower_id: str) -> int:
+    """Count outstanding (non-repaid) loans from lender to borrower.
+
+    Iterates over the lender's assets looking for NON_BANK_LOAN instruments
+    whose liability_issuer_id matches the borrower.  Settled/repaid loans
+    are removed from asset_ids by the repayment flow, so every contract
+    found here is still active.
+    """
+    from bilancio.domain.instruments.base import InstrumentKind
+
+    count = 0
+    lender = system.state.agents.get(lender_id)
+    if lender is None:
+        return 0
+    for cid in lender.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None:
+            continue
+        if (
+            contract.kind == InstrumentKind.NON_BANK_LOAN
+            and contract.liability_issuer_id == borrower_id
+        ):
+            count += 1
+    return count
 
 
 def _get_agent_cash(system: System, agent_id: str) -> int:
@@ -1017,6 +1041,7 @@ def _receivables_at_risk(
     horizon: int,
     default_probs: dict[str, Decimal] | None,
     threshold: Decimal,
+    info: Any | None = None,
 ) -> int:
     """Sum of receivables where issuer's default probability exceeds threshold.
 
@@ -1039,6 +1064,10 @@ def _receivables_at_risk(
         issuer_id = contract.liability_issuer_id
         if default_probs is not None:
             p = default_probs.get(issuer_id, Decimal("0.15"))
+        elif info is not None:
+            p = info.get_default_probability(issuer_id, current_day)
+            if p is None:
+                p = Decimal("0.15")
         else:
             p = Decimal("0.15")
         if p >= threshold:
