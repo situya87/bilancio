@@ -193,6 +193,11 @@ class DealerSubsystem:
     # run until no intentions remain (early-termination at line 670).
     trading_rounds: int = 100
 
+    # Issuer-specific pricing overlay (Feature 1)
+    issuer_specific_pricing: bool = False
+    issuer_default_probs: dict[str, Decimal] = field(default_factory=dict)
+    system_default_prob: Decimal = Decimal(0)
+
 
 
 def get_trader_assessor(subsystem: DealerSubsystem, trader_id: AgentId) -> RiskAssessor | None:

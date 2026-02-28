@@ -796,6 +796,10 @@ class BalancedDealerConfig(BaseModel):
         ge=1,
         description="Max trading sub-rounds per day; loop exits early when no intentions remain",
     )
+    issuer_specific_pricing: bool = Field(
+        default=False,
+        description="Enable per-issuer risk pricing (lower bids for riskier issuers)",
+    )
 
     @field_validator("trading_motive")
     @classmethod

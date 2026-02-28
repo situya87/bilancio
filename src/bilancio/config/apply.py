@@ -672,6 +672,11 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 buy_premium_multiplier=config.dealer.risk_assessment.buy_premium_multiplier,
             )
 
+            # Enable per-issuer tracking in BeliefTracker when issuer-specific pricing is on
+            if config.balanced_dealer and config.balanced_dealer.enabled and config.balanced_dealer.issuer_specific_pricing:
+                from dataclasses import replace as dc_replace
+                risk_params = dc_replace(risk_params, use_issuer_specific=True)
+
         if config.balanced_dealer and config.balanced_dealer.enabled:
             from bilancio.decision import TraderProfile, VBTProfile
             from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
@@ -707,6 +712,7 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 vbt_profile=vbt_profile,
             )
             system.state.dealer_subsystem.trading_rounds = config.balanced_dealer.trading_rounds
+            system.state.dealer_subsystem.issuer_specific_pricing = config.balanced_dealer.issuer_specific_pricing
         else:
             system.state.dealer_subsystem = initialize_dealer_subsystem(
                 system, dealer_ring_config, risk_params=risk_params
@@ -967,6 +973,11 @@ def _init_dealer_from_action_specs(
         seed=42,
     )
 
+    # Enable per-issuer tracking in BeliefTracker when issuer-specific pricing is on
+    if bd.issuer_specific_pricing and risk_params is not None:
+        from dataclasses import replace as dc_replace
+        risk_params = dc_replace(risk_params, use_issuer_specific=True)
+
     system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
         system,
         dealer_ring_config,
@@ -984,6 +995,7 @@ def _init_dealer_from_action_specs(
         vbt_profile=vbt_profile,
     )
     system.state.dealer_subsystem.trading_rounds = bd.trading_rounds
+    system.state.dealer_subsystem.issuer_specific_pricing = bd.issuer_specific_pricing
 
 
 def _init_lending_from_action_specs(

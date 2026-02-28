@@ -768,6 +768,11 @@ def sweep_comparison(
     help="Max trading sub-rounds per day; loop exits early when no intentions remain (default: 100)",
 )
 @click.option(
+    "--issuer-specific-pricing/--no-issuer-specific-pricing",
+    default=False,
+    help="Enable per-issuer risk pricing (lower bids for riskier issuers, default: disabled)",
+)
+@click.option(
     "--equalize-bank-capacity/--no-equalize-bank-capacity",
     default=True,
     help="Equalize bank reserves to match non-bank intermediary capital (default: True)",
@@ -817,6 +822,7 @@ def sweep_balanced(
     reserve_multiplier: float,
     lender_min_coverage: Decimal,
     trading_rounds: int,
+    issuer_specific_pricing: bool,
     equalize_bank_capacity: bool,
 ) -> None:
     """
@@ -944,6 +950,7 @@ def sweep_balanced(
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,
         trading_rounds=trading_rounds,
+        issuer_specific_pricing=issuer_specific_pricing,
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)

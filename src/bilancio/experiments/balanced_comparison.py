@@ -684,6 +684,10 @@ class BalancedComparisonConfig(BaseModel):
         ge=1,
         description="Number of trading sub-rounds per day (1=current behavior, higher=more throughput)",
     )
+    issuer_specific_pricing: bool = Field(
+        default=False,
+        description="Enable per-issuer risk pricing overlay",
+    )
 
 
 class BalancedComparisonRunner:
@@ -1070,6 +1074,7 @@ class BalancedComparisonRunner:
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
+            issuer_specific_pricing=self.config.issuer_specific_pricing,
         )
 
     def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1125,6 +1130,7 @@ class BalancedComparisonRunner:
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
+            issuer_specific_pricing=self.config.issuer_specific_pricing,
         )
 
     def _get_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1178,6 +1184,7 @@ class BalancedComparisonRunner:
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
+            issuer_specific_pricing=self.config.issuer_specific_pricing,
         )
 
     def _get_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1236,6 +1243,7 @@ class BalancedComparisonRunner:
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
+            issuer_specific_pricing=self.config.issuer_specific_pricing,
         )
 
     def _get_dealer_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1299,6 +1307,7 @@ class BalancedComparisonRunner:
             cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
+            issuer_specific_pricing=self.config.issuer_specific_pricing,
         )
 
     def _get_bank_passive_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1352,6 +1361,7 @@ class BalancedComparisonRunner:
             spread_scale=self.config.spread_scale,
             cb_lending_cutoff_day=effective_cutoff,
             trading_rounds=self.config.trading_rounds,
+            issuer_specific_pricing=self.config.issuer_specific_pricing,
         )
 
     def _get_bank_dealer_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1410,6 +1420,7 @@ class BalancedComparisonRunner:
             spread_scale=self.config.spread_scale,
             cb_lending_cutoff_day=effective_cutoff,
             trading_rounds=self.config.trading_rounds,
+            issuer_specific_pricing=self.config.issuer_specific_pricing,
         )
 
     def _get_bank_dealer_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1471,6 +1482,7 @@ class BalancedComparisonRunner:
             spread_scale=self.config.spread_scale,
             cb_lending_cutoff_day=effective_cutoff,
             trading_rounds=self.config.trading_rounds,
+            issuer_specific_pricing=self.config.issuer_specific_pricing,
         )
 
     def run_all(self) -> list[BalancedComparisonResult]:
