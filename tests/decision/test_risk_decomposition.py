@@ -1057,3 +1057,114 @@ class TestParamsImmutability:
 
         assert assessor1.position_assessor.base_risk_premium == Decimal("0")
         assert assessor2.position_assessor.base_risk_premium == Decimal("0.1")
+
+
+# ===========================================================================
+# Urgency sensitivity default (0.30) regression tests
+#
+# At urgency_sensitivity=0.10 (old default), moderately stressed sellers
+# reject realistic dealer bids because the threshold barely budges.
+# At 0.30, the same sellers accept — unlocking meaningful dealer trading.
+# ===========================================================================
+
+
+class TestUrgencySensitivityDefault:
+    """Regression tests: urgency_sensitivity=0.30 enables meaningful trading."""
+
+    def test_default_is_030(self):
+        """The default urgency_sensitivity should be 0.30."""
+        params = RiskAssessmentParams()
+        assert params.urgency_sensitivity == Decimal("0.30")
+
+    def test_moderate_stress_seller_accepts_at_030(self):
+        """A moderately stressed seller accepts a realistic bid at 0.30.
+
+        Scenario: seller has cash=30, shortfall=20, assets=50 (wealth=80).
+        No history: P=0.15, EV = 0.85 * 20 = 17.
+        Dealer bids 0.80 => offer = 16.
+
+        At 0.30: threshold = 0 - 0.30 * (20/80) = -0.075
+                 threshold_abs = -0.075 * 20 = -1.5
+                 Need: 16 >= 17 + (-1.5) = 15.5 => True (accepts)
+
+        At 0.10: threshold = 0 - 0.10 * (20/80) = -0.025
+                 threshold_abs = -0.025 * 20 = -0.5
+                 Need: 16 >= 17 + (-0.5) = 16.5 => False (rejects)
+        """
+        ticket = _MockTicket()
+
+        # New default (0.30): seller accepts
+        ra_new = RiskAssessor(RiskAssessmentParams())
+        assert ra_new.should_sell(
+            ticket,
+            dealer_bid=Decimal("0.80"),
+            current_day=0,
+            trader_cash=Decimal("30"),
+            trader_shortfall=Decimal("20"),
+            trader_asset_value=Decimal("50"),
+        ) is True
+
+        # Old default (0.10): same seller rejects the same bid
+        ra_old = RiskAssessor(
+            RiskAssessmentParams(urgency_sensitivity=Decimal("0.10"))
+        )
+        assert ra_old.should_sell(
+            ticket,
+            dealer_bid=Decimal("0.80"),
+            current_day=0,
+            trader_cash=Decimal("30"),
+            trader_shortfall=Decimal("20"),
+            trader_asset_value=Decimal("50"),
+        ) is False
+
+    def test_threshold_gap_widens_with_stress(self):
+        """Higher stress amplifies the gap between 0.10 and 0.30.
+
+        At high urgency ratios, the 3x difference in sensitivity produces
+        a proportionally larger threshold gap — exactly the mechanism that
+        unlocks dealer trading in stressed systems.
+        """
+        ticket = _MockTicket()
+        ra_new = RiskAssessor(RiskAssessmentParams())
+        ra_old = RiskAssessor(
+            RiskAssessmentParams(urgency_sensitivity=Decimal("0.10"))
+        )
+
+        # Low stress: shortfall=5, wealth=100, urgency=0.05
+        t_new_low = ra_new.compute_effective_threshold(
+            Decimal("50"), Decimal("5"), Decimal("50"),
+        )
+        t_old_low = ra_old.compute_effective_threshold(
+            Decimal("50"), Decimal("5"), Decimal("50"),
+        )
+        gap_low = abs(t_new_low - t_old_low)
+
+        # High stress: shortfall=40, wealth=80, urgency=0.5
+        t_new_high = ra_new.compute_effective_threshold(
+            Decimal("30"), Decimal("40"), Decimal("50"),
+        )
+        t_old_high = ra_old.compute_effective_threshold(
+            Decimal("30"), Decimal("40"), Decimal("50"),
+        )
+        gap_high = abs(t_new_high - t_old_high)
+
+        # Gap grows with stress (3x ratio preserved)
+        assert gap_high > gap_low
+        assert gap_high / gap_low == Decimal("10")  # urgency ratio 10x higher
+
+    def test_no_stress_unaffected_by_default(self):
+        """When shortfall=0, urgency_sensitivity doesn't matter."""
+        ticket = _MockTicket()
+        ra_new = RiskAssessor(RiskAssessmentParams())
+        ra_old = RiskAssessor(
+            RiskAssessmentParams(urgency_sensitivity=Decimal("0.10"))
+        )
+
+        # Both should return base_risk_premium (0)
+        t_new = ra_new.compute_effective_threshold(
+            Decimal("50"), Decimal("0"), Decimal("50"),
+        )
+        t_old = ra_old.compute_effective_threshold(
+            Decimal("50"), Decimal("0"), Decimal("50"),
+        )
+        assert t_new == t_old == Decimal("0")
