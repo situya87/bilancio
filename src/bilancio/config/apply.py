@@ -973,6 +973,11 @@ def _init_dealer_from_action_specs(
         seed=42,
     )
 
+    # Enable per-issuer tracking in BeliefTracker when issuer-specific pricing is on
+    if bd.issuer_specific_pricing and risk_params is not None:
+        from dataclasses import replace as dc_replace
+        risk_params = dc_replace(risk_params, use_issuer_specific=True)
+
     system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
         system,
         dealer_ring_config,

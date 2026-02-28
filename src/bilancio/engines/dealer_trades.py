@@ -269,6 +269,17 @@ def _execute_sell_trade(
         price_factor = _get_issuer_price_adjustment(subsystem, ticket.issuer_id)
         adjusted_price = result.price * price_factor
 
+        # Correct dealer/VBT cash to match the adjusted price.
+        # The kernel already moved cash at result.price (unit level).
+        # Refund the delta so both sides of the trade agree.
+        price_delta = result.price - adjusted_price
+        if price_delta != 0:
+            if result.is_passthrough:
+                vbt.cash += price_delta
+            else:
+                dealer.cash += price_delta
+            recompute_dealer_state(dealer, vbt, subsystem.params)
+
         # Scale price by ticket face value
         # The dealer module returns unit price (per S=1), but our tickets have actual face values
         scaled_price = adjusted_price * ticket.face
@@ -630,6 +641,18 @@ def _execute_buy_trade(
                 _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
                 recompute_dealer_state(dealer, vbt, subsystem.params)
                 continue  # Try next bucket
+
+            # Correct dealer/VBT cash to match the adjusted price.
+            # The kernel already moved cash at result.price (unit level).
+            # Claw back the excess so both sides of the trade agree.
+            # Placed after all rejection gates so reversals stay simple.
+            price_delta = result.price - adjusted_price
+            if price_delta != 0:
+                if result.is_passthrough:
+                    vbt.cash -= price_delta
+                else:
+                    dealer.cash -= price_delta
+                recompute_dealer_state(dealer, vbt, subsystem.params)
 
             # Track VBT flow (passthrough buy → VBT sold to customer).
             # Updated here (after all rejection gates) so reversed trades
