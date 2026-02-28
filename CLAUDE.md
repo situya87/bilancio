@@ -575,10 +575,11 @@ uv run bilancio run examples/scenarios/simple_dealer.yaml \
 ## NBFI Lender Specification
 
 **MANDATORY**: Before running `sweep balanced` with `--enable-lender` (passive vs NBFI lender comparison), read `docs/spec/nbfi_decision_profiles.md` and verify that:
-1. The parameters you are about to use match the spec (or the user has explicitly requested different values)
-2. Any deviation from the spec defaults is flagged to the user before running
-3. The spec documents all Plan 046 features (maturity matching, concentration limits, cascade ranking, graduated coverage, preventive lending) — be aware these all default to OFF for backward compatibility
-4. When Plan 046 features are enabled, flag which ones and their non-default values to the user
+1. **Arms**: Run only passive + lender arms. Do NOT include the active (dealer) or dealer+lender arms — dealer trading dominates and masks the NBFI effect. To measure dealer impact, use the dealer spec instead.
+2. The parameters you are about to use match the spec (or the user has explicitly requested different values)
+3. Any deviation from the spec defaults is flagged to the user before running
+4. The spec documents all Plan 046 features (maturity matching, concentration limits, cascade ranking, graduated coverage, preventive lending) — be aware these all default to OFF for backward compatibility
+5. When Plan 046 features are enabled, flag which ones and their non-default values to the user
 
 ## Sweep Pre-Flight: Interactive Parameter Review
 
