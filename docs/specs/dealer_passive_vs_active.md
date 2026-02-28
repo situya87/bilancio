@@ -42,8 +42,8 @@ These parameters define the macroeconomic environment. They vary across sweep gr
 |-----------|--------|---------|----------|
 | `kappa` | κ | sweep grid | Liquidity ratio L₀/S₁. Cash in system relative to total debt. Lower = more stressed. |
 | `concentration` | c | 1 | Dirichlet parameter for debt distribution. Lower = more unequal (some agents owe much more). |
-| `mu` | μ | 0 | Maturity timing skew. 0 = early due dates, 1 = late. |
-| `outside_mid_ratio` | ρ | 1.0 | Outside money discount. VBT mid starts at ρ × (1 − P_default). |
+| `mu` | μ | 0.5 | Maturity timing skew. 0 = early due dates, 1 = late. Note: code default is 0 but 0.5 (even spread) is the standard operational value. |
+| `outside_mid_ratio` | ρ | 0.90 | Outside money discount. VBT mid starts at ρ × (1 − P_default). Note: code default is 1.0 but ρ=1.0 makes buys impossible (§7.2); 0.90 is the standard operational value. |
 | `seed` | — | 42 | PRNG seed for ring construction and trading randomization. |
 
 ### 2.3 Scale Parameters
