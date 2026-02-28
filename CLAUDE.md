@@ -558,6 +558,20 @@ uv run bilancio run examples/scenarios/simple_dealer.yaml \
 
 ---
 
+## Dealer Passive vs Active Specification
+
+**MANDATORY**: Before running `sweep balanced` (dealer passive vs active), read `docs/specs/dealer_passive_vs_active.md` and verify that:
+1. The parameters you are about to use match the spec (or the user has explicitly requested different values)
+2. Any deviation from the spec defaults is flagged to the user before running
+3. The spec documents the effective `BalancedComparisonConfig` defaults — be aware these override raw dataclass defaults (e.g. `base_risk_premium=0.02`, `trading_motive=liquidity_then_earning`, `dealer_share=0.125`, `vbt_share=0.25`)
+
+## Bank Sweep Specification
+
+**MANDATORY**: Before running `sweep bank` (bank_idle vs bank_lend), read `docs/analysis/bank_idle_vs_bank_lend_specification.md` and verify that:
+1. The parameters you are about to use match the spec (or the user has explicitly requested different values)
+2. Any deviation from the spec defaults is flagged to the user before running
+3. The spec documents the three layers of defaults (CLI, BankComparisonConfig, BankProfile) — be aware that CLI defaults have NO credit risk pricing (`credit_risk_loading=0`, `max_borrower_risk=1.0`)
+
 ## Sweep Pre-Flight: Interactive Parameter Review
 
 **MANDATORY**: Before running ANY simulation or sweep (however simple), present the full parameter review below to the user. Do NOT run until the user confirms. This ensures every run is deliberate and reproducible.
