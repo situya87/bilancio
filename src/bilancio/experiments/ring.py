@@ -306,7 +306,7 @@ class RingSweepRunner:
         trading_motive: str = "liquidity_then_earning",
         lender_mode: bool = False,
         lender_share: Decimal = Decimal("0.10"),
-        lender_min_coverage: Decimal = Decimal("0"),
+        lender_min_coverage: Decimal = Decimal("0.5"),
         balanced_mode_override: str | None = None,
         n_banks: int = 0,
         reserve_multiplier: float = 10.0,
