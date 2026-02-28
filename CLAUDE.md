@@ -572,6 +572,14 @@ uv run bilancio run examples/scenarios/simple_dealer.yaml \
 2. Any deviation from the spec defaults is flagged to the user before running
 3. The spec documents the three layers of defaults (CLI, BankComparisonConfig, BankProfile) — be aware that CLI defaults have NO credit risk pricing (`credit_risk_loading=0`, `max_borrower_risk=1.0`)
 
+## NBFI Lender Specification
+
+**MANDATORY**: Before running `sweep balanced` with `--enable-lender` (passive vs NBFI lender comparison), read `docs/spec/nbfi_decision_profiles.md` and verify that:
+1. The parameters you are about to use match the spec (or the user has explicitly requested different values)
+2. Any deviation from the spec defaults is flagged to the user before running
+3. The spec documents all Plan 046 features (maturity matching, concentration limits, cascade ranking, graduated coverage, preventive lending) — be aware these all default to OFF for backward compatibility
+4. When Plan 046 features are enabled, flag which ones and their non-default values to the user
+
 ## Sweep Pre-Flight: Interactive Parameter Review
 
 **MANDATORY**: Before running ANY simulation or sweep (however simple), present the full parameter review below to the user. Do NOT run until the user confirms. This ensures every run is deliberate and reproducible.
@@ -620,7 +628,7 @@ Present the following table to the user. Show the **current value** (from CLI ar
 | Parameter | Default | Current | Description | Effect |
 |-----------|---------|---------|-------------|--------|
 | `risk_aversion` | 0 | ? | 0=risk-neutral, 1=max risk-averse | Higher → pickier buyers (buy_premium = 0.01 + 0.02×RA) |
-| `planning_horizon` | 10 | ? | Days to look ahead (1-20) | sell_horizon = PH, buy_horizon = PH/2 |
+| `planning_horizon` | 10 | ? | Days to look ahead (1-20) | sell_horizon = PH, buy_horizon = PH |
 | `aggressiveness` | 1.0 | ? | 0=conservative buyer, 1=eager | Lower → higher surplus needed to buy |
 | `buy_reserve_fraction` | 0.5 | ? | Fraction of upcoming dues reserved | Lower → more buyers eligible, less prudent |
 | `default_observability` | 1.0 | ? | 0=ignore defaults, 1=full tracking | Lower → agents slower to react to defaults |
