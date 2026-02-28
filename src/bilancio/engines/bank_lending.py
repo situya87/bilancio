@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from bilancio.core.atomic_tx import atomic
 from bilancio.domain.agent import AgentKind
+from bilancio.banking.pricing_kernel import compute_integrated_rate
 from bilancio.domain.instruments.base import InstrumentKind
 
 if TYPE_CHECKING:
@@ -67,7 +68,14 @@ def run_bank_lending_phase(
         if quote is None:
             continue
 
-        r_L = quote.loan_rate
+        _, r_L = compute_integrated_rate(
+            current_inventory=quote.inventory,
+            amount=shortfall,
+            direction=-1,  # loan = inventory decreases
+            cash_tightness=quote.cash_tightness,
+            risk_index=quote.risk_index,
+            params=bank_state.pricing_params,
+        )
 
         # Per-borrower credit risk pricing
         adjusted_rate = _per_borrower_rate(r_L, borrower_id, banking, current_day)
@@ -118,6 +126,7 @@ def run_bank_lending_phase(
         )
 
         if loan_id:
+            import math
             events.append({
                 "kind": "BankLoanIssued",
                 "day": current_day,
@@ -127,6 +136,7 @@ def run_bank_lending_phase(
                 "rate": str(r_L),
                 "maturity_day": current_day + banking.loan_maturity,
                 "loan_id": loan_id,
+                "n_tickets": max(1, math.ceil(shortfall / bank_state.pricing_params.ticket_size)),
             })
 
     return events

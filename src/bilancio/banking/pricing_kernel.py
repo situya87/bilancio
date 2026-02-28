@@ -207,6 +207,63 @@ def compute_quotes(
     )
 
 
+def compute_integrated_rate(
+    current_inventory: int,
+    amount: int,
+    direction: int,
+    cash_tightness: Decimal,
+    risk_index: Decimal,
+    params: PricingParams,
+) -> tuple[Decimal, Decimal]:
+    """Compute integrated (r_D, r_L) for a multi-ticket transaction.
+
+    The bank internally counts ceil(amount / ticket_size) tickets.
+    Each ticket shifts inventory by ``direction * ticket_size``.
+    Because the midline is linear, the average rate equals the rate
+    at the midpoint of the inventory walk.
+
+    Args:
+        current_inventory: x = R_{t+2} - R^tar (current position on funding plane)
+        amount: Transaction size in minor units
+        direction: -1 for loans/withdrawals (inventory decreases),
+                   +1 for deposit inflows (inventory increases)
+        cash_tightness: L* (10-day shortfall metric)
+        risk_index: ρ (shortfall risk + book-gap index)
+        params: Pricing parameters including ticket_size
+
+    Returns:
+        (integrated_r_D, integrated_r_L) — the average deposit and loan
+        rates across all ticket positions in the walk.
+    """
+    import math
+
+    n_tickets = max(1, math.ceil(amount / params.ticket_size))
+
+    # Total inventory walk across all tickets (excluding the starting position).
+    # Ticket i is priced at current_inventory + direction * i * ticket_size.
+    # The midpoint of positions 0 .. n-1 is at index (n-1)/2.
+    total_walk = (n_tickets - 1) * params.ticket_size
+    midpoint_shift = Decimal(direction * total_walk) / 2
+
+    midpoint_inventory = current_inventory + int(midpoint_shift)
+
+    # Compute tilted midline at the midpoint position
+    midline = compute_tilted_midline(
+        midpoint_inventory, cash_tightness, risk_index, params,
+    )
+
+    half_width = params.inside_width / 2
+
+    r_bid = midline - half_width
+    r_ask = midline + half_width
+
+    # Ceiling discipline on deposits (same as compute_quotes)
+    r_deposit = min(r_bid, params.cb_borrowing_rate)
+    r_deposit = max(r_deposit, Decimal("0"))
+
+    return r_deposit, r_ask
+
+
 def compute_inventory(
     projected_reserves_t2: int,
     reserve_target: int,
