@@ -619,7 +619,48 @@ class TestLenderProfileValidation:
         assert profile.preventive_lending is True
 
 
-# ── 7. Backward compatibility ──────────────────────────────────────
+# ── 7. LendingConfig validation ─────────────────────────────────────
+
+
+class TestLendingConfigValidation:
+    """Tests for LendingConfig field validation."""
+
+    def test_invalid_ranking_mode(self):
+        with pytest.raises(ValueError, match="ranking_mode"):
+            LendingConfig(ranking_mode="invalid")
+
+    def test_invalid_coverage_mode(self):
+        with pytest.raises(ValueError, match="coverage_mode"):
+            LendingConfig(coverage_mode="invalid")
+
+    def test_invalid_cascade_weight_above_one(self):
+        with pytest.raises(ValueError, match="cascade_weight"):
+            LendingConfig(cascade_weight=Decimal("1.5"))
+
+    def test_invalid_cascade_weight_negative(self):
+        with pytest.raises(ValueError, match="cascade_weight"):
+            LendingConfig(cascade_weight=Decimal("-0.1"))
+
+    def test_invalid_prevention_threshold_bounds(self):
+        with pytest.raises(ValueError, match="prevention_threshold"):
+            LendingConfig(prevention_threshold=Decimal("0"))
+        with pytest.raises(ValueError, match="prevention_threshold"):
+            LendingConfig(prevention_threshold=Decimal("1"))
+
+    def test_invalid_min_loan_maturity(self):
+        with pytest.raises(ValueError, match="min_loan_maturity"):
+            LendingConfig(min_loan_maturity=0)
+
+    def test_invalid_max_loans_negative(self):
+        with pytest.raises(ValueError, match="max_loans_per_borrower_per_day"):
+            LendingConfig(max_loans_per_borrower_per_day=-1)
+
+    def test_invalid_coverage_penalty_scale_negative(self):
+        with pytest.raises(ValueError, match="coverage_penalty_scale"):
+            LendingConfig(coverage_penalty_scale=Decimal("-0.1"))
+
+
+# ── 8. Backward compatibility ──────────────────────────────────────
 
 
 class TestBackwardCompatibility:
@@ -688,7 +729,7 @@ class TestBackwardCompatibility:
             )
 
 
-# ── 8. Review fixes: _count_existing_loans ───────────────────────────
+# ── 9. Review fixes: _count_existing_loans ───────────────────────────
 
 
 class TestCountExistingLoans:

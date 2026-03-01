@@ -922,28 +922,30 @@ class LenderScenarioConfig(BaseModel):
         default=False, description="Match loan maturity to borrower's next receivable"
     )
     min_loan_maturity: int = Field(
-        default=2, description="Floor for loan maturity when matching"
+        default=2, ge=1, description="Floor for loan maturity when matching"
     )
 
     # Phase 1B: Concentration limits (Plan 046)
     max_loans_per_borrower_per_day: int = Field(
-        default=0, description="Max loans per borrower per day (0=unlimited)"
+        default=0, ge=0, description="Max loans per borrower per day (0=unlimited)"
     )
 
     # Phase 2: Cascade-aware ranking (Plan 046)
-    ranking_mode: str = Field(
+    ranking_mode: Literal["profit", "cascade", "blended"] = Field(
         default="profit", description="Ranking mode: profit, cascade, or blended"
     )
     cascade_weight: Decimal = Field(
-        default=Decimal("0.5"), description="Weight for cascade score in blended mode"
+        default=Decimal("0.5"), ge=Decimal("0"), le=Decimal("1"),
+        description="Weight for cascade score in blended mode"
     )
 
     # Phase 3: Graduated coverage gate (Plan 046)
-    coverage_mode: str = Field(
+    coverage_mode: Literal["gate", "graduated"] = Field(
         default="gate", description="Coverage gate mode: gate or graduated"
     )
     coverage_penalty_scale: Decimal = Field(
-        default=Decimal("0.10"), description="Rate premium per unit below coverage threshold"
+        default=Decimal("0.10"), ge=Decimal("0"),
+        description="Rate premium per unit below coverage threshold"
     )
 
     # Phase 4: Preventive lending (Plan 046)
@@ -951,7 +953,8 @@ class LenderScenarioConfig(BaseModel):
         default=False, description="Enable proactive lending to at-risk agents"
     )
     prevention_threshold: Decimal = Field(
-        default=Decimal("0.3"), description="Min issuer default probability to trigger preventive lending"
+        default=Decimal("0.3"), gt=Decimal("0"), lt=Decimal("1"),
+        description="Min issuer default probability to trigger preventive lending"
     )
 
 
