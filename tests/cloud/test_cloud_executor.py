@@ -136,7 +136,7 @@ class TestCloudConfig:
         assert config.volume_name == "bilancio-results"
         assert config.timeout_seconds == 600
         assert config.memory_mb == 2048
-        assert config.max_parallel == 50
+        assert config.max_parallel == 10
         assert config.gpu is None
 
     def test_env_override(self, monkeypatch):
@@ -146,8 +146,10 @@ class TestCloudConfig:
         monkeypatch.setenv("BILANCIO_MODAL_VOLUME", "custom-volume")
         monkeypatch.setenv("BILANCIO_CLOUD_TIMEOUT", "1200")
         monkeypatch.setenv("BILANCIO_CLOUD_MEMORY", "4096")
+        monkeypatch.setenv("BILANCIO_CLOUD_MAX_PARALLEL", "24")
 
         config = CloudConfig()
         assert config.volume_name == "custom-volume"
         assert config.timeout_seconds == 1200
         assert config.memory_mb == 4096
+        assert config.max_parallel == 24

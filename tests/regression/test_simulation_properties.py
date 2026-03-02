@@ -590,3 +590,54 @@ def test_banking_differs_from_passive():
         f"defaults={defaults_passive}, CB loans passive={cb_loans_passive}, "
         f"CB loans banking={cb_loans_banking}"
     )
+
+
+@pytest.mark.regression
+def test_stylized_fact_liquidity_shortfall_produces_defaults():
+    """Stylized fact: severe liquidity shortfall should trigger defaults.
+
+    In ring payment systems with fixed obligations, kappa << 1 means agents
+    cannot settle all obligations from cash buffers, so default incidence
+    should be non-zero.
+    """
+    sys = build_ring_system(
+        n_agents=12,
+        cash_per_agent=20,
+        payable_amount=100,
+        maturity_days=5,
+        seed=42,
+    )
+    run_until_stable(sys, max_days=10)
+
+    defaults = count_defaults(sys)
+    assert defaults >= 1, f"Expected defaults under stylized low-kappa stress, got {defaults}"
+
+
+@pytest.mark.regression
+def test_stylized_fact_nbfi_credit_supply_emits_loans():
+    """Stylized fact: NBFI credit supply should activate under shortfalls."""
+    sys = build_ring_system(
+        n_agents=12,
+        cash_per_agent=20,
+        payable_amount=100,
+        maturity_days=5,
+        seed=42,
+    )
+
+    lender = NonBankLender(id="NBFI1", name="Non-Bank Lender")
+    sys.add_agent(lender)
+    sys.mint_cash("NBFI1", 3000)
+
+    sys.state.lender_config = LendingConfig(
+        base_rate=Decimal("0.05"),
+        risk_premium_scale=Decimal("0.20"),
+        max_single_exposure=Decimal("0.20"),
+        max_total_exposure=Decimal("0.90"),
+        maturity_days=3,
+        horizon=5,
+        min_shortfall=1,
+    )
+    run_until_stable(sys, max_days=10, enable_lender=True)
+
+    loan_count = count_events(sys, "NonBankLoanCreated")
+    assert loan_count >= 1, f"Expected NBFI loans under stylized shortfall scenario, got {loan_count}"

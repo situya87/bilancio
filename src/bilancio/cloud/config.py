@@ -28,7 +28,7 @@ class CloudConfig:
     )
     memory_mb: int = field(default_factory=lambda: int(os.getenv("BILANCIO_CLOUD_MEMORY", "2048")))
     max_parallel: int = field(
-        default_factory=lambda: int(os.getenv("BILANCIO_CLOUD_MAX_PARALLEL", "50"))
+        default_factory=lambda: int(os.getenv("BILANCIO_CLOUD_MAX_PARALLEL", "10"))
     )
 
     # GPU configuration (for future ML workloads)
