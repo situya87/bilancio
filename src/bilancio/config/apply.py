@@ -1087,49 +1087,26 @@ def _init_lending_from_action_specs(
 
         lending_initial_prior = kappa_informed_prior(_lender_kappa)
 
-    # Resolve Plan 044/046 fields: prefer lc (scenario config), then lender_profile, then defaults
+    # Resolve Plan 044/046 fields: prefer scenario config, then lender_profile, then defaults.
     _lp = lender_profile  # shorthand
 
-    min_coverage_ratio = (
-        lc.min_coverage_ratio if lc else
-        (_lp.min_coverage_ratio if _lp and hasattr(_lp, "min_coverage_ratio") else Decimal("0"))
-    )
-    maturity_matching = (
-        lc.maturity_matching if lc else
-        (_lp.maturity_matching if _lp and hasattr(_lp, "maturity_matching") else False)
-    )
-    min_loan_maturity = (
-        lc.min_loan_maturity if lc else
-        (_lp.min_loan_maturity if _lp and hasattr(_lp, "min_loan_maturity") else 2)
-    )
-    max_loans_per_borrower_per_day = (
-        lc.max_loans_per_borrower_per_day if lc else
-        (_lp.max_loans_per_borrower_per_day if _lp and hasattr(_lp, "max_loans_per_borrower_per_day") else 0)
-    )
-    ranking_mode = (
-        lc.ranking_mode if lc else
-        (_lp.ranking_mode if _lp and hasattr(_lp, "ranking_mode") else "profit")
-    )
-    cascade_weight = (
-        lc.cascade_weight if lc else
-        (_lp.cascade_weight if _lp and hasattr(_lp, "cascade_weight") else Decimal("0.5"))
-    )
-    coverage_mode = (
-        lc.coverage_mode if lc else
-        (_lp.coverage_mode if _lp and hasattr(_lp, "coverage_mode") else "gate")
-    )
-    coverage_penalty_scale = (
-        lc.coverage_penalty_scale if lc else
-        (_lp.coverage_penalty_scale if _lp and hasattr(_lp, "coverage_penalty_scale") else Decimal("0.10"))
-    )
-    preventive_lending = (
-        lc.preventive_lending if lc else
-        (_lp.preventive_lending if _lp and hasattr(_lp, "preventive_lending") else False)
-    )
-    prevention_threshold = (
-        lc.prevention_threshold if lc else
-        (_lp.prevention_threshold if _lp and hasattr(_lp, "prevention_threshold") else Decimal("0.3"))
-    )
+    def _resolve_lender_value(field: str, default: Any) -> Any:
+        if lc is not None:
+            return getattr(lc, field)
+        if _lp is not None and hasattr(_lp, field):
+            return getattr(_lp, field)
+        return default
+
+    min_coverage_ratio = _resolve_lender_value("min_coverage_ratio", Decimal("0"))
+    maturity_matching = _resolve_lender_value("maturity_matching", False)
+    min_loan_maturity = _resolve_lender_value("min_loan_maturity", 2)
+    max_loans_per_borrower_per_day = _resolve_lender_value("max_loans_per_borrower_per_day", 0)
+    ranking_mode = _resolve_lender_value("ranking_mode", "profit")
+    cascade_weight = _resolve_lender_value("cascade_weight", Decimal("0.5"))
+    coverage_mode = _resolve_lender_value("coverage_mode", "gate")
+    coverage_penalty_scale = _resolve_lender_value("coverage_penalty_scale", Decimal("0.10"))
+    preventive_lending = _resolve_lender_value("preventive_lending", False)
+    prevention_threshold = _resolve_lender_value("prevention_threshold", Decimal("0.3"))
 
     system.state.lender_config = LendingConfig(
         base_rate=base_rate,

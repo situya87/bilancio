@@ -562,6 +562,60 @@ def _record_buy_trade(
     )
 
 
+def _build_buy_bucket_order(subsystem: DealerSubsystem, motive: str) -> list[str]:
+    """Return bucket iteration order for buy attempts based on trading motive."""
+    if motive in ("liquidity_only", "liquidity_then_earning"):
+        # Prefer buckets maturing soonest for liquidity-oriented buyers.
+        tau_min_by_name = {bc.name: bc.tau_min for bc in subsystem.bucket_configs}
+        return sorted(subsystem.dealers.keys(), key=lambda b: tau_min_by_name.get(b, 999))
+
+    bucket_ids = list(subsystem.dealers.keys())
+    subsystem.rng.shuffle(bucket_ids)
+    return bucket_ids
+
+
+def _reverse_buy_and_recompute(
+    subsystem: DealerSubsystem,
+    dealer: DealerState,
+    vbt: VBTState,
+    result: ExecutionResult,
+    bucket_id: str,
+) -> None:
+    """Reverse buy execution and recompute dealer/VBT state."""
+    _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
+    recompute_dealer_state(dealer, vbt, subsystem.params)
+
+
+def _compute_upcoming_obligations(
+    trader: TraderState,
+    current_day: int,
+    horizon: int,
+) -> Decimal:
+    """Sum trader payment obligations across [current_day, current_day + horizon]."""
+    upcoming_obligations = Decimal(0)
+    for day_offset in range(horizon + 1):
+        upcoming_obligations += trader.payment_due(current_day + day_offset)
+    return upcoming_obligations
+
+
+def _apply_buy_price_adjustment(
+    subsystem: DealerSubsystem,
+    dealer: DealerState,
+    vbt: VBTState,
+    result: ExecutionResult,
+    adjusted_price: Decimal,
+) -> None:
+    """Align dealer/VBT cash with issuer-adjusted unit price."""
+    # Kernel already moved cash at result.price (unit level).
+    price_delta = result.price - adjusted_price
+    if price_delta != 0:
+        if result.is_passthrough:
+            vbt.cash -= price_delta
+        else:
+            dealer.cash -= price_delta
+        recompute_dealer_state(dealer, vbt, subsystem.params)
+
+
 def _execute_buy_trade(
     subsystem: DealerSubsystem,
     trader_id: str,
@@ -576,13 +630,7 @@ def _execute_buy_trade(
     # Bucket ordering depends on trading motive
     buy_profile = trader.profile or subsystem.trader_profile
     motive = buy_profile.trading_motive
-    if motive in ("liquidity_only", "liquidity_then_earning"):
-        # Sort by tau_min ascending (short bucket first) — prefer tickets maturing soonest
-        tau_min_by_name = {bc.name: bc.tau_min for bc in subsystem.bucket_configs}
-        bucket_ids = sorted(subsystem.dealers.keys(), key=lambda b: tau_min_by_name.get(b, 999))
-    else:
-        bucket_ids = list(subsystem.dealers.keys())
-        subsystem.rng.shuffle(bucket_ids)
+    bucket_ids = _build_buy_bucket_order(subsystem, motive)
     for bucket_id in bucket_ids:
         dealer = subsystem.dealers[bucket_id]
         vbt = subsystem.vbts[bucket_id]
@@ -609,129 +657,109 @@ def _execute_buy_trade(
             dealer, vbt, trader_id, check_assertions=False
         )
 
-        if result.executed and result.ticket:
-            # Post-execution risk assessment check (Plan 032)
-            if _check_buy_risk_assessment(
-                subsystem,
-                trader,
-                trader_id,
-                result,
-                dealer,
-                vbt,
-                bucket_id,
-                current_day,
-                events,
-            ):
-                continue  # Risk rejected, try next bucket
+        if not (result.executed and result.ticket):
+            continue
 
-        if result.executed and result.ticket:
-            # Liquidity-only gate: reject buys of tickets maturing after earliest obligation
-            if motive == "liquidity_only" and not _is_liquidity_buy(
-                trader, result.ticket, current_day
-            ):
-                _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
-                recompute_dealer_state(dealer, vbt, subsystem.params)
-                continue
+        # Post-execution risk assessment check (Plan 032)
+        if _check_buy_risk_assessment(
+            subsystem,
+            trader,
+            trader_id,
+            result,
+            dealer,
+            vbt,
+            bucket_id,
+            current_day,
+            events,
+        ):
+            continue  # Risk rejected, try next bucket
 
-            # Apply issuer-specific price adjustment (Feature 1)
-            price_factor = _get_issuer_price_adjustment(subsystem, result.ticket.issuer_id)
-            adjusted_price = result.price * price_factor
+        ticket = result.ticket
 
-            # Scale price by ticket face value
-            scaled_price = adjusted_price * result.ticket.face
+        # Liquidity-only gate: reject buys of tickets maturing after earliest obligation
+        if motive == "liquidity_only" and not _is_liquidity_buy(trader, ticket, current_day):
+            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id)
+            continue
 
-            # Pre-trade solvency check: trader must be able to afford scaled price
-            if trader.cash < scaled_price:
-                _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
-                recompute_dealer_state(dealer, vbt, subsystem.params)
-                continue  # Try next bucket
+        # Apply issuer-specific price adjustment (Feature 1)
+        price_factor = _get_issuer_price_adjustment(subsystem, ticket.issuer_id)
+        adjusted_price = result.price * price_factor
+        scaled_price = adjusted_price * ticket.face
 
-            # Budget enforcement: trader must not spend more than declared surplus
-            if scaled_price > max_spend:
-                _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
-                recompute_dealer_state(dealer, vbt, subsystem.params)
-                continue  # Try next bucket (cheaper ticket might exist)
+        # Pre-trade solvency check: trader must be able to afford scaled price
+        if trader.cash < scaled_price:
+            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id)
+            continue  # Try next bucket
 
-            # Update trader state
-            trader.tickets_owned.append(result.ticket)
-            trader.cash -= scaled_price
+        # Budget enforcement: trader must not spend more than declared surplus
+        if scaled_price > max_spend:
+            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id)
+            continue  # Try next bucket (cheaper ticket might exist)
 
-            # Cash-only obligation coverage check: prevent the "safety margin
-            # illusion" where receivables (valued at dealer bid) mask a cash
-            # shortfall.  After buying, the trader must still be able to
-            # cover obligations within its planning horizon with cash alone.
-            # Uses the same horizon as SurplusBuyer to stay consistent with
-            # the buy-intention eligibility policy (buy_reserve_fraction,
-            # planning_horizon).
-            horizon = buy_profile.buy_horizon
-            upcoming_obligations = Decimal(0)
-            for day_offset in range(horizon + 1):
-                upcoming_obligations += trader.payment_due(current_day + day_offset)
-            if trader.cash < upcoming_obligations:
-                trader.cash += scaled_price
-                trader.tickets_owned.pop()
-                _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
-                recompute_dealer_state(dealer, vbt, subsystem.params)
-                continue  # Try next bucket
+        # Update trader state
+        trader.tickets_owned.append(ticket)
+        trader.cash -= scaled_price
 
-            # Post-buy safety margin check: reverse if buy makes trader underwater
-            post_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
-            if post_safety_margin < 0:
-                trader.cash += scaled_price
-                trader.tickets_owned.pop()
-                _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
-                recompute_dealer_state(dealer, vbt, subsystem.params)
-                continue  # Try next bucket
+        # Cash-only obligation coverage check: prevent the "safety margin
+        # illusion" where receivables (valued at dealer bid) mask a cash
+        # shortfall. After buying, trader must still cover obligations
+        # within its planning horizon using cash alone.
+        horizon = buy_profile.buy_horizon
+        upcoming_obligations = _compute_upcoming_obligations(trader, current_day, horizon)
+        if trader.cash < upcoming_obligations:
+            trader.cash += scaled_price
+            trader.tickets_owned.pop()
+            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id)
+            continue  # Try next bucket
 
-            # Correct dealer/VBT cash to match the adjusted price.
-            # The kernel already moved cash at result.price (unit level).
-            # Claw back the excess so both sides of the trade agree.
-            # Placed after all rejection gates so reversals stay simple.
-            price_delta = result.price - adjusted_price
-            if price_delta != 0:
-                if result.is_passthrough:
-                    vbt.cash -= price_delta
-                else:
-                    dealer.cash -= price_delta
-                recompute_dealer_state(dealer, vbt, subsystem.params)
+        # Post-buy safety margin check: reverse if buy makes trader underwater
+        post_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
+        if post_safety_margin < 0:
+            trader.cash += scaled_price
+            trader.tickets_owned.pop()
+            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id)
+            continue  # Try next bucket
 
-            # Track VBT flow (passthrough buy → VBT sold to customer).
-            # Updated here (after all rejection gates) so reversed trades
-            # don't inflate net_outflow and widen future asks.
-            if result.is_passthrough:
-                vbt.cumulative_outflow += result.ticket.face
+        # Align dealer/VBT cash with adjusted price after all rejection gates.
+        _apply_buy_price_adjustment(subsystem, dealer, vbt, result, adjusted_price)
 
-            # Record trade in metrics, ticket outcomes, and events
-            _record_buy_trade(
-                subsystem,
-                trader_id,
-                trader,
-                result.ticket,
-                bucket_id,
-                current_day,
-                scaled_price,
-                adjusted_price,
-                result.is_passthrough,
-                pre_dealer_inventory,
-                pre_dealer_cash,
-                pre_dealer_bid,
-                pre_dealer_ask,
-                pre_trader_cash,
-                pre_safety_margin,
-                post_safety_margin,
-                dealer,
-                vbt,
-                trader.cash,
-                events,
-            )
+        # Track VBT flow (passthrough buy → VBT sold to customer).
+        # Updated here (after all rejection gates) so reversed trades
+        # don't inflate net_outflow and widen future asks.
+        if result.is_passthrough:
+            vbt.cumulative_outflow += ticket.face
 
-            # Update dealer/VBT cash budget after successful buy trade
-            # For a buy, the dealer/VBT received cash (sold a ticket)
-            if dealer_budgets is not None:
-                payee_id = f"vbt_{bucket_id}" if result.is_passthrough else f"dealer_{bucket_id}"
-                dealer_budgets[payee_id] = dealer_budgets.get(payee_id, Decimal(0)) + scaled_price
+        # Record trade in metrics, ticket outcomes, and events
+        _record_buy_trade(
+            subsystem,
+            trader_id,
+            trader,
+            ticket,
+            bucket_id,
+            current_day,
+            scaled_price,
+            adjusted_price,
+            result.is_passthrough,
+            pre_dealer_inventory,
+            pre_dealer_cash,
+            pre_dealer_bid,
+            pre_dealer_ask,
+            pre_trader_cash,
+            pre_safety_margin,
+            post_safety_margin,
+            dealer,
+            vbt,
+            trader.cash,
+            events,
+        )
 
-            return scaled_price  # One buy per trader per batch
+        # Update dealer/VBT cash budget after successful buy trade.
+        # For a buy, the dealer/VBT received cash (sold a ticket).
+        if dealer_budgets is not None:
+            payee_id = f"vbt_{bucket_id}" if result.is_passthrough else f"dealer_{bucket_id}"
+            dealer_budgets[payee_id] = dealer_budgets.get(payee_id, Decimal(0)) + scaled_price
+
+        return scaled_price  # One buy per trader per batch
 
     return Decimal(0)
 

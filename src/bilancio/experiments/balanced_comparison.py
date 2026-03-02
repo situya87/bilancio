@@ -2082,6 +2082,7 @@ class BalancedComparisonRunner:
         # Write final summary
         self._write_summary_json()
         self._write_stats_analysis()
+        self._write_activity_analysis()
 
         # Compute aggregate metrics on Modal (if using cloud executor)
         if hasattr(self.executor, "compute_aggregate_metrics"):
@@ -2215,6 +2216,7 @@ class BalancedComparisonRunner:
         # Write final summary
         self._write_summary_json()
         self._write_stats_analysis()
+        self._write_activity_analysis()
 
         total_time = time.time() - self._start_time
         print(
@@ -3129,6 +3131,28 @@ class BalancedComparisonRunner:
         except Exception as e:
             logger.warning("Statistical analysis failed: %s", e)
             print(f"Warning: Statistical analysis failed: {e}", flush=True)
+
+    def _write_activity_analysis(self) -> None:
+        """Write mechanism activity analysis (skipped in cloud-only mode)."""
+        if self.skip_local_processing:
+            return
+        if not self.comparison_results:
+            return
+        try:
+            from bilancio.analysis.mechanism_activity import run_mechanism_activity_analysis
+
+            analysis_dir = self.aggregate_dir / "analysis"
+            paths = run_mechanism_activity_analysis(
+                experiment_root=self.aggregate_dir.parent,
+                sweep_type="dealer",
+                output_dir=analysis_dir,
+            )
+            for name, path in paths.items():
+                logger.info("Activity analysis %s: %s", name, path)
+            print(f"Mechanism activity analysis written to {analysis_dir}", flush=True)
+        except Exception as e:
+            logger.warning("Activity analysis failed: %s", e)
+            print(f"Warning: Activity analysis failed: {e}", flush=True)
 
 
 def run_balanced_comparison_sweep(

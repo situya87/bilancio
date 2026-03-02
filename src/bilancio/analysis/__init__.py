@@ -28,6 +28,7 @@ from bilancio.analysis.dealer_usage_summary import (
     build_dealer_usage_by_run,
     run_dealer_usage_analysis,
 )
+from bilancio.analysis.mechanism_activity import run_mechanism_activity_analysis
 from bilancio.analysis.funding_chains import (
     cash_inflows_by_source,
     cash_outflows_by_type,
@@ -84,6 +85,8 @@ __all__ = [
     # dealer usage
     "build_dealer_usage_by_run",
     "run_dealer_usage_analysis",
+    # mechanism activity
+    "run_mechanism_activity_analysis",
     # funding chains
     "cash_inflows_by_source",
     "cash_outflows_by_type",
