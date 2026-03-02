@@ -702,6 +702,8 @@ class BankComparisonRunner:
             self._write_comparison_csv()
 
         self._write_summary_json()
+        self._write_stats_analysis()
+        self._write_activity_analysis()
 
         total_time = time.time() - self._start_time
         print(
@@ -791,6 +793,8 @@ class BankComparisonRunner:
                                     print("  Completed | (one or both runs failed)", flush=True)
 
         self._write_summary_json()
+        self._write_stats_analysis()
+        self._write_activity_analysis()
 
         total_time = time.time() - self._start_time
         print(
@@ -1026,3 +1030,58 @@ class BankComparisonRunner:
 
         with self.summary_path.open("w") as fh:
             json.dump(summary, fh, indent=2)
+
+    def _write_stats_analysis(self) -> None:
+        """Write statistical analysis files using RingSweepAnalysis (skipped in cloud-only mode)."""
+        if self.skip_local_processing:
+            return
+        if not self.comparison_results:
+            return
+        try:
+            import pandas as pd
+            from bilancio.experiments.sweep_analysis import RingSweepAnalysis
+
+            comp_df = pd.read_csv(self.comparison_path)
+            comp_df = comp_df.rename(columns={
+                "delta_idle": "delta_passive",
+                "delta_lend": "delta_active",
+                "bank_lending_effect": "trading_effect",
+                "phi_idle": "phi_passive",
+                "phi_lend": "phi_active",
+            })
+            analysis = RingSweepAnalysis(comp_df.to_dict("records"))
+            if analysis.min_replicates() < 2:
+                logger.info(
+                    "Skipping statistical analysis: need >= 2 replicates per cell, have %d",
+                    analysis.min_replicates(),
+                )
+                return
+            paths = analysis.write_stats(self.aggregate_dir)
+            for name, path in paths.items():
+                logger.info("Stats %s written to %s", name, path)
+            print(f"Statistical analysis written to {self.aggregate_dir}", flush=True)
+        except Exception as e:
+            logger.warning("Statistical analysis failed: %s", e)
+            print(f"Warning: Statistical analysis failed: {e}", flush=True)
+
+    def _write_activity_analysis(self) -> None:
+        """Write mechanism activity analysis (skipped in cloud-only mode)."""
+        if self.skip_local_processing:
+            return
+        if not self.comparison_results:
+            return
+        try:
+            from bilancio.analysis.mechanism_activity import run_mechanism_activity_analysis
+
+            analysis_dir = self.aggregate_dir / "analysis"
+            paths = run_mechanism_activity_analysis(
+                experiment_root=self.aggregate_dir.parent,
+                sweep_type="bank",
+                output_dir=analysis_dir,
+            )
+            for name, path in paths.items():
+                logger.info("Activity analysis %s: %s", name, path)
+            print(f"Mechanism activity analysis written to {analysis_dir}", flush=True)
+        except Exception as e:
+            logger.warning("Activity analysis failed: %s", e)
+            print(f"Warning: Activity analysis failed: {e}", flush=True)
