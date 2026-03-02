@@ -810,10 +810,12 @@ def generate_report() -> str:
         )
     parts.append("</table>")
 
+    dealer_ratio = f"{bank_mean / dealer_mean:.1f}x" if dealer_mean else "far larger than"
+    nbfi_ratio = f"{bank_mean / nbfi_mean:.0f}x" if nbfi_mean else "far larger than"
     parts.append(
         f"<p>The gap between bank lending and the other two mechanisms is striking. The bank's "
-        f"mean effect ({bank_mean:.3f}) is {bank_mean / dealer_mean:.1f}x the dealer's "
-        f"({dealer_mean:.3f}) and {bank_mean / nbfi_mean:.0f}x the NBFI's "
+        f"mean effect ({bank_mean:.3f}) is {dealer_ratio} the dealer's "
+        f"({dealer_mean:.3f}) and {nbfi_ratio} the NBFI's "
         f"({nbfi_mean:.3f}). Moreover, the bank's effect is statistically significant in "
         f"the vast majority of cells, while the dealer and NBFI effects are largely "
         f"indistinguishable from noise in most parameter regimes.</p>"
@@ -964,9 +966,9 @@ def generate_report() -> str:
         f"<p>The NBFI (non-bank financial intermediary) lends from its own finite capital "
         f"base, subject to coverage requirements and credit screening. Across all runs, "
         f"the NBFI made {nbfi_lending.get('overall_stats', {}).get('total_loans', 0):,} loans "
-        f"totaling {nbfi_total_lent:,.0f} &mdash; only "
-        f"{nbfi_total_lent / bank_total_lent * 100:.0f}% of the bank's lending volume. "
-        f"The mean treatment effect is a negligible {nbfi_mean:.3f}, and only "
+        f"totaling {nbfi_total_lent:,.0f}"
+        + (f" &mdash; only {nbfi_total_lent / bank_total_lent * 100:.0f}% of the bank's lending volume" if bank_total_lent else "")
+        + f". The mean treatment effect is a negligible {nbfi_mean:.3f}, and only "
         f"{_fmt_pct(nbfi_pct_sig)} of cells reach statistical significance.</p>"
     )
 
@@ -1203,8 +1205,9 @@ def generate_report() -> str:
         f"enough aggregate cash to settle all debts. The bank solves this by creating new "
         f"money. The dealer and NBFI cannot. Consider the lending volumes: the bank "
         f"deployed {bank_total_lent:,.0f} in total credit across {bank_lending.get('n_runs', 0)} "
-        f"runs, while the NBFI managed only {nbfi_total_lent:,.0f} &mdash; "
-        f"{nbfi_total_lent / bank_total_lent * 100:.0f}% of the bank's volume. "
+        f"runs, while the NBFI managed only {nbfi_total_lent:,.0f}"
+        + (f" &mdash; {nbfi_total_lent / bank_total_lent * 100:.0f}% of the bank's volume" if bank_total_lent else "")
+        + f". "
         f"And crucially, the bank's credit <em>adds</em> to aggregate liquidity, while the "
         f"NBFI's merely <em>reallocates</em> it.</p>"
     )
