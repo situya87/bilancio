@@ -120,16 +120,6 @@ def _analyze_dealer_activity(experiment_root: Path, comp_df: pd.DataFrame) -> pd
 # Bank activity analyzer
 # ---------------------------------------------------------------------------
 
-_BANK_EVENT_KINDS = frozenset({
-    "BankLoanIssued",
-    "BankLoanRepaid",
-    "BankLoanDefault",
-    "CBLendingFreezeActivated",
-    "PayableSettled",
-    "PayableRolledOver",
-})
-
-
 def _analyze_bank_activity(experiment_root: Path, comp_df: pd.DataFrame) -> pd.DataFrame:
     """Parse events.jsonl for each bank_lend run and compute activity metrics."""
     rows: list[dict[str, Any]] = []
@@ -196,7 +186,6 @@ def _parse_bank_events(events_path: Path) -> dict[str, Any]:
     borrowers = {e.get("borrower") for e in loans_issued}
     banks = {e.get("bank") for e in loans_issued}
     rates = [_safe_float(e.get("rate", 0)) for e in loans_issued]
-    amounts = [_safe_float(e.get("amount", 0)) for e in loans_issued]
     days = [e.get("day", 0) for e in loans_issued]
 
     n_repaid = len(loans_repaid)
@@ -235,18 +224,6 @@ def _parse_bank_events(events_path: Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # NBFI activity analyzer
 # ---------------------------------------------------------------------------
-
-_NBFI_EVENT_KINDS = frozenset({
-    "NonBankLoanCreated",
-    "NonBankLoanCreatedPreventive",
-    "NonBankLoanRepaid",
-    "NonBankLoanDefaulted",
-    "NonBankLoanRejectedCoverage",
-    "AgentDefaulted",
-    "PayableSettled",
-    "PayableRolledOver",
-})
-
 
 def _analyze_nbfi_activity(experiment_root: Path, comp_df: pd.DataFrame) -> pd.DataFrame:
     """Parse events.jsonl for each nbfi_lend run and compute activity metrics."""
@@ -317,7 +294,6 @@ def _parse_nbfi_events(events_path: Path) -> dict[str, Any]:
     total_lent = sum(_safe_float(e.get("amount", 0)) for e in loans_created)
     borrowers = {e.get("borrower_id") for e in loans_created}
     rates = [_safe_float(e.get("rate", 0)) for e in loans_created]
-    amounts = [_safe_float(e.get("amount", 0)) for e in loans_created]
     days = [e.get("day", 0) for e in loans_created]
     rejected_coverages = [_safe_float(e.get("coverage", 0)) for e in rejections]
     rejected_borrowers = {e.get("borrower_id") for e in rejections}
@@ -414,7 +390,8 @@ def _build_activity_summary(
                 col_series = pd.to_numeric(df[col], errors="coerce")
                 valid = effect_series.notna() & col_series.notna()
                 if valid.sum() >= 3:
-                    correlations[col] = float(effect_series[valid].corr(col_series[valid]))
+                    r = effect_series[valid].corr(col_series[valid])
+                    correlations[col] = float(r) if pd.notna(r) else None
                 else:
                     correlations[col] = None
         summary["correlations_with_effect"] = correlations
