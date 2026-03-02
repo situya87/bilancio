@@ -34,6 +34,96 @@ CLI_HANDLED_ERRORS = (
     RuntimeError,
 )
 
+VALID_POST_ANALYSES = ("drilldowns", "deltas", "dynamics", "narrative")
+
+
+def _offer_post_sweep_analysis(
+    out_dir: Path,
+    sweep_type: str,
+    post_analysis: str | None,
+    cloud: bool = False,
+) -> None:
+    """Offer interactive post-sweep analysis menu or run specified analyses.
+
+    Args:
+        out_dir: Sweep output directory.
+        sweep_type: One of "dealer", "bank", "nbfi".
+        post_analysis: "none" to skip, "all" to run everything,
+            comma-separated list, or None for interactive prompt.
+        cloud: If True and no local artifacts exist, skip silently.
+    """
+    from bilancio.analysis.post_sweep import run_post_sweep_analysis
+
+    # Check that comparison.csv exists (local artifacts required)
+    csv_path = out_dir / "aggregate" / "comparison.csv"
+    if not csv_path.is_file():
+        if cloud:
+            return  # Cloud-only — no local artifacts to analyse
+        click.echo("  (No comparison.csv found — skipping post-sweep analysis)")
+        return
+
+    # Determine which analyses to run
+    if post_analysis == "none":
+        return
+
+    if post_analysis == "all":
+        analyses = list(VALID_POST_ANALYSES)
+    elif post_analysis is not None:
+        analyses = [a.strip() for a in post_analysis.split(",") if a.strip()]
+        for a in analyses:
+            if a not in VALID_POST_ANALYSES:
+                click.echo(f"  Warning: unknown analysis '{a}' (valid: {', '.join(VALID_POST_ANALYSES)})")
+                analyses = [x for x in analyses if x in VALID_POST_ANALYSES]
+    else:
+        # Interactive menu
+        click.echo("\nPost-sweep analysis available:")
+        click.echo("  [1] Drill-downs       — Per-run defaults, credit, funding, pricing, network")
+        click.echo("  [2] Treatment deltas   — Baseline vs treatment comparison")
+        click.echo("  [3] Dynamics           — Time-series, agent heterogeneity")
+        click.echo("  [4] Narrative report   — Auto-generated research summary")
+        click.echo("  [a] All of the above")
+        click.echo("  [n] Skip")
+
+        try:
+            choice = click.prompt("Select", default="n", show_default=True)
+        except (click.Abort, EOFError):
+            return
+
+        choice = choice.strip().lower()
+        if choice == "n" or not choice:
+            return
+        if choice == "a":
+            analyses = list(VALID_POST_ANALYSES)
+        else:
+            mapping = {"1": "drilldowns", "2": "deltas", "3": "dynamics", "4": "narrative"}
+            analyses = []
+            for ch in choice.replace(",", ""):
+                if ch in mapping:
+                    analyses.append(mapping[ch])
+            if not analyses:
+                click.echo("  No valid selection — skipping.")
+                return
+
+    click.echo(f"\nRunning post-sweep analysis: {', '.join(analyses)}...")
+
+    try:
+        results = run_post_sweep_analysis(
+            experiment_root=out_dir,
+            sweep_type=sweep_type,
+            analyses=analyses,
+        )
+        if results:
+            click.echo("\nAnalysis outputs:")
+            for name, path in results.items():
+                click.echo(f"  {name}: {path}")
+            # Suggest opening first HTML
+            first_path = next(iter(results.values()))
+            click.echo(f'\n  Open with: open "{first_path}"')
+        else:
+            click.echo("  No analysis outputs generated.")
+    except Exception as e:
+        click.echo(f"  Post-sweep analysis failed: {e}")
+
 
 @click.group()
 def sweep() -> None:
@@ -841,6 +931,12 @@ def sweep_comparison(
     default=True,
     help="Equalize bank reserves to match non-bank intermediary capital (default: True)",
 )
+@click.option(
+    "--post-analysis",
+    type=str,
+    default=None,
+    help="Post-sweep analysis: 'all', 'none', or comma-separated list (drilldowns,deltas,dynamics,narrative). Default: interactive prompt.",
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -899,6 +995,7 @@ def sweep_balanced(
     flow_sensitivity: Decimal,
     dealer_concentration_limit: Decimal,
     equalize_bank_capacity: bool,
+    post_analysis: str | None,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -1105,6 +1202,8 @@ def sweep_balanced(
             click.echo(f"  {arm_name}: {counts['completed']}/{len(results)} ({status})")
         click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
 
+        _offer_post_sweep_analysis(out_dir, "dealer", post_analysis, cloud=cloud)
+
     except CLI_HANDLED_ERRORS as e:
         # Fail job on error
         if manager is not None:
@@ -1210,6 +1309,12 @@ def sweep_dealer_usage(experiment: Path, verbose: bool) -> None:
 @click.option("--quiet/--no-quiet", default=True, help="Suppress per-event output")
 @click.option("--nbfi-share", type=Decimal, default=Decimal("0.10"), help="NBFI cash as fraction of base liquidity")
 @click.option("--default-handling", type=str, default="expel-agent", help="Default handling mode")
+@click.option(
+    "--post-analysis",
+    type=str,
+    default=None,
+    help="Post-sweep analysis: 'all', 'none', or comma-separated list (drilldowns,deltas,dynamics,narrative). Default: interactive prompt.",
+)
 def sweep_nbfi(
     out_dir: Path,
     job_id: str | None,
@@ -1228,6 +1333,7 @@ def sweep_nbfi(
     quiet: bool,
     nbfi_share: Decimal,
     default_handling: str,
+    post_analysis: str | None,
 ) -> None:
     """Run NBFI lending experiment (Plan 043).
 
@@ -1299,6 +1405,8 @@ def sweep_nbfi(
     click.echo(f"  Lending helped: {improved}")
     click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
 
+    _offer_post_sweep_analysis(out_dir, "nbfi", post_analysis, cloud=cloud)
+
 
 # ── Plan 043: sweep bank ──────────────────────────────────────────────────────
 
@@ -1327,6 +1435,12 @@ def sweep_nbfi(
 @click.option("--cb-rate-escalation-slope", type=Decimal, default=Decimal("0.05"), help="CB cost pressure slope")
 @click.option("--cb-max-outstanding-ratio", type=Decimal, default=Decimal("2.0"), help="CB lending cap")
 @click.option("--default-handling", type=str, default="expel-agent", help="Default handling mode")
+@click.option(
+    "--post-analysis",
+    type=str,
+    default=None,
+    help="Post-sweep analysis: 'all', 'none', or comma-separated list (drilldowns,deltas,dynamics,narrative). Default: interactive prompt.",
+)
 def sweep_bank(
     out_dir: Path,
     job_id: str | None,
@@ -1351,6 +1465,7 @@ def sweep_bank(
     cb_rate_escalation_slope: Decimal,
     cb_max_outstanding_ratio: Decimal,
     default_handling: str,
+    post_analysis: str | None,
 ) -> None:
     """Run bank lending experiment (Plan 043).
 
@@ -1427,3 +1542,47 @@ def sweep_bank(
     click.echo(f"  Completed: {completed}")
     click.echo(f"  Lending helped: {improved}")
     click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
+
+    _offer_post_sweep_analysis(out_dir, "bank", post_analysis, cloud=cloud)
+
+
+# ── sweep analyze (post-hoc analysis on completed sweeps) ──────────────────
+
+
+@sweep.command("analyze")
+@click.option(
+    "--experiment",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to completed sweep directory",
+)
+@click.option(
+    "--sweep-type",
+    required=True,
+    type=click.Choice(["dealer", "bank", "nbfi"]),
+    help="Type of sweep to analyse",
+)
+@click.option(
+    "--post-analysis",
+    type=str,
+    default=None,
+    help="Analyses to run: 'all', or comma-separated list (drilldowns,deltas,dynamics,narrative). Default: interactive prompt.",
+)
+def sweep_analyze(
+    experiment: Path,
+    sweep_type: str,
+    post_analysis: str | None,
+) -> None:
+    """Run post-sweep analysis on a previously completed sweep.
+
+    This command runs drill-down, treatment delta, dynamics, and narrative
+    analyses on existing sweep output data. Use it to analyse sweeps that
+    have already completed, or to re-run analysis with different options.
+
+    Examples:
+
+        bilancio sweep analyze --experiment out/my_sweep --sweep-type dealer
+
+        bilancio sweep analyze --experiment out/bank_test --sweep-type bank --post-analysis all
+    """
+    _offer_post_sweep_analysis(experiment, sweep_type, post_analysis or "all")

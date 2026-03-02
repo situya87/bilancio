@@ -54,6 +54,7 @@ from bilancio.analysis.pricing_analysis import (
     trade_prices_by_day,
     trade_volume_by_day,
 )
+from bilancio.analysis.post_sweep import run_post_sweep_analysis
 from bilancio.analysis.strategy_outcomes import (
     build_strategy_outcomes_by_run,
     build_strategy_outcomes_overall,
@@ -108,6 +109,8 @@ __all__ = [
     "price_discovery_speed",
     "trade_prices_by_day",
     "trade_volume_by_day",
+    # post-sweep analysis
+    "run_post_sweep_analysis",
     # strategy outcomes
     "build_strategy_outcomes_by_run",
     "build_strategy_outcomes_overall",
