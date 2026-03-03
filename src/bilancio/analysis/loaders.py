@@ -1,16 +1,20 @@
-"""Lightweight loaders for analytics inputs (events JSONL, balances CSV).
+"""Lightweight loaders for analytics inputs (events JSONL, balances CSV,
+dealer/bank state CSVs).
 
-Stdlib only; keeps parsing minimal and robust to schema changes.
+Stdlib only for core loaders; pandas used only for snapshot loaders.
 """
 
 from __future__ import annotations
 
 import csv
 import json
+import logging
 from collections.abc import Iterator
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _to_decimal(val: object) -> Decimal:
@@ -70,3 +74,45 @@ def read_balances_csv(path: Path | str) -> list[dict[str, Any]]:
         for row in reader:
             rows.append(row)
     return rows
+
+
+def _find_csv(run_dir: Path, filename: str) -> Path | None:
+    """Locate a CSV file in run_dir or run_dir/out/."""
+    for candidate in [run_dir / filename, run_dir / "out" / filename]:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def load_dealer_snapshots(run_dir: Path | str) -> Any:
+    """Load dealer_state.csv from a run directory as a pandas DataFrame.
+
+    Returns None if the file is not found or pandas is not available.
+    """
+    run_dir = Path(run_dir)
+    csv_path = _find_csv(run_dir, "dealer_state.csv")
+    if csv_path is None:
+        return None
+    try:
+        import pandas as pd
+        return pd.read_csv(csv_path)
+    except Exception as exc:
+        logger.debug("Failed to load dealer_state.csv: %s", exc)
+        return None
+
+
+def load_bank_snapshots(run_dir: Path | str) -> Any:
+    """Load bank_state.csv from a run directory as a pandas DataFrame.
+
+    Returns None if the file is not found or pandas is not available.
+    """
+    run_dir = Path(run_dir)
+    csv_path = _find_csv(run_dir, "bank_state.csv")
+    if csv_path is None:
+        return None
+    try:
+        import pandas as pd
+        return pd.read_csv(csv_path)
+    except Exception as exc:
+        logger.debug("Failed to load bank_state.csv: %s", exc)
+        return None
