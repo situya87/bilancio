@@ -4,6 +4,14 @@ Provides drill-down, treatment-delta, dynamics, and narrative analyses
 that can be run on the output of any single-mechanism sweep (dealer, bank,
 or nbfi). Generates interactive Plotly HTML dashboards.
 
+Loss charts (added across all 4 dashboards):
+  Drilldowns:  D1 Loss Decomposition (stacked bar), D2 Defaults vs System Loss (bar+line)
+  Deltas:      T1 System Loss Comparison, T2 Loss Attribution Waterfall,
+               T3 Delta vs Loss Effect, T4 Loss/Capital Ratio
+  Dynamics:    Y1 System Loss vs κ (dual line), Y2 Loss Composition (stacked area),
+               Y3 Default Rate vs System Loss (scatter)
+  Narrative:   Loss Analysis section (summary stats, attribution, per-κ table)
+
 Usage from CLI:
     bilancio sweep analyze --experiment out/my_sweep --sweep-type dealer
 
@@ -21,6 +29,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -427,8 +437,6 @@ def _analyse_run(
             )
 
             # Initial capitals (from scenario.yaml)
-            import yaml
-
             scenario_path = run_dir / "scenario.yaml"
             if scenario_path.is_file():
                 with open(scenario_path) as f:
@@ -1569,16 +1577,16 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
                 k = float(row["kappa"])
             except (ValueError, KeyError):
                 continue
-            entry: dict[str, Any] = {"kappa": k}
-            entry["system_loss_pct_t"] = _safe_float(row, f"system_loss_pct{t_suffix}")
-            entry["system_loss_pct_b"] = _safe_float(row, f"system_loss_pct{b_suffix}")
-            entry["total_loss_pct_t"] = _safe_float(row, f"total_loss_pct{t_suffix}")
-            entry["total_loss_pct_b"] = _safe_float(row, f"total_loss_pct{b_suffix}")
-            entry["intermediary_loss_pct_t"] = _safe_float(row, f"intermediary_loss_pct{t_suffix}")
-            entry["intermediary_loss_pct_b"] = _safe_float(row, f"intermediary_loss_pct{b_suffix}")
-            entry["delta_t"] = _safe_float(row, col_map.get("delta_treatment", ""))
-            entry["delta_b"] = _safe_float(row, col_map.get("delta_baseline", ""))
-            kappa_loss_entries.append(entry)
+            loss_entry: dict[str, Any] = {"kappa": k}
+            loss_entry["system_loss_pct_t"] = _safe_float(row, f"system_loss_pct{t_suffix}")
+            loss_entry["system_loss_pct_b"] = _safe_float(row, f"system_loss_pct{b_suffix}")
+            loss_entry["total_loss_pct_t"] = _safe_float(row, f"total_loss_pct{t_suffix}")
+            loss_entry["total_loss_pct_b"] = _safe_float(row, f"total_loss_pct{b_suffix}")
+            loss_entry["intermediary_loss_pct_t"] = _safe_float(row, f"intermediary_loss_pct{t_suffix}")
+            loss_entry["intermediary_loss_pct_b"] = _safe_float(row, f"intermediary_loss_pct{b_suffix}")
+            loss_entry["delta_t"] = _safe_float(row, col_map.get("delta_treatment", ""))
+            loss_entry["delta_b"] = _safe_float(row, col_map.get("delta_baseline", ""))
+            kappa_loss_entries.append(loss_entry)
         kappa_loss_entries.sort(key=lambda e: e["kappa"])
 
         has_loss_dynamics = any(
@@ -1904,7 +1912,7 @@ def _run_narrative(paths: SweepPaths, kappas: list[float], output_dir: Path) -> 
         for k in sorted(kappa_effects.keys()):
             matched = [
                 r for r in rows
-                if _safe_float(r, "kappa") is not None and _approx_eq(float(r["kappa"]), k)
+                if (kv := _safe_float(r, "kappa")) is not None and _approx_eq(kv, k)
             ]
             if not matched:
                 continue
