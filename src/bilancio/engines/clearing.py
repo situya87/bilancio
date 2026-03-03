@@ -218,3 +218,156 @@ class _NeedsCBRefinancing(Exception):
     def __init__(self, shortfall: int) -> None:
         self.shortfall = shortfall
         super().__init__(shortfall)
+
+
+def compute_combined_nets(
+    system: "System",
+    day: int,
+    interbank_obligations: list[tuple[str, str, int, object]],
+) -> dict[tuple[str, str], int]:
+    """Compute combined bilateral nets: client payments + interbank repayments.
+
+    Starts with compute_intraday_nets() for client payments, then adds
+    interbank repayment obligations using the same lexical ordering
+    convention.
+
+    Convention: nets[(a,b)] > 0 means bank a owes bank b.
+
+    Args:
+        system: System instance.
+        day: Current simulation day.
+        interbank_obligations: List of (borrower_bank, lender_bank,
+            repayment_amount, loan) from compute_interbank_obligations().
+
+    Returns:
+        Combined bilateral net dict.
+    """
+    from collections import defaultdict
+
+    nets: defaultdict[tuple[str, str], int] = defaultdict(int)
+
+    # Start with client payment nets
+    client_nets = compute_intraday_nets(system, day)
+    for pair, amount in client_nets.items():
+        nets[pair] += amount
+
+    # Add interbank repayment obligations
+    for borrower, lender, repayment, _loan in interbank_obligations:
+        if borrower == lender:
+            continue
+        # borrower owes lender the repayment amount
+        if borrower < lender:
+            nets[(borrower, lender)] += repayment
+        else:
+            nets[(lender, borrower)] -= repayment
+
+    return dict(nets)
+
+
+def compute_bank_net_obligations(
+    nets: dict[tuple[str, str], int],
+) -> dict[str, int]:
+    """Aggregate bilateral nets to per-bank net obligations.
+
+    For each bank, sum its net obligations across all counterparties.
+    Positive = bank owes reserves (net debtor).
+    Negative = bank is owed reserves (net creditor).
+
+    Args:
+        nets: Bilateral net dict from compute_combined_nets().
+
+    Returns:
+        Dict mapping bank_id to net obligation (positive = owes).
+    """
+    obligations: dict[str, int] = {}
+
+    for (bank_a, bank_b), net_amount in nets.items():
+        if net_amount == 0:
+            continue
+
+        if net_amount > 0:
+            # bank_a owes bank_b
+            obligations[bank_a] = obligations.get(bank_a, 0) + net_amount
+            obligations[bank_b] = obligations.get(bank_b, 0) - net_amount
+        else:
+            # bank_b owes bank_a
+            obligations[bank_b] = obligations.get(bank_b, 0) + abs(net_amount)
+            obligations[bank_a] = obligations.get(bank_a, 0) - abs(net_amount)
+
+    return obligations
+
+
+def settle_nets_with_funding(
+    system: "System",
+    day: int,
+    nets: dict[tuple[str, str], int],
+) -> None:
+    """Settle pre-computed bilateral nets using reserves, CB refinancing, or overnight payables.
+
+    Same settlement logic as settle_intraday_nets() but receives
+    pre-computed nets (which may include interbank repayment obligations
+    folded into the bilateral netting).
+
+    Args:
+        system: System instance.
+        day: Current simulation day.
+        nets: Pre-computed bilateral net dict.
+    """
+    logger.debug("settle_nets_with_funding: day=%d, pairs=%d", day, len(nets))
+
+    for (bank_a, bank_b), net_amount in nets.items():
+        if net_amount == 0:
+            continue
+
+        if net_amount > 0:
+            debtor_bank = bank_a
+            creditor_bank = bank_b
+            amount = net_amount
+        else:
+            debtor_bank = bank_b
+            creditor_bank = bank_a
+            amount = -net_amount
+
+        # Try to transfer reserves directly.
+        try:
+            with atomic(system):
+                # Find available reserves for debtor bank
+                debtor_reserve_ids = []
+                for cid in system.state.agents[debtor_bank].asset_ids:
+                    contract = system.state.contracts.get(cid)
+                    if contract is None:
+                        continue
+                    if contract.kind == InstrumentKind.RESERVE_DEPOSIT:
+                        debtor_reserve_ids.append(cid)
+
+                if not debtor_reserve_ids:
+                    available_reserves = 0
+                else:
+                    available_reserves = sum(
+                        system.state.contracts[cid].amount for cid in debtor_reserve_ids
+                    )
+
+                if available_reserves >= amount:
+                    system.transfer_reserves(debtor_bank, creditor_bank, amount)
+                    logger.debug(
+                        "interbank cleared: %s -> %s amount=%d",
+                        debtor_bank, creditor_bank, amount,
+                    )
+                    system.log(
+                        EventKind.INTERBANK_CLEARED,
+                        debtor_bank=debtor_bank,
+                        creditor_bank=creditor_bank,
+                        amount=amount,
+                    )
+                else:
+                    raise _NeedsCBRefinancing(amount - available_reserves)
+
+        except _NeedsCBRefinancing as e:
+            _settle_net_with_cb_fallback(
+                system, debtor_bank, creditor_bank, amount, e.shortfall, day,
+            )
+        except Exception:
+            _settle_net_with_cb_fallback(
+                system, debtor_bank, creditor_bank, amount, amount, day,
+                label="fallback",
+            )

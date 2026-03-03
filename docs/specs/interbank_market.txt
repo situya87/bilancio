@@ -1,0 +1,385 @@
+SPECIFICATION: CALL-AUCTION INTERBANK RESERVE MARKET
+=====================================================
+
+Version: 1.0
+Status:  Draft
+Date:    2026-03-03
+
+
+1. OVERVIEW
+-----------
+
+Banks trade overnight reserve loans via a daily call auction that runs
+after client payment settlement (Phase C). The central bank corridor
+sets interest rate bounds. Surplus banks lend reserves to deficit banks
+at a single market-clearing rate r*. Any residual deficit after the
+auction is covered by the CB standing facility.
+
+This replaces the current bilateral matching mechanism in
+src/bilancio/engines/interbank.py with a proper call-auction design.
+
+
+2. DESIGN DECISIONS
+--------------------
+
+Post-settlement only.
+  The auction runs after client payment nets are settled. Banks know
+  their actual reserve position before submitting orders. There is no
+  pre-positioning or speculative reserve demand.
+
+Banks on one side only.
+  A surplus bank can only lend (submit an ask). A deficit bank can
+  only borrow (submit a bid). No bank appears on both sides. Position
+  determines role; there is no strategic choice of side.
+
+Single clearing rate.
+  The auction produces one clearing rate r* at which all matched
+  trades execute. This is a standard call-auction mechanism: no
+  bilateral rate negotiation.
+
+Surplus lends to deficit.
+  Reserve transfers flow from surplus banks to deficit banks. The
+  direction is mechanically determined by the reserve position.
+
+CB is true backstop.
+  The interbank auction runs first. Only unfilled borrowers access
+  the CB lending facility. This creates a clear pecking order:
+  interbank market first, central bank for residual.
+
+Overnight maturity.
+  All interbank loans mature the next day (day+1). This is the
+  simplest possible tenor and matches the daily cycle.
+
+Risk-free.
+  Interbank loans carry no counterparty credit risk assessment.
+  Banks do not evaluate each other's creditworthiness. The reserve
+  system guarantees settlement. This is a deliberate simplification
+  for the initial implementation.
+
+No new parameters.
+  The limit rate formula uses only existing BankProfile fields:
+  corridor midpoint M (from corridor_mid), corridor width Omega
+  (from corridor_width), and reserve target R*. No additional
+  tuning knobs are introduced.
+
+Simple quantities.
+  Each bank submits its full surplus or full deficit as the order
+  quantity. There is no partial submission or reserve withholding.
+
+Overnight repayments netted with client flows.
+  Maturing interbank loan repayments are folded into the bilateral
+  netting computation rather than settled as separate transfers.
+  This reduces gross reserve flows and is operationally cleaner.
+
+
+3. RESERVE POSITION COMPUTATION
+---------------------------------
+
+After client payment settlement, each bank i has:
+
+  R_i   = current reserves (post-settlement)
+  N_i   = net obligation from combined bilateral nets, including both
+          client payment obligations and interbank loan repayments
+  R*_i  = reserve target (from BankProfile.reserve_target_ratio times
+          total deposits)
+
+The reserve position is:
+
+  x_i = R_i - N_i - R*_i
+
+Interpretation:
+
+  x_i > 0   surplus bank, potential lender
+  x_i < 0   deficit bank, potential borrower
+  x_i = 0   at target, excluded from auction
+
+
+4. LIMIT RATE FORMULA
+----------------------
+
+Each bank's limit rate is derived mechanically from its reserve
+position. There is no strategic rate choice.
+
+Step 1: Normalize the position relative to target.
+
+  normalized_i = clamp(x_i / R*_i, -1, +1)
+
+  The clamp bounds the ratio to [-1, +1]. A bank whose surplus
+  equals its entire target has normalized = +1. A bank whose
+  deficit equals its entire target has normalized = -1.
+
+Step 2: Compute the limit rate.
+
+  limit_rate_i = M - (Omega / 2) * normalized_i
+
+  where:
+    M     = corridor midpoint  = BankProfile.corridor_mid(kappa)
+    Omega = corridor width     = BankProfile.corridor_width(kappa)
+
+Properties:
+
+  At target (x = 0, normalized = 0):
+    limit_rate = M
+    The bank is indifferent at the corridor midpoint.
+
+  Maximum surplus (normalized = +1):
+    limit_rate = M - Omega/2 = r_floor
+    The most liquid bank is willing to lend at the cheapest rate,
+    which equals the CB deposit facility rate (corridor floor).
+
+  Maximum deficit (normalized = -1):
+    limit_rate = M + Omega/2 = r_ceiling
+    The most stressed bank is willing to borrow at the most
+    expensive rate, which equals the CB lending facility rate
+    (corridor ceiling).
+
+  Surplus banks (normalized > 0):
+    limit_rate < M
+    Willing to lend below the midpoint. Larger surplus means
+    lower limit rate (more eager to lend).
+
+  Deficit banks (normalized < 0):
+    limit_rate > M
+    Willing to borrow above the midpoint. Larger deficit means
+    higher limit rate (more desperate to borrow).
+
+This ensures every limit rate falls within [r_floor, r_ceiling],
+the CB corridor bounds.
+
+
+5. ORDER BOOK CONSTRUCTION
+----------------------------
+
+Surplus banks become sellers of reserves. Their limit rates are
+ask prices. The sell side is sorted ascending by limit_rate (cheapest
+ask first).
+
+  Ask book: [(bank_id, quantity=x_i, limit_rate_i)]
+            sorted by limit_rate ascending
+
+Deficit banks become buyers of reserves. Their limit rates are bid
+prices. The buy side is sorted descending by limit_rate (highest bid
+first).
+
+  Bid book: [(bank_id, quantity=|x_i|, limit_rate_i)]
+            sorted by limit_rate descending
+
+Banks with x_i = 0 are excluded from both sides.
+
+
+6. AUCTION CLEARING
+--------------------
+
+The auction uses a standard call-auction crossing algorithm.
+
+Step 1: Walk the book.
+  Start from the cheapest ask and the highest bid. While the
+  marginal ask rate is less than or equal to the marginal bid rate,
+  match them.
+
+Step 2: Determine volume at each match.
+  volume = min(remaining_ask_quantity, remaining_bid_quantity)
+
+  If the ask is fully filled, advance to the next ask. If the bid
+  is fully filled, advance to the next bid. If both are exactly
+  filled, advance both.
+
+Step 3: Determine clearing rate.
+  r* = (marginal_ask_rate + marginal_bid_rate) / 2
+
+  The marginal ask and marginal bid are the last pair that crossed
+  (ask <= bid). All matched trades execute at this single rate r*.
+
+Step 4: Handle unfilled borrowers.
+  Any bid quantity remaining after the book is exhausted represents
+  a deficit that the interbank market could not fill. These borrowers
+  proceed to the CB backstop facility.
+
+Edge cases:
+
+  No crossing.
+    If the cheapest ask exceeds the highest bid, no trades occur.
+    All borrowers go directly to the CB backstop.
+
+  Single match.
+    r* = midpoint of the single ask-bid pair.
+
+  Equal rates.
+    If ask == bid, they match. r* = that rate.
+
+
+7. TRADE EXECUTION
+-------------------
+
+For each matched trade between lender L and borrower B:
+
+  a) Transfer reserves from L to B.
+     Call system.transfer_reserves(L, B, volume).
+     This updates both banks' reserve balances atomically.
+
+  b) Create an InterbankLoan record.
+     Fields:
+       lender_bank   = L
+       borrower_bank = B
+       amount        = volume
+       rate          = r*
+       issuance_day  = current_day
+       maturity_day  = current_day + 1
+
+     The loan is appended to banking.interbank_loans.
+
+  c) Emit an InterbankAuctionTrade event.
+     Fields:
+       kind          = "InterbankAuctionTrade"
+       day           = current_day
+       lender        = L
+       borrower      = B
+       amount        = volume
+       rate          = str(r*)
+       clearing_rate = str(r*)
+       maturity_day  = current_day + 1
+
+If transfer_reserves raises a ValidationError (e.g., lender has
+insufficient reserves due to a race condition), the trade is skipped
+and logged as a warning.
+
+
+8. OVERNIGHT REPAYMENT (NEXT DAY)
+-----------------------------------
+
+Interbank loans mature the day after issuance. Repayment is handled
+by folding the obligation into the bilateral netting system rather
+than settling it as a standalone transfer.
+
+Identification.
+  At the start of Phase C on day d, scan banking.interbank_loans for
+  loans where maturity_day == d. These are the maturing loans.
+
+Repayment amount.
+  For each maturing loan:
+    repayment = loan.amount + interest
+    interest  = round(loan.amount * loan.rate)
+
+  The interest calculation uses the loan's stored rate (r* from the
+  auction that created it).
+
+Netting integration.
+  Each maturing loan generates a bilateral obligation:
+    borrower_bank owes lender_bank the repayment amount.
+
+  This obligation is added to the same bilateral netting matrix as
+  client payment flows. The combined net determines the actual
+  reserve transfer direction and magnitude between each bank pair.
+
+  This means: if bank A owes bank B 1000 from client payments but
+  bank B owes bank A 800 from a maturing interbank loan, the net
+  transfer is only 200 from A to B.
+
+Cleanup.
+  After settlement completes, matured loans are removed from
+  banking.interbank_loans.
+
+
+9. PHASE C PIPELINE
+--------------------
+
+The full Phase C pipeline with call-auction interbank lending:
+
+Step 1: compute_interbank_obligations()
+  Scan banking.interbank_loans for loans maturing today.
+  Return a list of (borrower, lender, repayment_amount) tuples.
+
+Step 2: compute_combined_nets()
+  Start with client payment bilateral nets (from ClientPayment
+  events for today). Add interbank repayment obligations from
+  Step 1. Result: combined bilateral net matrix.
+
+Step 3: compute_bank_net_obligations()
+  Aggregate the combined bilateral nets to per-bank positions.
+  Each bank gets a single number: total net reserves owed (negative)
+  or receivable (positive) from all counterparties combined.
+
+Step 4: run_interbank_auction()
+  a) Compute reserve positions x_i using post-settlement reserves,
+     combined net obligations from Step 3, and reserve targets.
+  b) Compute limit rates from positions.
+  c) Build ask book (surplus banks) and bid book (deficit banks).
+  d) Run call-auction crossing to find r* and matched trades.
+  e) Execute trades (transfer reserves, create loans, emit events).
+  f) Return list of trade events and the clearing rate.
+
+Step 5: settle_nets_with_funding()
+  Settle the combined bilateral nets from Step 2. Banks that
+  received interbank funding in Step 4 now have the reserves to
+  meet their obligations. Banks still short go to the CB backstop.
+
+Step 6: finalize_interbank_repayments()
+  Remove all matured loans (maturity_day == today) from
+  banking.interbank_loans. These have been settled via the combined
+  netting in Step 5.
+
+Step 7: _run_cb_backstop()
+  Any bank still below its reserve target after Steps 4-6 borrows
+  from the CB standing facility at r_ceiling.
+
+
+10. RESERVE PROJECTION INTEGRATION
+-------------------------------------
+
+Banks maintain a 10-day forward projection of reserve flows for
+pricing purposes (the refresh_quote pipeline). Interbank loans must
+be included in this projection.
+
+For a lender bank that made a loan on day d:
+  Day d:    outflow of loan.amount (reserves lent out)
+  Day d+1:  inflow of loan.repayment_amount (principal + interest)
+
+For a borrower bank that received a loan on day d:
+  Day d:    inflow of loan.amount (reserves received)
+  Day d+1:  outflow of loan.repayment_amount (principal + interest)
+
+These flows are added to the existing projection alongside client
+payment flows, CB loan repayments, and deposit interest.
+
+
+11. PROPERTIES AND INVARIANTS
+-------------------------------
+
+Reserve conservation.
+  The interbank auction does not create or destroy reserves. For
+  every reserve unit transferred from a lender to a borrower, the
+  lender's reserves decrease and the borrower's reserves increase
+  by the same amount. The sum of all bank reserves is unchanged by
+  interbank trading. Only the CB standing facility creates new
+  reserves.
+
+Clearing rate within corridor.
+  r_floor <= r* <= r_ceiling. This follows from the limit rate
+  formula: all limit rates are in [r_floor, r_ceiling] by
+  construction, and r* is the midpoint of two such rates.
+
+No negative reserves.
+  system.transfer_reserves raises ValidationError if the source
+  bank would go below zero reserves. Trades that would violate
+  this constraint are skipped.
+
+Overnight maturity.
+  Every InterbankLoan has maturity_day = issuance_day + 1. There
+  are no multi-day interbank loans in this specification.
+
+One-sided participation.
+  A bank with x > 0 appears only in the ask book. A bank with
+  x < 0 appears only in the bid book. No bank is on both sides.
+
+Deterministic clearing.
+  Given the same reserve positions and the same BankProfile
+  parameters, the auction produces the same r* and the same set
+  of matched trades. There is no randomness in the clearing
+  mechanism.
+
+Monotonic limit rates.
+  Surplus banks with larger surpluses have lower limit rates (more
+  willing to lend cheaply). Deficit banks with larger deficits have
+  higher limit rates (more willing to borrow expensively). This
+  follows from the linear relationship between normalized position
+  and limit rate.
