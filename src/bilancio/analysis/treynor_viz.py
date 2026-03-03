@@ -662,20 +662,20 @@ def dealer_pricing_animation(
         ),
         plot_bgcolor="white",
         paper_bgcolor="white",
-        height=720,
+        height=750,
         shapes=init_shapes,
         annotations=init_annotations,
         sliders=sliders,
         updatemenus=updatemenus,
         legend=dict(
-            x=0.0, y=-0.25,
+            x=0.0, y=-0.30,
             orientation="h",
             bgcolor="rgba(250,250,250,0.9)",
             bordercolor="#CCC",
             borderwidth=0.5,
             font=dict(size=10, color="#333"),
         ),
-        margin=dict(l=90, r=100, t=65, b=200),
+        margin=dict(l=90, r=100, t=65, b=230),
         font=dict(family="Georgia, serif", color=_BLACK),
     )
 
@@ -858,7 +858,7 @@ def _build_dealer_frame_full(
              align="left"),
         # X-axis title
         dict(text="Inventory x (face units)",
-             xref="paper", yref="paper", x=0.35, y=-0.10,
+             xref="paper", yref="paper", x=0.35, y=-0.12,
              showarrow=False,
              font=dict(size=10, color=_BLACK, family="Georgia, serif")),
         # Equations
@@ -867,7 +867,7 @@ def _build_dealer_frame_full(
                  f"I = λ·O = {lam:.4f} × {O:.4f} = {I_w:.5f}<br>"
                  f"a(x) = min(A, p(x)+I/2)          "
                  f"b(x) = max(B, p(x)−I/2)"),
-             xref="paper", yref="paper", x=0.0, y=-0.35,
+             xref="paper", yref="paper", x=0.0, y=-0.42,
              showarrow=False, xanchor="left",
              font=dict(size=10, color=_BLACK, family="Calibri, sans-serif"),
              align="left"),
