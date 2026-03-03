@@ -16,11 +16,17 @@ import plotly.graph_objects as go
 import pytest
 
 from bilancio.analysis.treynor_viz import (
+    BUCKET_TAU,
+    _add_yield_curve_sections,
     _build_dealer_frame_full,
+    _build_yield_curve_frame,
     bank_pricing_animation,
     bank_pricing_plane,
     dealer_pricing_animation,
     dealer_pricing_plane,
+    yield_curve_animation,
+    yield_curve_static,
+    yield_curve_timeseries,
 )
 
 
@@ -105,6 +111,35 @@ def bank_snapshots_df():
             alpha=0.5,
             gamma=0.2,
             lambda_=0.2,
+        ))
+    return pd.DataFrame(rows)
+
+
+@pytest.fixture
+def yield_curve_df():
+    """DataFrame with 3 buckets x 3 days for yield curve tests."""
+    rows = []
+    for d in [0, 1, 2]:
+        # Short bucket: highest price (lowest discount)
+        rows.append(dict(
+            day=d, bucket="short",
+            vbt_mid=0.95 - 0.01 * d, vbt_spread=0.04,
+            midline=0.94 - 0.01 * d, bid=0.92 - 0.01 * d, ask=0.96 - 0.01 * d,
+            inventory=3, ticket_size=20, X_star=660, lambda_=0.03, inside_width=0.001,
+        ))
+        # Mid bucket: medium price
+        rows.append(dict(
+            day=d, bucket="mid",
+            vbt_mid=0.85 - 0.02 * d, vbt_spread=0.06,
+            midline=0.84 - 0.02 * d, bid=0.81 - 0.02 * d, ask=0.87 - 0.02 * d,
+            inventory=2, ticket_size=20, X_star=660, lambda_=0.03, inside_width=0.001,
+        ))
+        # Long bucket: lowest price (highest discount)
+        rows.append(dict(
+            day=d, bucket="long",
+            vbt_mid=0.75 - 0.03 * d, vbt_spread=0.08,
+            midline=0.73 - 0.03 * d, bid=0.69 - 0.03 * d, ask=0.77 - 0.03 * d,
+            inventory=1, ticket_size=20, X_star=660, lambda_=0.03, inside_width=0.001,
         ))
     return pd.DataFrame(rows)
 
@@ -561,3 +596,308 @@ class TestLoadBankSnapshots:
         csv.write_text("day,bank_id,i_R\n0,BK01,0.01\n")
         df = load_bank_snapshots(str(tmp_path))
         assert df is not None
+
+
+# ============================================================================
+# BUCKET_TAU
+# ============================================================================
+
+class TestBucketTau:
+    """Tests for BUCKET_TAU constant."""
+
+    def test_has_three_buckets(self):
+        assert len(BUCKET_TAU) == 3
+
+    def test_values(self):
+        assert BUCKET_TAU["short"] == 2
+        assert BUCKET_TAU["mid"] == 6
+        assert BUCKET_TAU["long"] == 12
+
+    def test_ascending_order(self):
+        assert BUCKET_TAU["short"] < BUCKET_TAU["mid"] < BUCKET_TAU["long"]
+
+
+# ============================================================================
+# _build_yield_curve_frame
+# ============================================================================
+
+class TestBuildYieldCurveFrame:
+    """Tests for _build_yield_curve_frame()."""
+
+    def test_returns_four_traces(self, yield_curve_df):
+        day_df = yield_curve_df[yield_curve_df["day"] == 0]
+        traces = _build_yield_curve_frame(day_df, day=0)
+        assert len(traces) == 4
+
+    def test_all_traces_are_scatter(self, yield_curve_df):
+        day_df = yield_curve_df[yield_curve_df["day"] == 0]
+        traces = _build_yield_curve_frame(day_df, day=0)
+        for t in traces:
+            assert isinstance(t, go.Scatter)
+
+    def test_vbt_mid_trace_values(self, yield_curve_df):
+        day_df = yield_curve_df[yield_curve_df["day"] == 0]
+        traces = _build_yield_curve_frame(day_df, day=0)
+        vbt_trace = traces[1]  # VBT mid yield
+        # Should have 3 points sorted by tau
+        assert len(vbt_trace.x) == 3
+        assert list(vbt_trace.x) == [2, 6, 12]  # short, mid, long tau
+        # Yields should increase (short < mid < long)
+        assert vbt_trace.y[0] < vbt_trace.y[1] < vbt_trace.y[2]
+
+    def test_midline_trace_values(self, yield_curve_df):
+        day_df = yield_curve_df[yield_curve_df["day"] == 0]
+        traces = _build_yield_curve_frame(day_df, day=0)
+        midline_trace = traces[2]  # Dealer midline yield
+        assert len(midline_trace.x) == 3
+        # Yield = 1/P - 1: short (1/0.94-1≈0.0638) < mid (1/0.84-1≈0.1905) < long (1/0.73-1≈0.3699)
+        assert midline_trace.y[0] == pytest.approx(1.0 / 0.94 - 1.0, abs=1e-6)
+        assert midline_trace.y[1] == pytest.approx(1.0 / 0.84 - 1.0, abs=1e-6)
+        assert midline_trace.y[2] == pytest.approx(1.0 / 0.73 - 1.0, abs=1e-6)
+
+    def test_empty_for_unknown_buckets(self):
+        df = pd.DataFrame([{"day": 0, "bucket": "unknown", "vbt_mid": 0.9,
+                            "vbt_spread": 0.04, "midline": 0.89, "bid": 0.87, "ask": 0.91}])
+        traces = _build_yield_curve_frame(df, day=0)
+        assert traces == []
+
+    def test_single_bucket(self, yield_curve_df):
+        day_df = yield_curve_df[(yield_curve_df["day"] == 0) & (yield_curve_df["bucket"] == "short")]
+        traces = _build_yield_curve_frame(day_df, day=0)
+        assert len(traces) == 4
+        assert len(traces[1].x) == 1
+
+
+# ============================================================================
+# yield_curve_static
+# ============================================================================
+
+class TestYieldCurveStatic:
+    """Tests for yield_curve_static()."""
+
+    def test_returns_figure(self, yield_curve_df):
+        fig = yield_curve_static(yield_curve_df)
+        assert isinstance(fig, go.Figure)
+
+    def test_defaults_to_last_day(self, yield_curve_df):
+        fig = yield_curve_static(yield_curve_df)
+        title = fig.layout.title.text
+        assert "Day 2" in title
+
+    def test_specific_day(self, yield_curve_df):
+        fig = yield_curve_static(yield_curve_df, day=0)
+        title = fig.layout.title.text
+        assert "Day 0" in title
+
+    def test_has_traces(self, yield_curve_df):
+        fig = yield_curve_static(yield_curve_df, day=0)
+        assert len(fig.data) == 4  # band + vbt + midline + placeholder
+
+    def test_trace_names(self, yield_curve_df):
+        fig = yield_curve_static(yield_curve_df)
+        names = [t.name for t in fig.data if t.name]
+        assert "VBT mid yield" in names
+        assert "Dealer midline yield" in names
+
+    def test_x_axis_range(self, yield_curve_df):
+        fig = yield_curve_static(yield_curve_df)
+        assert tuple(fig.layout.xaxis.range) == (0, 14)
+
+    def test_y_axis_starts_at_zero(self, yield_curve_df):
+        fig = yield_curve_static(yield_curve_df)
+        assert fig.layout.yaxis.rangemode == "tozero"
+
+    def test_y_axis_percent_format(self, yield_curve_df):
+        fig = yield_curve_static(yield_curve_df)
+        assert fig.layout.yaxis.tickformat == ".1%"
+
+    def test_layout_style(self, yield_curve_df):
+        fig = yield_curve_static(yield_curve_df)
+        assert fig.layout.plot_bgcolor == "white"
+        assert fig.layout.paper_bgcolor == "white"
+        assert fig.layout.height == 550
+
+    def test_annotation_present(self, yield_curve_df):
+        fig = yield_curve_static(yield_curve_df)
+        annots = fig.layout.annotations
+        texts = [a.text for a in annots]
+        assert any("Day:" in t for t in texts)
+        assert any("Buckets:" in t for t in texts)
+
+    def test_none_on_empty_df(self):
+        assert yield_curve_static(pd.DataFrame()) is None
+
+    def test_none_on_none_input(self):
+        assert yield_curve_static(None) is None
+
+    def test_none_for_nonexistent_day(self, yield_curve_df):
+        assert yield_curve_static(yield_curve_df, day=999) is None
+
+    def test_upward_sloping(self, yield_curve_df):
+        """Yield curve should slope upward (longer maturity = higher yield)."""
+        fig = yield_curve_static(yield_curve_df, day=0)
+        midline_trace = [t for t in fig.data if t.name == "Dealer midline yield"][0]
+        # Points sorted by tau, yields should increase
+        ys = list(midline_trace.y)
+        assert ys == sorted(ys)
+
+
+# ============================================================================
+# yield_curve_animation
+# ============================================================================
+
+class TestYieldCurveAnimation:
+    """Tests for yield_curve_animation()."""
+
+    def test_returns_figure(self, yield_curve_df):
+        fig = yield_curve_animation(yield_curve_df)
+        assert isinstance(fig, go.Figure)
+
+    def test_frame_count(self, yield_curve_df):
+        fig = yield_curve_animation(yield_curve_df)
+        assert len(fig.frames) == 3  # days 0, 1, 2
+
+    def test_frame_names_match_days(self, yield_curve_df):
+        fig = yield_curve_animation(yield_curve_df)
+        names = [f.name for f in fig.frames]
+        assert names == ["0", "1", "2"]
+
+    def test_slider_present(self, yield_curve_df):
+        fig = yield_curve_animation(yield_curve_df)
+        assert fig.layout.sliders is not None
+        assert len(fig.layout.sliders) == 1
+
+    def test_play_pause_buttons(self, yield_curve_df):
+        fig = yield_curve_animation(yield_curve_df)
+        menus = fig.layout.updatemenus
+        assert menus is not None
+        assert len(menus) == 1
+        buttons = menus[0]["buttons"]
+        labels = [b["label"] for b in buttons]
+        assert "Play" in labels
+        assert "Pause" in labels
+
+    def test_global_y_range(self, yield_curve_df):
+        fig = yield_curve_animation(yield_curve_df)
+        y_range = fig.layout.yaxis.range
+        assert y_range is not None
+        assert y_range[0] == 0
+        assert y_range[1] > 0
+
+    def test_layout_style(self, yield_curve_df):
+        fig = yield_curve_animation(yield_curve_df)
+        assert fig.layout.height == 550
+        assert fig.layout.plot_bgcolor == "white"
+
+    def test_none_on_empty_df(self):
+        assert yield_curve_animation(pd.DataFrame()) is None
+
+    def test_none_on_none_input(self):
+        assert yield_curve_animation(None) is None
+
+
+# ============================================================================
+# yield_curve_timeseries
+# ============================================================================
+
+class TestYieldCurveTimeseries:
+    """Tests for yield_curve_timeseries()."""
+
+    def test_returns_figure(self, yield_curve_df):
+        fig = yield_curve_timeseries(yield_curve_df)
+        assert isinstance(fig, go.Figure)
+
+    def test_three_traces(self, yield_curve_df):
+        fig = yield_curve_timeseries(yield_curve_df)
+        assert len(fig.data) == 3  # one per bucket
+
+    def test_trace_names(self, yield_curve_df):
+        fig = yield_curve_timeseries(yield_curve_df)
+        names = [t.name for t in fig.data]
+        assert any("short" in n for n in names)
+        assert any("mid" in n for n in names)
+        assert any("long" in n for n in names)
+
+    def test_dash_styles(self, yield_curve_df):
+        fig = yield_curve_timeseries(yield_curve_df)
+        dashes = {t.name.split()[0]: t.line.dash for t in fig.data}
+        assert dashes["short"] == "solid"
+        assert dashes["mid"] == "dash"
+        assert dashes["long"] == "dot"
+
+    def test_x_values_are_days(self, yield_curve_df):
+        fig = yield_curve_timeseries(yield_curve_df)
+        for trace in fig.data:
+            assert list(trace.x) == [0, 1, 2]
+
+    def test_yields_increase_over_time(self, yield_curve_df):
+        """Midline drops each day, so yield (1/P - 1) increases."""
+        fig = yield_curve_timeseries(yield_curve_df)
+        for trace in fig.data:
+            ys = list(trace.y)
+            assert ys == sorted(ys)
+
+    def test_layout_style(self, yield_curve_df):
+        fig = yield_curve_timeseries(yield_curve_df)
+        assert fig.layout.height == 450
+        assert fig.layout.plot_bgcolor == "white"
+        assert fig.layout.yaxis.showgrid is True
+
+    def test_title(self, yield_curve_df):
+        fig = yield_curve_timeseries(yield_curve_df)
+        assert "Term Structure" in fig.layout.title.text
+
+    def test_none_on_empty_df(self):
+        assert yield_curve_timeseries(pd.DataFrame()) is None
+
+    def test_none_on_none_input(self):
+        assert yield_curve_timeseries(None) is None
+
+    def test_single_bucket(self):
+        df = pd.DataFrame([
+            dict(day=0, bucket="short", vbt_mid=0.95, vbt_spread=0.04,
+                 midline=0.94, bid=0.92, ask=0.96),
+            dict(day=1, bucket="short", vbt_mid=0.94, vbt_spread=0.04,
+                 midline=0.93, bid=0.91, ask=0.95),
+        ])
+        fig = yield_curve_timeseries(df)
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 1
+
+
+# ============================================================================
+# _add_yield_curve_sections
+# ============================================================================
+
+class TestAddYieldCurveSections:
+    """Tests for _add_yield_curve_sections()."""
+
+    def test_adds_two_sections(self, yield_curve_df):
+        sections = []
+        nav_items = []
+        _add_yield_curve_sections(yield_curve_df, sections, nav_items)
+        assert len(sections) == 2
+
+    def test_adds_two_nav_items(self, yield_curve_df):
+        sections = []
+        nav_items = []
+        _add_yield_curve_sections(yield_curve_df, sections, nav_items)
+        assert len(nav_items) == 2
+        ids = [item[0] for item in nav_items]
+        assert "yield-curve" in ids
+        assert "term-structure" in ids
+
+    def test_sections_contain_html(self, yield_curve_df):
+        sections = []
+        nav_items = []
+        _add_yield_curve_sections(yield_curve_df, sections, nav_items)
+        # Yield curve section has static + animation charts
+        assert 'id="yield-curve"' in sections[0]
+        assert 'id="term-structure"' in sections[1]
+
+    def test_sections_contain_chart_containers(self, yield_curve_df):
+        sections = []
+        nav_items = []
+        _add_yield_curve_sections(yield_curve_df, sections, nav_items)
+        assert "chart-container" in sections[0]
+        assert "chart-container" in sections[1]

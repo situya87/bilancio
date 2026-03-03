@@ -5,6 +5,9 @@ Provides:
 - bank_pricing_plane(): Static bank Treynor diagram for one bank/day
 - dealer_pricing_animation(): Animated dealer diagram across days
 - bank_pricing_animation(): Animated bank diagram across days
+- yield_curve_static(): Single yield curve snapshot for one day
+- yield_curve_animation(): Animated yield curve across all days
+- yield_curve_timeseries(): Term structure evolution over time
 - build_treynor_dashboard(): Full HTML dashboard from a run directory
 """
 
@@ -39,6 +42,9 @@ _POSITION_COLOR = "rgba(142, 68, 173, 0.9)"
 _CB_CEIL_COLOR = "rgba(44, 62, 80, 0.9)"
 _CB_FLOOR_COLOR = "rgba(44, 62, 80, 0.9)"
 _TILT_COLOR = "rgba(142, 68, 173, 0.7)"
+
+# ---- Bucket maturity mapping (representative days-to-maturity) ----
+BUCKET_TAU = {"short": 2, "mid": 6, "long": 12}
 
 
 # =====================================================================
@@ -1027,7 +1033,418 @@ def _build_bank_frame_traces(row: Any) -> list[go.BaseTraceType]:
 
 
 # =====================================================================
-# 5. Dashboard builder
+# 5. Yield Curve
+# =====================================================================
+
+
+def _build_yield_curve_frame(
+    day_df: Any,  # pd.DataFrame (rows for one day, one row per bucket)
+    day: int,
+) -> list[go.BaseTraceType]:
+    """Build yield-curve traces for a single day.
+
+    Y-values are implied yields: ``(1/P - 1)`` — the holding-period return
+    for buying at price *P* and receiving par at maturity.
+
+    Returns a list of 4 traces:
+      0. Bid/ask shaded band
+      1. VBT mid yield line
+      2. Dealer midline yield line
+      3. (invisible) – placeholder to keep trace count stable
+    """
+    taus: list[int] = []
+    vbt_yields: list[float] = []
+    midline_yields: list[float] = []
+    bid_yields: list[float] = []
+    ask_yields: list[float] = []
+
+    for _, row in day_df.iterrows():
+        bkt = str(row["bucket"])
+        if bkt not in BUCKET_TAU:
+            continue
+        tau = BUCKET_TAU[bkt]
+        taus.append(tau)
+        vbt_yields.append(1.0 / float(row["vbt_mid"]) - 1.0)
+        midline_yields.append(1.0 / float(row["midline"]) - 1.0)
+        bid_yields.append(1.0 / float(row["bid"]) - 1.0)     # lower price → higher yield
+        ask_yields.append(1.0 / float(row["ask"]) - 1.0)      # higher price → lower yield
+
+    if not taus:
+        return []
+
+    # Sort by tau
+    order = sorted(range(len(taus)), key=lambda i: taus[i])
+    taus = [taus[i] for i in order]
+    vbt_yields = [vbt_yields[i] for i in order]
+    midline_yields = [midline_yields[i] for i in order]
+    bid_yields = [bid_yields[i] for i in order]
+    ask_yields = [ask_yields[i] for i in order]
+
+    # Shaded band: bid yield (top) to ask yield (bottom)
+    band_x = taus + taus[::-1]
+    band_y = bid_yields + ask_yields[::-1]
+
+    traces = [
+        # 0: Bid-ask shaded band
+        go.Scatter(
+            x=band_x, y=band_y,
+            fill="toself", fillcolor=_GRAY_SPREAD,
+            line=dict(width=0), showlegend=False, hoverinfo="skip",
+        ),
+        # 1: VBT mid yield
+        go.Scatter(
+            x=taus, y=vbt_yields, mode="lines+markers",
+            line=dict(color="#999", width=2),
+            marker=dict(symbol="circle", size=8, color="#999"),
+            name="VBT mid yield",
+        ),
+        # 2: Dealer midline yield
+        go.Scatter(
+            x=taus, y=midline_yields, mode="lines+markers",
+            line=dict(color=_BLACK, width=2.5),
+            marker=dict(symbol="diamond", size=10, color=_BLACK),
+            name="Dealer midline yield",
+        ),
+        # 3: invisible placeholder (keeps trace count constant across frames)
+        go.Scatter(
+            x=[None], y=[None], mode="markers",
+            marker=dict(size=0, opacity=0),
+            showlegend=False, hoverinfo="skip",
+        ),
+    ]
+    return traces
+
+
+def yield_curve_static(
+    df: Any,  # pd.DataFrame
+    day: int | None = None,
+) -> go.Figure | None:
+    """Static yield curve snapshot for one day.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from dealer_state.csv with columns: day, bucket,
+        vbt_mid, vbt_spread, midline, bid, ask.
+    day : int or None
+        Day to display.  Defaults to the last day in *df*.
+
+    Returns
+    -------
+    go.Figure or None
+        Plotly figure, or None if *df* is None / empty.
+    """
+    if df is None or df.empty:
+        return None
+
+    if day is None:
+        day = int(df["day"].max())
+
+    day_df = df[df["day"] == day]
+    if day_df.empty:
+        return None
+
+    traces = _build_yield_curve_frame(day_df, day)
+    if not traces:
+        return None
+
+    fig = go.Figure(data=traces)
+
+    n_buckets = sum(1 for b in day_df["bucket"].unique() if b in BUCKET_TAU)
+
+    fig.update_layout(
+        title=dict(
+            text=f"Yield Curve \u2014 Day {day}",
+            font=dict(size=16, color=_BLACK, family="Georgia, serif"),
+        ),
+        xaxis=dict(
+            title="Representative Maturity \u03c4 (days)",
+            showgrid=False,
+            zeroline=False,
+            linecolor=_BLACK,
+            linewidth=1.5,
+            tickfont=dict(size=11, color="#444"),
+            range=[0, 14],
+        ),
+        yaxis=dict(
+            title="Implied Yield  (1/P \u2212 1)",
+            showgrid=False,
+            zeroline=False,
+            linecolor=_BLACK,
+            linewidth=1.5,
+            tickfont=dict(size=10, color=_BLACK),
+            tickformat=".1%",
+            rangemode="tozero",
+        ),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=550,
+        legend=dict(
+            x=0.0, y=-0.18,
+            orientation="h",
+            bgcolor="rgba(250,250,250,0.9)",
+            bordercolor="#CCC",
+            borderwidth=0.5,
+            font=dict(size=10, color="#333"),
+        ),
+        margin=dict(l=80, r=40, t=65, b=120),
+        font=dict(family="Georgia, serif", color=_BLACK),
+    )
+
+    # Annotation panel
+    info = f"Day: <b>{day}</b>  |  Buckets: <b>{n_buckets}</b>"
+    fig.add_annotation(
+        text=info, xref="paper", yref="paper",
+        x=0.0, y=1.01, showarrow=False,
+        font=dict(size=9, color=_GRAY_MID, family="Calibri, sans-serif"),
+        align="left", xanchor="left", yanchor="bottom",
+    )
+
+    return fig
+
+
+def yield_curve_animation(
+    df: Any,  # pd.DataFrame
+) -> go.Figure | None:
+    """Animated yield curve across all days with slider.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from dealer_state.csv.
+
+    Returns
+    -------
+    go.Figure or None
+    """
+    if df is None or df.empty:
+        return None
+
+    days = sorted(df["day"].unique())
+    if not days:
+        return None
+
+    # Compute global y range across ALL days (in yield space)
+    global_y_max = 0.0
+    for d in days:
+        day_df = df[df["day"] == d]
+        for _, row in day_df.iterrows():
+            bkt = str(row["bucket"])
+            if bkt not in BUCKET_TAU:
+                continue
+            bid_yield = 1.0 / float(row["bid"]) - 1.0
+            if bid_yield > global_y_max:
+                global_y_max = bid_yield
+    y_pad = max(global_y_max * 0.15, 0.005)
+    y_upper = global_y_max + y_pad
+
+    # Build frames
+    frames = []
+    first_traces = None
+    for d in days:
+        day_df = df[df["day"] == d]
+        traces = _build_yield_curve_frame(day_df, int(d))
+        if not traces:
+            continue
+        if first_traces is None:
+            first_traces = traces
+        frames.append(go.Frame(data=traces, name=str(int(d))))
+
+    if first_traces is None:
+        return None
+
+    fig = go.Figure(data=first_traces, frames=frames)
+
+    # Day slider
+    sliders = [dict(
+        active=0,
+        currentvalue=dict(prefix="Day: "),
+        pad=dict(t=50),
+        steps=[
+            dict(
+                args=[[str(int(d))], dict(
+                    frame=dict(duration=500, redraw=True),
+                    mode="immediate",
+                )],
+                method="animate",
+                label=str(int(d)),
+            )
+            for d in days
+        ],
+    )]
+
+    # Play / Pause buttons
+    updatemenus = [dict(
+        type="buttons", showactive=False,
+        x=0.1, y=0, xanchor="right", yanchor="top",
+        buttons=[
+            dict(label="Play", method="animate",
+                 args=[None, dict(frame=dict(duration=700, redraw=True),
+                                  fromcurrent=True)]),
+            dict(label="Pause", method="animate",
+                 args=[[None], dict(frame=dict(duration=0, redraw=False),
+                                    mode="immediate")]),
+        ],
+    )]
+
+    fig.update_layout(
+        title=dict(
+            text="Yield Curve Animation",
+            font=dict(size=16, color=_BLACK, family="Georgia, serif"),
+        ),
+        xaxis=dict(
+            title="Representative Maturity \u03c4 (days)",
+            showgrid=False,
+            zeroline=False,
+            linecolor=_BLACK,
+            linewidth=1.5,
+            tickfont=dict(size=11, color="#444"),
+            range=[0, 14],
+        ),
+        yaxis=dict(
+            title="Implied Yield  (1/P \u2212 1)",
+            showgrid=False,
+            zeroline=False,
+            linecolor=_BLACK,
+            linewidth=1.5,
+            tickfont=dict(size=10, color=_BLACK),
+            tickformat=".1%",
+            range=[0, y_upper],
+        ),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=550,
+        sliders=sliders,
+        updatemenus=updatemenus,
+        legend=dict(
+            x=0.0, y=-0.25,
+            orientation="h",
+            bgcolor="rgba(250,250,250,0.9)",
+            bordercolor="#CCC",
+            borderwidth=0.5,
+            font=dict(size=10, color="#333"),
+        ),
+        margin=dict(l=80, r=40, t=65, b=150),
+        font=dict(family="Georgia, serif", color=_BLACK),
+    )
+
+    return fig
+
+
+def yield_curve_timeseries(
+    df: Any,  # pd.DataFrame
+) -> go.Figure | None:
+    """Time series of each bucket's implied yield.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame from dealer_state.csv.
+
+    Returns
+    -------
+    go.Figure or None
+    """
+    if df is None or df.empty:
+        return None
+
+    _DASH_MAP = {"short": "solid", "mid": "dash", "long": "dot"}
+    fig = go.Figure()
+    has_data = False
+
+    for bucket in ("short", "mid", "long"):
+        bdf = df[df["bucket"] == bucket].sort_values("day")
+        if bdf.empty:
+            continue
+        days = bdf["day"].tolist()
+        yields = [1.0 / float(v) - 1.0 for v in bdf["midline"]]
+        fig.add_trace(go.Scatter(
+            x=days, y=yields, mode="lines",
+            line=dict(color=_BLACK, width=2, dash=_DASH_MAP.get(bucket, "solid")),
+            name=f"{bucket} (\u03c4={BUCKET_TAU.get(bucket, '?')}d)",
+        ))
+        has_data = True
+
+    if not has_data:
+        return None
+
+    fig.update_layout(
+        title=dict(
+            text="Term Structure Evolution",
+            font=dict(size=16, color=_BLACK, family="Georgia, serif"),
+        ),
+        xaxis=dict(
+            title="Day",
+            showgrid=False,
+            zeroline=False,
+            linecolor=_BLACK,
+            linewidth=1.5,
+            tickfont=dict(size=11, color="#444"),
+        ),
+        yaxis=dict(
+            title="Implied Yield  (1/P \u2212 1)",
+            tickformat=".1%",
+            showgrid=True,
+            gridcolor=_GRAY_LIGHT,
+            zeroline=False,
+            linecolor=_BLACK,
+            linewidth=1.5,
+            tickfont=dict(size=10, color=_BLACK),
+        ),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=450,
+        legend=dict(
+            x=0.0, y=-0.20,
+            orientation="h",
+            bgcolor="rgba(250,250,250,0.9)",
+            bordercolor="#CCC",
+            borderwidth=0.5,
+            font=dict(size=10, color="#333"),
+        ),
+        margin=dict(l=80, r=40, t=65, b=100),
+        font=dict(family="Georgia, serif", color=_BLACK),
+    )
+
+    return fig
+
+
+def _add_yield_curve_sections(
+    df: Any,  # pd.DataFrame
+    sections: list[str],
+    nav_items: list[tuple[str, str]],
+) -> None:
+    """Add yield curve visualizations to the dashboard."""
+
+    # Section 1: Yield Curve (static + animation)
+    nav_items.append(("yield-curve", "Yield Curve"))
+    section_html = '<div id="yield-curve"><h1>Yield Curve</h1>'
+
+    fig_static = yield_curve_static(df)
+    if fig_static is not None:
+        section_html += f'<div class="chart-container">{_fig_to_div(fig_static, "yield-curve-static")}</div>'
+
+    fig_anim = yield_curve_animation(df)
+    if fig_anim is not None:
+        section_html += f'<div class="chart-container">{_fig_to_div(fig_anim, "yield-curve-anim")}</div>'
+
+    section_html += "</div>"
+    sections.append(section_html)
+
+    # Section 2: Term Structure
+    nav_items.append(("term-structure", "Term Structure"))
+    ts_html = '<div id="term-structure"><h1>Term Structure</h1>'
+
+    fig_ts = yield_curve_timeseries(df)
+    if fig_ts is not None:
+        ts_html += f'<div class="chart-container">{_fig_to_div(fig_ts, "term-structure-ts")}</div>'
+
+    ts_html += "</div>"
+    sections.append(ts_html)
+
+
+# =====================================================================
+# 6. Dashboard builder
 # =====================================================================
 
 def _fig_to_div(fig: go.Figure, div_id: str = "") -> str:
@@ -1062,6 +1479,7 @@ def build_treynor_dashboard(run_dir: Path) -> str:
 
     if dealer_df is not None and not dealer_df.empty:
         _add_dealer_sections(dealer_df, sections, nav_items)
+        _add_yield_curve_sections(dealer_df, sections, nav_items)
 
     if bank_df is not None and not bank_df.empty:
         _add_bank_sections(bank_df, sections, nav_items)
