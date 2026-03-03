@@ -150,7 +150,11 @@ def compute_limit_rates(
 
         target = bank_state.pricing_params.reserve_target
         if target <= 0:
-            target = 1  # Avoid division by zero
+            logger.warning(
+                "Bank %s has reserve_target=%d; defaulting to 1 for limit rate calc",
+                bank_id, target,
+            )
+            target = 1
 
         # Corridor parameters
         r_floor = bank_state.pricing_params.reserve_remuneration_rate
@@ -323,6 +327,7 @@ def run_interbank_auction(
     result = clear_auction(lender_asks, borrower_bids)
 
     # 5. Execute trades at r*
+    executed_volume = 0
     if result.clearing_rate is not None and result.trades:
         for trade in result.trades:
             lender_id = trade["lender"]
@@ -336,10 +341,10 @@ def run_interbank_auction(
                     "Interbank auction transfer failed: %s -> %s, amount=%d",
                     lender_id, borrower_id, amount,
                 )
-                # Add to unfilled
                 result.unfilled_borrowers.append((borrower_id, amount))
-                result.total_volume -= amount
                 continue
+
+            executed_volume += amount
 
             # Record interbank loan (overnight, due tomorrow)
             ib_loan = InterbankLoan(
@@ -368,7 +373,7 @@ def run_interbank_auction(
         "kind": EventKind.INTERBANK_AUCTION.value,
         "day": current_day,
         "clearing_rate": str(result.clearing_rate) if result.clearing_rate else None,
-        "total_volume": result.total_volume,
+        "total_volume": executed_volume,
         "n_trades": len(result.trades),
         "n_unfilled": len(result.unfilled_borrowers),
     })
@@ -386,7 +391,7 @@ def run_interbank_auction(
         "Interbank auction day=%d: r*=%s, volume=%d, trades=%d, unfilled=%d",
         current_day,
         result.clearing_rate,
-        result.total_volume,
+        executed_volume,
         len(result.trades),
         len(result.unfilled_borrowers),
     )
@@ -421,7 +426,7 @@ def finalize_interbank_repayments(
 
     for borrower, lender, repayment, loan in obligations:
         events.append({
-            "kind": "InterbankRepaid",
+            "kind": EventKind.INTERBANK_REPAID.value,
             "day": current_day,
             "lender": lender,
             "borrower": borrower,

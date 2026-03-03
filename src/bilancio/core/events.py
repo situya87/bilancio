@@ -68,6 +68,7 @@ class EventKind(str, Enum):
     INTERBANK_AUCTION = "InterbankAuction"
     INTERBANK_AUCTION_TRADE = "InterbankAuctionTrade"
     INTERBANK_UNFILLED = "InterbankUnfilled"
+    INTERBANK_REPAID = "InterbankRepaid"
 
     # ── Banking / payment events ─────────────────────────────────────
     CASH_DEPOSITED = "CashDeposited"
