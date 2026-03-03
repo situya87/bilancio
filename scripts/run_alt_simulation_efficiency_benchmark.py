@@ -38,7 +38,7 @@ import statistics
 import subprocess
 import sys
 import tracemalloc
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -396,15 +396,20 @@ def category_cold_start() -> tuple[CategoryResult, list[CriticalCheck]]:
     for trial in range(3):
         print(f"    Trial {trial + 1}/3 ...", end=" ", flush=True)
         t0 = perf_counter()
-        result = subprocess.run(
-            [sys.executable, "-c", "import bilancio.engines.simulation"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        elapsed = perf_counter() - t0
+        try:
+            result = subprocess.run(
+                [sys.executable, "-c", "import bilancio.engines.simulation"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            elapsed = perf_counter() - t0
+            status = "ok" if result.returncode == 0 else f"rc={result.returncode}"
+        except subprocess.TimeoutExpired:
+            elapsed = perf_counter() - t0
+            status = "timeout"
         times.append(elapsed)
-        status = "ok" if result.returncode == 0 else f"rc={result.returncode}"
         print(f"{elapsed:.3f}s ({status})")
 
     median_time = statistics.median(times)

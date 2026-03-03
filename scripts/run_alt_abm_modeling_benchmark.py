@@ -31,7 +31,7 @@ import logging
 import math
 import statistics
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -365,8 +365,9 @@ def run_category_accounting_conservation() -> CategoryResult:
     config_results: list[dict[str, Any]] = []
 
     for cfg in configs:
-        label = cfg.pop("label")
-        sys = build_ring_system(**cfg)
+        label = cfg["label"]
+        build_kwargs = {k: v for k, v in cfg.items() if k != "label"}
+        sys = build_ring_system(**build_kwargs)
         run_until_stable(sys, max_days=15)
 
         invariant_ok = True
