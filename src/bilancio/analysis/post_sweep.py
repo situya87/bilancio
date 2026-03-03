@@ -45,6 +45,45 @@ COLORS_LIGHT = {
 VALID_ANALYSES = ("drilldowns", "deltas", "dynamics", "narrative")
 VALID_SWEEP_TYPES = ("dealer", "bank", "nbfi")
 
+# ---------------------------------------------------------------------------
+# Loss visualization metadata
+# ---------------------------------------------------------------------------
+
+LOSS_COLUMN_MAP: dict[str, dict[str, str]] = {
+    "dealer": {
+        "treatment": "_active",
+        "baseline": "_passive",
+        "delta_treatment": "delta_active",
+        "delta_baseline": "delta_passive",
+        "system_loss_effect": "system_loss_trading_effect",
+    },
+    "bank": {
+        "treatment": "_lend",
+        "baseline": "_idle",
+        "delta_treatment": "delta_lend",
+        "delta_baseline": "delta_idle",
+        "system_loss_effect": "system_loss_bank_lending_effect",
+    },
+    "nbfi": {
+        "treatment": "_lend",
+        "baseline": "_idle",
+        "delta_treatment": "delta_lend",
+        "delta_baseline": "delta_idle",
+        "system_loss_effect": "system_loss_lending_effect",
+    },
+}
+
+LOSS_COLORS = {
+    "payable_default": "#c0392b",
+    "deposit_loss": "#e67e22",
+    "dealer_vbt": "#e74c3c",
+    "nbfi_loan": "#27ae60",
+    "bank_credit": "#2980b9",
+    "cb_backstop": "#9b59b6",
+    "trader_total": "#c0392b",
+    "intermediary_total": "#2980b9",
+}
+
 
 # ===================================================================
 # Path resolution
@@ -133,6 +172,17 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(f))
 
 
+def _safe_float(row: dict[str, str], col: str) -> float | None:
+    """Extract float from CSV row, returning None for missing/empty values."""
+    val = row.get(col, "").strip()
+    if not val:
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
 def _auto_detect_kappas(csv_path: Path, n: int = 3) -> list[float]:
     """Extract unique kappa values from comparison CSV, pick n representative levels."""
     rows = _read_csv(csv_path)
@@ -183,6 +233,12 @@ def _find_run_in_csv(
     return None
 
 
+def _run_dir_path(runs_dir: Path, run_id: str) -> Path | None:
+    """Resolve run directory for a run_id."""
+    p = runs_dir / run_id
+    return p if p.is_dir() else None
+
+
 def _events_path(runs_dir: Path, run_id: str) -> Path | None:
     """Resolve events.jsonl for a run_id."""
     p = runs_dir / run_id / "out" / "events.jsonl"
@@ -215,8 +271,21 @@ def _safe_load_json(path: Path) -> dict | None:
 # ===================================================================
 
 
-def _analyse_run(events: list[dict], sweep_type: str, is_treatment: bool) -> dict[str, Any]:
-    """Run analysis functions on events and return structured results."""
+def _analyse_run(
+    events: list[dict],
+    sweep_type: str,
+    is_treatment: bool,
+    run_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Run analysis functions on events and return structured results.
+
+    Args:
+        events: List of event dicts from the simulation.
+        sweep_type: One of "dealer", "bank", "nbfi".
+        is_treatment: Whether this is the treatment arm.
+        run_dir: Optional path to the run directory. When provided,
+            loss metrics are computed from events and dealer_metrics.json.
+    """
     from bilancio.analysis import (
         cash_inflows_by_source,
         contagion_by_day,
@@ -324,6 +393,50 @@ def _analyse_run(events: list[dict], sweep_type: str, is_treatment: bool) -> dic
         logger.debug("systemic_importance failed: %s", exc)
         result["systemic_importance"] = []
 
+    # Loss metrics (when run_dir is provided)
+    result["loss_metrics"] = {}
+    result["intermediary_losses"] = {}
+    result["initial_capitals"] = {}
+    if run_dir is not None:
+        try:
+            from bilancio.analysis.report import (
+                compute_intermediary_losses,
+                compute_run_level_metrics,
+                extract_initial_capitals,
+            )
+
+            run_metrics = compute_run_level_metrics(events)
+            result["loss_metrics"] = {
+                "payable_default_loss": run_metrics.get("payable_default_loss", 0),
+                "deposit_loss_gross": run_metrics.get("deposit_loss_gross", 0),
+                "total_loss": run_metrics.get("payable_default_loss", 0) + run_metrics.get("deposit_loss_gross", 0),
+                "nbfi_loan_loss": run_metrics.get("nbfi_loan_loss", 0),
+                "bank_credit_loss": run_metrics.get("bank_credit_loss", 0),
+                "cb_backstop_loss": run_metrics.get("cb_backstop_loss", 0),
+            }
+
+            # Intermediary losses (needs dealer_metrics.json)
+            dealer_metrics_path = run_dir / "out" / "dealer_metrics.json"
+            dealer_metrics = _safe_load_json(dealer_metrics_path)
+            intermediary = compute_intermediary_losses(events, dealer_metrics)
+            result["intermediary_losses"] = intermediary
+            result["loss_metrics"]["dealer_vbt_loss"] = intermediary.get("dealer_vbt_loss", 0)
+            result["loss_metrics"]["intermediary_loss_total"] = intermediary.get("intermediary_loss_total", 0)
+            result["loss_metrics"]["system_loss"] = (
+                result["loss_metrics"]["total_loss"] + intermediary.get("intermediary_loss_total", 0)
+            )
+
+            # Initial capitals (from scenario.yaml)
+            import yaml
+
+            scenario_path = run_dir / "scenario.yaml"
+            if scenario_path.is_file():
+                with open(scenario_path) as f:
+                    scenario_config = yaml.safe_load(f)
+                result["initial_capitals"] = extract_initial_capitals(scenario_config)
+        except Exception as exc:
+            logger.debug("loss metrics computation failed: %s", exc)
+
     return result
 
 
@@ -418,9 +531,10 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
         t_id = _find_run_in_csv(rows, kappa, paths.treatment_col)
         if t_id:
             ep = _events_path(paths.treatment_dir, t_id)
+            rd = _run_dir_path(paths.treatment_dir, t_id)
             if ep:
                 events = _load_events(ep)
-                res = _analyse_run(events, paths.sweep_type, is_treatment=True)
+                res = _analyse_run(events, paths.sweep_type, is_treatment=True, run_dir=rd)
                 res["kappa"] = kappa
                 res["arm"] = "treatment"
                 res["label"] = f"{mech_label} Treatment κ={kappa}"
@@ -430,9 +544,10 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
         b_id = _find_run_in_csv(rows, kappa, paths.baseline_col)
         if b_id:
             ep = _events_path(paths.baseline_dir, b_id)
+            rd = _run_dir_path(paths.baseline_dir, b_id)
             if ep:
                 events = _load_events(ep)
-                res = _analyse_run(events, paths.sweep_type, is_treatment=False)
+                res = _analyse_run(events, paths.sweep_type, is_treatment=False, run_dir=rd)
                 res["kappa"] = kappa
                 res["arm"] = "baseline"
                 res["label"] = f"{mech_label} Baseline κ={kappa}"
@@ -489,6 +604,118 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
         title=f"Contagion Timeline at κ={target_kappa} ({mech_label})",
         xaxis_title="Day", yaxis_title="Defaults", template="plotly_white", height=400,
     )
+
+    # --- Chart D1: Loss Decomposition (Stacked Bar) ---
+    fig_loss_decomp = None
+    try:
+        has_loss_data = any(r.get("loss_metrics", {}).get("total_loss", 0) > 0 for r in all_results)
+        if has_loss_data:
+            fig_loss_decomp = go.Figure()
+            loss_labels: list[str] = []
+            loss_components: dict[str, list[float]] = {
+                "payable_default": [],
+                "deposit_loss": [],
+                "dealer_vbt": [],
+                "nbfi_loan": [],
+                "bank_credit_cb": [],
+            }
+            for kappa in kappas:
+                for arm_list, arm_name in [(treatments, "Treatment"), (baselines, "Baseline")]:
+                    r = next((x for x in arm_list if _approx_eq(x["kappa"], kappa)), None)
+                    if r is None:
+                        continue
+                    lm = r.get("loss_metrics", {})
+                    loss_labels.append(f"{arm_name}\nκ={kappa}")
+                    loss_components["payable_default"].append(lm.get("payable_default_loss", 0))
+                    loss_components["deposit_loss"].append(lm.get("deposit_loss_gross", 0))
+                    loss_components["dealer_vbt"].append(lm.get("dealer_vbt_loss", 0))
+                    loss_components["nbfi_loan"].append(lm.get("nbfi_loan_loss", 0))
+                    loss_components["bank_credit_cb"].append(
+                        lm.get("bank_credit_loss", 0) + lm.get("cb_backstop_loss", 0)
+                    )
+
+            segment_config = [
+                ("payable_default", "Payable Default Loss", LOSS_COLORS["payable_default"]),
+                ("deposit_loss", "Deposit Loss", LOSS_COLORS["deposit_loss"]),
+                ("dealer_vbt", "Dealer/VBT Loss", LOSS_COLORS["dealer_vbt"]),
+                ("nbfi_loan", "NBFI Loan Loss", LOSS_COLORS["nbfi_loan"]),
+                ("bank_credit_cb", "Bank Credit + CB Loss", LOSS_COLORS["cb_backstop"]),
+            ]
+            for key, name, c in segment_config:
+                vals = loss_components[key]
+                if any(v > 0 for v in vals):
+                    fig_loss_decomp.add_trace(go.Bar(
+                        name=name, x=loss_labels, y=vals, marker_color=c,
+                    ))
+            fig_loss_decomp.update_layout(
+                barmode="stack", title=f"Loss Decomposition by Asset Type ({mech_label})",
+                xaxis_title="Arm / κ", yaxis_title="Loss Amount",
+                template="plotly_white", height=450,
+            )
+    except Exception as exc:
+        logger.debug("Loss decomposition chart failed: %s", exc)
+
+    # --- Chart D2: Defaults vs System Loss (Combined View) ---
+    fig_defaults_vs_loss = None
+    try:
+        has_loss = any(r.get("loss_metrics", {}).get("system_loss", 0) > 0 for r in all_results)
+        if has_loss:
+            from plotly.subplots import make_subplots
+
+            fig_defaults_vs_loss = make_subplots(specs=[[{"secondary_y": True}]])
+            d2_kappas: list[str] = []
+            for kappa in kappas:
+                d2_kappas.append(str(kappa))
+            # Treatment bars + line
+            t_defaults = []
+            t_loss_pct = []
+            b_defaults = []
+            b_loss_pct = []
+            for kappa in kappas:
+                tr = next((x for x in treatments if _approx_eq(x["kappa"], kappa)), None)
+                br = next((x for x in baselines if _approx_eq(x["kappa"], kappa)), None)
+                t_defaults.append(tr["default_counts"].get("total", 0) if tr else 0)
+                b_defaults.append(br["default_counts"].get("total", 0) if br else 0)
+                # Compute loss_pct: system_loss / total_loss_denominator
+                # Use total_loss + intermediary as proxy; actual pct from CSV is more accurate
+                t_lm = tr.get("loss_metrics", {}) if tr else {}
+                b_lm = br.get("loss_metrics", {}) if br else {}
+                t_loss_pct.append(t_lm.get("system_loss", 0))
+                b_loss_pct.append(b_lm.get("system_loss", 0))
+
+            fig_defaults_vs_loss.add_trace(
+                go.Bar(name="Treatment Defaults", x=d2_kappas, y=t_defaults, marker_color=color),
+                secondary_y=False,
+            )
+            fig_defaults_vs_loss.add_trace(
+                go.Bar(name="Baseline Defaults", x=d2_kappas, y=b_defaults, marker_color=color_light),
+                secondary_y=False,
+            )
+            fig_defaults_vs_loss.add_trace(
+                go.Scatter(
+                    name="Treatment System Loss", x=d2_kappas, y=t_loss_pct,
+                    mode="lines+markers", line=dict(color=color, width=3),
+                    marker=dict(size=8),
+                ),
+                secondary_y=True,
+            )
+            fig_defaults_vs_loss.add_trace(
+                go.Scatter(
+                    name="Baseline System Loss", x=d2_kappas, y=b_loss_pct,
+                    mode="lines+markers", line=dict(color=color_light, width=3, dash="dash"),
+                    marker=dict(size=8, symbol="diamond"),
+                ),
+                secondary_y=True,
+            )
+            fig_defaults_vs_loss.update_layout(
+                title=f"Defaults vs System Loss ({mech_label})",
+                xaxis_title="κ", barmode="group",
+                template="plotly_white", height=450,
+            )
+            fig_defaults_vs_loss.update_yaxes(title_text="Default Count", secondary_y=False)
+            fig_defaults_vs_loss.update_yaxes(title_text="System Loss (amount)", secondary_y=True)
+    except Exception as exc:
+        logger.debug("Defaults vs loss chart failed: %s", exc)
 
     # --- Chart 3: Credit created ---
     all_types: set[str] = set()
@@ -670,28 +897,33 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
             mean_out = f"{sum(out_degs) / len(out_degs):.1f}" if out_degs else "n/a"
             si = r.get("systemic_importance", [])
             max_si = f"{si[0]['score']:.3f}" if si else "n/a"
+            lm = r.get("loss_metrics", {})
+            total_loss_str = f"{lm['total_loss']:,.0f}" if lm.get("total_loss") else "n/a"
+            interm_loss_str = f"{lm['intermediary_loss_total']:,.0f}" if lm.get("intermediary_loss_total") else "n/a"
+            sys_loss_str = f"{lm['system_loss']:,.0f}" if lm.get("system_loss") else "n/a"
             table_rows.append(
                 f"<tr><td>{arm_name}</td><td>{kappa}</td>"
                 f"<td>{dc.get('primary', 0)}</td><td>{dc.get('secondary', 0)}</td>"
                 f"<td>{cascade_frac}</td><td>{nci:,.0f}</td>"
+                f"<td>{total_loss_str}</td><td>{interm_loss_str}</td><td>{sys_loss_str}</td>"
                 f"<td>{funding_div}</td><td>{mean_out}</td><td>{max_si}</td></tr>"
             )
 
     summary_table = f"""<table class="summary-table">
     <thead><tr>
         <th>Arm</th><th>κ</th><th>Primary</th><th>Cascade</th>
-        <th>Cascade %</th><th>NCI</th><th>Fund. Diversity</th>
-        <th>Mean Out-Deg</th><th>Max SI Score</th>
+        <th>Cascade %</th><th>NCI</th><th>Total Loss</th><th>Intermed. Loss</th><th>System Loss</th>
+        <th>Fund. Div.</th><th>Mean Out-Deg</th><th>Max SI</th>
     </tr></thead>
     <tbody>{"".join(table_rows)}</tbody></table>"""
 
     # Assemble
     nav = [
-        ("defaults", "Defaults"), ("credit", "Credit"), ("funding", "Funding"),
+        ("defaults", "Defaults"), ("losses", "Losses"), ("credit", "Credit"), ("funding", "Funding"),
         ("network", "Network"), ("summary", "Summary"),
     ]
     if paths.sweep_type == "dealer":
-        nav.insert(3, ("pricing", "Pricing"))
+        nav.insert(4, ("pricing", "Pricing"))
 
     n_treat = len(treatments)
     n_base = len(baselines)
@@ -706,12 +938,37 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
         f'<div class="chart-container">{_fig_to_div(fig_contagion, "contagion")}</div>',
         '<div class="interpretation"><strong>Interpretation:</strong> Contagion timeline at the most '
         'stressed κ level. Compare how treatment reduces or delays cascade propagation.</div>',
+    ]
+
+    # Loss section (between defaults and credit)
+    body_parts.append(f'<h2 id="losses">Loss Analysis</h2>')
+    if fig_loss_decomp is not None:
+        body_parts.extend([
+            f'<div class="chart-container">{_fig_to_div(fig_loss_decomp, "loss_decomp")}</div>',
+            '<div class="interpretation"><strong>Interpretation:</strong> Stacked bars show the '
+            'composition of losses by asset type. Payable defaults are the primary loss channel; '
+            'intermediary losses (dealer, bank, NBFI) represent the cost of the mechanism.</div>',
+        ])
+    if fig_defaults_vs_loss is not None:
+        body_parts.extend([
+            f'<div class="chart-container">{_fig_to_div(fig_defaults_vs_loss, "defaults_vs_loss")}</div>',
+            '<div class="interpretation"><strong>Interpretation:</strong> Bars show default counts; '
+            'lines show total system loss. Where losses grow faster than defaults, there is '
+            'nonlinear amplification (cascade effects, deposit erosion).</div>',
+        ])
+    if fig_loss_decomp is None and fig_defaults_vs_loss is None:
+        body_parts.append(
+            '<div class="interpretation">No loss data available for these runs. '
+            'Loss metrics require run directories with events.jsonl.</div>'
+        )
+
+    body_parts.extend([
         f'<h2 id="credit">Credit Dynamics</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_credit, "credit_created")}</div>',
         f'<div class="chart-container">{_fig_to_div(fig_nci, "nci")}</div>',
         f'<h2 id="funding">Funding Mix</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_funding, "funding")}</div>',
-    ]
+    ])
 
     if paths.sweep_type == "dealer":
         body_parts.extend([
@@ -859,6 +1116,159 @@ def _run_treatment_deltas(paths: SweepPaths, kappas: list[float], output_dir: Pa
         template="plotly_white", height=400,
     )
 
+    # --- Loss charts T1-T4 from comparison CSV ---
+    col_map = LOSS_COLUMN_MAP.get(paths.sweep_type, {})
+    t_suffix = col_map.get("treatment", "_active")
+    b_suffix = col_map.get("baseline", "_passive")
+    loss_effect_col = col_map.get("system_loss_effect", "")
+
+    fig_loss_comparison = None
+    fig_loss_waterfall = None
+    fig_loss_vs_delta = None
+    fig_loss_capital = None
+
+    try:
+        # Build per-kappa loss data from CSV rows
+        csv_loss_data: list[dict[str, Any]] = []
+        for kappa in kappas:
+            matched_row = None
+            for row in rows:
+                try:
+                    if _approx_eq(float(row["kappa"]), kappa):
+                        matched_row = row
+                        break
+                except (ValueError, KeyError):
+                    continue
+            if matched_row is None:
+                continue
+
+            entry: dict[str, Any] = {"kappa": kappa, "row": matched_row}
+            entry["system_loss_pct_t"] = _safe_float(matched_row, f"system_loss_pct{t_suffix}")
+            entry["system_loss_pct_b"] = _safe_float(matched_row, f"system_loss_pct{b_suffix}")
+            entry["total_loss_pct_t"] = _safe_float(matched_row, f"total_loss_pct{t_suffix}")
+            entry["total_loss_pct_b"] = _safe_float(matched_row, f"total_loss_pct{b_suffix}")
+            entry["intermediary_loss_pct_t"] = _safe_float(matched_row, f"intermediary_loss_pct{t_suffix}")
+            entry["intermediary_loss_pct_b"] = _safe_float(matched_row, f"intermediary_loss_pct{b_suffix}")
+            entry["loss_capital_ratio_t"] = _safe_float(matched_row, f"loss_capital_ratio{t_suffix}")
+            entry["loss_capital_ratio_b"] = _safe_float(matched_row, f"loss_capital_ratio{b_suffix}")
+            entry["system_loss_effect"] = _safe_float(matched_row, loss_effect_col)
+            entry["delta_t"] = _safe_float(matched_row, col_map.get("delta_treatment", ""))
+            entry["delta_b"] = _safe_float(matched_row, col_map.get("delta_baseline", ""))
+            csv_loss_data.append(entry)
+
+        has_csv_loss = any(
+            e.get("system_loss_pct_t") is not None or e.get("system_loss_pct_b") is not None
+            for e in csv_loss_data
+        )
+
+        if has_csv_loss and csv_loss_data:
+            loss_x = [f"κ={e['kappa']}" for e in csv_loss_data]
+
+            # Chart T1: System Loss Comparison (Grouped Bar)
+            fig_loss_comparison = go.Figure()
+            fig_loss_comparison.add_trace(go.Bar(
+                name=paths.baseline_label,
+                x=loss_x, y=[e.get("system_loss_pct_b") or 0 for e in csv_loss_data],
+                marker_color=COLORS_LIGHT.get(paths.sweep_type, "#aed6f1"),
+            ))
+            fig_loss_comparison.add_trace(go.Bar(
+                name=paths.treatment_label,
+                x=loss_x, y=[e.get("system_loss_pct_t") or 0 for e in csv_loss_data],
+                marker_color=color,
+            ))
+            fig_loss_comparison.update_layout(
+                barmode="group", title=f"System Loss Comparison: {mech_label}",
+                xaxis_title="κ", yaxis_title="System Loss %",
+                template="plotly_white", height=420,
+            )
+
+            # Chart T2: Loss Attribution Waterfall (Stacked Grouped Bar)
+            fig_loss_waterfall = go.Figure()
+            # Baseline trader loss
+            fig_loss_waterfall.add_trace(go.Bar(
+                name=f"{paths.baseline_label} Trader Loss",
+                x=loss_x, y=[e.get("total_loss_pct_b") or 0 for e in csv_loss_data],
+                marker_color=LOSS_COLORS["trader_total"], opacity=0.5,
+            ))
+            # Baseline intermediary loss (stacked on top of trader)
+            fig_loss_waterfall.add_trace(go.Bar(
+                name=f"{paths.baseline_label} Intermediary Loss",
+                x=loss_x, y=[e.get("intermediary_loss_pct_b") or 0 for e in csv_loss_data],
+                marker_color=LOSS_COLORS["intermediary_total"], opacity=0.5,
+            ))
+            # Treatment trader loss
+            fig_loss_waterfall.add_trace(go.Bar(
+                name=f"{paths.treatment_label} Trader Loss",
+                x=loss_x, y=[e.get("total_loss_pct_t") or 0 for e in csv_loss_data],
+                marker_color=LOSS_COLORS["trader_total"],
+            ))
+            # Treatment intermediary loss
+            fig_loss_waterfall.add_trace(go.Bar(
+                name=f"{paths.treatment_label} Intermediary Loss",
+                x=loss_x, y=[e.get("intermediary_loss_pct_t") or 0 for e in csv_loss_data],
+                marker_color=LOSS_COLORS["intermediary_total"],
+            ))
+            fig_loss_waterfall.update_layout(
+                barmode="stack", title=f"Loss Attribution: Trader vs Intermediary ({mech_label})",
+                xaxis_title="κ", yaxis_title="Loss % of Total Debt",
+                template="plotly_white", height=450,
+            )
+
+            # Chart T3: Delta-Based vs Loss-Based Effect (Bar + Line)
+            from plotly.subplots import make_subplots
+
+            fig_loss_vs_delta = make_subplots(specs=[[{"secondary_y": True}]])
+            loss_effects = [e.get("system_loss_effect") or 0 for e in csv_loss_data]
+            delta_effects = [
+                (e.get("delta_b") or 0) - (e.get("delta_t") or 0) for e in csv_loss_data
+            ]
+            fig_loss_vs_delta.add_trace(
+                go.Bar(
+                    name="System Loss Effect", x=loss_x, y=loss_effects,
+                    marker_color=LOSS_COLORS["intermediary_total"],
+                ),
+                secondary_y=False,
+            )
+            fig_loss_vs_delta.add_trace(
+                go.Scatter(
+                    name="δ-Based Effect", x=loss_x, y=delta_effects,
+                    mode="lines+markers", line=dict(color=color, width=3),
+                    marker=dict(size=8),
+                ),
+                secondary_y=True,
+            )
+            fig_loss_vs_delta.update_layout(
+                title=f"Delta-Based vs Loss-Based Treatment Effect ({mech_label})",
+                xaxis_title="κ", template="plotly_white", height=450,
+            )
+            fig_loss_vs_delta.update_yaxes(title_text="System Loss Effect", secondary_y=False)
+            fig_loss_vs_delta.update_yaxes(title_text="δ Effect (baseline - treatment)", secondary_y=True)
+
+            # Chart T4: Loss/Capital Ratio (conditional on data)
+            has_capital = any(
+                e.get("loss_capital_ratio_t") is not None or e.get("loss_capital_ratio_b") is not None
+                for e in csv_loss_data
+            )
+            if has_capital:
+                fig_loss_capital = go.Figure()
+                fig_loss_capital.add_trace(go.Bar(
+                    name=paths.baseline_label,
+                    x=loss_x, y=[e.get("loss_capital_ratio_b") or 0 for e in csv_loss_data],
+                    marker_color=COLORS_LIGHT.get(paths.sweep_type, "#aed6f1"),
+                ))
+                fig_loss_capital.add_trace(go.Bar(
+                    name=paths.treatment_label,
+                    x=loss_x, y=[e.get("loss_capital_ratio_t") or 0 for e in csv_loss_data],
+                    marker_color=color,
+                ))
+                fig_loss_capital.update_layout(
+                    barmode="group", title=f"Loss / Capital Ratio: {mech_label}",
+                    xaxis_title="κ", yaxis_title="Loss / Intermediary Capital",
+                    template="plotly_white", height=420,
+                )
+    except Exception as exc:
+        logger.debug("Treatment delta loss charts failed: %s", exc)
+
     # --- Summary table ---
     table_rows = []
     for d in deltas:
@@ -879,7 +1289,7 @@ def _run_treatment_deltas(paths: SweepPaths, kappas: list[float], output_dir: Pa
 
     # Assemble
     nav = [
-        ("defaults", "Default Deltas"), ("credit", "Credit Deltas"),
+        ("defaults", "Default Deltas"), ("losses", "Loss Deltas"), ("credit", "Credit Deltas"),
         ("funding", "Funding Shift"), ("network", "Network Deltas"), ("summary", "Summary"),
     ]
     body_parts = [
@@ -891,6 +1301,43 @@ def _run_treatment_deltas(paths: SweepPaths, kappas: list[float], output_dir: Pa
         '<div class="interpretation"><strong>Interpretation:</strong> Negative bars mean the treatment '
         'reduced defaults compared to baseline. Cascade reduction is particularly important as it '
         'indicates systemic risk mitigation.</div>',
+    ]
+
+    # Loss section
+    body_parts.append(f'<h2 id="losses">Loss Comparison</h2>')
+    if fig_loss_comparison is not None:
+        body_parts.extend([
+            f'<div class="chart-container">{_fig_to_div(fig_loss_comparison, "loss_comparison")}</div>',
+            '<div class="interpretation"><strong>Interpretation:</strong> System loss = trader loss + '
+            'intermediary loss. Lower bars mean the mechanism reduced overall economic damage.</div>',
+        ])
+    if fig_loss_waterfall is not None:
+        body_parts.extend([
+            f'<div class="chart-container">{_fig_to_div(fig_loss_waterfall, "loss_waterfall")}</div>',
+            '<div class="interpretation"><strong>Interpretation:</strong> If treatment reduces trader loss '
+            'but increases intermediary loss, that indicates loss-shifting rather than genuine risk reduction. '
+            'Both components should shrink for a true improvement.</div>',
+        ])
+    if fig_loss_vs_delta is not None:
+        body_parts.extend([
+            f'<div class="chart-container">{_fig_to_div(fig_loss_vs_delta, "loss_vs_delta")}</div>',
+            '<div class="interpretation"><strong>Interpretation:</strong> The gap between the δ-based effect '
+            '(line) and the system loss effect (bars) represents the intermediary cost of the mechanism. '
+            'If the line exceeds the bars, intermediaries absorbed some of the default reduction.</div>',
+        ])
+    if fig_loss_capital is not None:
+        body_parts.extend([
+            f'<div class="chart-container">{_fig_to_div(fig_loss_capital, "loss_capital")}</div>',
+            '<div class="interpretation"><strong>Interpretation:</strong> Loss/capital ratio shows how much '
+            'intermediary capital was consumed. Values above 1.0 mean intermediaries lost more than their '
+            'initial capital.</div>',
+        ])
+    if all(f is None for f in [fig_loss_comparison, fig_loss_waterfall, fig_loss_vs_delta]):
+        body_parts.append(
+            '<div class="interpretation">No loss data available in comparison CSV for these runs.</div>'
+        )
+
+    body_parts.extend([
         f'<h2 id="credit">Credit Impulse Delta</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_nci_delta, "nci_delta")}</div>',
         f'<h2 id="funding">Funding Source Shift</h2>',
@@ -899,7 +1346,7 @@ def _run_treatment_deltas(paths: SweepPaths, kappas: list[float], output_dir: Pa
         f'<div class="chart-container">{_fig_to_div(fig_degree_delta, "degree_delta")}</div>',
         f'<h2 id="summary">Summary</h2>',
         f'<div class="chart-container">{summary_table}</div>',
-    ]
+    ])
 
     html = _dashboard_shell(
         f"{mech_label} Treatment Deltas", nav, "\n".join(body_parts), paths.sweep_type,
@@ -1104,10 +1551,133 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
         template="plotly_white", height=450,
     )
 
+    # --- Loss dynamics charts Y1-Y3 (from comparison CSV, all kappas) ---
+    col_map = LOSS_COLUMN_MAP.get(paths.sweep_type, {})
+    t_suffix = col_map.get("treatment", "_active")
+    b_suffix = col_map.get("baseline", "_passive")
+
+    fig_loss_kappa = None
+    fig_loss_composition = None
+    fig_loss_scatter = None
+
+    try:
+        all_csv_rows = _read_csv(paths.comparison_csv)
+        # Build sorted kappa-loss data from ALL CSV rows
+        kappa_loss_entries: list[dict[str, Any]] = []
+        for row in all_csv_rows:
+            try:
+                k = float(row["kappa"])
+            except (ValueError, KeyError):
+                continue
+            entry: dict[str, Any] = {"kappa": k}
+            entry["system_loss_pct_t"] = _safe_float(row, f"system_loss_pct{t_suffix}")
+            entry["system_loss_pct_b"] = _safe_float(row, f"system_loss_pct{b_suffix}")
+            entry["total_loss_pct_t"] = _safe_float(row, f"total_loss_pct{t_suffix}")
+            entry["total_loss_pct_b"] = _safe_float(row, f"total_loss_pct{b_suffix}")
+            entry["intermediary_loss_pct_t"] = _safe_float(row, f"intermediary_loss_pct{t_suffix}")
+            entry["intermediary_loss_pct_b"] = _safe_float(row, f"intermediary_loss_pct{b_suffix}")
+            entry["delta_t"] = _safe_float(row, col_map.get("delta_treatment", ""))
+            entry["delta_b"] = _safe_float(row, col_map.get("delta_baseline", ""))
+            kappa_loss_entries.append(entry)
+        kappa_loss_entries.sort(key=lambda e: e["kappa"])
+
+        has_loss_dynamics = any(
+            e.get("system_loss_pct_t") is not None or e.get("system_loss_pct_b") is not None
+            for e in kappa_loss_entries
+        )
+
+        if has_loss_dynamics and kappa_loss_entries:
+            k_vals = [e["kappa"] for e in kappa_loss_entries]
+
+            # Chart Y1: System Loss vs κ (Dual Line with fill)
+            fig_loss_kappa = go.Figure()
+            sys_t = [e.get("system_loss_pct_t") or 0 for e in kappa_loss_entries]
+            sys_b = [e.get("system_loss_pct_b") or 0 for e in kappa_loss_entries]
+            fig_loss_kappa.add_trace(go.Scatter(
+                x=k_vals, y=sys_b, mode="lines+markers",
+                name=paths.baseline_label, line=dict(color=COLORS_LIGHT.get(paths.sweep_type, "#aed6f1")),
+                marker=dict(size=6),
+            ))
+            fig_loss_kappa.add_trace(go.Scatter(
+                x=k_vals, y=sys_t, mode="lines+markers",
+                name=paths.treatment_label, line=dict(color=color),
+                marker=dict(size=6), fill="tonexty", fillcolor=f"rgba(0,0,0,0.05)",
+            ))
+            fig_loss_kappa.update_layout(
+                title=f"System Loss vs κ ({mech_label})",
+                xaxis_title="κ (liquidity ratio)", yaxis_title="System Loss %",
+                template="plotly_white", height=420,
+            )
+
+            # Chart Y2: Loss Composition across κ (Stacked Area, treatment arm)
+            fig_loss_composition = go.Figure()
+            trader_loss = [e.get("total_loss_pct_t") or 0 for e in kappa_loss_entries]
+            interm_loss = [e.get("intermediary_loss_pct_t") or 0 for e in kappa_loss_entries]
+            if any(v > 0 for v in trader_loss):
+                fig_loss_composition.add_trace(go.Scatter(
+                    x=k_vals, y=trader_loss, mode="lines",
+                    name="Trader Loss %", stackgroup="one",
+                    line=dict(color=LOSS_COLORS["trader_total"]),
+                    fillcolor="rgba(192, 57, 43, 0.3)",
+                ))
+            if any(v > 0 for v in interm_loss):
+                fig_loss_composition.add_trace(go.Scatter(
+                    x=k_vals, y=interm_loss, mode="lines",
+                    name="Intermediary Loss %", stackgroup="one",
+                    line=dict(color=LOSS_COLORS["intermediary_total"]),
+                    fillcolor="rgba(41, 128, 185, 0.3)",
+                ))
+            fig_loss_composition.update_layout(
+                title=f"Loss Composition across κ ({paths.treatment_label})",
+                xaxis_title="κ", yaxis_title="Loss % of Total Debt",
+                template="plotly_white", height=420,
+            )
+
+            # Chart Y3: Default Rate vs System Loss (Scatter)
+            fig_loss_scatter = go.Figure()
+            t_deltas = [e.get("delta_t") for e in kappa_loss_entries]
+            b_deltas = [e.get("delta_b") for e in kappa_loss_entries]
+            # Treatment points
+            scatter_x_t = [d for d in t_deltas if d is not None]
+            scatter_y_t = [
+                e.get("system_loss_pct_t") or 0
+                for e, d in zip(kappa_loss_entries, t_deltas)
+                if d is not None
+            ]
+            if scatter_x_t:
+                fig_loss_scatter.add_trace(go.Scatter(
+                    x=scatter_x_t, y=scatter_y_t, mode="markers",
+                    name=paths.treatment_label,
+                    marker=dict(color=color, size=10, symbol="circle"),
+                ))
+            # Baseline points
+            scatter_x_b = [d for d in b_deltas if d is not None]
+            scatter_y_b = [
+                e.get("system_loss_pct_b") or 0
+                for e, d in zip(kappa_loss_entries, b_deltas)
+                if d is not None
+            ]
+            if scatter_x_b:
+                fig_loss_scatter.add_trace(go.Scatter(
+                    x=scatter_x_b, y=scatter_y_b, mode="markers",
+                    name=paths.baseline_label,
+                    marker=dict(
+                        color=COLORS_LIGHT.get(paths.sweep_type, "#aed6f1"),
+                        size=10, symbol="diamond-open", line=dict(width=2),
+                    ),
+                ))
+            fig_loss_scatter.update_layout(
+                title=f"Default Rate vs System Loss ({mech_label})",
+                xaxis_title="δ (Default Rate)", yaxis_title="System Loss %",
+                template="plotly_white", height=450,
+            )
+    except Exception as exc:
+        logger.debug("Dynamics loss charts failed: %s", exc)
+
     # Assemble
     nav = [
         ("timeline", "Default Timeline"), ("metrics", "Metrics Trajectories"),
-        ("agents", "Agent Outcomes"),
+        ("losses", "Loss Dynamics"), ("agents", "Agent Outcomes"),
     ]
     body_parts = [
         f"<h1>{mech_label} Dynamics Analysis</h1>",
@@ -1126,12 +1696,43 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
         f'<div class="chart-container">{_fig_to_div(fig_phi_t, "phi_t")}</div>',
         '<div class="interpretation"><strong>Interpretation:</strong> φ_t tracks the clearing rate '
         '(fraction of due obligations settled). Higher is better — treatment should raise φ_t.</div>',
+    ]
+
+    # Loss dynamics section
+    body_parts.append(f'<h2 id="losses">Loss Dynamics</h2>')
+    if fig_loss_kappa is not None:
+        body_parts.extend([
+            f'<div class="chart-container">{_fig_to_div(fig_loss_kappa, "loss_kappa")}</div>',
+            '<div class="interpretation"><strong>Interpretation:</strong> System loss as a function of '
+            'liquidity (κ). The shaded area between curves shows the loss reduction from the treatment. '
+            'Wider gaps at low κ indicate the mechanism is most effective under stress.</div>',
+        ])
+    if fig_loss_composition is not None:
+        body_parts.extend([
+            f'<div class="chart-container">{_fig_to_div(fig_loss_composition, "loss_composition")}</div>',
+            '<div class="interpretation"><strong>Interpretation:</strong> How losses are distributed between '
+            'traders (direct payable defaults) and intermediaries (mechanism cost). As κ increases, both '
+            'components should decrease.</div>',
+        ])
+    if fig_loss_scatter is not None:
+        body_parts.extend([
+            f'<div class="chart-container">{_fig_to_div(fig_loss_scatter, "loss_scatter")}</div>',
+            '<div class="interpretation"><strong>Interpretation:</strong> Each point is one parameter '
+            'combination. Points above the diagonal suggest nonlinear loss amplification (losses exceed '
+            'default rates). Filled markers = treatment, open = baseline.</div>',
+        ])
+    if all(f is None for f in [fig_loss_kappa, fig_loss_composition, fig_loss_scatter]):
+        body_parts.append(
+            '<div class="interpretation">No loss data available in comparison CSV.</div>'
+        )
+
+    body_parts.extend([
         f'<h2 id="agents">Agent Outcomes</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_agents, "agents")}</div>',
         '<div class="interpretation"><strong>Interpretation:</strong> Each point is an agent. '
         'Agents that traded more and survived with positive cash benefited from the mechanism. '
         'Red X marks indicate defaulted agents.</div>',
-    ]
+    ])
 
     html = _dashboard_shell(
         f"{mech_label} Dynamics Analysis", nav, "\n".join(body_parts), paths.sweep_type,
@@ -1272,8 +1873,128 @@ def _run_narrative(paths: SweepPaths, kappas: list[float], output_dir: Path) -> 
     </div>
     """)
 
+    # Loss analysis section
+    try:
+        col_map = LOSS_COLUMN_MAP.get(paths.sweep_type, {})
+        t_suffix = col_map.get("treatment", "_active")
+        b_suffix = col_map.get("baseline", "_passive")
+        loss_effect_col = col_map.get("system_loss_effect", "")
+
+        sys_loss_t_all: list[float] = []
+        sys_loss_b_all: list[float] = []
+        total_loss_t_all: list[float] = []
+        interm_loss_t_all: list[float] = []
+        kappa_loss_data: list[dict[str, Any]] = []
+
+        for row in rows:
+            slt = _safe_float(row, f"system_loss_pct{t_suffix}")
+            slb = _safe_float(row, f"system_loss_pct{b_suffix}")
+            if slt is not None:
+                sys_loss_t_all.append(slt)
+            if slb is not None:
+                sys_loss_b_all.append(slb)
+            tlt = _safe_float(row, f"total_loss_pct{t_suffix}")
+            if tlt is not None:
+                total_loss_t_all.append(tlt)
+            ilt = _safe_float(row, f"intermediary_loss_pct{t_suffix}")
+            if ilt is not None:
+                interm_loss_t_all.append(ilt)
+
+        # Per-kappa loss table
+        for k in sorted(kappa_effects.keys()):
+            matched = [
+                r for r in rows
+                if _safe_float(r, "kappa") is not None and _approx_eq(float(r["kappa"]), k)
+            ]
+            if not matched:
+                continue
+            row = matched[0]
+            kappa_loss_data.append({
+                "kappa": k,
+                "sys_loss_b": _safe_float(row, f"system_loss_pct{b_suffix}"),
+                "sys_loss_t": _safe_float(row, f"system_loss_pct{t_suffix}"),
+                "effect": _safe_float(row, loss_effect_col),
+            })
+
+        has_loss_narrative = bool(sys_loss_t_all or sys_loss_b_all)
+
+        if has_loss_narrative:
+            mean_loss_t = sum(sys_loss_t_all) / len(sys_loss_t_all) if sys_loss_t_all else 0
+            mean_loss_b = sum(sys_loss_b_all) / len(sys_loss_b_all) if sys_loss_b_all else 0
+            loss_reduction = mean_loss_b - mean_loss_t
+            loss_reduction_pct = (loss_reduction / mean_loss_b * 100) if mean_loss_b > 0 else 0
+
+            # Attribution
+            mean_trader = sum(total_loss_t_all) / len(total_loss_t_all) if total_loss_t_all else 0
+            mean_interm = sum(interm_loss_t_all) / len(interm_loss_t_all) if interm_loss_t_all else 0
+            total_sys = mean_trader + mean_interm
+            trader_share = (mean_trader / total_sys * 100) if total_sys > 0 else 0
+            interm_share = (mean_interm / total_sys * 100) if total_sys > 0 else 0
+
+            sections.append(f"""
+    <h2>Loss Analysis</h2>
+    <p>Beyond default counts, system losses measure the actual economic damage from defaults.
+    System loss combines trader losses (payable defaults, deposit erosion) with intermediary
+    losses (dealer mark-to-market, NBFI loan defaults, bank credit losses, CB backstop).</p>
+
+    <div style="display: flex; gap: 20px; margin: 20px 0;">
+        <div style="background: white; padding: 20px; border-radius: 8px; flex: 1; text-align: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="font-size: 24px; font-weight: bold; color: {LOSS_COLORS['trader_total']};">
+                {mean_loss_b:.4f}
+            </div>
+            <div style="color: #666; margin-top: 4px;">Mean Baseline System Loss</div>
+        </div>
+        <div style="background: white; padding: 20px; border-radius: 8px; flex: 1; text-align: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="font-size: 24px; font-weight: bold; color: {color};">
+                {mean_loss_t:.4f}
+            </div>
+            <div style="color: #666; margin-top: 4px;">Mean Treatment System Loss</div>
+        </div>
+        <div style="background: white; padding: 20px; border-radius: 8px; flex: 1; text-align: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="font-size: 24px; font-weight: bold; color: #27ae60;">
+                {loss_reduction_pct:+.1f}%
+            </div>
+            <div style="color: #666; margin-top: 4px;">Loss Reduction</div>
+        </div>
+    </div>
+
+    <div class="interpretation">
+    <strong>Loss attribution (treatment arm):</strong> Of total system loss,
+    {trader_share:.0f}% is borne by traders (payable defaults + deposits) and
+    {interm_share:.0f}% by intermediaries (dealer, lender, bank, CB).
+    </div>
+    """)
+
+            # Per-kappa loss table
+            if kappa_loss_data:
+                loss_table_rows = []
+                for entry in kappa_loss_data:
+                    sl_b = f"{entry['sys_loss_b']:.4f}" if entry.get("sys_loss_b") is not None else "n/a"
+                    sl_t = f"{entry['sys_loss_t']:.4f}" if entry.get("sys_loss_t") is not None else "n/a"
+                    eff = f"{entry['effect']:+.4f}" if entry.get("effect") is not None else "n/a"
+                    loss_table_rows.append(
+                        f"<tr><td>{entry['kappa']}</td><td>{sl_b}</td>"
+                        f"<td>{sl_t}</td><td>{eff}</td></tr>"
+                    )
+                sections.append(f"""
+    <div class="chart-container">
+    <table class="summary-table" style="font-family: system-ui, sans-serif;">
+    <thead><tr>
+        <th>κ</th><th>Baseline System Loss %</th>
+        <th>Treatment System Loss %</th><th>Loss Effect</th>
+    </tr></thead>
+    <tbody>{"".join(loss_table_rows)}</tbody>
+    </table>
+    </div>
+    """)
+    except Exception as exc:
+        logger.debug("Narrative loss section failed: %s", exc)
+
     # Assemble
-    nav = [("summary", "Summary"), ("kappa", "By κ"), ("findings", "Findings")]
+    nav = [("summary", "Summary"), ("kappa", "By κ"), ("findings", "Findings"), ("losses", "Losses")]
     body = f"<h1>{mech_label} Narrative Report</h1>\n" + "\n".join(sections)
 
     html = f"""<!DOCTYPE html>
