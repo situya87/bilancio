@@ -65,6 +65,10 @@ class EventKind(str, Enum):
     # ── Interbank / clearing events ──────────────────────────────────
     INTERBANK_CLEARED = "InterbankCleared"
     INTERBANK_OVERNIGHT_CREATED = "InterbankOvernightCreated"
+    INTERBANK_AUCTION = "InterbankAuction"
+    INTERBANK_AUCTION_TRADE = "InterbankAuctionTrade"
+    INTERBANK_UNFILLED = "InterbankUnfilled"
+    INTERBANK_REPAID = "InterbankRepaid"
 
     # ── Banking / payment events ─────────────────────────────────────
     CASH_DEPOSITED = "CashDeposited"

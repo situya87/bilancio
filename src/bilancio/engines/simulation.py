@@ -24,6 +24,7 @@ IMPACT_EVENTS = {
     "DeliveryObligationSettled",
     "InterbankCleared",
     "InterbankOvernightCreated",
+    "InterbankAuctionTrade",
 }
 
 DEFAULT_EVENTS = {
@@ -370,17 +371,48 @@ def run_day(
             system, current_day, settled_for_rollover, dealer_active=dealer_active
         )
 
-    # Phase C: Clear intraday nets for the current day
-    system.log("PhaseC")  # optional: helps timeline
-    settle_intraday_nets(system, current_day)
-
-    # SubphaseC_Interbank: Interbank lending (optional)
+    # Phase C: Clear intraday nets + interbank auction
+    system.log("PhaseC")
     if enable_banking and banking_sub is not None:
-        system.log("SubphaseC_Interbank")
-        from bilancio.engines.interbank import run_interbank_lending
+        from bilancio.engines.interbank import (
+            compute_interbank_obligations,
+            finalize_interbank_repayments,
+            run_interbank_auction,
+        )
+        from bilancio.engines.clearing import (
+            compute_bank_net_obligations,
+            compute_combined_nets,
+            settle_nets_with_funding,
+        )
 
-        interbank_events = run_interbank_lending(system, current_day, banking_sub)
-        system.state.events.extend(interbank_events)
+        # 1. Identify overnight loan repayment obligations (DO NOT settle yet)
+        ib_obligations = compute_interbank_obligations(current_day, banking_sub)
+
+        # 2-3. Compute combined bilateral nets and per-bank positions
+        combined_nets = compute_combined_nets(system, current_day, ib_obligations)
+        net_obligations = compute_bank_net_obligations(combined_nets)
+
+        # 4. Call auction
+        system.log("SubphaseC_InterbankAuction")
+        auction_events = run_interbank_auction(
+            system, current_day, banking_sub, net_obligations,
+        )
+        system.state.events.extend(auction_events)
+
+        # 5. Settle combined nets (interbank-funded + CB fallback)
+        settle_nets_with_funding(system, current_day, combined_nets)
+
+        # 6. Finalize overnight repayments (remove from book)
+        repay_events = finalize_interbank_repayments(
+            current_day, banking_sub, ib_obligations,
+        )
+        system.state.events.extend(repay_events)
+
+        # 7. CB backstop (top up remaining deficit banks to target)
+        _run_cb_backstop(system, banking_sub, current_day)
+        banking_sub.refresh_all_quotes(system, current_day)
+    else:
+        settle_intraday_nets(system, current_day)
 
     # Phase D: CB corridor maintenance (interest + loan repayment)
     has_cb = any(agent.kind == AgentKind.CENTRAL_BANK for agent in system.state.agents.values())
@@ -464,17 +496,7 @@ def run_day(
         interest_events = accrue_deposit_interest(system, current_day, banking_sub)
         system.state.events.extend(interest_events)
 
-    # Interbank loan repayments
-    if enable_banking and banking_sub is not None:
-        from bilancio.engines.interbank import run_interbank_repayments
-
-        ib_repay_events = run_interbank_repayments(system, current_day, banking_sub)
-        system.state.events.extend(ib_repay_events)
-
-    # CB end-of-day backstop (paper Part E): top up reserves to target
-    if enable_banking and banking_sub is not None:
-        _run_cb_backstop(system, banking_sub, current_day)
-        banking_sub.refresh_all_quotes(system, current_day)
+    # (Interbank repayments and CB backstop are now handled in Phase C)
 
     # Increment system day
     system.state.day += 1
@@ -686,9 +708,26 @@ def _run_bank_loan_winddown(system: System, banking_sub) -> int:
         )
         system.state.events.extend(bank_repay_events)
 
-        # Run interbank repayments
-        from bilancio.engines.interbank import run_interbank_repayments
-        ib_repay_events = run_interbank_repayments(system, current_day, banking_sub)
+        # Run interbank repayments (simplified: identify + finalize during wind-down)
+        from bilancio.engines.interbank import (
+            compute_interbank_obligations,
+            finalize_interbank_repayments,
+        )
+        ib_obligations = compute_interbank_obligations(current_day, banking_sub)
+        # During wind-down, interbank repayments are simple reserve transfers
+        # (no auction needed — just settle maturing loans directly)
+        for borrower, lender, repayment, _loan in ib_obligations:
+            try:
+                system.transfer_reserves(borrower, lender, repayment)
+            except Exception:
+                # Borrower can't repay — CB backstop will handle
+                logger.warning(
+                    "Wind-down interbank repayment failed: %s -> %s amount=%d",
+                    borrower, lender, repayment,
+                )
+        ib_repay_events = finalize_interbank_repayments(
+            current_day, banking_sub, ib_obligations,
+        )
         system.state.events.extend(ib_repay_events)
 
         # CB loan repayments during wind-down

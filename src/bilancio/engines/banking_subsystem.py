@@ -123,7 +123,13 @@ class BankTreynorState:
         self.realized_withdrawals = 0
         self.withdrawal_forecast = 0
 
-    def refresh_quote(self, system: System, current_day: int, n_banks: int = 1) -> Quote:
+    def refresh_quote(
+        self,
+        system: System,
+        current_day: int,
+        n_banks: int = 1,
+        interbank_loans: list | None = None,
+    ) -> Quote:
         """Recompute (r_D, r_L) from bank's current balance sheet.
 
         Uses a 10-day reserve projection path (per paper Section 6.1.3):
@@ -185,6 +191,15 @@ class BankTreynorState:
             # This makes rates rise with lending volume — the correct behavior.
             # When repayments DO arrive, actual reserves improve, and the next
             # quote naturally reflects the better position.
+
+            # Interbank loan legs (overnight, risk-free between banks)
+            if interbank_loans:
+                for ib_loan in interbank_loans:
+                    if ib_loan.maturity_day == proj_day:
+                        if ib_loan.lender_bank == self.bank_id:
+                            delta += ib_loan.repayment_amount  # inflow
+                        elif ib_loan.borrower_bank == self.bank_id:
+                            delta -= ib_loan.repayment_amount  # outflow
 
             path[s] = path[s - 1] + delta
 
@@ -312,7 +327,10 @@ class BankingSubsystem:
         settlement = self.compute_settlement_forecasts(system, current_day)
         for bank_state in self.banks.values():
             bank_state._settlement_net_outflow = settlement.get(bank_state.bank_id, 0)
-            bank_state.refresh_quote(system, current_day, n_banks)
+            bank_state.refresh_quote(
+                system, current_day, n_banks,
+                interbank_loans=self.interbank_loans,
+            )
 
     def compute_settlement_forecasts(
         self, system: System, current_day: int
