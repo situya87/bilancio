@@ -35,7 +35,7 @@ jobs:
             script: scripts/run_scientific_comparison_benchmark.py
             report_json: temp/scientific_comparison_benchmark_report.json
             report_md: temp/scientific_comparison_benchmark_report.md
-          - name: Calibration / Stylized-Facts Benchmark
+          - name: Calibration - Stylized-Facts Benchmark
             script: scripts/run_stylized_facts_benchmark.py
             report_json: temp/stylized_facts_benchmark_report.json
             report_md: temp/stylized_facts_benchmark_report.md
