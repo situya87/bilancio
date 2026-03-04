@@ -130,6 +130,7 @@ class CloudExecutor:
             execution_time_ms=result.get("execution_time_ms"),
             modal_call_id=result.get("modal_call_id"),
             metrics=result.get("metrics"),
+            performance_config=result.get("performance_config"),
         )
 
     def execute_batch(
@@ -199,6 +200,7 @@ class CloudExecutor:
                 execution_time_ms=result.get("execution_time_ms"),
                 modal_call_id=result.get("modal_call_id"),
                 metrics=result.get("metrics"),
+                performance_config=result.get("performance_config"),
             )
 
             completed += 1
@@ -233,6 +235,8 @@ class CloudExecutor:
             result["seed"] = options.seed
         if options.performance is not None:
             result["performance"] = options.performance.to_dict()
+        if options.show_balances is not None:
+            result["show_balances"] = options.show_balances
         return result
 
     @retry_transient(max_retries=2)

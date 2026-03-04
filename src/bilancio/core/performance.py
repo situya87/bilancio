@@ -28,7 +28,6 @@ _BOOL_FLAGS = (
     "preview_buy",
     "dirty_bucket_recompute",
     "incremental_intentions",
-    "targeted_undo",
 )
 
 # Flags enabled by each preset (beyond compatible defaults)
@@ -45,7 +44,6 @@ _PRESET_AGGRESSIVE: dict[str, Any] = {
     "preview_buy": True,
     "dirty_bucket_recompute": True,
     "incremental_intentions": True,
-    # targeted_undo deliberately excluded (too risky)
     # matching_order stays "random" (semantics-changing)
 }
 
@@ -54,6 +52,21 @@ _PRESETS: dict[str, dict[str, Any]] = {
     "fast": _PRESET_FAST,
     "aggressive": _PRESET_AGGRESSIVE,
 }
+
+# Classification of flags by semantic impact
+SEMANTICS_PRESERVING: frozenset[str] = frozenset({
+    "fast_atomic",
+    "prune_ineligible",
+    "cache_dealer_quotes",
+    "preview_buy",
+    "dirty_bucket_recompute",
+    "incremental_intentions",
+    "dealer_backend",
+})
+
+SEMANTICS_CHANGING: frozenset[str] = frozenset({
+    "matching_order",
+})
 
 
 @dataclass(frozen=True)
@@ -80,7 +93,6 @@ class PerformanceConfig:
             buckets that had a successful trade.
         incremental_intentions: (H) Maintain persistent intention queues
             across rounds; only re-evaluate changed traders.
-        targeted_undo: (I) Field-level undo log instead of deepcopy.
         preset: ``"compatible"`` | ``"fast"`` | ``"aggressive"``.
     """
 
@@ -92,7 +104,6 @@ class PerformanceConfig:
     preview_buy: bool = False              # F
     dirty_bucket_recompute: bool = False   # G
     incremental_intentions: bool = False   # H
-    targeted_undo: bool = False            # I
     preset: str = "compatible"             # "compatible" | "fast" | "aggressive"
 
     def __post_init__(self) -> None:

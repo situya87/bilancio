@@ -118,6 +118,7 @@ class LocalExecutor:
                 storage_base=str(output_dir.resolve()),
                 artifacts=artifacts,
                 execution_time_ms=execution_time_ms,
+                performance_config=options.performance.to_dict() if options.performance else None,
             )
 
         except EXECUTION_ERRORS as e:

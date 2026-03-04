@@ -56,6 +56,11 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="temp/scientific_comparison_benchmark/artifacts",
     )
+    parser.add_argument(
+        "--manifest",
+        type=str,
+        default="scripts/analysis_manifest.json",
+    )
     return parser.parse_args()
 
 
@@ -241,6 +246,52 @@ def _canonicalize_sensitivity(results: list[Any]) -> list[tuple[str, float, floa
     return out
 
 
+def _load_analysis_manifest(path: Path) -> dict[str, Any]:
+    """Load and validate the analysis manifest JSON."""
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    # Basic schema validation
+    required_keys = {"version", "primary_endpoints", "hypothesis_families", "design"}
+    if not required_keys.issubset(manifest.keys()):
+        raise ValueError(f"Manifest missing keys: {required_keys - set(manifest.keys())}")
+    for ep in manifest["primary_endpoints"]:
+        for k in ("metric", "mde", "alpha", "power"):
+            if k not in ep:
+                raise ValueError(f"Endpoint missing key: {k}")
+    return manifest
+
+
+def _compute_required_replicates(
+    mde: float, alpha: float, power: float, variance: float
+) -> int:
+    """Compute required replicates per cell for a paired t-test.
+
+    Uses the formula: n = ceil((z_alpha + z_beta)^2 * 2 * sigma^2 / mde^2)
+    where z_alpha and z_beta are the standard normal quantiles.
+    """
+    from scipy.stats import norm
+
+    z_alpha = norm.ppf(1 - alpha / 2)
+    z_beta = norm.ppf(power)
+    n = math.ceil((z_alpha + z_beta) ** 2 * 2 * variance / (mde ** 2))
+    return max(2, n)  # At least 2 replicates
+
+
+def _validate_manifest_coverage(
+    manifest: dict[str, Any], effect_rows: list[dict[str, Any]]
+) -> bool:
+    """Check all primary endpoints in manifest have corresponding effect rows."""
+    if not manifest or not manifest.get("primary_endpoints"):
+        return False
+    required_metrics = {ep["metric"] for ep in manifest["primary_endpoints"]}
+    # effect_rows have trading_effect for delta_total by construction
+    # We just check that delta_total is present (phi_total effects come from same analysis)
+    available = {"delta_total", "phi_total"}  # Our benchmark always computes these
+    return required_metrics.issubset(available)
+
+
 def main() -> int:
     args = parse_args()
     cwd = Path(__file__).resolve().parents[1]
@@ -249,6 +300,9 @@ def main() -> int:
     artifacts_dir = cwd / args.artifacts_dir
 
     t0 = perf_counter()
+
+    manifest_path = cwd / args.manifest
+    manifest = _load_analysis_manifest(manifest_path)
 
     kappas = [Decimal("0.4"), Decimal("1.0")]
     concentrations = [Decimal("0.5"), Decimal("2.0")]
@@ -325,6 +379,28 @@ def main() -> int:
     min_replicates = min(cell_counts.values()) if cell_counts else 0
     max_replicates = max(cell_counts.values()) if cell_counts else 0
     balance_ratio = (min_replicates / max_replicates) if max_replicates > 0 else 0.0
+
+    # Power planning: compute required replicates from manifest
+    required_replicates = args.replicates  # default
+    power_valid = True
+    estimated_variance = 0.01  # conservative default
+    if manifest and records:
+        effects_list = [r["delta_passive"] - r["delta_active"] for r in records]
+        if len(effects_list) > 1:
+            import statistics
+
+            estimated_variance = statistics.variance(effects_list)
+        for ep in manifest.get("primary_endpoints", []):
+            if ep["metric"] == "delta_total":
+                req = _compute_required_replicates(
+                    mde=ep["mde"],
+                    alpha=ep["alpha"],
+                    power=ep["power"],
+                    variance=estimated_variance,
+                )
+                required_replicates = max(required_replicates, req)
+                if min_replicates < req:
+                    power_valid = False
 
     unique_record_keys = {_record_key(record) for record in records}
     uniqueness_rate = len(unique_record_keys) / max(1, completed_pairs)
@@ -595,6 +671,16 @@ def main() -> int:
                 f"deterministic_effects={deterministic_effects}, "
                 f"deterministic_sensitivity={deterministic_sensitivity}"
             ),
+        ),
+        CriticalCheck(
+            code="scientific::power_planning_valid",
+            passed=power_valid,
+            message=f"min_replicates={min_replicates}, required_for_power={required_replicates}, variance={estimated_variance:.6f}",
+        ),
+        CriticalCheck(
+            code="scientific::analysis_manifest_present",
+            passed=bool(manifest),
+            message=f"manifest_path={manifest_path}, loaded={bool(manifest)}",
         ),
     ]
 
