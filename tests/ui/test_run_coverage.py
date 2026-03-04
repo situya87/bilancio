@@ -423,8 +423,8 @@ class TestRunScenarioErrors:
         with pytest.raises((SystemExit, Exception)):
             run_scenario(bad_file, max_days=1)
 
-    def test_missing_agents(self, tmp_path):
-        """Scenario with no agents should fail during setup."""
+    def test_empty_agents_returns_none(self, tmp_path):
+        """Scenario with no agents runs to max_days and returns None."""
         scenario = {
             "version": 1,
             "name": "Empty",
@@ -433,11 +433,9 @@ class TestRunScenarioErrors:
             "run": {"max_days": 1},
         }
         path = _write_scenario(tmp_path, scenario)
-        # This may either raise or exit; both are acceptable
-        try:
-            run_scenario(path, max_days=1, show="none")
-        except (SystemExit, Exception):
-            pass
+        # Empty agent list hits max_days without stable state → returns None
+        result = run_scenario(path, max_days=1, show="none")
+        assert result is None
 
 
 # ---------------------------------------------------------------------------

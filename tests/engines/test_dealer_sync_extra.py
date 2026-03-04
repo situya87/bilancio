@@ -224,8 +224,10 @@ class TestUpdateVBTCreditMids:
         sub.initial_spread_by_bucket = {"short": Decimal("0.10")}
 
         _update_vbt_credit_mids(sub, current_day=1)
-        # M should have been updated via legacy logic
-        assert v.M != Decimal("0.90") or True  # Value changes with p_default != prior
+        # Legacy: new_M = initial_M + sens*(raw_M - initial_M)
+        # raw_M = 0.90*(1-0.10) = 0.81, initial_M = 0.90*(1-0.15) = 0.765
+        # new_M = 0.765 + 1.0*(0.81 - 0.765) = 0.81
+        assert v.M == Decimal("0.81")
 
 
 class TestCleanupOrphanedTickets:
