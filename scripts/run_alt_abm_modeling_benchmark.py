@@ -26,9 +26,11 @@ Critical Gates (4):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import math
+import re
 import statistics
 import sys
 from dataclasses import asdict, dataclass
@@ -238,6 +240,51 @@ def total_event_count(system: System) -> int:
     return len(system.state.events)
 
 
+def event_stream_signature(system: System) -> str:
+    """Stable hash of the event stream for deterministic comparisons.
+
+    Ignores volatile contract/instrument identifiers that can vary across runs
+    while preserving event semantics.
+    """
+    volatile_keys = {
+        "id",
+        "instr_id",
+        "payable_id",
+        "loan_id",
+        "contract_id",
+        "delivery_id",
+        "new_payable_id",
+        "old_payable_id",
+        "trigger_contract",
+        "run_id",
+    }
+
+    def is_volatile_field(key: str, value: Any) -> bool:
+        if key in volatile_keys:
+            return True
+        if key.endswith("_id"):
+            return True
+        if key in {"pid", "keep", "removed"}:
+            return True
+        if isinstance(value, str):
+            if re.fullmatch(r"[A-Z]+_[0-9a-f]{8,}", value):
+                return True
+            if re.fullmatch(r"PAY_[0-9a-f]{8,}", value):
+                return True
+        return False
+
+    digest = hashlib.sha256()
+    for event in system.state.events:
+        stable_event = {
+            k: v for k, v in event.items()
+            if not is_volatile_field(k, v)
+        }
+        encoded = json.dumps(stable_event, sort_keys=True, separators=(",", ":"), default=str)
+        digest.update(encoded.encode("utf-8"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
 def has_negative_cash(system: System) -> bool:
     """Check whether any agent has negative cash balance."""
     for _aid, agent in system.state.agents.items():
@@ -293,20 +340,28 @@ def run_category_seed_reproducibility() -> CategoryResult:
     run_until_stable(sys_a, max_days=15)
     defaults_a = count_defaults(sys_a)
     events_a = total_event_count(sys_a)
+    signature_a = event_stream_signature(sys_a)
 
     sys_b = build_ring_via_explorer(n_agents=20, kappa=0.5, concentration=0.5,
                                     maturity_days=5, seed=42)
     run_until_stable(sys_b, max_days=15)
     defaults_b = count_defaults(sys_b)
     events_b = total_event_count(sys_b)
+    signature_b = event_stream_signature(sys_b)
 
-    same_seed_identical = (defaults_a == defaults_b) and (events_a == events_b)
+    same_seed_identical = (
+        defaults_a == defaults_b
+        and events_a == events_b
+        and signature_a == signature_b
+    )
     details["same_seed"] = {
         "seed": 42,
         "run1_defaults": defaults_a,
         "run1_events": events_a,
+        "run1_signature": signature_a,
         "run2_defaults": defaults_b,
         "run2_events": events_b,
+        "run2_signature": signature_b,
         "identical": same_seed_identical,
     }
     if same_seed_identical:
@@ -318,15 +373,22 @@ def run_category_seed_reproducibility() -> CategoryResult:
     run_until_stable(sys_c, max_days=15)
     defaults_c = count_defaults(sys_c)
     events_c = total_event_count(sys_c)
+    signature_c = event_stream_signature(sys_c)
 
-    diff_seed_different = (defaults_a != defaults_c) or (events_a != events_c)
+    diff_seed_different = (
+        defaults_a != defaults_c
+        or events_a != events_c
+        or signature_a != signature_c
+    )
     details["diff_seed"] = {
         "seed_1": 42,
         "seed_2": 99,
         "seed1_defaults": defaults_a,
         "seed1_events": events_a,
+        "seed1_signature": signature_a,
         "seed2_defaults": defaults_c,
         "seed2_events": events_c,
+        "seed2_signature": signature_c,
         "different": diff_seed_different,
     }
     if diff_seed_different:
@@ -515,9 +577,13 @@ def run_category_cross_seed_convergence() -> CategoryResult:
     default_counts: list[int] = []
 
     for seed in seeds:
-        sys = build_ring_system(
-            n_agents=25, cash_per_agent=50, payable_amount=100,
-            maturity_days=5, seed=seed,
+        # Use generator-based ring construction so seed actually changes the economy.
+        sys = build_ring_via_explorer(
+            n_agents=25,
+            kappa=0.5,
+            concentration=0.5,
+            maturity_days=5,
+            seed=seed,
         )
         run_until_stable(sys, max_days=15)
         default_counts.append(count_defaults(sys))
