@@ -62,7 +62,7 @@ def _compute_dep_fingerprint() -> str:
         )
         content = "\n".join(pkgs)
         return hashlib.sha256(content.encode()).hexdigest()
-    except Exception:
+    except (ImportError, TypeError, AttributeError, StopIteration):
         pass
     return ""
 

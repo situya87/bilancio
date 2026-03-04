@@ -163,18 +163,20 @@ def main() -> int:
             total_checks += 1
             actual = result[key]
             expected = fp[key]
-            if actual == expected:
-                matches += 1
-            elif actual is not None and expected is not None:
-                # Allow small float tolerance
-                try:
-                    if abs(float(actual) - float(expected)) < 1e-10:
-                        matches += 1
-                    else:
-                        drift_details.append(
-                            f"{tier_name}.{key}: expected={expected}, got={actual}"
-                        )
-                except (TypeError, ValueError):
+            # Use tolerant float comparison for all numeric values
+            try:
+                if actual is not None and expected is not None and abs(float(actual) - float(expected)) < 1e-10:
+                    matches += 1
+                elif actual == expected:
+                    matches += 1
+                else:
+                    drift_details.append(
+                        f"{tier_name}.{key}: expected={expected}, got={actual}"
+                    )
+            except (TypeError, ValueError):
+                if actual == expected:
+                    matches += 1
+                else:
                     drift_details.append(
                         f"{tier_name}.{key}: expected={expected}, got={actual}"
                     )
