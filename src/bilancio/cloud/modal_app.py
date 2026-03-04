@@ -404,6 +404,14 @@ def run_simulation(
         # Import bilancio inside the function (container context)
         from bilancio.ui.run import run_scenario
 
+        # Deserialize performance config if present
+        perf_dict = options.get("performance")
+        performance = None
+        if perf_dict:
+            from bilancio.core.performance import PerformanceConfig
+
+            performance = PerformanceConfig.from_dict(perf_dict)
+
         # Execute simulation
         run_scenario(
             path=scenario_path,
@@ -422,6 +430,7 @@ def run_simulation(
             detailed_dealer_logging=options.get("detailed_dealer_logging", False),
             run_id=run_id,
             regime=options.get("regime", ""),
+            performance=performance,
         )
 
         # Commit changes to volume

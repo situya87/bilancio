@@ -60,6 +60,7 @@ from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
 from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.dealer.trading import TradeExecutor
 from bilancio.decision.intentions import (
+    IntentionCache,
     collect_buy_intentions,
     collect_sell_intentions,
     init_intention_cache,
@@ -217,7 +218,7 @@ class DealerSubsystem:
     # Performance option H: maintain persistent intention queues across
     # trading rounds; only re-evaluate traders whose state changed.
     incremental_intentions: bool = False
-    _intention_cache: Any = None
+    _intention_cache: IntentionCache | None = None
 
     # Performance option D: matching order for sell/buy intention lists.
     # "random" (default) shuffles; "urgency" sorts sellers by stress
@@ -728,8 +729,10 @@ def run_dealer_trading_phase(
                 refresh_intentions(
                     cache, subsystem, current_day, eligible_traders=eligible,
                 )
-            sell_intentions = list(cache.sell_queue.values())
-            buy_intentions = list(cache.buy_queue.values())
+            # Sort by trader_id for deterministic order regardless of dict
+            # iteration order (P2: seed reproducibility).
+            sell_intentions = sorted(cache.sell_queue.values(), key=lambda s: s.trader_id)
+            buy_intentions = sorted(cache.buy_queue.values(), key=lambda b: b.trader_id)
         else:
             sell_intentions = collect_sell_intentions(
                 subsystem, current_day, eligible_traders=eligible,

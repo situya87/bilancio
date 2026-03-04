@@ -317,7 +317,8 @@ def refresh_intentions(
     """Re-evaluate only invalidated traders, updating the cache in-place."""
     if not cache._invalidated:
         return
-    for trader_id in cache._invalidated:
+    # Sort to ensure deterministic iteration order regardless of hash seed.
+    for trader_id in sorted(cache._invalidated):
         # Remove old entries
         cache.sell_queue.pop(trader_id, None)
         cache.buy_queue.pop(trader_id, None)
