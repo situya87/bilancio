@@ -4,8 +4,12 @@ from decimal import Decimal
 
 from bilancio.specification.trade_viability import (
     InterbankViabilityReport,
+    SimulationViabilityReport,
+    SweepViabilityReport,
     ViabilityReport,
     check_interbank_viability,
+    check_simulation_viability,
+    check_sweep_viability,
     check_trade_viability,
 )
 
@@ -290,3 +294,304 @@ class TestCheckInterbankViability:
         )
         warnings = report.diagnostics.get("warnings", [])
         assert any("cb_rate_escalation_slope=0" in w for w in warnings)
+
+
+class TestSimulationViabilityReport:
+    """Test SimulationViabilityReport dataclass."""
+
+    def test_all_viable_all_true(self):
+        report = SimulationViabilityReport(
+            dealer_capacity_viable=True,
+            lending_viable=True,
+            temporal_spread_viable=True,
+            parameters_consistent=True,
+        )
+        assert report.all_viable is True
+
+    def test_all_viable_one_false(self):
+        report = SimulationViabilityReport(
+            dealer_capacity_viable=True,
+            lending_viable=True,
+            temporal_spread_viable=False,
+            parameters_consistent=True,
+        )
+        assert report.all_viable is False
+
+
+class TestCheckSimulationViability:
+    """Test check_simulation_viability function."""
+
+    def test_v4_balanced_k_star(self):
+        """Balanced system -> K_star in diagnostics, no K_star warnings."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.10"),
+            vbt_share=Decimal("0.20"),
+        )
+        assert "K_star" in report.diagnostics
+        assert report.dealer_capacity_viable is True
+        # No V4 warnings for balanced config
+        assert not any("V4" in w for w in report.diagnostics["warnings"])
+
+    def test_v4_tiny_dealer_share(self):
+        """Very small dealer_share -> K_star < 3 warning."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.001"),
+            vbt_share=Decimal("0.20"),
+        )
+        warnings = report.diagnostics["warnings"]
+        assert any("K*=" in w and "< 3" in w for w in warnings)
+
+    def test_v4_large_dealer_share(self):
+        """Large dealer_share -> K_star > n/2 warning."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=15,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.80"),
+            vbt_share=Decimal("0.10"),
+        )
+        warnings = report.diagnostics["warnings"]
+        assert any("never constrained" in w for w in warnings)
+
+    def test_v5_lender_disabled(self):
+        """Lender disabled -> lending_viable=True, no V5 warnings."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.05"),
+            vbt_share=Decimal("0.20"),
+            lender_enabled=False,
+        )
+        assert report.lending_viable is True
+        assert not any("V5" in w for w in report.diagnostics["warnings"])
+
+    def test_v5_kappa_one_reasonable(self):
+        """Lender at kappa=1 -> viable, no V5 warnings."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.05"),
+            vbt_share=Decimal("0.20"),
+            lender_enabled=True,
+        )
+        assert report.lending_viable is True
+        assert not any("V5" in w for w in report.diagnostics["warnings"])
+        assert "lending_rate" in report.diagnostics
+
+    def test_v5_kappa_low_expensive(self):
+        """Lender at kappa=0.1 -> expensive loans warning."""
+        report = check_simulation_viability(
+            kappa=Decimal("0.1"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.05"),
+            vbt_share=Decimal("0.20"),
+            lender_enabled=True,
+        )
+        warnings = report.diagnostics["warnings"]
+        assert any("expensive loans" in w for w in warnings)
+
+    def test_v5_kappa_high_unnecessary(self):
+        """Lender at kappa=5 -> unnecessary lending warning."""
+        report = check_simulation_viability(
+            kappa=Decimal("5"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.05"),
+            vbt_share=Decimal("0.20"),
+            lender_enabled=True,
+        )
+        warnings = report.diagnostics["warnings"]
+        assert any("unnecessary" in w for w in warnings)
+
+    def test_v6_maturity_one_fails(self):
+        """maturity_days=1 -> temporal_spread_viable=False."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=100,
+            maturity_days=1,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.05"),
+            vbt_share=Decimal("0.20"),
+        )
+        assert report.temporal_spread_viable is False
+
+    def test_v6_maturity_ten_viable(self):
+        """maturity_days=10, mu=0.5 -> temporal_spread_viable=True."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.05"),
+            vbt_share=Decimal("0.20"),
+        )
+        assert report.temporal_spread_viable is True
+
+    def test_v6_mu_zero_warns(self):
+        """mu=0 -> front-loaded warning."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0"),
+            dealer_share=Decimal("0.05"),
+            vbt_share=Decimal("0.20"),
+        )
+        warnings = report.diagnostics["warnings"]
+        assert any("front-loaded" in w for w in warnings)
+
+    def test_v6_buy_reserve_one_warns(self):
+        """buy_reserve_fraction=1 -> buyers disappear warning."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.05"),
+            vbt_share=Decimal("0.20"),
+            buy_reserve_fraction=Decimal("1"),
+        )
+        warnings = report.diagnostics["warnings"]
+        assert any("buyers disappear" in w for w in warnings)
+
+    def test_v9_shares_exceed_one(self):
+        """dealer_share + vbt_share > 1 -> parameters_consistent=False."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.60"),
+            vbt_share=Decimal("0.50"),
+        )
+        assert report.parameters_consistent is False
+
+    def test_v9_valid_params(self):
+        """Valid params -> parameters_consistent=True."""
+        report = check_simulation_viability(
+            kappa=Decimal("1.0"),
+            n_agents=100,
+            maturity_days=10,
+            face_value=Decimal("20"),
+            Q_total=Decimal("10000"),
+            mu=Decimal("0.5"),
+            dealer_share=Decimal("0.05"),
+            vbt_share=Decimal("0.20"),
+        )
+        assert report.parameters_consistent is True
+
+
+class TestSweepViabilityReport:
+    """Test SweepViabilityReport dataclass."""
+
+    def test_all_viable_both_true(self):
+        report = SweepViabilityReport(
+            two_way_trading_viable=True,
+            effect_detectable=True,
+        )
+        assert report.all_viable is True
+
+    def test_all_viable_one_false(self):
+        report = SweepViabilityReport(
+            two_way_trading_viable=False,
+            effect_detectable=True,
+        )
+        assert report.all_viable is False
+
+
+class TestCheckSweepViability:
+    """Test check_sweep_viability function."""
+
+    def test_v3_all_kappas_below(self):
+        """All kappas < 0.3 -> two_way_trading_viable=False."""
+        report = check_sweep_viability(
+            kappas=[Decimal("0.1"), Decimal("0.2"), Decimal("0.25")],
+            n_agents=100,
+            maturity_days=10,
+        )
+        assert report.two_way_trading_viable is False
+
+    def test_v3_all_kappas_above(self):
+        """All kappas > 2 -> two_way_trading_viable=False."""
+        report = check_sweep_viability(
+            kappas=[Decimal("3"), Decimal("4"), Decimal("5")],
+            n_agents=100,
+            maturity_days=10,
+        )
+        assert report.two_way_trading_viable is False
+
+    def test_v3_mixed_range(self):
+        """Mixed kappas -> two_way_trading_viable=True."""
+        report = check_sweep_viability(
+            kappas=[Decimal("0.5"), Decimal("1.0"), Decimal("2.0")],
+            n_agents=100,
+            maturity_days=10,
+        )
+        assert report.two_way_trading_viable is True
+
+    def test_v7_small_n_agents(self):
+        """n_agents < 10 -> effect_detectable=False."""
+        report = check_sweep_viability(
+            kappas=[Decimal("0.5"), Decimal("1.0")],
+            n_agents=5,
+            maturity_days=10,
+        )
+        assert report.effect_detectable is False
+
+    def test_v7_no_kappa_below_one(self):
+        """No kappa < 1 -> effect_detectable=False."""
+        report = check_sweep_viability(
+            kappas=[Decimal("1.0"), Decimal("2.0")],
+            n_agents=100,
+            maturity_days=10,
+        )
+        assert report.effect_detectable is False
+
+    def test_v7_good_config(self):
+        """Good config -> effect_detectable=True."""
+        report = check_sweep_viability(
+            kappas=[Decimal("0.5"), Decimal("1.0")],
+            n_agents=100,
+            maturity_days=10,
+        )
+        assert report.effect_detectable is True

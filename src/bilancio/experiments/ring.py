@@ -489,6 +489,24 @@ class RingSweepRunner:
         mus: Sequence[Decimal],
         monotonicities: Sequence[Decimal],
     ) -> list[RingRunSummary]:
+        # Sweep-level viability check (V3, V7)
+        try:
+            from bilancio.specification.trade_viability import check_sweep_viability
+
+            sweep_report = check_sweep_viability(
+                kappas=kappas,
+                n_agents=self.n_agents,
+                maturity_days=self.maturity_days,
+            )
+            if not sweep_report.all_viable:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "Sweep viability: %s", sweep_report.diagnostics
+                )
+        except Exception:
+            pass
+
         summaries: list[RingRunSummary] = []
         for kappa, concentration, mu, monotonicity in generate_grid_params(
             kappas, concentrations, mus, monotonicities
@@ -658,6 +676,37 @@ class RingSweepRunner:
                 _ib_viability_logger.debug(
                     "Interbank viability check skipped: %s", exc,
                 )
+
+        # Per-run simulation viability check (V4, V5, V6, V9)
+        try:
+            import logging
+
+            from bilancio.specification.trade_viability import (
+                check_simulation_viability,
+            )
+
+            sim_report = check_simulation_viability(
+                kappa=kappa,
+                n_agents=self.n_agents,
+                maturity_days=self.maturity_days,
+                face_value=self.face_value,
+                Q_total=self.Q_total,
+                mu=mu,
+                dealer_share=self.dealer_share_per_bucket,
+                vbt_share=self.vbt_share_per_bucket,
+                outside_mid_ratio=self.outside_mid_ratio,
+                lender_enabled=self.lender_mode,
+            )
+            if not sim_report.all_viable:
+                logging.getLogger(__name__).warning(
+                    "Simulation viability failed for kappa=%s: %s",
+                    kappa,
+                    sim_report.diagnostics,
+                )
+        except EXTERNAL_SERVICE_ERRORS as exc:
+            logging.getLogger(__name__).debug(
+                "Simulation viability check skipped: %s", exc
+            )
 
         run_uuid = uuid.uuid4().hex[:12]
         run_id = f"{phase}_{label}_{run_uuid}" if label else f"{phase}_{run_uuid}"
