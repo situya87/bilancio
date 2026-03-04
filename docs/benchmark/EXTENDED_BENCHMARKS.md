@@ -42,7 +42,23 @@ PYTHONPATH=src .venv/bin/python scripts/run_stochastic_robustness_benchmark.py
   - `temp/stochastic_robustness_benchmark_report.json`
   - `temp/stochastic_robustness_benchmark_report.md`
 
-### 4) Calibration / Stylized-Facts Benchmark
+### 4) Scientific Comparison Benchmark
+- Script: `scripts/run_scientific_comparison_benchmark.py`
+- Focus: scientific quality of comparison experiments and analysis outputs:
+  - paired seed-matched control/treatment design
+  - replication discipline per parameter cell
+  - inferential completeness (CIs, p-values, effect sizes)
+  - multiplicity handling (Benjamini-Hochberg FDR)
+  - reproducible, schema-complete analysis artifacts
+- Run:
+```bash
+PYTHONPATH=src .venv/bin/python scripts/run_scientific_comparison_benchmark.py
+```
+- Outputs:
+  - `temp/scientific_comparison_benchmark_report.json`
+  - `temp/scientific_comparison_benchmark_report.md`
+
+### 5) Calibration / Stylized-Facts Benchmark
 - Script: `scripts/run_stylized_facts_benchmark.py`
 - Focus: required stylized facts (liquidity monotonicity, NBFI activation, banking differentiation, invariants).
 - Run:
@@ -53,7 +69,7 @@ PYTHONPATH=src .venv/bin/python scripts/run_stylized_facts_benchmark.py
   - `temp/stylized_facts_benchmark_report.json`
   - `temp/stylized_facts_benchmark_report.md`
 
-### 5) Scenario Plugin Contract Benchmark
+### 6) Scenario Plugin Contract Benchmark
 - Script: `scripts/run_plugin_contract_benchmark.py`
 - Focus: plugin protocol/schema/default/error semantics with valid/invalid fixture corpus.
 - Run:
@@ -64,7 +80,7 @@ PYTHONPATH=src .venv/bin/python scripts/run_plugin_contract_benchmark.py
   - `temp/plugin_contract_benchmark_report.json`
   - `temp/plugin_contract_benchmark_report.md`
 
-### 6) Compile-to-Apply Equivalence Benchmark
+### 7) Compile-to-Apply Equivalence Benchmark
 - Script: `scripts/run_compile_apply_equivalence_benchmark.py`
 - Focus: compile/apply preservation of counts, debt totals, and maturity distribution.
 - Run:
@@ -75,7 +91,7 @@ PYTHONPATH=src .venv/bin/python scripts/run_compile_apply_equivalence_benchmark.
   - `temp/compile_apply_equivalence_benchmark_report.json`
   - `temp/compile_apply_equivalence_benchmark_report.md`
 
-### 7) Local-vs-Cloud Parity Benchmark
+### 8) Local-vs-Cloud Parity Benchmark
 - Script: `scripts/run_local_cloud_parity_benchmark.py`
 - Focus: local run artifacts and metric parity vs cloud metrics computation path.
 - Run:
@@ -86,7 +102,7 @@ PYTHONPATH=src .venv/bin/python scripts/run_local_cloud_parity_benchmark.py
   - `temp/local_cloud_parity_benchmark_report.json`
   - `temp/local_cloud_parity_benchmark_report.md`
 
-### 8) Failure-Injection Integration Benchmark
+### 9) Failure-Injection Integration Benchmark
 - Script: `scripts/run_failure_injection_integration_benchmark.py`
 - Focus: invalid config handling, mixed status accounting, malformed artifact rejection, retry behavior.
 - Run:
