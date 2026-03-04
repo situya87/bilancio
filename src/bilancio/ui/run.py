@@ -270,7 +270,11 @@ def run_scenario(
             system.state.banking_subsystem = banking_sub
             # Wire risk assessor for credit-risk-adjusted bank lending
             if _credit_risk_loading > 0:
-                if system.state.dealer_subsystem and hasattr(system.state.dealer_subsystem, 'risk_assessor') and system.state.dealer_subsystem.risk_assessor:
+                if (
+                    system.state.dealer_subsystem
+                    and hasattr(system.state.dealer_subsystem, 'risk_assessor')
+                    and system.state.dealer_subsystem.risk_assessor
+                ):
                     banking_sub.risk_assessor = system.state.dealer_subsystem.risk_assessor
                 else:
                     from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor

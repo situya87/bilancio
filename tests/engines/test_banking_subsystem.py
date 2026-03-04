@@ -17,7 +17,6 @@ from bilancio.decision.profiles import BankProfile
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.firm import Firm
-from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.banking_subsystem import (
     BankingSubsystem,
@@ -28,7 +27,6 @@ from bilancio.engines.banking_subsystem import (
 )
 from bilancio.engines.system import System
 from bilancio.ops.banking import deposit_cash
-
 
 # ---------------------------------------------------------------------------
 # Helpers

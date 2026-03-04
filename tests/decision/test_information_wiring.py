@@ -13,22 +13,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
 
 import pytest
 
+from bilancio.dealer.models import TraderState
+from bilancio.decision.factories import create_assessor
 from bilancio.decision.risk_assessment import (
     BeliefTracker,
-    EVValuer,
-    PositionAssessor,
     RiskAssessmentParams,
     RiskAssessor,
-    TradeGate,
 )
-from bilancio.dealer.models import TraderState, Ticket
-from bilancio.decision.factories import create_assessor, observability_from_profile
 from bilancio.information.estimates import Estimate
-
 
 # ---------------------------------------------------------------------------
 # Mock InformationService (avoids needing a full System)
@@ -281,14 +276,14 @@ class TestEndToEndDecisionImpact:
 
         bid = Decimal("0.45")  # bid price = 0.45 * 20 = 9
 
-        sell_kwargs = dict(
-            ticket=ticket,
-            dealer_bid=bid,
-            current_day=0,
-            trader_cash=Decimal("50"),
-            trader_shortfall=Decimal("0"),
-            trader_asset_value=Decimal("50"),
-        )
+        sell_kwargs = {
+            "ticket": ticket,
+            "dealer_bid": bid,
+            "current_day": 0,
+            "trader_cash": Decimal("50"),
+            "trader_shortfall": Decimal("0"),
+            "trader_asset_value": Decimal("50"),
+        }
 
         # Without service: bid 9 < EV 17 => reject
         assert assessor_no_svc.should_sell(**sell_kwargs) is False
@@ -308,14 +303,14 @@ class TestEndToEndDecisionImpact:
 
         ask = Decimal("0.30")  # cost = 6
 
-        buy_kwargs = dict(
-            ticket=ticket,
-            dealer_ask=ask,
-            current_day=0,
-            trader_cash=Decimal("100"),
-            trader_shortfall=Decimal("0"),
-            trader_asset_value=Decimal("100"),
-        )
+        buy_kwargs = {
+            "ticket": ticket,
+            "dealer_ask": ask,
+            "current_day": 0,
+            "trader_cash": Decimal("100"),
+            "trader_shortfall": Decimal("0"),
+            "trader_asset_value": Decimal("100"),
+        }
 
         # Without service: EV=17, cost=6 => 17 >= 6 + threshold => accept
         assert assessor_no_svc.should_buy(**buy_kwargs) is True

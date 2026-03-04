@@ -28,13 +28,13 @@ from bilancio.analysis.dealer_usage_summary import (
     build_dealer_usage_by_run,
     run_dealer_usage_analysis,
 )
-from bilancio.analysis.mechanism_activity import run_mechanism_activity_analysis
 from bilancio.analysis.funding_chains import (
     cash_inflows_by_source,
     cash_outflows_by_type,
     funding_mix,
     liquidity_providers,
 )
+from bilancio.analysis.mechanism_activity import run_mechanism_activity_analysis
 from bilancio.analysis.metrics_computer import (
     MetricsBundle,
     MetricsComputer,
@@ -46,6 +46,7 @@ from bilancio.analysis.network_analysis import (
     systemic_importance,
     weighted_degree,
 )
+from bilancio.analysis.post_sweep import run_post_sweep_analysis
 from bilancio.analysis.pricing_analysis import (
     average_price_ratio_by_day,
     bid_ask_spread_by_day,
@@ -54,7 +55,6 @@ from bilancio.analysis.pricing_analysis import (
     trade_prices_by_day,
     trade_volume_by_day,
 )
-from bilancio.analysis.post_sweep import run_post_sweep_analysis
 from bilancio.analysis.strategy_outcomes import (
     build_strategy_outcomes_by_run,
     build_strategy_outcomes_overall,

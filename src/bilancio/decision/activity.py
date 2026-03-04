@@ -703,7 +703,7 @@ class AgentDecisionSpec:
     def run_phase(
         self,
         phase: str,
-        info: "InformationService",
+        info: InformationService,
         position: CashFlowPosition,
         action_set: ActionSet,
     ) -> list[Action]:

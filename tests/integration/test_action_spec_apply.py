@@ -1,10 +1,10 @@
 """Integration tests for action spec application to the system."""
 
-import pytest
-from decimal import Decimal
 
-from bilancio.config.models import ScenarioConfig
+import pytest
+
 from bilancio.config.apply import apply_to_system
+from bilancio.config.models import ScenarioConfig
 from bilancio.engines.system import System
 
 
@@ -286,8 +286,8 @@ class TestRingCompilerActionSpecs:
 
     def test_emit_action_specs_dealer_subsystem_initialized(self):
         """Compiled active ring with emit_action_specs=True initializes dealer_subsystem."""
-        from bilancio.config.models import RingExplorerGeneratorConfig, ScenarioConfig
         from bilancio.config.apply import apply_to_system
+        from bilancio.config.models import RingExplorerGeneratorConfig, ScenarioConfig
         from bilancio.engines.system import System
         from bilancio.scenarios.ring.compiler import compile_ring_explorer_balanced
 

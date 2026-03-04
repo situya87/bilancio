@@ -12,7 +12,6 @@ import logging
 from collections.abc import Generator
 from contextlib import contextmanager
 from decimal import Decimal
-from typing import Any
 
 from bilancio.core.atomic_tx import atomic
 from bilancio.core.errors import ValidationError
@@ -50,12 +49,18 @@ class System:
     # ---- phase management
     @contextmanager
     def setup(self) -> Generator[None, None, None]:
-        """Context manager to temporarily set phase to 'setup'."""
+        """Context manager to temporarily set phase to 'setup'.
+
+        Also disables ``atomic()`` deep-copies during setup — if setup fails
+        the entire system is discarded, so rollback is unnecessary.
+        """
         old_phase = self.state.phase
         self.state.phase = "setup"
+        self._atomic_disabled = True
         try:
             yield
         finally:
+            self._atomic_disabled = False
             self.state.phase = old_phase
 
     # ---- registry gateway
@@ -75,8 +80,8 @@ class System:
             raise ValidationError(f"{issuer.kind} cannot issue {c.kind}")
 
         self.state.contracts[c.id] = c
-        holder.asset_ids.append(c.id)
-        issuer.liability_ids.append(c.id)
+        holder.asset_ids.add(c.id)
+        issuer.liability_ids.add(c.id)
         logger.debug("add_contract: %s (kind=%s)", c.id, c.kind)
 
         # Maintain due_day index
@@ -215,7 +220,7 @@ class System:
                 piece = self.state.contracts[piece_id]
                 # move holder
                 self.state.agents[from_agent_id].asset_ids.remove(piece_id)
-                self.state.agents[to_agent_id].asset_ids.append(piece_id)
+                self.state.agents[to_agent_id].asset_ids.add(piece_id)
                 piece.asset_holder_id = to_agent_id
                 self.log(
                     "CashTransferred",
@@ -301,7 +306,7 @@ class System:
                 piece = self.state.contracts[piece_id]
                 # move holder
                 self.state.agents[from_bank_id].asset_ids.remove(piece_id)
-                self.state.agents[to_bank_id].asset_ids.append(piece_id)
+                self.state.agents[to_bank_id].asset_ids.add(piece_id)
                 piece.asset_holder_id = to_bank_id
                 self.log(
                     "ReservesTransferred",
@@ -1142,7 +1147,7 @@ class System:
         )
         with atomic(self):
             self.state.stocks[stock_id] = stock
-            self.state.agents[owner_id].stock_ids.append(stock_id)
+            self.state.agents[owner_id].stock_ids.add(stock_id)
             self.log(
                 "StockCreated",
                 owner=owner_id,
@@ -1183,7 +1188,7 @@ class System:
         # Transfer ownership
         moving_stock = self.state.stocks[moving_id]
         self.state.agents[from_owner].stock_ids.remove(moving_id)
-        self.state.agents[to_owner].stock_ids.append(moving_id)
+        self.state.agents[to_owner].stock_ids.add(moving_id)
         moving_stock.owner_id = to_owner
 
         self.log(

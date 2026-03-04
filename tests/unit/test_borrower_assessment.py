@@ -9,8 +9,6 @@ ability to repay:
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.domain.agent import Agent, AgentKind
 from bilancio.domain.instruments.bank_loan import BankLoan
 from bilancio.domain.instruments.base import InstrumentKind
@@ -18,7 +16,6 @@ from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.means_of_payment import BankDeposit, Cash
 from bilancio.engines.bank_lending import _assess_borrower
 from bilancio.engines.system import System
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -51,7 +48,7 @@ def _add_cash(system: System, agent: Agent, amount: int, cash_id: str = "cash_1"
         liability_issuer_id="cb",
     )
     system.state.contracts[cash_id] = cash
-    agent.asset_ids.append(cash_id)
+    agent.asset_ids.add(cash_id)
 
 
 def _add_deposit(
@@ -71,7 +68,7 @@ def _add_deposit(
         liability_issuer_id=bank_id,
     )
     system.state.contracts[dep_id] = deposit
-    agent.asset_ids.append(dep_id)
+    agent.asset_ids.add(dep_id)
 
 
 def _add_payable_liability(
@@ -92,7 +89,7 @@ def _add_payable_liability(
         due_day=due_day,
     )
     system.state.contracts[pay_id] = payable
-    agent.liability_ids.append(pay_id)
+    agent.liability_ids.add(pay_id)
 
 
 def _add_payable_receivable(
@@ -113,7 +110,7 @@ def _add_payable_receivable(
         due_day=due_day,
     )
     system.state.contracts[pay_id] = payable
-    agent.asset_ids.append(pay_id)
+    agent.asset_ids.add(pay_id)
 
 
 def _add_bank_loan_liability(
@@ -137,7 +134,7 @@ def _add_bank_loan_liability(
         maturity_days=maturity_days,
     )
     system.state.contracts[loan_id] = loan
-    agent.liability_ids.append(loan_id)
+    agent.liability_ids.add(loan_id)
 
 
 # ---------------------------------------------------------------------------

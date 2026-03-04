@@ -147,6 +147,16 @@ class VBTPricingModel(Protocol):
         """Credit-adjusted mid price given observed default probability."""
         ...
 
+    def compute_mid_blended(
+        self,
+        p_default: Decimal,
+        p_forward: Decimal,
+        initial_prior: Decimal,
+        forward_weight: Decimal,
+    ) -> Decimal:
+        """Credit-adjusted mid with forward stress blending."""
+        ...
+
     def compute_spread(self, base_spread: Decimal, p_default: Decimal) -> Decimal:
         """Bid–ask spread, possibly widened by credit risk."""
         ...

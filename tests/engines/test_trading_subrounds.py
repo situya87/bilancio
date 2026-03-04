@@ -9,7 +9,7 @@ Validates that:
 """
 
 from decimal import Decimal
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from bilancio.engines.dealer_integration import DealerSubsystem
 

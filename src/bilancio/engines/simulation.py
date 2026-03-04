@@ -62,7 +62,7 @@ def _has_open_obligations(system: System) -> bool:
     return False
 
 
-def _has_outstanding_bank_loans(banking_sub) -> bool:
+def _has_outstanding_bank_loans(banking_sub: Any) -> bool:
     """Check if any bank has outstanding loans."""
     for bank_state in banking_sub.banks.values():
         if bank_state.outstanding_loans:
@@ -204,7 +204,7 @@ def _log_dealer_estimates(system: System, current_day: int) -> None:
         system.log_estimate(est)
 
 
-def _run_cb_backstop(system: System, banking_sub, current_day: int) -> None:
+def _run_cb_backstop(system: System, banking_sub: Any, current_day: int) -> None:
     """CB end-of-day backstop: automatically lend from CB to bring bank reserves up to target.
 
     Per paper Part E, at end of each day the CB checks each bank's reserves
@@ -239,7 +239,7 @@ def _run_cb_backstop(system: System, banking_sub, current_day: int) -> None:
                     "CB backstop: bank=%s shortfall=%d day=%d",
                     bank_id, shortfall, current_day,
                 )
-            except (ValueError, Exception):
+            except (ValueError, ValidationError, RuntimeError):
                 # CB lending frozen or other issue - log and continue
                 logger.warning(
                     "CB backstop failed for bank=%s shortfall=%d",
@@ -374,15 +374,15 @@ def run_day(
     # Phase C: Clear intraday nets + interbank auction
     system.log("PhaseC")
     if enable_banking and banking_sub is not None:
-        from bilancio.engines.interbank import (
-            compute_interbank_obligations,
-            finalize_interbank_repayments,
-            run_interbank_auction,
-        )
         from bilancio.engines.clearing import (
             compute_bank_net_obligations,
             compute_combined_nets,
             settle_nets_with_funding,
+        )
+        from bilancio.engines.interbank import (
+            compute_interbank_obligations,
+            finalize_interbank_repayments,
+            run_interbank_auction,
         )
 
         # 1. Identify overnight loan repayment obligations (DO NOT settle yet)
@@ -422,10 +422,11 @@ def run_day(
             loan = system.state.contracts.get(loan_id)
             if loan is None:
                 continue
+            assert isinstance(loan, CBLoan)
             bank_id = loan.liability_issuer_id
             try:
                 system.cb_repay_loan(loan_id, bank_id)
-            except Exception:
+            except (ValueError, ValidationError):
                 # Bank can't repay — try refinancing
                 repayment = loan.repayment_amount
                 try:
@@ -651,7 +652,7 @@ def run_final_cb_settlement(system: System) -> dict[str, Any]:
     }
 
 
-def _run_bank_loan_winddown(system: System, banking_sub) -> int:
+def _run_bank_loan_winddown(system: System, banking_sub: Any) -> int:
     """Run bank loan repayments until all outstanding loans mature.
 
     After the main simulation loop reaches stability, continue running
@@ -719,7 +720,7 @@ def _run_bank_loan_winddown(system: System, banking_sub) -> int:
         for borrower, lender, repayment, _loan in ib_obligations:
             try:
                 system.transfer_reserves(borrower, lender, repayment)
-            except Exception:
+            except (ValueError, ValidationError):
                 # Borrower can't repay — CB backstop will handle
                 logger.warning(
                     "Wind-down interbank repayment failed: %s -> %s amount=%d",
@@ -741,7 +742,7 @@ def _run_bank_loan_winddown(system: System, banking_sub) -> int:
                 bank_id = loan.liability_issuer_id
                 try:
                     system.cb_repay_loan(loan_id, bank_id)
-                except Exception:
+                except (ValueError, ValidationError):
                     # CB is frozen during wind-down, so refinancing will fail
                     bank_agent = system.state.agents.get(bank_id)
                     if bank_agent and not bank_agent.defaulted:

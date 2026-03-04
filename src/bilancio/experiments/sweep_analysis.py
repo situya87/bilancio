@@ -382,7 +382,7 @@ class RingSweepAnalysis:
                     }
                     for r in results
                 ]
-            except Exception as e:
+            except (ValueError, KeyError, TypeError, ZeroDivisionError) as e:
                 logger.warning(f"Sensitivity analysis failed for {metric}: {e}")
 
         with path.open("w") as fh:

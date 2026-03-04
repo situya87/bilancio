@@ -264,9 +264,9 @@ class TestNonBankLenderAgent:
     def test_starts_with_empty_ids(self):
         """Newly created lender has no assets or liabilities."""
         lender = NonBankLender(id="NBL04", name="Lender 4")
-        assert lender.asset_ids == []
-        assert lender.liability_ids == []
-        assert lender.stock_ids == []
+        assert lender.asset_ids == set()
+        assert lender.liability_ids == set()
+        assert lender.stock_ids == set()
         assert lender.defaulted is False
 
 

@@ -51,7 +51,7 @@ def build_profile(profile_type: str, params: dict[str, Any]) -> Any:
         if isinstance(v, str):
             try:
                 converted[k] = Decimal(v)
-            except Exception:
+            except (ValueError, ArithmeticError):
                 converted[k] = v  # Keep as string if not a valid Decimal
         else:
             converted[k] = v

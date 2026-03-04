@@ -42,11 +42,9 @@ from bilancio.decision.activities import (
 from bilancio.decision.activity import (
     ACTION_BUY,
     ACTION_EXTEND_LOAN,
-    ACTION_HOLD,
     ACTION_SELL,
     ACTION_SET_ANCHORS,
     ACTION_SET_CORRIDOR,
-    ACTION_SET_QUOTES,
     Action,
     ActionSet,
     ActionTemplate,
@@ -58,7 +56,6 @@ from bilancio.decision.activity import (
     RiskView,
     Valuations,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -681,14 +678,14 @@ class TestExports:
     def test_all_activities_exported_from_decision_package(self):
         """Import from bilancio.decision should also work (re-exported)."""
         from bilancio.decision import (
-            TradingActivity,
-            MarketMakingActivity,
-            OutsideLiquidityActivity,
-            LendingActivity,
-            RatingActivity,
             BankLendingActivity,
             BankTreasuryActivity,
             CBActivity,
+            LendingActivity,
+            MarketMakingActivity,
+            OutsideLiquidityActivity,
+            RatingActivity,
+            TradingActivity,
         )
 
         assert TradingActivity is not None

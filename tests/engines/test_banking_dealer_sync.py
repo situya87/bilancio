@@ -31,7 +31,6 @@ from bilancio.engines.dealer_sync import (
 )
 from bilancio.engines.system import System
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

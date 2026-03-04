@@ -41,17 +41,15 @@ from bilancio.decision.activities import (
     bind_activities,
 )
 from bilancio.decision.activity import (
-    Action,
+    KALECKI_BINDINGS,
     ActionSet,
     ActionTemplate,
     AgentDecisionSpec,
     CashFlowEntry,
     CashFlowPosition,
     InstrumentBindings,
-    KALECKI_BINDINGS,
     build_cash_flow_position_from_trader,
 )
-
 
 # -- Helpers -----------------------------------------------------------------
 

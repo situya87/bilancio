@@ -560,7 +560,7 @@ class NBFIComparisonRunner:
                             for _rep in range(reps_needed):
                                 seed = self._next_seed()
                                 arm_preps: dict[str, PreparedRun] = {}
-                                for arm_name, phase, getter_name, _regime in arm_defs:
+                                for arm_name, phase, _getter_name, _regime in arm_defs:
                                     runner = runners_cache[(outside_mid_ratio, arm_name)]
                                     arm_preps[arm_name] = runner._prepare_run(
                                         phase=phase,
@@ -611,7 +611,7 @@ class NBFIComparisonRunner:
 
         # Route results
         combo_results: dict[int, dict[str, Any]] = {}
-        for (_config, run_id, _opts), raw_result in zip(batch_runs, results):
+        for (_config, run_id, _opts), raw_result in zip(batch_runs, results, strict=False):
             combo_idx, arm_name = run_id_to_location[run_id]
             combo_results.setdefault(combo_idx, {})[arm_name] = raw_result
 
@@ -945,6 +945,7 @@ class NBFIComparisonRunner:
             return
         try:
             import pandas as pd
+
             from bilancio.experiments.sweep_analysis import RingSweepAnalysis
 
             comp_df = pd.read_csv(self.comparison_path)
@@ -966,7 +967,7 @@ class NBFIComparisonRunner:
             for name, path in paths.items():
                 logger.info("Stats %s written to %s", name, path)
             print(f"Statistical analysis written to {self.aggregate_dir}", flush=True)
-        except Exception as e:
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Statistical analysis failed: %s", e)
             print(f"Warning: Statistical analysis failed: {e}", flush=True)
 
@@ -988,6 +989,6 @@ class NBFIComparisonRunner:
             for name, path in paths.items():
                 logger.info("Activity analysis %s: %s", name, path)
             print(f"Mechanism activity analysis written to {analysis_dir}", flush=True)
-        except Exception as e:
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Activity analysis failed: %s", e)
             print(f"Warning: Activity analysis failed: {e}", flush=True)

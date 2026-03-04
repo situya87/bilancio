@@ -96,7 +96,7 @@ def load_dealer_snapshots(run_dir: Path | str) -> Any:
     try:
         import pandas as pd
         return pd.read_csv(csv_path)
-    except Exception as exc:
+    except (OSError, ValueError, KeyError, ImportError) as exc:
         logger.debug("Failed to load dealer_state.csv: %s", exc)
         return None
 
@@ -113,6 +113,6 @@ def load_bank_snapshots(run_dir: Path | str) -> Any:
     try:
         import pandas as pd
         return pd.read_csv(csv_path)
-    except Exception as exc:
+    except (OSError, ValueError, KeyError, ImportError) as exc:
         logger.debug("Failed to load bank_state.csv: %s", exc)
         return None

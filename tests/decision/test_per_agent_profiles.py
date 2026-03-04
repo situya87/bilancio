@@ -18,13 +18,11 @@ from bilancio.dealer.models import Ticket, TraderState
 from bilancio.decision.intentions import (
     BuyIntention,
     LiquidityDrivenSeller,
-    SellIntention,
     SurplusBuyer,
     collect_buy_intentions,
     collect_sell_intentions,
 )
 from bilancio.decision.profiles import TraderProfile
-
 
 # ---------------------------------------------------------------------------
 # Helpers

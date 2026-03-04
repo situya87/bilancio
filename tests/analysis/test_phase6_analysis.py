@@ -5,34 +5,33 @@ Covers:
 - credit_creation: credit_created_by_type, credit_destroyed_by_type, net_credit_impulse, credit_creation_by_day, credit_destruction_by_day
 - contagion: classify_defaults, default_counts_by_type, contagion_by_day, time_to_contagion, default_dependency_graph
 - network_analysis: build_obligation_adjacency, node_degree, weighted_degree, betweenness_centrality, systemic_importance
-- pricing_analysis: trade_prices_by_day, average_price_ratio_by_day, price_discovery_speed, bid_ask_spread_by_day, trade_volume_by_day, fire_sale_indicator
+- pricing_analysis: trade_prices_by_day, average_price_ratio_by_day, price_discovery_speed,
+  bid_ask_spread_by_day, trade_volume_by_day, fire_sale_indicator
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
-
-from bilancio.analysis.funding_chains import (
-    cash_inflows_by_source,
-    cash_outflows_by_type,
-    funding_mix,
-    liquidity_providers,
-)
-from bilancio.analysis.credit_creation import (
-    credit_created_by_type,
-    credit_destroyed_by_type,
-    credit_creation_by_day,
-    credit_destruction_by_day,
-    net_credit_impulse,
-)
 from bilancio.analysis.contagion import (
     classify_defaults,
     contagion_by_day,
     default_counts_by_type,
     default_dependency_graph,
     time_to_contagion,
+)
+from bilancio.analysis.credit_creation import (
+    credit_created_by_type,
+    credit_creation_by_day,
+    credit_destroyed_by_type,
+    credit_destruction_by_day,
+    net_credit_impulse,
+)
+from bilancio.analysis.funding_chains import (
+    cash_inflows_by_source,
+    cash_outflows_by_type,
+    funding_mix,
+    liquidity_providers,
 )
 from bilancio.analysis.network_analysis import (
     betweenness_centrality,
@@ -49,7 +48,6 @@ from bilancio.analysis.pricing_analysis import (
     trade_prices_by_day,
     trade_volume_by_day,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shared test events

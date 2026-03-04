@@ -112,9 +112,9 @@ class TestAgent:
         assert a.id == "a1"
         assert a.name == "Alice"
         assert a.kind == "firm"
-        assert a.asset_ids == []
-        assert a.liability_ids == []
-        assert a.stock_ids == []
+        assert a.asset_ids == set()
+        assert a.liability_ids == set()
+        assert a.stock_ids == set()
         assert a.defaulted is False
 
     def test_construction_with_all_fields(self) -> None:
@@ -122,14 +122,14 @@ class TestAgent:
             id="a2",
             name="Bob",
             kind=AgentKind.BANK,
-            asset_ids=["i1", "i2"],
-            liability_ids=["i3"],
-            stock_ids=["s1"],
+            asset_ids={"i1", "i2"},
+            liability_ids={"i3"},
+            stock_ids={"s1"},
             defaulted=True,
         )
-        assert a.asset_ids == ["i1", "i2"]
-        assert a.liability_ids == ["i3"]
-        assert a.stock_ids == ["s1"]
+        assert a.asset_ids == {"i1", "i2"}
+        assert a.liability_ids == {"i3"}
+        assert a.stock_ids == {"s1"}
         assert a.defaulted is True
 
     def test_kind_accepts_enum(self) -> None:
@@ -137,11 +137,11 @@ class TestAgent:
         assert a.kind == AgentKind.CENTRAL_BANK
         assert a.kind == "central_bank"
 
-    def test_default_lists_are_independent(self) -> None:
-        """Each instance should get its own list (field(default_factory=list))."""
+    def test_default_sets_are_independent(self) -> None:
+        """Each instance should get its own set (field(default_factory=set))."""
         a1 = Agent(id="x1", name="X1", kind="firm")
         a2 = Agent(id="x2", name="X2", kind="firm")
-        a1.asset_ids.append("instr_1")
+        a1.asset_ids.add("instr_1")
         assert "instr_1" not in a2.asset_ids
 
 
@@ -161,7 +161,7 @@ class TestFirm:
 
     def test_inherits_agent_defaults(self) -> None:
         f = Firm(id="f3", name="Gamma", kind="firm")
-        assert f.asset_ids == []
+        assert f.asset_ids == set()
         assert f.defaulted is False
 
     def test_is_instance_of_agent(self) -> None:
@@ -327,8 +327,8 @@ class TestDealer:
 
     def test_default_lists_empty(self) -> None:
         d = Dealer(id="d4", name="Dealer D")
-        assert d.asset_ids == []
-        assert d.liability_ids == []
+        assert d.asset_ids == set()
+        assert d.liability_ids == set()
 
 
 # =========================================================================
@@ -1034,9 +1034,9 @@ class TestCrossCutting:
     def test_agent_holds_multiple_instrument_types(self) -> None:
         """An agent can reference instruments of different kinds."""
         firm = Firm(id="f1", name="Corp", kind="firm")
-        firm.asset_ids.extend(["cash_1", "payable_1"])
-        firm.liability_ids.append("payable_2")
-        firm.stock_ids.append("stock_1")
+        firm.asset_ids.update(["cash_1", "payable_1"])
+        firm.liability_ids.add("payable_2")
+        firm.stock_ids.add("stock_1")
 
         assert len(firm.asset_ids) == 2
         assert len(firm.liability_ids) == 1

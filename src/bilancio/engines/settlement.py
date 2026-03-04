@@ -893,7 +893,7 @@ def _resolve_failed_bank(system: System, bank_id: str) -> None:
     if remaining_reserves > 0:
         # Collect depositor claims (BankDeposit where bank is liability issuer)
         deposit_claims: list[tuple[str, int]] = []  # (depositor_id, amount)
-        for cid, contract in system.state.contracts.items():
+        for _cid, contract in system.state.contracts.items():
             if (
                 contract.kind == InstrumentKind.BANK_DEPOSIT
                 and contract.liability_issuer_id == bank_id
@@ -926,7 +926,7 @@ def _resolve_failed_bank(system: System, bank_id: str) -> None:
                             "method": "deposit_at_surviving_bank",
                             "bank": surviving_bank_id,
                         })
-                    except (ValidationError, Exception):
+                    except (ValidationError, ValueError, RuntimeError):
                         # Fallback to cash if transfer fails
                         try:
                             _resolve_to_cash(system, bank_id, depositor_id, share)
@@ -936,7 +936,7 @@ def _resolve_failed_bank(system: System, bank_id: str) -> None:
                                 "amount": share,
                                 "method": "cash_fallback",
                             })
-                        except (ValidationError, Exception):
+                        except (ValidationError, ValueError, RuntimeError):
                             logger.warning(
                                 "Failed to distribute reserves to depositor %s: share=%d",
                                 depositor_id, share,
@@ -951,7 +951,7 @@ def _resolve_failed_bank(system: System, bank_id: str) -> None:
                             "amount": share,
                             "method": "cash_no_surviving_bank",
                         })
-                    except (ValidationError, Exception):
+                    except (ValidationError, ValueError, RuntimeError):
                         logger.warning(
                             "Failed to convert reserves to cash for depositor %s: share=%d",
                             depositor_id, share,
@@ -1414,19 +1414,30 @@ def settle_due(
     settled_for_rollover = []
     risk_assessor = _get_risk_assessor(system)
 
-    for payable_instr in due_list:
-        if payable_instr.id not in system.state.contracts:
-            continue
-        assert isinstance(payable_instr, Payable)
-        settled, rollover_info = _settle_single_payable(
-            system,
-            payable_instr,
-            day,
-            risk_assessor=risk_assessor,
-            rollover_enabled=rollover_enabled,
-        )
-        if rollover_info is not None:
-            settled_for_rollover.append(rollover_info)
+    # In expel-agent mode, defaults are handled inline (no exception raised),
+    # so atomic deepcopy snapshots are never needed for rollback.  Disable them
+    # for the entire settlement loop to eliminate the O(state_size) per-operation
+    # cost that otherwise dominates scaling behavior.
+    skip_atomic = _get_default_mode(system) != DEFAULT_MODE_FAIL_FAST
+    if skip_atomic:
+        system._atomic_disabled = True
+    try:
+        for payable_instr in due_list:
+            if payable_instr.id not in system.state.contracts:
+                continue
+            assert isinstance(payable_instr, Payable)
+            settled, rollover_info = _settle_single_payable(
+                system,
+                payable_instr,
+                day,
+                risk_assessor=risk_assessor,
+                rollover_enabled=rollover_enabled,
+            )
+            if rollover_info is not None:
+                settled_for_rollover.append(rollover_info)
+    finally:
+        if skip_atomic:
+            system._atomic_disabled = False
 
     settle_due_delivery_obligations(system, day)
     return settled_for_rollover

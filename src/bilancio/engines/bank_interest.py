@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from bilancio.domain.instruments.base import InstrumentKind
 
@@ -25,7 +25,7 @@ def accrue_deposit_interest(
     system: System,
     current_day: int,
     banking: BankingSubsystem,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Credit interest on deposits every N days.
 
     Interest = deposit_amount * r_D (from the bank's current quote).
@@ -39,7 +39,7 @@ def accrue_deposit_interest(
     Returns:
         List of interest event dicts.
     """
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
     period = banking.interest_period
 
     if current_day % period != 0 or current_day == 0:

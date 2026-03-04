@@ -182,7 +182,7 @@ class TestNoReservesAvailable:
         sys.mint_reserves("B2", 1000)
 
         # Inject a stale contract ID that doesn't exist in state.contracts
-        sys.state.agents["B1"].asset_ids.append("STALE_CONTRACT_ID")
+        sys.state.agents["B1"].asset_ids.add("STALE_CONTRACT_ID")
 
         sys.mint_cash("H1", 200)
         sys.mint_cash("H2", 100)

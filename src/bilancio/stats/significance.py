@@ -45,7 +45,7 @@ def paired_wilcoxon(
             "Use paired_t_test for smaller samples (with normality caveat)."
         )
 
-    differences = [c - t for c, t in zip(control, treatment)]
+    differences = [c - t for c, t in zip(control, treatment, strict=False)]
 
     # Remove zeros (ties with zero difference)
     nonzero = [(abs(d), d) for d in differences if d != 0.0]
@@ -66,8 +66,8 @@ def paired_wilcoxon(
     ranks = _assign_ranks([abs_d for abs_d, _ in nonzero])
 
     # Sum of ranks for positive and negative differences
-    w_plus = sum(r for r, (_, d) in zip(ranks, nonzero) if d > 0)
-    w_minus = sum(r for r, (_, d) in zip(ranks, nonzero) if d < 0)
+    w_plus = sum(r for r, (_, d) in zip(ranks, nonzero, strict=False) if d > 0)
+    w_minus = sum(r for r, (_, d) in zip(ranks, nonzero, strict=False) if d < 0)
     w = min(w_plus, w_minus)
 
     # Normal approximation (valid for n_eff >= 10, reasonable for >= 6)
@@ -117,7 +117,7 @@ def paired_t_test(
     if n < 2:
         raise ValueError(f"Paired t-test requires >= 2 pairs, got {n}")
 
-    differences = [c - t for c, t in zip(control, treatment)]
+    differences = [c - t for c, t in zip(control, treatment, strict=False)]
 
     mean_d = sum(differences) / n
     var_d = sum((d - mean_d) ** 2 for d in differences) / (n - 1)

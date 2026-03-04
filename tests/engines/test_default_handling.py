@@ -66,8 +66,8 @@ def test_expel_mode_handles_partial_payment_and_marks_agent():
     assert trailing_payable.id not in system.state.contracts
     assert debtor.defaulted is True
     assert debtor.id in system.state.defaulted_agent_ids
-    assert creditor.asset_ids.count(payable.id) == 0
-    assert creditor.asset_ids.count(trailing_payable.id) == 0
+    assert payable.id not in creditor.asset_ids
+    assert trailing_payable.id not in creditor.asset_ids
     assert not system.state.scheduled_actions_by_day
     assert "PAY1" not in system.state.aliases
 

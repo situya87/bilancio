@@ -54,30 +54,31 @@ def build_ring_system(
     ``DefaultError``.
     """
     system = System(default_mode=default_mode)
-    cb = CentralBank(id="CB1", name="Central Bank", kind="central_bank")
-    bank = Bank(id="B1", name="Bank 1", kind="bank")
-    system.add_agent(cb)
-    system.add_agent(bank)
+    with system.setup():
+        cb = CentralBank(id="CB1", name="Central Bank", kind="central_bank")
+        bank = Bank(id="B1", name="Bank 1", kind="bank")
+        system.add_agent(cb)
+        system.add_agent(bank)
 
-    for i in range(1, n_agents + 1):
-        h = Household(id=f"H{i}", name=f"Household {i}", kind="household")
-        system.add_agent(h)
-        system.mint_cash(f"H{i}", cash_per_agent)
+        for i in range(1, n_agents + 1):
+            h = Household(id=f"H{i}", name=f"Household {i}", kind="household")
+            system.add_agent(h)
+            system.mint_cash(f"H{i}", cash_per_agent)
 
-    for i in range(1, n_agents + 1):
-        from_id = f"H{i}"
-        to_id = f"H{(i % n_agents) + 1}"
-        due_day = 1 + ((i - 1) % maturity_days)
-        p = Payable(
-            id=system.new_contract_id("P"),
-            kind=InstrumentKind.PAYABLE,
-            amount=payable_amount,
-            denom="X",
-            asset_holder_id=to_id,
-            liability_issuer_id=from_id,
-            due_day=due_day,
-        )
-        system.add_contract(p)
+        for i in range(1, n_agents + 1):
+            from_id = f"H{i}"
+            to_id = f"H{(i % n_agents) + 1}"
+            due_day = 1 + ((i - 1) % maturity_days)
+            p = Payable(
+                id=system.new_contract_id("P"),
+                kind=InstrumentKind.PAYABLE,
+                amount=payable_amount,
+                denom="X",
+                asset_holder_id=to_id,
+                liability_issuer_id=from_id,
+                due_day=due_day,
+            )
+            system.add_contract(p)
 
     return system
 
@@ -121,58 +122,58 @@ def build_banking_ring_system(
     multiplier * total_deposits.  Use low values (1-2) to stress banks.
     """
     system = System(default_mode=default_mode)
+    with system.setup():
+        # Central bank with escalation config
+        cb = CentralBank(id="CB1", name="Central Bank", kind="central_bank")
+        cb.rate_escalation_slope = Decimal("0.05")
+        cb.max_outstanding_ratio = Decimal("2.0")
+        cb.escalation_base_amount = n_agents * payable_amount
+        system.add_agent(cb)
 
-    # Central bank with escalation config
-    cb = CentralBank(id="CB1", name="Central Bank", kind="central_bank")
-    cb.rate_escalation_slope = Decimal("0.05")
-    cb.max_outstanding_ratio = Decimal("2.0")
-    cb.escalation_base_amount = n_agents * payable_amount
-    system.add_agent(cb)
+        # Create banks
+        bank_ids = []
+        for b in range(1, n_banks + 1):
+            bank = Bank(id=f"B{b}", name=f"Bank {b}", kind="bank")
+            system.add_agent(bank)
+            bank_ids.append(f"B{b}")
 
-    # Create banks
-    bank_ids = []
-    for b in range(1, n_banks + 1):
-        bank = Bank(id=f"B{b}", name=f"Bank {b}", kind="bank")
-        system.add_agent(bank)
-        bank_ids.append(f"B{b}")
+        # Create households in ring, deposit cash into banks round-robin
+        trader_banks: dict[str, list[str]] = {}
+        for i in range(1, n_agents + 1):
+            h = Household(id=f"H{i}", name=f"Household {i}", kind="household")
+            system.add_agent(h)
+            system.mint_cash(f"H{i}", cash_per_agent)
 
-    # Create households in ring, deposit cash into banks round-robin
-    trader_banks: dict[str, list[str]] = {}
-    for i in range(1, n_agents + 1):
-        h = Household(id=f"H{i}", name=f"Household {i}", kind="household")
-        system.add_agent(h)
-        system.mint_cash(f"H{i}", cash_per_agent)
+            assigned_bank = bank_ids[(i - 1) % n_banks]
+            trader_banks[f"H{i}"] = [assigned_bank]
+            deposit_cash(system, f"H{i}", assigned_bank, cash_per_agent)
 
-        assigned_bank = bank_ids[(i - 1) % n_banks]
-        trader_banks[f"H{i}"] = [assigned_bank]
-        deposit_cash(system, f"H{i}", assigned_bank, cash_per_agent)
+        # Mint reserves per bank: reserve_multiplier * total deposits at that bank
+        for bank_id in bank_ids:
+            # Count deposits at this bank
+            total_deposits = 0
+            for cid in system.state.agents[bank_id].liability_ids:
+                c = system.state.contracts.get(cid)
+                if c and c.kind == InstrumentKind.BANK_DEPOSIT:
+                    total_deposits += c.amount
+            reserves = reserve_multiplier * total_deposits
+            system.mint_reserves(bank_id, reserves)
 
-    # Mint reserves per bank: reserve_multiplier * total deposits at that bank
-    for bank_id in bank_ids:
-        # Count deposits at this bank
-        total_deposits = 0
-        for cid in system.state.agents[bank_id].liability_ids:
-            c = system.state.contracts.get(cid)
-            if c and c.kind == InstrumentKind.BANK_DEPOSIT:
-                total_deposits += c.amount
-        reserves = reserve_multiplier * total_deposits
-        system.mint_reserves(bank_id, reserves)
-
-    # Create payable ring: H1->H2->...->HN->H1
-    for i in range(1, n_agents + 1):
-        from_id = f"H{i}"
-        to_id = f"H{(i % n_agents) + 1}"
-        due_day = 1 + ((i - 1) % maturity_days)
-        p = Payable(
-            id=system.new_contract_id("P"),
-            kind=InstrumentKind.PAYABLE,
-            amount=payable_amount,
-            denom="X",
-            asset_holder_id=to_id,
-            liability_issuer_id=from_id,
-            due_day=due_day,
-        )
-        system.add_contract(p)
+        # Create payable ring: H1->H2->...->HN->H1
+        for i in range(1, n_agents + 1):
+            from_id = f"H{i}"
+            to_id = f"H{(i % n_agents) + 1}"
+            due_day = 1 + ((i - 1) % maturity_days)
+            p = Payable(
+                id=system.new_contract_id("P"),
+                kind=InstrumentKind.PAYABLE,
+                amount=payable_amount,
+                denom="X",
+                asset_holder_id=to_id,
+                liability_issuer_id=from_id,
+                due_day=due_day,
+            )
+            system.add_contract(p)
 
     # Initialize banking subsystem
     profile = BankProfile(
@@ -512,7 +513,7 @@ def test_settlement_forecast_nonzero_with_cross_bank_payables():
     # After refreshing quotes, at least one bank should have projected
     # reserves below its initial level (settlement drain reduces the path)
     initial_reserves = {}
-    for bank_id, bank_state in subsystem.banks.items():
+    for bank_id, _bank_state in subsystem.banks.items():
         agent = sys.state.agents[bank_id]
         initial_reserves[bank_id] = sum(
             sys.state.contracts[cid].amount

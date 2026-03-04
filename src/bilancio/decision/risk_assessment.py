@@ -205,7 +205,7 @@ class BeliefTracker:
         issuer_id: AgentId,
         current_day: int,
         estimator_id: str = "system",
-    ) -> "Estimate":
+    ) -> Estimate:
         """Return an Estimate wrapping estimate_default_prob() with provenance."""
         # Delegate to InformationService when available
         if self._information_service is not None:
@@ -301,7 +301,7 @@ class EVValuer:
         ticket: Ticket,
         current_day: int,
         estimator_id: str = "system",
-    ) -> "Estimate":
+    ) -> Estimate:
         """Return an Estimate wrapping expected_value() with provenance.
 
         When an ``instrument_valuer`` is injected, delegates to its
@@ -656,7 +656,7 @@ class RiskAssessor:
         issuer_id: AgentId,
         current_day: int,
         estimator_id: str = "system",
-    ) -> "Estimate":
+    ) -> Estimate:
         """Return an Estimate wrapping estimate_default_prob() with provenance."""
         return self.belief_tracker.estimate_default_prob_detail(
             issuer_id, current_day, estimator_id
@@ -685,7 +685,7 @@ class RiskAssessor:
         ticket: Ticket,
         current_day: int,
         estimator_id: str = "system",
-    ) -> "Estimate":
+    ) -> Estimate:
         """Return an Estimate wrapping expected_value() with provenance.
 
         When an ``instrument_valuer`` is injected, delegates to its

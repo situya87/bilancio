@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, cast
 
 from bilancio.core.atomic_tx import atomic
+from bilancio.core.errors import ValidationError
 from bilancio.core.events import EventKind
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
@@ -102,7 +104,7 @@ def _settle_net_with_cb_fallback(
             amount=amount,
             cb_refinanced=shortfall,
         )
-    except Exception:
+    except (ValueError, ValidationError):
         # Both cb_lend_reserves and transfer_reserves are rolled back.
         # Fall back to an overnight interbank payable.
         logger.warning(
@@ -203,7 +205,7 @@ def settle_intraday_nets(system: System, day: int) -> None:
             _settle_net_with_cb_fallback(
                 system, debtor_bank, creditor_bank, amount, e.shortfall, day,
             )
-        except Exception:
+        except (ValueError, ValidationError):
             # Direct transfer failed (ValidationError or otherwise, e.g. no
             # reserves at all).  Attempt CB refinancing for the full amount.
             _settle_net_with_cb_fallback(
@@ -221,9 +223,9 @@ class _NeedsCBRefinancing(Exception):
 
 
 def compute_combined_nets(
-    system: "System",
+    system: System,
     day: int,
-    interbank_obligations: list[tuple[str, str, int, object]],
+    interbank_obligations: Sequence[tuple[str, str, int, object]],
 ) -> dict[tuple[str, str], int]:
     """Compute combined bilateral nets: client payments + interbank repayments.
 
@@ -298,7 +300,7 @@ def compute_bank_net_obligations(
 
 
 def settle_nets_with_funding(
-    system: "System",
+    system: System,
     day: int,
     nets: dict[tuple[str, str], int],
 ) -> None:
@@ -366,7 +368,7 @@ def settle_nets_with_funding(
             _settle_net_with_cb_fallback(
                 system, debtor_bank, creditor_bank, amount, e.shortfall, day,
             )
-        except Exception:
+        except (ValueError, ValidationError):
             _settle_net_with_cb_fallback(
                 system, debtor_bank, creditor_bank, amount, amount, day,
                 label="fallback",

@@ -784,10 +784,7 @@ def _build_eligible_sellers(
     """
     from bilancio.decision.intentions import collect_sell_intentions
 
-    kwargs: dict = {}
-    if horizon is not None:
-        kwargs["horizon"] = horizon
-    intentions = collect_sell_intentions(subsystem, current_day, **kwargs)
+    intentions = collect_sell_intentions(subsystem, current_day, horizon=horizon)
     return [si.trader_id for si in intentions]
 
 
@@ -811,10 +808,7 @@ def _build_eligible_buyers(
     """
     from bilancio.decision.intentions import collect_buy_intentions
 
-    kwargs: dict = {}
-    if horizon is not None:
-        kwargs["horizon"] = horizon
-    intentions = collect_buy_intentions(subsystem, current_day, **kwargs)
+    intentions = collect_buy_intentions(subsystem, current_day, horizon=horizon)
     return [bi.trader_id for bi in intentions]
 
 

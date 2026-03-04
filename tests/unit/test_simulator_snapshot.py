@@ -7,7 +7,6 @@ import pytest
 from bilancio.analysis.balances import AgentBalance
 from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.system import System
-
 from dashboards.simulator.lib.bridge import (
     add_agent,
     create_payable,

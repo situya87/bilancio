@@ -99,8 +99,8 @@ class DealerMatchingEngine:
         buy_order: list[BuyIntention] = list(buy_intentions)
 
         # --- Randomise execution order ---
-        subsystem.rng.shuffle(sell_order)  # type: ignore[arg-type]
-        subsystem.rng.shuffle(buy_order)  # type: ignore[arg-type]
+        subsystem.rng.shuffle(sell_order)
+        subsystem.rng.shuffle(buy_order)
 
         # --- Build execution budgets from subsystem cash (not system) ---
         # Subsystem dealer/VBT cash is the live, authoritative value that

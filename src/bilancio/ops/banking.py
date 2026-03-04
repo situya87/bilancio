@@ -30,7 +30,7 @@ def deposit_cash(system: System, customer_id: str, bank_id: str, amount: int) ->
                 instr = system.state.contracts[cid]
             # move holder to bank (issuer CB unchanged)
             system.state.agents[customer_id].asset_ids.remove(cid)
-            system.state.agents[bank_id].asset_ids.append(cid)
+            system.state.agents[bank_id].asset_ids.add(cid)
             instr.asset_holder_id = bank_id
             moved_piece_ids.append(cid)
             remaining -= instr.amount
@@ -93,7 +93,7 @@ def withdraw_cash(system: System, customer_id: str, bank_id: str, amount: int) -
                 cid = split(system, cid, remaining)
                 instr = system.state.contracts[cid]
             system.state.agents[bank_id].asset_ids.remove(cid)
-            system.state.agents[customer_id].asset_ids.append(cid)
+            system.state.agents[customer_id].asset_ids.add(cid)
             instr.asset_holder_id = customer_id
             moved_piece_ids.append(cid)
             remaining -= instr.amount
@@ -161,7 +161,7 @@ def client_payment(
                     instr = system.state.contracts[cid]
                 # move payer cash → payee (physical cash handover)
                 system.state.agents[payer_id].asset_ids.remove(cid)
-                system.state.agents[payee_id].asset_ids.append(cid)
+                system.state.agents[payee_id].asset_ids.add(cid)
                 instr.asset_holder_id = payee_id
                 cash_paid += instr.amount
                 remaining -= instr.amount

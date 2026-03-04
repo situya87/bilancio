@@ -1888,7 +1888,10 @@ class BalancedComparisonRunner:
         if "bank_dealer" in arm_summaries and result.intermediary_capital_bank_dealer > 0:
             result.loss_capital_ratio_bank_dealer = result.intermediary_loss_bank_dealer / result.intermediary_capital_bank_dealer
         if "bank_dealer_nbfi" in arm_summaries and result.intermediary_capital_bank_dealer_nbfi > 0:
-            result.loss_capital_ratio_bank_dealer_nbfi = result.intermediary_loss_bank_dealer_nbfi / result.intermediary_capital_bank_dealer_nbfi
+            result.loss_capital_ratio_bank_dealer_nbfi = (
+                result.intermediary_loss_bank_dealer_nbfi
+                / result.intermediary_capital_bank_dealer_nbfi
+            )
 
         return result
 
@@ -1966,7 +1969,7 @@ class BalancedComparisonRunner:
 
                                 # Prepare all enabled arms for this combo
                                 arm_preps: dict[str, PreparedRun] = {}
-                                for arm_name, phase, getter_name, _regime in arm_defs:
+                                for arm_name, phase, _getter_name, _regime in arm_defs:
                                     runner = runners_cache[(outside_mid_ratio, arm_name)]
                                     arm_preps[arm_name] = runner._prepare_run(
                                         phase=phase,
@@ -2031,7 +2034,7 @@ class BalancedComparisonRunner:
 
         # Route results back to (combo_idx, arm_name)
         combo_results: dict[int, dict[str, Any]] = {}
-        for (_config, run_id, _opts), raw_result in zip(batch_runs, results):
+        for (_config, run_id, _opts), raw_result in zip(batch_runs, results, strict=False):
             combo_idx, arm_name = run_id_to_location[run_id]
             combo_results.setdefault(combo_idx, {})[arm_name] = raw_result
 
@@ -2105,7 +2108,7 @@ class BalancedComparisonRunner:
             if all_run_ids:
                 try:
                     self.executor.compute_aggregate_metrics(all_run_ids)
-                except Exception as e:
+                except EXTERNAL_OPERATION_ERRORS as e:
                     print(f"\nWarning: Aggregate metrics computation failed: {e}", flush=True)
                     print("Local comparison.csv is still available.", flush=True)
 
@@ -2595,7 +2598,10 @@ class BalancedComparisonRunner:
         if self.config.enable_bank_dealer and bank_dealer_data and result.intermediary_capital_bank_dealer > 0:
             result.loss_capital_ratio_bank_dealer = result.intermediary_loss_bank_dealer / result.intermediary_capital_bank_dealer
         if self.config.enable_bank_dealer_nbfi and bank_dealer_nbfi_data and result.intermediary_capital_bank_dealer_nbfi > 0:
-            result.loss_capital_ratio_bank_dealer_nbfi = result.intermediary_loss_bank_dealer_nbfi / result.intermediary_capital_bank_dealer_nbfi
+            result.loss_capital_ratio_bank_dealer_nbfi = (
+                result.intermediary_loss_bank_dealer_nbfi
+                / result.intermediary_capital_bank_dealer_nbfi
+            )
 
         # Log comparison
         if result.trading_effect is not None:
@@ -2928,13 +2934,31 @@ class BalancedComparisonRunner:
                     "total_loss_bank_dealer": str(result.total_loss_bank_dealer),
                     "payable_default_loss_bank_dealer_nbfi": str(result.payable_default_loss_bank_dealer_nbfi),
                     "total_loss_bank_dealer_nbfi": str(result.total_loss_bank_dealer_nbfi),
-                    "total_loss_pct_passive": str(result.total_loss_pct_passive) if result.total_loss_pct_passive is not None else "",
-                    "total_loss_pct_active": str(result.total_loss_pct_active) if result.total_loss_pct_active is not None else "",
-                    "total_loss_pct_lender": str(result.total_loss_pct_lender) if result.total_loss_pct_lender is not None else "",
-                    "total_loss_pct_dealer_lender": str(result.total_loss_pct_dealer_lender) if result.total_loss_pct_dealer_lender is not None else "",
-                    "total_loss_pct_bank_passive": str(result.total_loss_pct_bank_passive) if result.total_loss_pct_bank_passive is not None else "",
-                    "total_loss_pct_bank_dealer": str(result.total_loss_pct_bank_dealer) if result.total_loss_pct_bank_dealer is not None else "",
-                    "total_loss_pct_bank_dealer_nbfi": str(result.total_loss_pct_bank_dealer_nbfi) if result.total_loss_pct_bank_dealer_nbfi is not None else "",
+                    "total_loss_pct_passive": (
+                        str(result.total_loss_pct_passive) if result.total_loss_pct_passive is not None else ""
+                    ),
+                    "total_loss_pct_active": (
+                        str(result.total_loss_pct_active) if result.total_loss_pct_active is not None else ""
+                    ),
+                    "total_loss_pct_lender": (
+                        str(result.total_loss_pct_lender) if result.total_loss_pct_lender is not None else ""
+                    ),
+                    "total_loss_pct_dealer_lender": (
+                        str(result.total_loss_pct_dealer_lender)
+                        if result.total_loss_pct_dealer_lender is not None else ""
+                    ),
+                    "total_loss_pct_bank_passive": (
+                        str(result.total_loss_pct_bank_passive)
+                        if result.total_loss_pct_bank_passive is not None else ""
+                    ),
+                    "total_loss_pct_bank_dealer": (
+                        str(result.total_loss_pct_bank_dealer)
+                        if result.total_loss_pct_bank_dealer is not None else ""
+                    ),
+                    "total_loss_pct_bank_dealer_nbfi": (
+                        str(result.total_loss_pct_bank_dealer_nbfi)
+                        if result.total_loss_pct_bank_dealer_nbfi is not None else ""
+                    ),
                     "intermediary_loss_passive": str(result.intermediary_loss_passive),
                     "intermediary_loss_active": str(result.intermediary_loss_active),
                     "intermediary_loss_lender": str(result.intermediary_loss_lender),
@@ -2942,19 +2966,58 @@ class BalancedComparisonRunner:
                     "intermediary_loss_bank_passive": str(result.intermediary_loss_bank_passive),
                     "intermediary_loss_bank_dealer": str(result.intermediary_loss_bank_dealer),
                     "intermediary_loss_bank_dealer_nbfi": str(result.intermediary_loss_bank_dealer_nbfi),
-                    "intermediary_loss_pct_passive": str(result.intermediary_loss_pct_passive) if result.intermediary_loss_pct_passive is not None else "",
-                    "intermediary_loss_pct_active": str(result.intermediary_loss_pct_active) if result.intermediary_loss_pct_active is not None else "",
-                    "intermediary_loss_pct_lender": str(result.intermediary_loss_pct_lender) if result.intermediary_loss_pct_lender is not None else "",
-                    "intermediary_loss_pct_dealer_lender": str(result.intermediary_loss_pct_dealer_lender) if result.intermediary_loss_pct_dealer_lender is not None else "",
-                    "intermediary_loss_pct_bank_passive": str(result.intermediary_loss_pct_bank_passive) if result.intermediary_loss_pct_bank_passive is not None else "",
-                    "intermediary_loss_pct_bank_dealer": str(result.intermediary_loss_pct_bank_dealer) if result.intermediary_loss_pct_bank_dealer is not None else "",
-                    "intermediary_loss_pct_bank_dealer_nbfi": str(result.intermediary_loss_pct_bank_dealer_nbfi) if result.intermediary_loss_pct_bank_dealer_nbfi is not None else "",
-                    "adjusted_trading_effect": str(result.adjusted_trading_effect) if result.adjusted_trading_effect is not None else "",
-                    "adjusted_lending_effect": str(result.adjusted_lending_effect) if result.adjusted_lending_effect is not None else "",
-                    "adjusted_combined_effect": str(result.adjusted_combined_effect) if result.adjusted_combined_effect is not None else "",
-                    "adjusted_bank_passive_effect": str(result.adjusted_bank_passive_effect) if result.adjusted_bank_passive_effect is not None else "",
-                    "adjusted_bank_dealer_effect": str(result.adjusted_bank_dealer_effect) if result.adjusted_bank_dealer_effect is not None else "",
-                    "adjusted_bank_dealer_nbfi_effect": str(result.adjusted_bank_dealer_nbfi_effect) if result.adjusted_bank_dealer_nbfi_effect is not None else "",
+                    "intermediary_loss_pct_passive": (
+                        str(result.intermediary_loss_pct_passive)
+                        if result.intermediary_loss_pct_passive is not None else ""
+                    ),
+                    "intermediary_loss_pct_active": (
+                        str(result.intermediary_loss_pct_active)
+                        if result.intermediary_loss_pct_active is not None else ""
+                    ),
+                    "intermediary_loss_pct_lender": (
+                        str(result.intermediary_loss_pct_lender)
+                        if result.intermediary_loss_pct_lender is not None else ""
+                    ),
+                    "intermediary_loss_pct_dealer_lender": (
+                        str(result.intermediary_loss_pct_dealer_lender)
+                        if result.intermediary_loss_pct_dealer_lender is not None else ""
+                    ),
+                    "intermediary_loss_pct_bank_passive": (
+                        str(result.intermediary_loss_pct_bank_passive)
+                        if result.intermediary_loss_pct_bank_passive is not None else ""
+                    ),
+                    "intermediary_loss_pct_bank_dealer": (
+                        str(result.intermediary_loss_pct_bank_dealer)
+                        if result.intermediary_loss_pct_bank_dealer is not None else ""
+                    ),
+                    "intermediary_loss_pct_bank_dealer_nbfi": (
+                        str(result.intermediary_loss_pct_bank_dealer_nbfi)
+                        if result.intermediary_loss_pct_bank_dealer_nbfi is not None else ""
+                    ),
+                    "adjusted_trading_effect": (
+                        str(result.adjusted_trading_effect)
+                        if result.adjusted_trading_effect is not None else ""
+                    ),
+                    "adjusted_lending_effect": (
+                        str(result.adjusted_lending_effect)
+                        if result.adjusted_lending_effect is not None else ""
+                    ),
+                    "adjusted_combined_effect": (
+                        str(result.adjusted_combined_effect)
+                        if result.adjusted_combined_effect is not None else ""
+                    ),
+                    "adjusted_bank_passive_effect": (
+                        str(result.adjusted_bank_passive_effect)
+                        if result.adjusted_bank_passive_effect is not None else ""
+                    ),
+                    "adjusted_bank_dealer_effect": (
+                        str(result.adjusted_bank_dealer_effect)
+                        if result.adjusted_bank_dealer_effect is not None else ""
+                    ),
+                    "adjusted_bank_dealer_nbfi_effect": (
+                        str(result.adjusted_bank_dealer_nbfi_effect)
+                        if result.adjusted_bank_dealer_nbfi_effect is not None else ""
+                    ),
                     # Approach 3: Total System Loss
                     "system_loss_passive": str(result.system_loss_passive),
                     "system_loss_active": str(result.system_loss_active),
@@ -2963,19 +3026,58 @@ class BalancedComparisonRunner:
                     "system_loss_bank_passive": str(result.system_loss_bank_passive),
                     "system_loss_bank_dealer": str(result.system_loss_bank_dealer),
                     "system_loss_bank_dealer_nbfi": str(result.system_loss_bank_dealer_nbfi),
-                    "system_loss_pct_passive": str(result.system_loss_pct_passive) if result.system_loss_pct_passive is not None else "",
-                    "system_loss_pct_active": str(result.system_loss_pct_active) if result.system_loss_pct_active is not None else "",
-                    "system_loss_pct_lender": str(result.system_loss_pct_lender) if result.system_loss_pct_lender is not None else "",
-                    "system_loss_pct_dealer_lender": str(result.system_loss_pct_dealer_lender) if result.system_loss_pct_dealer_lender is not None else "",
-                    "system_loss_pct_bank_passive": str(result.system_loss_pct_bank_passive) if result.system_loss_pct_bank_passive is not None else "",
-                    "system_loss_pct_bank_dealer": str(result.system_loss_pct_bank_dealer) if result.system_loss_pct_bank_dealer is not None else "",
-                    "system_loss_pct_bank_dealer_nbfi": str(result.system_loss_pct_bank_dealer_nbfi) if result.system_loss_pct_bank_dealer_nbfi is not None else "",
-                    "system_loss_trading_effect": str(result.system_loss_trading_effect) if result.system_loss_trading_effect is not None else "",
-                    "system_loss_lending_effect": str(result.system_loss_lending_effect) if result.system_loss_lending_effect is not None else "",
-                    "system_loss_combined_effect": str(result.system_loss_combined_effect) if result.system_loss_combined_effect is not None else "",
-                    "system_loss_bank_passive_effect": str(result.system_loss_bank_passive_effect) if result.system_loss_bank_passive_effect is not None else "",
-                    "system_loss_bank_dealer_effect": str(result.system_loss_bank_dealer_effect) if result.system_loss_bank_dealer_effect is not None else "",
-                    "system_loss_bank_dealer_nbfi_effect": str(result.system_loss_bank_dealer_nbfi_effect) if result.system_loss_bank_dealer_nbfi_effect is not None else "",
+                    "system_loss_pct_passive": (
+                        str(result.system_loss_pct_passive)
+                        if result.system_loss_pct_passive is not None else ""
+                    ),
+                    "system_loss_pct_active": (
+                        str(result.system_loss_pct_active)
+                        if result.system_loss_pct_active is not None else ""
+                    ),
+                    "system_loss_pct_lender": (
+                        str(result.system_loss_pct_lender)
+                        if result.system_loss_pct_lender is not None else ""
+                    ),
+                    "system_loss_pct_dealer_lender": (
+                        str(result.system_loss_pct_dealer_lender)
+                        if result.system_loss_pct_dealer_lender is not None else ""
+                    ),
+                    "system_loss_pct_bank_passive": (
+                        str(result.system_loss_pct_bank_passive)
+                        if result.system_loss_pct_bank_passive is not None else ""
+                    ),
+                    "system_loss_pct_bank_dealer": (
+                        str(result.system_loss_pct_bank_dealer)
+                        if result.system_loss_pct_bank_dealer is not None else ""
+                    ),
+                    "system_loss_pct_bank_dealer_nbfi": (
+                        str(result.system_loss_pct_bank_dealer_nbfi)
+                        if result.system_loss_pct_bank_dealer_nbfi is not None else ""
+                    ),
+                    "system_loss_trading_effect": (
+                        str(result.system_loss_trading_effect)
+                        if result.system_loss_trading_effect is not None else ""
+                    ),
+                    "system_loss_lending_effect": (
+                        str(result.system_loss_lending_effect)
+                        if result.system_loss_lending_effect is not None else ""
+                    ),
+                    "system_loss_combined_effect": (
+                        str(result.system_loss_combined_effect)
+                        if result.system_loss_combined_effect is not None else ""
+                    ),
+                    "system_loss_bank_passive_effect": (
+                        str(result.system_loss_bank_passive_effect)
+                        if result.system_loss_bank_passive_effect is not None else ""
+                    ),
+                    "system_loss_bank_dealer_effect": (
+                        str(result.system_loss_bank_dealer_effect)
+                        if result.system_loss_bank_dealer_effect is not None else ""
+                    ),
+                    "system_loss_bank_dealer_nbfi_effect": (
+                        str(result.system_loss_bank_dealer_nbfi_effect)
+                        if result.system_loss_bank_dealer_nbfi_effect is not None else ""
+                    ),
                     # Approach 2: Loss/Capital Ratio
                     "intermediary_capital_passive": str(result.intermediary_capital_passive),
                     "intermediary_capital_active": str(result.intermediary_capital_active),
@@ -2983,14 +3085,37 @@ class BalancedComparisonRunner:
                     "intermediary_capital_dealer_lender": str(result.intermediary_capital_dealer_lender),
                     "intermediary_capital_bank_passive": str(result.intermediary_capital_bank_passive),
                     "intermediary_capital_bank_dealer": str(result.intermediary_capital_bank_dealer),
-                    "intermediary_capital_bank_dealer_nbfi": str(result.intermediary_capital_bank_dealer_nbfi),
-                    "loss_capital_ratio_passive": str(result.loss_capital_ratio_passive) if result.loss_capital_ratio_passive is not None else "",
-                    "loss_capital_ratio_active": str(result.loss_capital_ratio_active) if result.loss_capital_ratio_active is not None else "",
-                    "loss_capital_ratio_lender": str(result.loss_capital_ratio_lender) if result.loss_capital_ratio_lender is not None else "",
-                    "loss_capital_ratio_dealer_lender": str(result.loss_capital_ratio_dealer_lender) if result.loss_capital_ratio_dealer_lender is not None else "",
-                    "loss_capital_ratio_bank_passive": str(result.loss_capital_ratio_bank_passive) if result.loss_capital_ratio_bank_passive is not None else "",
-                    "loss_capital_ratio_bank_dealer": str(result.loss_capital_ratio_bank_dealer) if result.loss_capital_ratio_bank_dealer is not None else "",
-                    "loss_capital_ratio_bank_dealer_nbfi": str(result.loss_capital_ratio_bank_dealer_nbfi) if result.loss_capital_ratio_bank_dealer_nbfi is not None else "",
+                    "intermediary_capital_bank_dealer_nbfi": str(
+                        result.intermediary_capital_bank_dealer_nbfi
+                    ),
+                    "loss_capital_ratio_passive": (
+                        str(result.loss_capital_ratio_passive)
+                        if result.loss_capital_ratio_passive is not None else ""
+                    ),
+                    "loss_capital_ratio_active": (
+                        str(result.loss_capital_ratio_active)
+                        if result.loss_capital_ratio_active is not None else ""
+                    ),
+                    "loss_capital_ratio_lender": (
+                        str(result.loss_capital_ratio_lender)
+                        if result.loss_capital_ratio_lender is not None else ""
+                    ),
+                    "loss_capital_ratio_dealer_lender": (
+                        str(result.loss_capital_ratio_dealer_lender)
+                        if result.loss_capital_ratio_dealer_lender is not None else ""
+                    ),
+                    "loss_capital_ratio_bank_passive": (
+                        str(result.loss_capital_ratio_bank_passive)
+                        if result.loss_capital_ratio_bank_passive is not None else ""
+                    ),
+                    "loss_capital_ratio_bank_dealer": (
+                        str(result.loss_capital_ratio_bank_dealer)
+                        if result.loss_capital_ratio_bank_dealer is not None else ""
+                    ),
+                    "loss_capital_ratio_bank_dealer_nbfi": (
+                        str(result.loss_capital_ratio_bank_dealer_nbfi)
+                        if result.loss_capital_ratio_bank_dealer_nbfi is not None else ""
+                    ),
                 }
                 writer.writerow(row)
 
@@ -3128,7 +3253,7 @@ class BalancedComparisonRunner:
             for name, path in paths.items():
                 logger.info("Stats %s written to %s", name, path)
             print(f"Statistical analysis written to {self.aggregate_dir}", flush=True)
-        except Exception as e:
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Statistical analysis failed: %s", e)
             print(f"Warning: Statistical analysis failed: {e}", flush=True)
 
@@ -3150,7 +3275,7 @@ class BalancedComparisonRunner:
             for name, path in paths.items():
                 logger.info("Activity analysis %s: %s", name, path)
             print(f"Mechanism activity analysis written to {analysis_dir}", flush=True)
-        except Exception as e:
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Activity analysis failed: %s", e)
             print(f"Warning: Activity analysis failed: {e}", flush=True)
 

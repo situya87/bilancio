@@ -26,7 +26,6 @@ from bilancio.decision.risk_assessment import (
 )
 from bilancio.information.estimates import Estimate
 
-
 # ---------------------------------------------------------------------------
 # Mock ticket for testing (avoids dependence on full dealer subsystem)
 # ---------------------------------------------------------------------------
@@ -366,11 +365,11 @@ class TestPositionAssessor:
         ra_low = RiskAssessor(params_low)
         ra_high = RiskAssessor(params_high)
 
-        kwargs = dict(
-            cash=Decimal("20"),
-            shortfall=Decimal("30"),
-            asset_value=Decimal("50"),
-        )
+        kwargs = {
+            "cash": Decimal("20"),
+            "shortfall": Decimal("30"),
+            "asset_value": Decimal("50"),
+        }
 
         t_low = ra_low.compute_effective_threshold(**kwargs)
         t_high = ra_high.compute_effective_threshold(**kwargs)
@@ -564,7 +563,7 @@ class TestTradeGate:
 
     def test_buy_liquidity_factor(self, ticket):
         """Low cash ratio should increase the effective buy threshold."""
-        params = RiskAssessmentParams(initial_prior=Decimal("0.15"))
+        RiskAssessmentParams(initial_prior=Decimal("0.15"))
 
         # Cash-rich buyer
         ra_rich = RiskAssessor(RiskAssessmentParams(initial_prior=Decimal("0.15")))
@@ -609,7 +608,7 @@ class TestTradeGate:
         assert poor_result is True
 
         # Now try a tighter ask where only the rich buyer accepts
-        tight_ask = Decimal("0.74")  # cost = 14.8
+        Decimal("0.74")  # cost = 14.8
         # rich: 17 >= 14.8 + 2.45 = 17.25? No => reject
         # poor: 17 >= 14.8 + 2.90 = 17.70? No => reject
         # Both reject at this price. The effect is marginal here.
@@ -774,29 +773,29 @@ class TestRiskAssessorWrapper:
         assert ra1.expected_value(ticket, 3) == ra2.expected_value(ticket, 3)
 
         # Same threshold
-        args = dict(cash=Decimal("40"), shortfall=Decimal("10"), asset_value=Decimal("60"))
+        args = {"cash": Decimal("40"), "shortfall": Decimal("10"), "asset_value": Decimal("60")}
         assert ra1.compute_effective_threshold(**args) == ra2.compute_effective_threshold(**args)
 
         # Same sell decision
-        sell_args = dict(
-            ticket=ticket,
-            dealer_bid=Decimal("0.80"),
-            current_day=3,
-            trader_cash=Decimal("40"),
-            trader_shortfall=Decimal("10"),
-            trader_asset_value=Decimal("60"),
-        )
+        sell_args = {
+            "ticket": ticket,
+            "dealer_bid": Decimal("0.80"),
+            "current_day": 3,
+            "trader_cash": Decimal("40"),
+            "trader_shortfall": Decimal("10"),
+            "trader_asset_value": Decimal("60"),
+        }
         assert ra1.should_sell(**sell_args) == ra2.should_sell(**sell_args)
 
         # Same buy decision
-        buy_args = dict(
-            ticket=ticket,
-            dealer_ask=Decimal("0.60"),
-            current_day=3,
-            trader_cash=Decimal("40"),
-            trader_shortfall=Decimal("0"),
-            trader_asset_value=Decimal("60"),
-        )
+        buy_args = {
+            "ticket": ticket,
+            "dealer_ask": Decimal("0.60"),
+            "current_day": 3,
+            "trader_cash": Decimal("40"),
+            "trader_shortfall": Decimal("0"),
+            "trader_asset_value": Decimal("60"),
+        }
         assert ra1.should_buy(**buy_args) == ra2.should_buy(**buy_args)
 
 
@@ -1124,7 +1123,7 @@ class TestUrgencySensitivityDefault:
         a proportionally larger threshold gap — exactly the mechanism that
         unlocks dealer trading in stressed systems.
         """
-        ticket = _MockTicket()
+        _MockTicket()
         ra_new = RiskAssessor(RiskAssessmentParams())
         ra_old = RiskAssessor(
             RiskAssessmentParams(urgency_sensitivity=Decimal("0.10"))
@@ -1154,7 +1153,7 @@ class TestUrgencySensitivityDefault:
 
     def test_no_stress_unaffected_by_default(self):
         """When shortfall=0, urgency_sensitivity doesn't matter."""
-        ticket = _MockTicket()
+        _MockTicket()
         ra_new = RiskAssessor(RiskAssessmentParams())
         ra_old = RiskAssessor(
             RiskAssessmentParams(urgency_sensitivity=Decimal("0.10"))

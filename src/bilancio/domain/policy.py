@@ -10,13 +10,13 @@ from bilancio.domain.agents.firm import Firm
 from bilancio.domain.agents.household import Household
 from bilancio.domain.agents.non_bank_lender import NonBankLender
 from bilancio.domain.agents.treasury import Treasury
+from bilancio.domain.instruments.bank_loan import BankLoan
 from bilancio.domain.instruments.base import Instrument, InstrumentKind
 from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.delivery import DeliveryObligation
 from bilancio.domain.instruments.means_of_payment import BankDeposit, Cash, ReserveDeposit
 from bilancio.domain.instruments.non_bank_loan import NonBankLoan
-from bilancio.domain.instruments.bank_loan import BankLoan
 
 AgentType = type[Agent]
 InstrType = type[Instrument]

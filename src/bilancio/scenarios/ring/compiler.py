@@ -570,8 +570,8 @@ def compile_ring_explorer_balanced(
         total_deposited = Decimal(0)
         for action in initial_actions:
             if "mint_cash" in action:
-                agent_id = action["mint_cash"]["to"]
-                amount = action["mint_cash"]["amount"]
+                agent_id = str(action["mint_cash"]["to"])
+                amount = Decimal(str(action["mint_cash"]["amount"]))
                 if agent_id in trader_bank_assignments:
                     # Split across assigned banks
                     banks = trader_bank_assignments[agent_id]
@@ -808,7 +808,6 @@ def _build_action_specs(
     # Modes with bank lending (households can borrow from banks)
     has_bank_lending = mode in ("banking", "bank_dealer", "bank_dealer_nbfi", "bank_lend")
     # Modes with banking infrastructure (deposits, but not necessarily lending)
-    has_banking = mode in ("banking", "bank_dealer", "bank_dealer_nbfi", "bank_idle", "bank_lend")
 
     if has_dealer:
         household_actions.extend([

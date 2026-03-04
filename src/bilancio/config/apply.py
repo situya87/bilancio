@@ -29,7 +29,7 @@ from bilancio.engines.system import System
 from bilancio.ops.banking import client_payment, deposit_cash, withdraw_cash
 
 from .loaders import parse_action
-from .models import AgentSpec, ScenarioConfig
+from .models import ActionSpecConfig, AgentSpec, ScenarioConfig
 
 logger = logging.getLogger(__name__)
 
@@ -362,7 +362,7 @@ def apply_action(system: System, action_dict: dict[str, Any], agents: dict[str, 
                 if resolved_id not in old_holder.asset_ids:
                     raise ValueError(f"Contract {resolved_id} not in old holder's assets")
                 old_holder.asset_ids.remove(resolved_id)
-                new_holder.asset_ids.append(resolved_id)
+                new_holder.asset_ids.add(resolved_id)
                 instr.asset_holder_id = new_holder_id
                 system.log(
                     "ClaimTransferred",
@@ -832,7 +832,7 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
 
 
 def apply_action_specs(
-    specs: list,
+    specs: list[ActionSpecConfig],
     config: ScenarioConfig,
     system: System,
 ) -> None:
@@ -873,8 +873,8 @@ def apply_action_specs(
 
     # 2. Scan all specs to determine which phases are needed
     needed_phases: set[str] = set()
-    for spec in domain_specs:
-        for action_def in spec.actions:
+    for ds in domain_specs:
+        for action_def in ds.actions:
             needed_phases.add(action_def.phase)
 
     # 3. Build profiles from specs
@@ -886,18 +886,18 @@ def apply_action_specs(
     # Information presets
     info_presets: dict[str, str] = {}  # kind -> information preset
 
-    for spec in domain_specs:
-        if spec.profile_type and spec.profile_params:
-            profile = build_profile(spec.profile_type, spec.profile_params)
-            if spec.profile_type == "trader":
+    for ds in domain_specs:
+        if ds.profile_type and ds.profile_params:
+            profile = build_profile(ds.profile_type, ds.profile_params)
+            if ds.profile_type == "trader":
                 trader_profile = profile
-            elif spec.profile_type == "vbt":
+            elif ds.profile_type == "vbt":
                 vbt_profile = profile
-            elif spec.profile_type == "lender":
+            elif ds.profile_type == "lender":
                 lender_profile = profile
-            elif spec.profile_type == "rating":
+            elif ds.profile_type == "rating":
                 rating_profile = profile
-        info_presets[spec.kind] = spec.information
+        info_presets[ds.kind] = ds.information
 
     # 4. Initialize subsystems based on needed phases
 
@@ -926,10 +926,10 @@ def _init_dealer_from_action_specs(
     vbt_profile: Any | None,
 ) -> None:
     """Initialize dealer subsystem from action spec profiles."""
-    from bilancio.decision.profiles import TraderProfile, VBTProfile
     from bilancio.dealer.models import BucketConfig
     from bilancio.dealer.risk_assessment import RiskAssessmentParams
     from bilancio.dealer.simulation import DealerRingConfig
+    from bilancio.decision.profiles import TraderProfile, VBTProfile
     from bilancio.engines.dealer_integration import initialize_balanced_dealer_subsystem
 
     # balanced_dealer config is required for dealer initialization —

@@ -12,15 +12,16 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from bilancio.core.atomic_tx import atomic
-from bilancio.domain.agent import AgentKind
 from bilancio.banking.pricing_kernel import compute_integrated_rate
+from bilancio.core.atomic_tx import atomic
+from bilancio.core.errors import ValidationError
+from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
 
 if TYPE_CHECKING:
-    from bilancio.engines.banking_subsystem import BankLoanRecord, BankingSubsystem, BankTreynorState
+    from bilancio.engines.banking_subsystem import BankingSubsystem, BankLoanRecord, BankTreynorState
     from bilancio.engines.system import System
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ def run_bank_lending_phase(
     system: System,
     current_day: int,
     banking: BankingSubsystem,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Run bank lending phase: banks offer loans to traders with shortfalls.
 
     Steps:
@@ -44,7 +45,7 @@ def run_bank_lending_phase(
 
     Returns list of event dicts.
     """
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
 
     # Find eligible borrowers with shortfalls
     eligible = _find_eligible_borrowers(system, banking, current_day)
@@ -66,6 +67,9 @@ def run_bank_lending_phase(
         bank_state = banking.banks[bank_id]
         quote = bank_state.current_quote
         if quote is None:
+            continue
+
+        if quote.inventory is None or quote.cash_tightness is None or quote.risk_index is None:
             continue
 
         _, r_L = compute_integrated_rate(
@@ -148,7 +152,7 @@ def run_bank_loan_repayments(
     banking: BankingSubsystem,
     *,
     include_overdue: bool = False,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Process bank loan repayments due today.
 
     For each loan maturing today:
@@ -163,9 +167,9 @@ def run_bank_loan_repayments(
 
     Returns list of event dicts.
     """
-    from bilancio.engines.banking_subsystem import _get_deposit_at_bank, _get_total_deposits
+    from bilancio.engines.banking_subsystem import _get_total_deposits
 
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
 
     for bank_state in banking.banks.values():
         repaid_loan_ids = []
@@ -222,7 +226,9 @@ def run_bank_loan_repayments(
 
         # Remove repaid/defaulted loans from book
         for loan_id in repaid_loan_ids:
-            loan = bank_state.outstanding_loans.pop(loan_id, None)
+            if loan_id not in bank_state.outstanding_loans:
+                continue
+            loan = bank_state.outstanding_loans.pop(loan_id)
             if loan:
                 bank_state.total_loan_principal -= loan.principal
 
@@ -269,7 +275,7 @@ def _per_borrower_rate(
     if assessor is None:
         return base_rate  # no risk assessor available
 
-    p = assessor.estimate_default_prob(borrower_id, current_day)
+    p = Decimal(assessor.estimate_default_prob(borrower_id, current_day))
 
     # Credit rationing (independent of loading)
     if p > max_risk:
@@ -603,11 +609,11 @@ def _execute_bank_loan(
     bank_agent = system.state.agents.get(bid)
     borrower_agent = system.state.agents.get(borrower_id)
     if bank_agent:
-        bank_agent.asset_ids.append(loan_id)
+        bank_agent.asset_ids.add(loan_id)
     else:
         logger.warning("Bank agent %s not found when issuing loan %s", bid, loan_id)
     if borrower_agent:
-        borrower_agent.liability_ids.append(loan_id)
+        borrower_agent.liability_ids.add(loan_id)
     else:
         logger.warning("Borrower agent %s not found when issuing loan %s", borrower_id, loan_id)
 
@@ -671,10 +677,10 @@ def _increase_deposit(system: System, agent_id: str, bank_id: str, amount: int) 
         liability_issuer_id=bank_id,
     )
     system.state.contracts[deposit_id] = deposit
-    agent.asset_ids.append(deposit_id)
+    agent.asset_ids.add(deposit_id)
     bank_agent = system.state.agents.get(bank_id)
     if bank_agent:
-        bank_agent.liability_ids.append(deposit_id)
+        bank_agent.liability_ids.add(deposit_id)
 
 
 def _decrease_deposit(system: System, agent_id: str, bank_id: str, amount: int) -> int:
@@ -741,13 +747,13 @@ def _repay_loan(
                 # whose deposit was debited to the lending bank.
                 try:
                     system.transfer_reserves(other_bid, bank_id, debited)
-                except Exception:
+                except (ValueError, ValidationError):
                     # Reserve transfer failed — try CB refinancing atomically
                     try:
                         with atomic(system):
                             system.cb_lend_reserves(other_bid, debited, system.state.day)
                             system.transfer_reserves(other_bid, bank_id, debited)
-                    except Exception:
+                    except (ValueError, ValidationError):
                         # Both operations rolled back — reverse deposit debit
                         logger.warning(
                             "Reserve transfer failed (even with CB): %s -> %s amount=%d; "

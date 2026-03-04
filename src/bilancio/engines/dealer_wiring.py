@@ -27,7 +27,7 @@ from bilancio.domain.agent import AgentKind
 
 def _compute_corridor_spreads(
     banking_sub: object,
-    bucket_configs: list,
+    bucket_configs: list[object],
 ) -> dict[str, Decimal]:
     """Derive VBT base spreads from corridor width when banking is active.
 

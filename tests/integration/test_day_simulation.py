@@ -135,7 +135,6 @@ def test_overnight_settlement_next_day():
     # Create cross-bank payment: B1 owes B2: 100
     client_payment(sys, "H1", "B1", "H3", "B2", 100)
 
-    day_0 = sys.state.day
 
     # Run day 0 — CB refinancing covers the reserve shortfall
     run_day(sys)

@@ -266,13 +266,14 @@ def _load_events(path: Path) -> list[dict[str, Any]]:
         return [json.loads(line) for line in f if line.strip()]
 
 
-def _safe_load_json(path: Path) -> dict | None:
+def _safe_load_json(path: Path) -> dict[str, Any] | None:
     if not path or not path.is_file():
         return None
     try:
         with open(path) as f:
-            return json.load(f)
-    except Exception:
+            result: dict[str, Any] = json.load(f)
+            return result
+    except (OSError, json.JSONDecodeError, ValueError):
         return None
 
 
@@ -282,7 +283,7 @@ def _safe_load_json(path: Path) -> dict | None:
 
 
 def _analyse_run(
-    events: list[dict],
+    events: list[dict[str, Any]],
     sweep_type: str,
     is_treatment: bool,
     run_dir: Path | None = None,
@@ -312,32 +313,32 @@ def _analyse_run(
     # Defaults
     try:
         result["default_counts"] = default_counts_by_type(events)
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError) as exc:
         logger.debug("default_counts failed: %s", exc)
         result["default_counts"] = {"primary": 0, "secondary": 0, "total": 0}
 
     try:
         result["contagion_by_day"] = contagion_by_day(events)
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError) as exc:
         logger.debug("contagion_by_day failed: %s", exc)
         result["contagion_by_day"] = {}
 
     # Credit
     try:
         result["credit_created"] = {k: float(v) for k, v in credit_created_by_type(events).items()}
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError) as exc:
         logger.debug("credit_created failed: %s", exc)
         result["credit_created"] = {}
 
     try:
         result["credit_destroyed"] = {k: float(v) for k, v in credit_destroyed_by_type(events).items()}
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError) as exc:
         logger.debug("credit_destroyed failed: %s", exc)
         result["credit_destroyed"] = {}
 
     try:
         result["net_credit_impulse"] = float(net_credit_impulse(events))
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError) as exc:
         logger.debug("net_credit_impulse failed: %s", exc)
         result["net_credit_impulse"] = 0.0
 
@@ -349,7 +350,7 @@ def _analyse_run(
             for source, amount in agent_flows.items():
                 system_funding[source] += float(amount)
         result["funding_mix"] = dict(system_funding)
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError) as exc:
         logger.debug("funding_mix failed: %s", exc)
         result["funding_mix"] = {}
 
@@ -359,7 +360,7 @@ def _analyse_run(
             from bilancio.analysis import bid_ask_spread_by_day, trade_prices_by_day, trade_volume_by_day
 
             raw = trade_prices_by_day(events)
-            prices: dict[int, list[dict]] = {}
+            prices: dict[int, list[dict[str, Any]]] = {}
             for day, trades in raw.items():
                 prices[day] = [
                     {"side": t["side"], "price_ratio": float(t["price_ratio"])}
@@ -371,7 +372,7 @@ def _analyse_run(
             result["bid_ask_spread_by_day"] = {
                 d: float(v) if v is not None else None for d, v in spread_raw.items()
             }
-        except Exception as exc:
+        except (KeyError, ValueError, TypeError, IndexError) as exc:
             logger.debug("pricing analysis failed: %s", exc)
             result["trade_prices_by_day"] = {}
             result["trade_volume_by_day"] = {}
@@ -384,7 +385,7 @@ def _analyse_run(
     # Network
     try:
         result["node_degrees"] = node_degree(events)
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError) as exc:
         logger.debug("node_degree failed: %s", exc)
         result["node_degrees"] = {}
 
@@ -399,7 +400,7 @@ def _analyse_run(
             }
             for e in si
         ]
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError) as exc:
         logger.debug("systemic_importance failed: %s", exc)
         result["systemic_importance"] = []
 
@@ -442,7 +443,7 @@ def _analyse_run(
                 with open(scenario_path) as f:
                     scenario_config = yaml.safe_load(f)
                 result["initial_capitals"] = extract_initial_capitals(scenario_config)
-        except Exception as exc:
+        except (KeyError, ValueError, TypeError, OSError) as exc:
             logger.debug("loss metrics computation failed: %s", exc)
 
     return result
@@ -457,7 +458,7 @@ _PLOTLY_CDN = "https://cdn.plot.ly/plotly-2.27.0.min.js"
 
 def _fig_to_div(fig: Any, div_id: str = "") -> str:
     """Convert Plotly figure to HTML div (no full page wrapper)."""
-    return fig.to_html(full_html=False, include_plotlyjs=False, div_id=div_id)
+    return str(fig.to_html(full_html=False, include_plotlyjs=False, div_id=div_id))
 
 
 def _dashboard_shell(title: str, nav_items: list[tuple[str, str]], body: str, sweep_type: str) -> str:
@@ -601,12 +602,12 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
         secondary = [cbd[d].get("secondary", 0) for d in days]
         fig_contagion.add_trace(go.Scatter(
             x=days, y=primary, mode="lines+markers",
-            name=f"{arm_name} primary", line=dict(color=c), marker=dict(size=5),
+            name=f"{arm_name} primary", line={"color": c}, marker={"size": 5},
         ))
         fig_contagion.add_trace(go.Scatter(
             x=days, y=secondary, mode="lines+markers",
-            name=f"{arm_name} cascade", line=dict(color=c, dash="dash"),
-            marker=dict(size=5, symbol="x"),
+            name=f"{arm_name} cascade", line={"color": c, "dash": "dash"},
+            marker={"size": 5, "symbol": "x"},
         ))
     fig_contagion.update_layout(
         title=f"Contagion Timeline at κ={target_kappa} ({mech_label})",
@@ -660,7 +661,7 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
                 xaxis_title="Arm / κ", yaxis_title="Loss Amount",
                 template="plotly_white", height=450,
             )
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError, IndexError) as exc:
         logger.debug("Loss decomposition chart failed: %s", exc)
 
     # --- Chart D2: Defaults vs System Loss (Combined View) ---
@@ -702,16 +703,16 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
             fig_defaults_vs_loss.add_trace(
                 go.Scatter(
                     name="Treatment System Loss", x=d2_kappas, y=t_loss_pct,
-                    mode="lines+markers", line=dict(color=color, width=3),
-                    marker=dict(size=8),
+                    mode="lines+markers", line={"color": color, "width": 3},
+                    marker={"size": 8},
                 ),
                 secondary_y=True,
             )
             fig_defaults_vs_loss.add_trace(
                 go.Scatter(
                     name="Baseline System Loss", x=d2_kappas, y=b_loss_pct,
-                    mode="lines+markers", line=dict(color=color_light, width=3, dash="dash"),
-                    marker=dict(size=8, symbol="diamond"),
+                    mode="lines+markers", line={"color": color_light, "width": 3, "dash": "dash"},
+                    marker={"size": 8, "symbol": "diamond"},
                 ),
                 secondary_y=True,
             )
@@ -722,7 +723,7 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
             )
             fig_defaults_vs_loss.update_yaxes(title_text="Default Count", secondary_y=False)
             fig_defaults_vs_loss.update_yaxes(title_text="System Loss (amount)", secondary_y=True)
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError, IndexError) as exc:
         logger.debug("Defaults vs loss chart failed: %s", exc)
 
     # --- Chart 3: Credit created ---
@@ -801,7 +802,7 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
     fig_pricing = go.Figure()
     fig_volume = go.Figure()
     if paths.sweep_type == "dealer":
-        dash_styles = {k: s for k, s in zip(kappas, ["solid", "dash", "dot"])}
+        dash_styles = dict(zip(kappas, ["solid", "dash", "dot"], strict=False))
         for r in treatments:
             kappa = r["kappa"]
             prices = r.get("trade_prices_by_day", {})
@@ -818,12 +819,12 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
             dash = dash_styles.get(kappa, "solid")
             fig_pricing.add_trace(go.Scatter(
                 x=days, y=buy_avgs, mode="lines+markers",
-                name=f"Buy avg κ={kappa}", line=dict(color=color, dash=dash), marker=dict(size=4),
+                name=f"Buy avg κ={kappa}", line={"color": color, "dash": dash}, marker={"size": 4},
             ))
             fig_pricing.add_trace(go.Scatter(
                 x=days, y=sell_avgs, mode="lines+markers",
-                name=f"Sell avg κ={kappa}", line=dict(color="#c0392b", dash=dash),
-                marker=dict(size=4, symbol="triangle-up"),
+                name=f"Sell avg κ={kappa}", line={"color": "#c0392b", "dash": dash},
+                marker={"size": 4, "symbol": "triangle-up"},
             ))
         fig_pricing.update_layout(
             title="Price Discovery: Buy/Sell Price Ratios",
@@ -939,7 +940,7 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
         f"<h1>{mech_label} Drill-Down Analysis</h1>",
         f"<p>Analysed <strong>{n_treat} treatment</strong> and <strong>{n_base} baseline</strong> "
         f"runs at κ ∈ {{{', '.join(str(k) for k in kappas)}}}.</p>",
-        f'<h2 id="defaults">Default Classification</h2>',
+        '<h2 id="defaults">Default Classification</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_defaults, "defaults_bar")}</div>',
         '<div class="interpretation"><strong>Interpretation:</strong> Primary vs cascade defaults '
         'across treatment and baseline arms. A higher cascade fraction suggests greater systemic fragility.</div>',
@@ -949,7 +950,7 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
     ]
 
     # Loss section (between defaults and credit)
-    body_parts.append(f'<h2 id="losses">Loss Analysis</h2>')
+    body_parts.append('<h2 id="losses">Loss Analysis</h2>')
     if fig_loss_decomp is not None:
         body_parts.extend([
             f'<div class="chart-container">{_fig_to_div(fig_loss_decomp, "loss_decomp")}</div>',
@@ -971,25 +972,25 @@ def _run_drilldowns(paths: SweepPaths, kappas: list[float], output_dir: Path) ->
         )
 
     body_parts.extend([
-        f'<h2 id="credit">Credit Dynamics</h2>',
+        '<h2 id="credit">Credit Dynamics</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_credit, "credit_created")}</div>',
         f'<div class="chart-container">{_fig_to_div(fig_nci, "nci")}</div>',
-        f'<h2 id="funding">Funding Mix</h2>',
+        '<h2 id="funding">Funding Mix</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_funding, "funding")}</div>',
     ])
 
     if paths.sweep_type == "dealer":
         body_parts.extend([
-            f'<h2 id="pricing">Price Discovery</h2>',
+            '<h2 id="pricing">Price Discovery</h2>',
             f'<div class="chart-container">{_fig_to_div(fig_pricing, "pricing")}</div>',
             f'<div class="chart-container">{_fig_to_div(fig_volume, "volume")}</div>',
         ])
 
     body_parts.extend([
-        f'<h2 id="network">Network Topology</h2>',
+        '<h2 id="network">Network Topology</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_degree, "degree")}</div>',
         f'<div class="chart-container">{_fig_to_div(fig_systemic, "systemic")}</div>',
-        f'<h2 id="summary">Summary</h2>',
+        '<h2 id="summary">Summary</h2>',
         f'<div class="chart-container">{summary_table}</div>',
     ])
 
@@ -1240,8 +1241,8 @@ def _run_treatment_deltas(paths: SweepPaths, kappas: list[float], output_dir: Pa
             fig_loss_vs_delta.add_trace(
                 go.Scatter(
                     name="δ-Based Effect", x=loss_x, y=delta_effects,
-                    mode="lines+markers", line=dict(color=color, width=3),
-                    marker=dict(size=8),
+                    mode="lines+markers", line={"color": color, "width": 3},
+                    marker={"size": 8},
                 ),
                 secondary_y=True,
             )
@@ -1274,7 +1275,7 @@ def _run_treatment_deltas(paths: SweepPaths, kappas: list[float], output_dir: Pa
                     xaxis_title="κ", yaxis_title="Loss / Intermediary Capital",
                     template="plotly_white", height=420,
                 )
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError, IndexError) as exc:
         logger.debug("Treatment delta loss charts failed: %s", exc)
 
     # --- Summary table ---
@@ -1304,7 +1305,7 @@ def _run_treatment_deltas(paths: SweepPaths, kappas: list[float], output_dir: Pa
         f"<h1>{mech_label} Treatment Deltas</h1>",
         f"<p>Treatment minus baseline comparison across κ ∈ {{{', '.join(str(k) for k in kappas)}}}. "
         f"Negative default deltas indicate the treatment reduced defaults.</p>",
-        f'<h2 id="defaults">Default Reduction</h2>',
+        '<h2 id="defaults">Default Reduction</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_default_delta, "default_delta")}</div>',
         '<div class="interpretation"><strong>Interpretation:</strong> Negative bars mean the treatment '
         'reduced defaults compared to baseline. Cascade reduction is particularly important as it '
@@ -1312,7 +1313,7 @@ def _run_treatment_deltas(paths: SweepPaths, kappas: list[float], output_dir: Pa
     ]
 
     # Loss section
-    body_parts.append(f'<h2 id="losses">Loss Comparison</h2>')
+    body_parts.append('<h2 id="losses">Loss Comparison</h2>')
     if fig_loss_comparison is not None:
         body_parts.extend([
             f'<div class="chart-container">{_fig_to_div(fig_loss_comparison, "loss_comparison")}</div>',
@@ -1346,13 +1347,13 @@ def _run_treatment_deltas(paths: SweepPaths, kappas: list[float], output_dir: Pa
         )
 
     body_parts.extend([
-        f'<h2 id="credit">Credit Impulse Delta</h2>',
+        '<h2 id="credit">Credit Impulse Delta</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_nci_delta, "nci_delta")}</div>',
-        f'<h2 id="funding">Funding Source Shift</h2>',
+        '<h2 id="funding">Funding Source Shift</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_funding_delta, "funding_delta")}</div>',
-        f'<h2 id="network">Network Structure Delta</h2>',
+        '<h2 id="network">Network Structure Delta</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_degree_delta, "degree_delta")}</div>',
-        f'<h2 id="summary">Summary</h2>',
+        '<h2 id="summary">Summary</h2>',
         f'<div class="chart-container">{summary_table}</div>',
     ])
 
@@ -1371,7 +1372,7 @@ def _run_treatment_deltas(paths: SweepPaths, kappas: list[float], output_dir: Pa
 # ===================================================================
 
 
-def _extract_defaults_by_day(events: list[dict]) -> dict[int, dict[str, int]]:
+def _extract_defaults_by_day(events: list[dict[str, Any]]) -> dict[int, dict[str, int]]:
     """Extract default counts by day from events."""
     by_day: dict[int, dict[str, int]] = defaultdict(lambda: {"primary": 0, "secondary": 0})
     for e in events:
@@ -1384,7 +1385,7 @@ def _extract_defaults_by_day(events: list[dict]) -> dict[int, dict[str, int]]:
     return dict(by_day)
 
 
-def _extract_agent_outcomes(events: list[dict]) -> dict[str, dict[str, Any]]:
+def _extract_agent_outcomes(events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Extract per-agent outcome data from events."""
     agents: dict[str, dict[str, Any]] = defaultdict(lambda: {"cash_final": 0, "defaulted": False, "n_trades": 0})
     for e in events:
@@ -1430,7 +1431,7 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
                 try:
                     metrics_rows = _read_csv(metrics_path)
                     entry[f"{arm}_metrics"] = metrics_rows
-                except Exception:
+                except (OSError, KeyError, ValueError):
                     entry[f"{arm}_metrics"] = []
 
             # Load events
@@ -1440,7 +1441,7 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
                     events = _load_events(ep)
                     entry[f"{arm}_defaults_by_day"] = _extract_defaults_by_day(events)
                     entry[f"{arm}_agents"] = _extract_agent_outcomes(events)
-                except Exception:
+                except (OSError, KeyError, ValueError, json.JSONDecodeError):
                     pass
 
         dynamics_data.append(entry)
@@ -1450,7 +1451,7 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
 
     # --- Chart 1: Default timeline (cumulative) ---
     fig_cum_defaults = go.Figure()
-    dash_styles = {k: s for k, s in zip(kappas, ["solid", "dash", "dot"])}
+    dash_styles = dict(zip(kappas, ["solid", "dash", "dot"], strict=False))
     for entry in dynamics_data:
         kappa = entry["kappa"]
         for arm, c in [("treatment", color), ("baseline", color_light)]:
@@ -1466,8 +1467,8 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
             fig_cum_defaults.add_trace(go.Scatter(
                 x=days, y=cumulative, mode="lines+markers",
                 name=f"{arm.title()} κ={kappa}",
-                line=dict(color=c, dash=dash_styles.get(kappa, "solid")),
-                marker=dict(size=4),
+                line={"color": c, "dash": dash_styles.get(kappa, "solid")},
+                marker={"size": 4},
             ))
     fig_cum_defaults.update_layout(
         title=f"Cumulative Defaults Over Time ({mech_label})",
@@ -1494,7 +1495,7 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
                 fig_delta_t.add_trace(go.Scatter(
                     x=days, y=vals, mode="lines",
                     name=f"{arm.title()} κ={kappa}",
-                    line=dict(color=c, dash=dash_styles.get(kappa, "solid")),
+                    line={"color": c, "dash": dash_styles.get(kappa, "solid")},
                 ))
     fig_delta_t.update_layout(
         title=f"δ_t (Default Rate) Trajectory ({mech_label})",
@@ -1521,7 +1522,7 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
                 fig_phi_t.add_trace(go.Scatter(
                     x=days, y=vals, mode="lines",
                     name=f"{arm.title()} κ={kappa}",
-                    line=dict(color=c, dash=dash_styles.get(kappa, "solid")),
+                    line={"color": c, "dash": dash_styles.get(kappa, "solid")},
                 ))
     fig_phi_t.update_layout(
         title=f"φ_t (Clearing Rate) Trajectory ({mech_label})",
@@ -1544,14 +1545,14 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
                 x=[v["n_trades"] for v in survived.values()],
                 y=[v.get("cash_final", 0) for v in survived.values()],
                 mode="markers", name=f"{arm.title()} survived",
-                marker=dict(color=c, size=6, symbol=sym),
+                marker={"color": c, "size": 6, "symbol": sym},
             ))
         if defaulted:
             fig_agents.add_trace(go.Scatter(
                 x=[v["n_trades"] for v in defaulted.values()],
                 y=[v.get("cash_final", 0) for v in defaulted.values()],
                 mode="markers", name=f"{arm.title()} defaulted",
-                marker=dict(color="red", size=8, symbol="x"),
+                marker={"color": "red", "size": 8, "symbol": "x"},
             ))
     fig_agents.update_layout(
         title=f"Agent Outcomes at κ={kappas[0]} ({mech_label})",
@@ -1603,13 +1604,13 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
             sys_b = [e.get("system_loss_pct_b") or 0 for e in kappa_loss_entries]
             fig_loss_kappa.add_trace(go.Scatter(
                 x=k_vals, y=sys_b, mode="lines+markers",
-                name=paths.baseline_label, line=dict(color=COLORS_LIGHT.get(paths.sweep_type, "#aed6f1")),
-                marker=dict(size=6),
+                name=paths.baseline_label, line={"color": COLORS_LIGHT.get(paths.sweep_type, "#aed6f1")},
+                marker={"size": 6},
             ))
             fig_loss_kappa.add_trace(go.Scatter(
                 x=k_vals, y=sys_t, mode="lines+markers",
-                name=paths.treatment_label, line=dict(color=color),
-                marker=dict(size=6), fill="tonexty", fillcolor=f"rgba(0,0,0,0.05)",
+                name=paths.treatment_label, line={"color": color},
+                marker={"size": 6}, fill="tonexty", fillcolor="rgba(0,0,0,0.05)",
             ))
             fig_loss_kappa.update_layout(
                 title=f"System Loss vs κ ({mech_label})",
@@ -1625,14 +1626,14 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
                 fig_loss_composition.add_trace(go.Scatter(
                     x=k_vals, y=trader_loss, mode="lines",
                     name="Trader Loss %", stackgroup="one",
-                    line=dict(color=LOSS_COLORS["trader_total"]),
+                    line={"color": LOSS_COLORS["trader_total"]},
                     fillcolor="rgba(192, 57, 43, 0.3)",
                 ))
             if any(v > 0 for v in interm_loss):
                 fig_loss_composition.add_trace(go.Scatter(
                     x=k_vals, y=interm_loss, mode="lines",
                     name="Intermediary Loss %", stackgroup="one",
-                    line=dict(color=LOSS_COLORS["intermediary_total"]),
+                    line={"color": LOSS_COLORS["intermediary_total"]},
                     fillcolor="rgba(41, 128, 185, 0.3)",
                 ))
             fig_loss_composition.update_layout(
@@ -1649,37 +1650,37 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
             scatter_x_t = [d for d in t_deltas if d is not None]
             scatter_y_t = [
                 e.get("system_loss_pct_t") or 0
-                for e, d in zip(kappa_loss_entries, t_deltas)
+                for e, d in zip(kappa_loss_entries, t_deltas, strict=False)
                 if d is not None
             ]
             if scatter_x_t:
                 fig_loss_scatter.add_trace(go.Scatter(
                     x=scatter_x_t, y=scatter_y_t, mode="markers",
                     name=paths.treatment_label,
-                    marker=dict(color=color, size=10, symbol="circle"),
+                    marker={"color": color, "size": 10, "symbol": "circle"},
                 ))
             # Baseline points
             scatter_x_b = [d for d in b_deltas if d is not None]
             scatter_y_b = [
                 e.get("system_loss_pct_b") or 0
-                for e, d in zip(kappa_loss_entries, b_deltas)
+                for e, d in zip(kappa_loss_entries, b_deltas, strict=False)
                 if d is not None
             ]
             if scatter_x_b:
                 fig_loss_scatter.add_trace(go.Scatter(
                     x=scatter_x_b, y=scatter_y_b, mode="markers",
                     name=paths.baseline_label,
-                    marker=dict(
-                        color=COLORS_LIGHT.get(paths.sweep_type, "#aed6f1"),
-                        size=10, symbol="diamond-open", line=dict(width=2),
-                    ),
+                    marker={
+                        "color": COLORS_LIGHT.get(paths.sweep_type, "#aed6f1"),
+                        "size": 10, "symbol": "diamond-open", "line": {"width": 2},
+                    },
                 ))
             fig_loss_scatter.update_layout(
                 title=f"Default Rate vs System Loss ({mech_label})",
                 xaxis_title="δ (Default Rate)", yaxis_title="System Loss %",
                 template="plotly_white", height=450,
             )
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError, IndexError) as exc:
         logger.debug("Dynamics loss charts failed: %s", exc)
 
     # Assemble
@@ -1691,12 +1692,12 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
         f"<h1>{mech_label} Dynamics Analysis</h1>",
         f"<p>Time-series dynamics and agent heterogeneity across "
         f"κ ∈ {{{', '.join(str(k) for k in kappas)}}}.</p>",
-        f'<h2 id="timeline">Default Timeline</h2>',
+        '<h2 id="timeline">Default Timeline</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_cum_defaults, "cum_defaults")}</div>',
         '<div class="interpretation"><strong>Interpretation:</strong> Cumulative default curves show '
         'the speed and magnitude of system failure. Flatter treatment curves indicate the mechanism '
         'is delaying or preventing defaults.</div>',
-        f'<h2 id="metrics">Metrics Trajectories</h2>',
+        '<h2 id="metrics">Metrics Trajectories</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_delta_t, "delta_t")}</div>',
         '<div class="interpretation"><strong>Interpretation:</strong> δ_t tracks the instantaneous '
         'default rate. Treatment should show lower δ_t, especially in early days when liquidity '
@@ -1707,7 +1708,7 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
     ]
 
     # Loss dynamics section
-    body_parts.append(f'<h2 id="losses">Loss Dynamics</h2>')
+    body_parts.append('<h2 id="losses">Loss Dynamics</h2>')
     if fig_loss_kappa is not None:
         body_parts.extend([
             f'<div class="chart-container">{_fig_to_div(fig_loss_kappa, "loss_kappa")}</div>',
@@ -1735,7 +1736,7 @@ def _run_dynamics(paths: SweepPaths, kappas: list[float], output_dir: Path) -> P
         )
 
     body_parts.extend([
-        f'<h2 id="agents">Agent Outcomes</h2>',
+        '<h2 id="agents">Agent Outcomes</h2>',
         f'<div class="chart-container">{_fig_to_div(fig_agents, "agents")}</div>',
         '<div class="interpretation"><strong>Interpretation:</strong> Each point is an agent. '
         'Agents that traded more and survived with positive cash benefited from the mechanism. '
@@ -1771,11 +1772,9 @@ def _run_narrative(paths: SweepPaths, kappas: list[float], output_dir: Path) -> 
         # Balanced comparison: delta_passive - delta_active = trading_effect
         delta_treatment_col = "delta_active"
         delta_baseline_col = "delta_passive"
-        effect_name = "trading_effect"
     else:
         delta_treatment_col = "delta_lend"
         delta_baseline_col = "delta_idle"
-        effect_name = "lending_effect" if paths.sweep_type == "nbfi" else "bank_lending_effect"
 
     # Compute effects per kappa
     kappa_effects: dict[float, list[float]] = defaultdict(list)
@@ -1793,7 +1792,7 @@ def _run_narrative(paths: SweepPaths, kappas: list[float], output_dir: Path) -> 
 
     # Load stats summary if available
     stats = _safe_load_json(paths.stats_summary) if paths.stats_summary else None
-    sensitivity = _safe_load_json(paths.stats_sensitivity) if paths.stats_sensitivity else None
+    _safe_load_json(paths.stats_sensitivity) if paths.stats_sensitivity else None
 
     # Build narrative sections
     sections = []
@@ -1998,11 +1997,10 @@ def _run_narrative(paths: SweepPaths, kappas: list[float], output_dir: Path) -> 
     </table>
     </div>
     """)
-    except Exception as exc:
+    except (KeyError, ValueError, TypeError, IndexError, ZeroDivisionError) as exc:
         logger.debug("Narrative loss section failed: %s", exc)
 
     # Assemble
-    nav = [("summary", "Summary"), ("kappa", "By κ"), ("findings", "Findings"), ("losses", "Losses")]
     body = f"<h1>{mech_label} Narrative Report</h1>\n" + "\n".join(sections)
 
     html = f"""<!DOCTYPE html>
@@ -2117,7 +2115,7 @@ def run_post_sweep_analysis(
             path = fn(paths, kappas, output_dir)
             results[name] = path
             logger.info("  %s -> %s", name, path)
-        except Exception as exc:
+        except (KeyError, ValueError, TypeError, IndexError, OSError, RuntimeError) as exc:
             logger.error("  %s FAILED: %s", name, exc)
 
     return results

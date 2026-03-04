@@ -120,17 +120,17 @@ def betweenness_centrality(
 
     n = len(all_nodes)
     if n <= 2:
-        return {a: 0.0 for a in all_nodes}
+        return dict.fromkeys(all_nodes, 0.0)
 
-    cb: dict[str, float] = {a: 0.0 for a in all_nodes}
+    cb: dict[str, float] = dict.fromkeys(all_nodes, 0.0)
 
     for s in all_nodes:
         # BFS from s
         stack: list[str] = []
         pred: dict[str, list[str]] = {a: [] for a in all_nodes}
-        sigma: dict[str, int] = {a: 0 for a in all_nodes}
+        sigma: dict[str, int] = dict.fromkeys(all_nodes, 0)
         sigma[s] = 1
-        dist: dict[str, int] = {a: -1 for a in all_nodes}
+        dist: dict[str, int] = dict.fromkeys(all_nodes, -1)
         dist[s] = 0
         queue = [s]
 
@@ -145,7 +145,7 @@ def betweenness_centrality(
                     sigma[w] += sigma[v]
                     pred[w].append(v)
 
-        delta: dict[str, float] = {a: 0.0 for a in all_nodes}
+        delta: dict[str, float] = dict.fromkeys(all_nodes, 0.0)
         while stack:
             w = stack.pop()
             for v in pred[w]:

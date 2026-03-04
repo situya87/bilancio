@@ -30,6 +30,7 @@ from bilancio.decision.activity import (
     ACTION_SET_ANCHORS,
     ACTION_SET_CORRIDOR,
     ACTION_SET_QUOTES,
+    KALECKI_BINDINGS,
     Action,
     ActionSet,
     ActionTemplate,
@@ -39,12 +40,19 @@ from bilancio.decision.activity import (
     CashFlowPosition,
     ComposedProfile,
     InstrumentBindings,
-    KALECKI_BINDINGS,
     MarketQuote,
     ObservedState,
     RiskView,
     Valuations,
     build_cash_flow_position_from_trader,
+)
+from bilancio.decision.intentions import (
+    BuyIntention,
+    LiquidityDrivenSeller,
+    SellIntention,
+    SurplusBuyer,
+    collect_buy_intentions,
+    collect_sell_intentions,
 )
 from bilancio.decision.presets import AGGRESSIVE, BASELINE, CAUTIOUS
 from bilancio.decision.profile_factory import build_profile
@@ -60,14 +68,6 @@ from bilancio.decision.protocols import (
     ThresholdScreener,
     TransactionPricer,
     VBTPricingModel,
-)
-from bilancio.decision.intentions import (
-    BuyIntention,
-    LiquidityDrivenSeller,
-    SellIntention,
-    SurplusBuyer,
-    collect_buy_intentions,
-    collect_sell_intentions,
 )
 from bilancio.decision.risk_assessment import (
     BeliefTracker,

@@ -14,15 +14,12 @@ Tests cover:
 
 from decimal import Decimal
 
-from bilancio.banking.types import Quote
 from bilancio.decision.profiles import BankProfile
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.firm import Firm
 from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.banking_subsystem import (
-    BankingSubsystem,
-    BankTreynorState,
     InterbankLoan,
     _get_bank_reserves,
     initialize_banking_subsystem,
@@ -32,7 +29,6 @@ from bilancio.engines.clearing import (
     compute_combined_nets,
 )
 from bilancio.engines.interbank import (
-    AuctionResult,
     InterbankOrder,
     build_order_book,
     clear_auction,
@@ -44,7 +40,6 @@ from bilancio.engines.interbank import (
 )
 from bilancio.engines.system import System
 from bilancio.ops.banking import deposit_cash
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -700,6 +695,6 @@ class TestOvernightRollover:
             obligations = compute_interbank_obligations(1, banking)
             assert len(obligations) == len(banking.interbank_loans)
 
-            for borrower, lender, repayment, loan in obligations:
+            for _borrower, _lender, repayment, loan in obligations:
                 assert loan.maturity_day == 1
                 assert repayment == loan.repayment_amount

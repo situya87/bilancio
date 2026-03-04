@@ -42,7 +42,7 @@ def split_stock(system: "System", stock_id: InstrId, quantity: int) -> InstrId:
 
     # Register new stock
     system.state.stocks[new_id_val] = new_stock
-    system.state.agents[stock.owner_id].stock_ids.append(new_id_val)
+    system.state.agents[stock.owner_id].stock_ids.add(new_id_val)
 
     system.log(
         "StockSplit",

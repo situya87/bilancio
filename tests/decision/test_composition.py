@@ -45,7 +45,6 @@ from bilancio.decision.activity import (
     CashFlowPosition,
 )
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 

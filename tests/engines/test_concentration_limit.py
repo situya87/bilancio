@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import pytest
 
-from bilancio.dealer.models import DealerState, Ticket, VBTState
+from bilancio.dealer.models import DealerState, Ticket
 from bilancio.engines.dealer_integration import DealerSubsystem
 from bilancio.engines.dealer_trades import _check_concentration_limit
 
@@ -172,6 +172,7 @@ class TestConcentrationGatePassthrough:
         """The rejection event uses 'kind' (not 'type') for consistency."""
         import ast
         import inspect
+
         from bilancio.engines import dealer_trades
 
         source = inspect.getsource(dealer_trades._execute_sell_trade)
@@ -195,6 +196,7 @@ class TestConcentrationGatePassthrough:
     def test_gate_checks_is_passthrough(self) -> None:
         """The concentration gate is guarded by `not result.is_passthrough`."""
         import inspect
+
         from bilancio.engines import dealer_trades
 
         source = inspect.getsource(dealer_trades._execute_sell_trade)

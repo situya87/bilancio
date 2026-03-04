@@ -92,10 +92,10 @@ def dealer_pricing_plane(
         Custom title; auto-generated if None.
     """
     M = vbt_mid
-    O = vbt_spread
+    spread = vbt_spread
     S = ticket_size
-    A = M + O / 2  # VBT ask (ceiling)
-    B = M - O / 2  # VBT bid (floor)
+    A = M + spread / 2  # VBT ask (ceiling)
+    B = M - spread / 2  # VBT bid (floor)
 
     # x-axis range: 0 to X_star + S (one-sided capacity + one ticket)
     x_max = max(X_star + S, S * 2) if (X_star + S) > 0 else S * 2
@@ -103,7 +103,7 @@ def dealer_pricing_plane(
 
     # Midline: p(x) = M - slope * (x - X_star/2)
     denom = X_star + 2 * S
-    slope = O / denom if denom > 0 else 0.0
+    slope = spread / denom if denom > 0 else 0.0
     midline = M - slope * (xs - X_star / 2)
 
     # Interior quotes
@@ -123,7 +123,7 @@ def dealer_pricing_plane(
     ask_cur = float(max(bid_cur, min(A, mid_cur + half_I, PAR)))
 
     # ── Y-axis range ──
-    y_pad = max(O * 0.35, 0.005)
+    y_pad = max(spread * 0.35, 0.005)
     y_lo = B - y_pad
     y_hi = A + y_pad
 
@@ -133,70 +133,70 @@ def dealer_pricing_plane(
     fig.add_hrect(y0=B, y1=A, fillcolor=_GRAY_LIGHT, line_width=0, layer="below")
 
     # ── VBT bounds: gray, behind traces ──
-    fig.add_hline(y=A, line=dict(color="#BBB", width=1.5), layer="below")
-    fig.add_hline(y=B, line=dict(color="#BBB", width=1.5), layer="below")
+    fig.add_hline(y=A, line={"color": "#BBB", "width": 1.5}, layer="below")
+    fig.add_hline(y=B, line={"color": "#BBB", "width": 1.5}, layer="below")
 
     # ── VBT mid: dashed gray, behind traces ──
-    fig.add_hline(y=M, line=dict(dash="6px,4px", color="#CCC", width=1), layer="below")
+    fig.add_hline(y=M, line={"dash": "6px,4px", "color": "#CCC", "width": 1}, layer="below")
 
     # ── Inside spread fill (gray polygon between ask and bid curves) ──
     fig.add_trace(go.Scatter(
         x=np.concatenate([xs, xs[::-1]]).tolist(),
         y=np.concatenate([clipped_ask, clipped_bid[::-1]]).tolist(),
         fill="toself", fillcolor=_GRAY_SPREAD,
-        line=dict(width=0), showlegend=False, hoverinfo="skip",
+        line={"width": 0}, showlegend=False, hoverinfo="skip",
     ))
 
     # ── Midline p(x): thick solid black ──
     fig.add_trace(go.Scatter(
         x=xs.tolist(), y=midline.tolist(), mode="lines",
-        line=dict(color=_BLACK, width=2.5),
+        line={"color": _BLACK, "width": 2.5},
         name="p(x) midline",
     ))
 
     # ── Ask a(x): dashed black ──
     fig.add_trace(go.Scatter(
         x=xs.tolist(), y=clipped_ask.tolist(), mode="lines",
-        line=dict(color=_BLACK, width=1.5, dash="8px,4px"),
+        line={"color": _BLACK, "width": 1.5, "dash": "8px,4px"},
         name="a(x) ask",
     ))
 
     # ── Bid b(x): dashed black ──
     fig.add_trace(go.Scatter(
         x=xs.tolist(), y=clipped_bid.tolist(), mode="lines",
-        line=dict(color=_BLACK, width=1.5, dash="8px,4px"),
+        line={"color": _BLACK, "width": 1.5, "dash": "8px,4px"},
         name="b(x) bid",
     ))
 
     # ── Inventory limits: x=0 (empty) and x=X* (full capacity) ──
-    fig.add_vline(x=0, line=dict(color="#BBB", width=1.2), layer="below")
+    fig.add_vline(x=0, line={"color": "#BBB", "width": 1.2}, layer="below")
     if X_star > 0:
-        fig.add_vline(x=X_star, line=dict(color="#BBB", width=1.2), layer="below")
+        fig.add_vline(x=X_star, line={"color": "#BBB", "width": 1.2}, layer="below")
 
     # ── Balanced inventory at X*/2 (light dashed, behind traces) ──
     if X_star > 0:
-        fig.add_vline(x=X_star / 2, line=dict(dash="4px,4px", color="#DDD", width=0.8), layer="below")
+        fig.add_vline(x=X_star / 2, line={"dash": "4px,4px", "color": "#DDD", "width": 0.8}, layer="below")
 
     # ── Current position: purple vertical line spanning full figure ──
-    fig.add_vline(x=x_cur, line=dict(color=_PURPLE, width=1.5))
+    fig.add_vline(x=x_cur, line={"color": _PURPLE, "width": 1.5})
 
     # ── Intersection dots: current ask and bid (purple) ──
     fig.add_trace(go.Scatter(
         x=[x_cur, x_cur], y=[ask_cur, bid_cur], mode="markers",
-        marker=dict(size=8, color=_PURPLE),
+        marker={"size": 8, "color": _PURPLE},
         showlegend=False, hoverinfo="skip",
     ))
     fig.add_annotation(
         x=x_cur, y=ask_cur,
         text=f"a({x_cur:.0f}) = {ask_cur:.4f}", showarrow=False,
         xshift=10, yshift=8, xanchor="left",
-        font=dict(size=9, color=_PURPLE),
+        font={"size": 9, "color": _PURPLE},
     )
     fig.add_annotation(
         x=x_cur, y=bid_cur,
         text=f"b({x_cur:.0f}) = {bid_cur:.4f}", showarrow=False,
         xshift=10, yshift=-14, xanchor="left",
-        font=dict(size=9, color=_PURPLE),
+        font={"size": 9, "color": _PURPLE},
     )
 
     # ── Bracket: O (outside spread) on right edge ──
@@ -205,27 +205,27 @@ def dealer_pricing_plane(
     for y_end in [A, B]:
         fig.add_shape(
             type="line", x0=bx - tick_w, y0=y_end, x1=bx + tick_w, y1=y_end,
-            line=dict(color=_GRAY_MID, width=1),
+            line={"color": _GRAY_MID, "width": 1},
         )
     fig.add_shape(
         type="line", x0=bx, y0=A, x1=bx, y1=B,
-        line=dict(color=_GRAY_MID, width=1),
+        line={"color": _GRAY_MID, "width": 1},
     )
     fig.add_annotation(
         x=bx, y=(A + B) / 2,
-        text=f"<b>O</b> = {O:.4f}", showarrow=False, xshift=45,
-        font=dict(size=11, color=_BLACK),
+        text=f"<b>O</b> = {spread:.4f}", showarrow=False, xshift=45,
+        font={"size": 11, "color": _BLACK},
     )
     # label on A/B lines
     fig.add_annotation(
         x=x_max, y=A, text="(VBT ask — ceiling)", showarrow=False,
         xshift=45, yshift=8, xanchor="left",
-        font=dict(size=9, color=_GRAY_MID),
+        font={"size": 9, "color": _GRAY_MID},
     )
     fig.add_annotation(
         x=x_max, y=B, text="(VBT bid — floor)", showarrow=False,
         xshift=45, yshift=-8, xanchor="left",
-        font=dict(size=9, color=_GRAY_MID),
+        font={"size": 9, "color": _GRAY_MID},
     )
 
     # ── Bracket: I (inside spread) at X*/2 ──
@@ -236,16 +236,16 @@ def dealer_pricing_plane(
     for y_end in [i_top, i_bot]:
         fig.add_shape(
             type="line", x0=ix - tick_w, y0=y_end, x1=ix + tick_w, y1=y_end,
-            line=dict(color=_BLACK, width=1.2),
+            line={"color": _BLACK, "width": 1.2},
         )
     fig.add_shape(
         type="line", x0=ix, y0=i_top, x1=ix, y1=i_bot,
-        line=dict(color=_BLACK, width=1.2),
+        line={"color": _BLACK, "width": 1.2},
     )
     fig.add_annotation(
         x=ix, y=(i_top + i_bot) / 2,
         text=f"<b>I</b> = {inside_width:.5f}", showarrow=False, xshift=45, yshift=15,
-        font=dict(size=11, color=_BLACK),
+        font={"size": 11, "color": _BLACK},
     )
 
     # ── Right-side curve labels (like SVG) ──
@@ -254,15 +254,15 @@ def dealer_pricing_plane(
     y_end_mid = float(midline[-1])
     fig.add_annotation(
         x=x_max, y=y_end_mid, text="<b>p(x)</b>", showarrow=False,
-        xshift=5, xanchor="left", font=dict(size=11, color=_BLACK),
+        xshift=5, xanchor="left", font={"size": 11, "color": _BLACK},
     )
     fig.add_annotation(
         x=x_max, y=y_end_mid, text="<b>a(x)</b>", showarrow=False,
-        xshift=5, yshift=14, xanchor="left", font=dict(size=10, color=_BLACK),
+        xshift=5, yshift=14, xanchor="left", font={"size": 10, "color": _BLACK},
     )
     fig.add_annotation(
         x=x_max, y=y_end_mid, text="<b>b(x)</b>", showarrow=False,
-        xshift=5, yshift=-14, xanchor="left", font=dict(size=10, color=_BLACK),
+        xshift=5, yshift=-14, xanchor="left", font={"size": 10, "color": _BLACK},
     )
 
     # ── X-axis sub-labels ──
@@ -270,19 +270,19 @@ def dealer_pricing_plane(
         fig.add_annotation(
             x=X_star * 0.2, y=y_lo,
             text="← Empty: higher asks", showarrow=False, yshift=-28,
-            font=dict(size=9, color="#888"),
+            font={"size": 9, "color": "#888"},
         )
         fig.add_annotation(
             x=X_star * 0.8, y=y_lo,
             text="Full: lower bids →", showarrow=False, yshift=-28,
-            font=dict(size=9, color="#888"),
+            font={"size": 9, "color": "#888"},
         )
 
     # ── X-axis title (manually positioned left of center) ──
     fig.add_annotation(
         text="Inventory x (face units)", xref="paper", yref="paper",
         x=0.35, y=-0.08, showarrow=False,
-        font=dict(size=10, color=_BLACK, family="Georgia, serif"),
+        font={"size": 10, "color": _BLACK, "family": "Georgia, serif"},
     )
 
     # ── Title ──
@@ -294,72 +294,72 @@ def dealer_pricing_plane(
     x_tick_text = ["0", "X*/2", f"X*={X_star:.0f}"] if X_star > 0 else None
 
     fig.update_layout(
-        title=dict(
-            text=title,
-            font=dict(size=16, color=_BLACK, family="Georgia, serif"),
-        ),
-        xaxis=dict(
-            title=dict(text=""),
-            showgrid=False,
-            zeroline=False,
-            linecolor=_BLACK,
-            linewidth=1.5,
-            tickvals=x_tick_vals,
-            ticktext=x_tick_text,
-            tickfont=dict(size=11, color="#444"),
-            range=[-x_max * 0.08, x_max * 1.12],
-        ),
-        yaxis=dict(
-            title="Unit Price",
-            showgrid=False,
-            zeroline=False,
-            linecolor=_BLACK,
-            linewidth=1.5,
-            tickvals=[B, M, A],
-            ticktext=[f"B={B:.3f}", f"M={M:.3f}", f"A={A:.3f}"],
-            tickfont=dict(size=10, color=_BLACK),
-            range=[y_lo, y_hi],
-        ),
+        title={
+            "text": title,
+            "font": {"size": 16, "color": _BLACK, "family": "Georgia, serif"},
+        },
+        xaxis={
+            "title": {"text": ""},
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickvals": x_tick_vals,
+            "ticktext": x_tick_text,
+            "tickfont": {"size": 11, "color": "#444"},
+            "range": [-x_max * 0.08, x_max * 1.12],
+        },
+        yaxis={
+            "title": "Unit Price",
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickvals": [B, M, A],
+            "ticktext": [f"B={B:.3f}", f"M={M:.3f}", f"A={A:.3f}"],
+            "tickfont": {"size": 10, "color": _BLACK},
+            "range": [y_lo, y_hi],
+        },
         plot_bgcolor="white",
         paper_bgcolor="white",
         height=600,
-        legend=dict(
-            x=0.0, y=-0.18,
-            orientation="h",
-            bgcolor="rgba(250,250,250,0.9)",
-            bordercolor="#CCC",
-            borderwidth=0.5,
-            font=dict(size=10, color="#333"),
-        ),
-        margin=dict(l=90, r=100, t=65, b=210),
-        font=dict(family="Georgia, serif", color=_BLACK),
+        legend={
+            "x": 0.0, "y": -0.18,
+            "orientation": "h",
+            "bgcolor": "rgba(250,250,250,0.9)",
+            "bordercolor": "#CCC",
+            "borderwidth": 0.5,
+            "font": {"size": 10, "color": "#333"},
+        },
+        margin={"l": 90, "r": 100, "t": 65, "b": 210},
+        font={"family": "Georgia, serif", "color": _BLACK},
     )
 
     # ── Info annotation (top, below title) ──
     info = (
         f"Bucket: <b>{bucket_name}</b>  |  Day: <b>{day}</b>  |  "
         f"x = {inventory_x:.0f}  |  X* = {X_star:.0f}  |  S = {S:.0f}  |  "
-        f"M = {M:.4f}  |  O = {O:.4f}  |  I = {inside_width:.5f}  |  "
+        f"M = {M:.4f}  |  O = {spread:.4f}  |  I = {inside_width:.5f}  |  "
         f"λ = {lambda_:.4f}  |  slope = {slope:.7f}"
     )
     fig.add_annotation(
         text=info, xref="paper", yref="paper",
         x=0.0, y=1.01, showarrow=False,
-        font=dict(size=9, color=_GRAY_MID, family="Calibri, sans-serif"),
+        font={"size": 9, "color": _GRAY_MID, "family": "Calibri, sans-serif"},
         align="left", xanchor="left", yanchor="bottom",
     )
 
     # ── Equations (bottom, below legend) ──
     eqs = (
         f"p(x) = M − [O / (X*+2S)] · (x − X*/2)          "
-        f"I = λ·O = {lambda_:.4f} × {O:.4f} = {inside_width:.5f}<br>"
+        f"I = λ·O = {lambda_:.4f} × {spread:.4f} = {inside_width:.5f}<br>"
         f"a(x) = min(A, p(x)+I/2)          "
         f"b(x) = max(B, p(x)−I/2)"
     )
     fig.add_annotation(
         text=eqs, xref="paper", yref="paper",
         x=0.0, y=-0.38, showarrow=False,
-        font=dict(size=10, color=_BLACK, family="Calibri, sans-serif"),
+        font={"size": 10, "color": _BLACK, "family": "Calibri, sans-serif"},
         align="left", xanchor="left",
     )
 
@@ -436,11 +436,11 @@ def bank_pricing_plane(
                   line_width=0, layer="below")
 
     # CB bounds
-    fig.add_hline(y=i_B, line=dict(color=_CB_CEIL_COLOR, width=2),
+    fig.add_hline(y=i_B, line={"color": _CB_CEIL_COLOR, "width": 2},
                   annotation_text=f"i_B={i_B:.4f}", annotation_position="top left")
-    fig.add_hline(y=i_R, line=dict(color=_CB_FLOOR_COLOR, width=2),
+    fig.add_hline(y=i_R, line={"color": _CB_FLOOR_COLOR, "width": 2},
                   annotation_text=f"i_R={i_R:.4f}", annotation_position="bottom left")
-    fig.add_hline(y=M_rate, line=dict(dash="dot", color="gray", width=1),
+    fig.add_hline(y=M_rate, line={"dash": "dot", "color": "gray", "width": 1},
                   annotation_text=f"M={M_rate:.4f}", annotation_position="top right")
 
     # Inside spread fill (between loan and deposit rates)
@@ -448,53 +448,53 @@ def bank_pricing_plane(
         x=np.concatenate([xs, xs[::-1]]),
         y=np.concatenate([r_ask, r_deposit[::-1]]),
         fill="toself", fillcolor=_FILL_COLOR,
-        line=dict(width=0), showlegend=False, hoverinfo="skip",
+        line={"width": 0}, showlegend=False, hoverinfo="skip",
     ))
 
     # Symmetric midline (untilted)
     if tilt > 1e-8:
         fig.add_trace(go.Scatter(
             x=xs, y=midline_sym, mode="lines",
-            line=dict(color="gray", width=1, dash="dot"),
+            line={"color": "gray", "width": 1, "dash": "dot"},
             name="Symmetric midline m(x)",
         ))
 
     # Tilted midline
     fig.add_trace(go.Scatter(
         x=xs, y=midline_tilted, mode="lines",
-        line=dict(color=_TILT_COLOR if tilt > 1e-8 else _MIDLINE_COLOR, width=2.5),
+        line={"color": _TILT_COLOR if tilt > 1e-8 else _MIDLINE_COLOR, "width": 2.5},
         name="Bank midline m_bank(x)" if tilt > 1e-8 else "Midline m(x)",
     ))
 
     # Loan rate (ask)
     fig.add_trace(go.Scatter(
         x=xs, y=r_ask, mode="lines",
-        line=dict(color=_ASK_COLOR, width=1.5, dash="dash"),
+        line={"color": _ASK_COLOR, "width": 1.5, "dash": "dash"},
         name="Loan rate r_L",
     ))
 
     # Deposit rate (bid, clipped)
     fig.add_trace(go.Scatter(
         x=xs, y=r_deposit, mode="lines",
-        line=dict(color=_BID_COLOR, width=1.5, dash="dash"),
+        line={"color": _BID_COLOR, "width": 1.5, "dash": "dash"},
         name="Deposit rate r_D",
     ))
 
     # Capacity markers
     if X_star > 0:
-        fig.add_vline(x=X_star, line=dict(dash="dot", color="gray", width=1),
+        fig.add_vline(x=X_star, line={"dash": "dot", "color": "gray", "width": 1},
                       annotation_text=f"+X*={X_star}", annotation_position="top right")
-        fig.add_vline(x=-X_star, line=dict(dash="dot", color="gray", width=1),
+        fig.add_vline(x=-X_star, line={"dash": "dot", "color": "gray", "width": 1},
                       annotation_text=f"-X*={-X_star}", annotation_position="top left")
 
     # Current position marker
     fig.add_trace(go.Scatter(
         x=[x_cur], y=[mid_cur_tilted], mode="markers+text",
-        marker=dict(size=12, color=_POSITION_COLOR, symbol="diamond"),
+        marker={"size": 12, "color": _POSITION_COLOR, "symbol": "diamond"},
         text=[f"x={x_cur}"], textposition="top center",
         name=f"Current (day {day})",
     ))
-    fig.add_vline(x=x_cur, line=dict(dash="dash", color=_POSITION_COLOR, width=1))
+    fig.add_vline(x=x_cur, line={"dash": "dash", "color": _POSITION_COLOR, "width": 1})
 
     # Title
     if title is None:
@@ -505,8 +505,8 @@ def bank_pricing_plane(
         yaxis_title="Interest Rate (2-day effective)",
         template="plotly_white",
         height=500,
-        legend=dict(x=0.01, y=0.99, bgcolor="rgba(255,255,255,0.8)"),
-        margin=dict(l=60, r=30, t=60, b=50),
+        legend={"x": 0.01, "y": 0.99, "bgcolor": "rgba(255,255,255,0.8)"},
+        margin={"l": 60, "r": 30, "t": 60, "b": 50},
     )
 
     # Spread annotations
@@ -514,13 +514,13 @@ def bank_pricing_plane(
         x=x_cur, y=(r_L_cur + r_D_cur) / 2,
         text=f"I={inside_width:.4f}",
         showarrow=False, xshift=40,
-        font=dict(size=10, color="#7f8c8d"),
+        font={"size": 10, "color": "#7f8c8d"},
     )
     fig.add_annotation(
         x=-x_bound * 0.9, y=(i_B + i_R) / 2,
         text=f"Omega={Omega:.4f}",
         showarrow=False,
-        font=dict(size=10, color="#7f8c8d"),
+        font={"size": 10, "color": "#7f8c8d"},
     )
 
     if tilt > 1e-8:
@@ -529,7 +529,7 @@ def bank_pricing_plane(
             ax=x_cur, ay=mid_cur_sym,
             text=f"tilt={tilt:.4f}",
             showarrow=True, arrowhead=2, arrowcolor=_TILT_COLOR,
-            xshift=50, font=dict(size=9, color=_TILT_COLOR),
+            xshift=50, font={"size": 9, "color": _TILT_COLOR},
         )
 
     return fig
@@ -619,53 +619,53 @@ def dealer_pricing_animation(
     fig = go.Figure(data=init_traces, frames=frames)
 
     # Slider
-    sliders = [dict(
-        active=0,
-        currentvalue=dict(prefix="Day: "),
-        pad=dict(t=50),
-        steps=[dict(args=[[str(d)], dict(frame=dict(duration=500, redraw=True),
-                                          mode="immediate")],
-                     method="animate", label=str(d))
+    sliders = [{
+        "active": 0,
+        "currentvalue": {"prefix": "Day: "},
+        "pad": {"t": 50},
+        "steps": [{"args": [[str(d)], {"frame": {"duration": 500, "redraw": True},
+                                          "mode": "immediate"}],
+                     "method": "animate", "label": str(d)}
                for d in days],
-    )]
+    }]
 
     # Play/pause buttons
-    updatemenus = [dict(
-        type="buttons", showactive=False,
-        x=0.1, y=0, xanchor="right", yanchor="top",
-        buttons=[
-            dict(label="Play", method="animate",
-                 args=[None, dict(frame=dict(duration=700, redraw=True),
-                                  fromcurrent=True)]),
-            dict(label="Pause", method="animate",
-                 args=[[None], dict(frame=dict(duration=0, redraw=False),
-                                    mode="immediate")]),
+    updatemenus = [{
+        "type": "buttons", "showactive": False,
+        "x": 0.1, "y": 0, "xanchor": "right", "yanchor": "top",
+        "buttons": [
+            {"label": "Play", "method": "animate",
+                 "args": [None, {"frame": {"duration": 700, "redraw": True},
+                                  "fromcurrent": True}]},
+            {"label": "Pause", "method": "animate",
+                 "args": [[None], {"frame": {"duration": 0, "redraw": False},
+                                    "mode": "immediate"}]},
         ],
-    )]
+    }]
 
     fig.update_layout(
-        title=dict(
-            text=f"Dealer Treynor Pricing Animation — {bucket} bucket",
-            font=dict(size=16, color=_BLACK, family="Georgia, serif"),
-        ),
-        xaxis=dict(
-            title=dict(text=""),
-            showgrid=False,
-            zeroline=False,
-            linecolor=_BLACK,
-            linewidth=1.5,
-            tickfont=dict(size=11, color="#444"),
-            range=[-g_x_max * 0.08, g_x_max * 1.12],
-        ),
-        yaxis=dict(
-            title="Unit Price",
-            showgrid=False,
-            zeroline=False,
-            linecolor=_BLACK,
-            linewidth=1.5,
-            tickfont=dict(size=10, color=_BLACK),
-            range=[y_lo, y_hi],
-        ),
+        title={
+            "text": f"Dealer Treynor Pricing Animation — {bucket} bucket",
+            "font": {"size": 16, "color": _BLACK, "family": "Georgia, serif"},
+        },
+        xaxis={
+            "title": {"text": ""},
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickfont": {"size": 11, "color": "#444"},
+            "range": [-g_x_max * 0.08, g_x_max * 1.12],
+        },
+        yaxis={
+            "title": "Unit Price",
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickfont": {"size": 10, "color": _BLACK},
+            "range": [y_lo, y_hi],
+        },
         plot_bgcolor="white",
         paper_bgcolor="white",
         height=750,
@@ -673,16 +673,16 @@ def dealer_pricing_animation(
         annotations=init_annotations,
         sliders=sliders,
         updatemenus=updatemenus,
-        legend=dict(
-            x=0.0, y=-0.30,
-            orientation="h",
-            bgcolor="rgba(250,250,250,0.9)",
-            bordercolor="#CCC",
-            borderwidth=0.5,
-            font=dict(size=10, color="#333"),
-        ),
-        margin=dict(l=90, r=100, t=65, b=230),
-        font=dict(family="Georgia, serif", color=_BLACK),
+        legend={
+            "x": 0.0, "y": -0.30,
+            "orientation": "h",
+            "bgcolor": "rgba(250,250,250,0.9)",
+            "bordercolor": "#CCC",
+            "borderwidth": 0.5,
+            "font": {"size": 10, "color": "#333"},
+        },
+        margin={"l": 90, "r": 100, "t": 65, "b": 230},
+        font={"family": "Georgia, serif", "color": _BLACK},
     )
 
     return fig
@@ -695,13 +695,13 @@ def _build_dealer_frame_full(
     x_max_global: float | None = None,
     y_lo: float | None = None,
     y_hi: float | None = None,
-) -> tuple[list[go.BaseTraceType], list[dict], list[dict]]:
+) -> tuple[list[go.BaseTraceType], list[dict[str, Any]], list[dict[str, Any]]]:
     """Build traces, shapes, and annotations for one dealer animation frame.
 
     Returns (traces, shapes, annotations) matching the static diagram style.
     """
     M = float(row["vbt_mid"])
-    O = float(row["vbt_spread"])
+    spread = float(row["vbt_spread"])
     S = float(row["ticket_size"])
     X_star = float(row["X_star"])
     I_w = float(row["inside_width"])
@@ -710,14 +710,14 @@ def _build_dealer_frame_full(
     x_cur = inv_tickets * S
     day = int(row["day"])
 
-    A = M + O / 2
-    B = M - O / 2
+    A = M + spread / 2
+    B = M - spread / 2
 
     x_max = x_max_global if x_max_global else max(X_star + S, S * 2)
     xs = np.linspace(0, x_max, 200)
 
     denom = X_star + 2 * S
-    slope = O / denom if denom > 0 else 0.0
+    slope = spread / denom if denom > 0 else 0.0
     midline = M - slope * (xs - X_star / 2)
     half_I = I_w / 2
     PAR = 1.0
@@ -730,8 +730,8 @@ def _build_dealer_frame_full(
     y_end_mid = float(midline[-1])
 
     # ── Y range for purple line trace ──
-    y_bot = y_lo if y_lo is not None else B - max(O * 0.35, 0.005)
-    y_top = y_hi if y_hi is not None else A + max(O * 0.35, 0.005)
+    y_bot = y_lo if y_lo is not None else B - max(spread * 0.35, 0.005)
+    y_top = y_hi if y_hi is not None else A + max(spread * 0.35, 0.005)
 
     # ── Traces ──
     traces = [
@@ -740,37 +740,37 @@ def _build_dealer_frame_full(
             x=np.concatenate([xs, xs[::-1]]).tolist(),
             y=np.concatenate([clipped_ask, clipped_bid[::-1]]).tolist(),
             fill="toself", fillcolor=_GRAY_SPREAD,
-            line=dict(width=0), showlegend=False, hoverinfo="skip",
+            line={"width": 0}, showlegend=False, hoverinfo="skip",
         ),
         # Midline p(x)
         go.Scatter(
             x=xs.tolist(), y=midline.tolist(), mode="lines",
-            line=dict(color=_BLACK, width=2.5), name="p(x) midline",
+            line={"color": _BLACK, "width": 2.5}, name="p(x) midline",
         ),
         # Ask a(x)
         go.Scatter(
             x=xs.tolist(), y=clipped_ask.tolist(), mode="lines",
-            line=dict(color=_BLACK, width=1.5, dash="8px,4px"), name="a(x) ask",
+            line={"color": _BLACK, "width": 1.5, "dash": "8px,4px"}, name="a(x) ask",
         ),
         # Bid b(x)
         go.Scatter(
             x=xs.tolist(), y=clipped_bid.tolist(), mode="lines",
-            line=dict(color=_BLACK, width=1.5, dash="8px,4px"), name="b(x) bid",
+            line={"color": _BLACK, "width": 1.5, "dash": "8px,4px"}, name="b(x) bid",
         ),
         # Current position — purple vertical line (as trace so it animates)
         go.Scatter(
             x=[x_cur, x_cur], y=[y_bot, y_top], mode="lines",
-            line=dict(color=_PURPLE, width=1.5),
+            line={"color": _PURPLE, "width": 1.5},
             showlegend=False, hoverinfo="skip",
         ),
         # Intersection dots (purple) with value labels
         go.Scatter(
             x=[x_cur, x_cur], y=[ask_cur, bid_cur],
             mode="markers+text",
-            marker=dict(size=8, color=_PURPLE),
+            marker={"size": 8, "color": _PURPLE},
             text=[f"  a({x_cur:.0f})={ask_cur:.4f}", f"  b({x_cur:.0f})={bid_cur:.4f}"],
             textposition=["top right", "bottom right"],
-            textfont=dict(size=9, color=_PURPLE),
+            textfont={"size": 9, "color": _PURPLE},
             showlegend=False, hoverinfo="skip",
         ),
     ]
@@ -784,99 +784,99 @@ def _build_dealer_frame_full(
 
     shapes = [
         # VBT corridor fill
-        dict(type="rect", x0=0, x1=1, xref="paper", y0=B, y1=A,
-             fillcolor=_GRAY_LIGHT, line=dict(width=0), layer="below"),
+        {"type": "rect", "x0": 0, "x1": 1, "xref": "paper", "y0": B, "y1": A,
+             "fillcolor": _GRAY_LIGHT, "line": {"width": 0}, "layer": "below"},
         # VBT A bound
-        dict(type="line", x0=0, x1=1, xref="paper", y0=A, y1=A,
-             line=dict(color="#BBB", width=1.5), layer="below"),
+        {"type": "line", "x0": 0, "x1": 1, "xref": "paper", "y0": A, "y1": A,
+             "line": {"color": "#BBB", "width": 1.5}, "layer": "below"},
         # VBT B bound
-        dict(type="line", x0=0, x1=1, xref="paper", y0=B, y1=B,
-             line=dict(color="#BBB", width=1.5), layer="below"),
+        {"type": "line", "x0": 0, "x1": 1, "xref": "paper", "y0": B, "y1": B,
+             "line": {"color": "#BBB", "width": 1.5}, "layer": "below"},
         # VBT M mid
-        dict(type="line", x0=0, x1=1, xref="paper", y0=M, y1=M,
-             line=dict(color="#CCC", width=1, dash="6px,4px"), layer="below"),
+        {"type": "line", "x0": 0, "x1": 1, "xref": "paper", "y0": M, "y1": M,
+             "line": {"color": "#CCC", "width": 1, "dash": "6px,4px"}, "layer": "below"},
         # x=0 empty inventory limit
-        dict(type="line", x0=0, x1=0, y0=0, y1=1, yref="paper",
-             line=dict(color="#BBB", width=1.2), layer="below"),
+        {"type": "line", "x0": 0, "x1": 0, "y0": 0, "y1": 1, "yref": "paper",
+             "line": {"color": "#BBB", "width": 1.2}, "layer": "below"},
         # X* capacity
-        dict(type="line", x0=X_star, x1=X_star, y0=0, y1=1, yref="paper",
-             line=dict(color="#BBB", width=1.2), layer="below"),
+        {"type": "line", "x0": X_star, "x1": X_star, "y0": 0, "y1": 1, "yref": "paper",
+             "line": {"color": "#BBB", "width": 1.2}, "layer": "below"},
         # X*/2 balanced
-        dict(type="line", x0=X_star / 2, x1=X_star / 2, y0=0, y1=1, yref="paper",
-             line=dict(color="#DDD", width=0.8, dash="4px,4px"), layer="below"),
+        {"type": "line", "x0": X_star / 2, "x1": X_star / 2, "y0": 0, "y1": 1, "yref": "paper",
+             "line": {"color": "#DDD", "width": 0.8, "dash": "4px,4px"}, "layer": "below"},
         # O bracket: stem
-        dict(type="line", x0=bx, x1=bx, y0=A, y1=B,
-             line=dict(color=_GRAY_MID, width=1)),
+        {"type": "line", "x0": bx, "x1": bx, "y0": A, "y1": B,
+             "line": {"color": _GRAY_MID, "width": 1}},
         # O bracket: top tick
-        dict(type="line", x0=bx - tick_w, x1=bx + tick_w, y0=A, y1=A,
-             line=dict(color=_GRAY_MID, width=1)),
+        {"type": "line", "x0": bx - tick_w, "x1": bx + tick_w, "y0": A, "y1": A,
+             "line": {"color": _GRAY_MID, "width": 1}},
         # O bracket: bottom tick
-        dict(type="line", x0=bx - tick_w, x1=bx + tick_w, y0=B, y1=B,
-             line=dict(color=_GRAY_MID, width=1)),
+        {"type": "line", "x0": bx - tick_w, "x1": bx + tick_w, "y0": B, "y1": B,
+             "line": {"color": _GRAY_MID, "width": 1}},
         # I bracket: stem
-        dict(type="line", x0=ix, x1=ix, y0=i_top, y1=i_bot,
-             line=dict(color=_BLACK, width=1.2)),
+        {"type": "line", "x0": ix, "x1": ix, "y0": i_top, "y1": i_bot,
+             "line": {"color": _BLACK, "width": 1.2}},
         # I bracket: top tick
-        dict(type="line", x0=ix - tick_w, x1=ix + tick_w, y0=i_top, y1=i_top,
-             line=dict(color=_BLACK, width=1.2)),
+        {"type": "line", "x0": ix - tick_w, "x1": ix + tick_w, "y0": i_top, "y1": i_top,
+             "line": {"color": _BLACK, "width": 1.2}},
         # I bracket: bottom tick
-        dict(type="line", x0=ix - tick_w, x1=ix + tick_w, y0=i_bot, y1=i_bot,
-             line=dict(color=_BLACK, width=1.2)),
+        {"type": "line", "x0": ix - tick_w, "x1": ix + tick_w, "y0": i_bot, "y1": i_bot,
+             "line": {"color": _BLACK, "width": 1.2}},
     ]
 
     # ── Annotations ──
     annotations = [
         # O label
-        dict(x=bx, y=(A + B) / 2, text=f"<b>O</b> = {O:.4f}",
-             showarrow=False, xshift=45, font=dict(size=11, color=_BLACK)),
+        {"x": bx, "y": (A + B) / 2, "text": f"<b>O</b> = {spread:.4f}",
+             "showarrow": False, "xshift": 45, "font": {"size": 11, "color": _BLACK}},
         # VBT ask label
-        dict(x=x_max, y=A, text="(VBT ask — ceiling)",
-             showarrow=False, xshift=45, yshift=8, xanchor="left",
-             font=dict(size=9, color=_GRAY_MID)),
+        {"x": x_max, "y": A, "text": "(VBT ask — ceiling)",
+             "showarrow": False, "xshift": 45, "yshift": 8, "xanchor": "left",
+             "font": {"size": 9, "color": _GRAY_MID}},
         # VBT bid label
-        dict(x=x_max, y=B, text="(VBT bid — floor)",
-             showarrow=False, xshift=45, yshift=-8, xanchor="left",
-             font=dict(size=9, color=_GRAY_MID)),
+        {"x": x_max, "y": B, "text": "(VBT bid — floor)",
+             "showarrow": False, "xshift": 45, "yshift": -8, "xanchor": "left",
+             "font": {"size": 9, "color": _GRAY_MID}},
         # I label
-        dict(x=ix, y=(i_top + i_bot) / 2,
-             text=f"<b>I</b> = {I_w:.5f}",
-             showarrow=False, xshift=45, yshift=15,
-             font=dict(size=11, color=_BLACK)),
+        {"x": ix, "y": (i_top + i_bot) / 2,
+             "text": f"<b>I</b> = {I_w:.5f}",
+             "showarrow": False, "xshift": 45, "yshift": 15,
+             "font": {"size": 11, "color": _BLACK}},
         # Right-side curve labels
-        dict(x=x_max, y=y_end_mid, text="<b>p(x)</b>",
-             showarrow=False, xshift=5, xanchor="left",
-             font=dict(size=11, color=_BLACK)),
-        dict(x=x_max, y=y_end_mid, text="<b>a(x)</b>",
-             showarrow=False, xshift=5, yshift=14, xanchor="left",
-             font=dict(size=10, color=_BLACK)),
-        dict(x=x_max, y=y_end_mid, text="<b>b(x)</b>",
-             showarrow=False, xshift=5, yshift=-14, xanchor="left",
-             font=dict(size=10, color=_BLACK)),
+        {"x": x_max, "y": y_end_mid, "text": "<b>p(x)</b>",
+             "showarrow": False, "xshift": 5, "xanchor": "left",
+             "font": {"size": 11, "color": _BLACK}},
+        {"x": x_max, "y": y_end_mid, "text": "<b>a(x)</b>",
+             "showarrow": False, "xshift": 5, "yshift": 14, "xanchor": "left",
+             "font": {"size": 10, "color": _BLACK}},
+        {"x": x_max, "y": y_end_mid, "text": "<b>b(x)</b>",
+             "showarrow": False, "xshift": 5, "yshift": -14, "xanchor": "left",
+             "font": {"size": 10, "color": _BLACK}},
         # Info line
-        dict(text=(
+        {"text": (
                  f"Bucket: <b>{bucket_name}</b>  |  Day: <b>{day}</b>  |  "
                  f"x = {x_cur:.0f}  |  X* = {X_star:.0f}  |  S = {S:.0f}  |  "
-                 f"M = {M:.4f}  |  O = {O:.4f}  |  I = {I_w:.5f}  |  "
+                 f"M = {M:.4f}  |  O = {spread:.4f}  |  I = {I_w:.5f}  |  "
                  f"λ = {lam:.4f}  |  slope = {slope:.7f}"),
-             xref="paper", yref="paper", x=0.0, y=1.01,
-             showarrow=False, xanchor="left", yanchor="bottom",
-             font=dict(size=9, color=_GRAY_MID, family="Calibri, sans-serif"),
-             align="left"),
+             "xref": "paper", "yref": "paper", "x": 0.0, "y": 1.01,
+             "showarrow": False, "xanchor": "left", "yanchor": "bottom",
+             "font": {"size": 9, "color": _GRAY_MID, "family": "Calibri, sans-serif"},
+             "align": "left"},
         # X-axis title
-        dict(text="Inventory x (face units)",
-             xref="paper", yref="paper", x=0.35, y=-0.12,
-             showarrow=False,
-             font=dict(size=10, color=_BLACK, family="Georgia, serif")),
+        {"text": "Inventory x (face units)",
+             "xref": "paper", "yref": "paper", "x": 0.35, "y": -0.12,
+             "showarrow": False,
+             "font": {"size": 10, "color": _BLACK, "family": "Georgia, serif"}},
         # Equations
-        dict(text=(
+        {"text": (
                  f"p(x) = M − [O / (X*+2S)] · (x − X*/2)          "
-                 f"I = λ·O = {lam:.4f} × {O:.4f} = {I_w:.5f}<br>"
+                 f"I = λ·O = {lam:.4f} × {spread:.4f} = {I_w:.5f}<br>"
                  f"a(x) = min(A, p(x)+I/2)          "
                  f"b(x) = max(B, p(x)−I/2)"),
-             xref="paper", yref="paper", x=0.0, y=-0.42,
-             showarrow=False, xanchor="left",
-             font=dict(size=10, color=_BLACK, family="Calibri, sans-serif"),
-             align="left"),
+             "xref": "paper", "yref": "paper", "x": 0.0, "y": -0.42,
+             "showarrow": False, "xanchor": "left",
+             "font": {"size": 10, "color": _BLACK, "family": "Calibri, sans-serif"},
+             "align": "left"},
     ]
 
     return traces, shapes, annotations
@@ -928,28 +928,28 @@ def bank_pricing_animation(
 
     fig = go.Figure(data=initial_traces, frames=frames)
 
-    sliders = [dict(
-        active=0,
-        currentvalue=dict(prefix="Day: "),
-        pad=dict(t=50),
-        steps=[dict(args=[[str(d)], dict(frame=dict(duration=500, redraw=True),
-                                          mode="immediate")],
-                     method="animate", label=str(d))
+    sliders = [{
+        "active": 0,
+        "currentvalue": {"prefix": "Day: "},
+        "pad": {"t": 50},
+        "steps": [{"args": [[str(d)], {"frame": {"duration": 500, "redraw": True},
+                                          "mode": "immediate"}],
+                     "method": "animate", "label": str(d)}
                for d in days],
-    )]
+    }]
 
-    updatemenus = [dict(
-        type="buttons", showactive=False,
-        x=0.1, y=0, xanchor="right", yanchor="top",
-        buttons=[
-            dict(label="Play", method="animate",
-                 args=[None, dict(frame=dict(duration=700, redraw=True),
-                                  fromcurrent=True)]),
-            dict(label="Pause", method="animate",
-                 args=[[None], dict(frame=dict(duration=0, redraw=False),
-                                    mode="immediate")]),
+    updatemenus = [{
+        "type": "buttons", "showactive": False,
+        "x": 0.1, "y": 0, "xanchor": "right", "yanchor": "top",
+        "buttons": [
+            {"label": "Play", "method": "animate",
+                 "args": [None, {"frame": {"duration": 700, "redraw": True},
+                                  "fromcurrent": True}]},
+            {"label": "Pause", "method": "animate",
+                 "args": [[None], {"frame": {"duration": 0, "redraw": False},
+                                    "mode": "immediate"}]},
         ],
-    )]
+    }]
 
     fig.update_layout(
         title=f"Bank Treynor Pricing Animation — {bank_id}",
@@ -959,7 +959,7 @@ def bank_pricing_animation(
         height=550,
         sliders=sliders,
         updatemenus=updatemenus,
-        legend=dict(x=0.01, y=0.99, bgcolor="rgba(255,255,255,0.8)"),
+        legend={"x": 0.01, "y": 0.99, "bgcolor": "rgba(255,255,255,0.8)"},
     )
 
     return fig
@@ -1003,28 +1003,28 @@ def _build_bank_frame_traces(row: Any) -> list[go.BaseTraceType]:
             x=np.concatenate([xs, xs[::-1]]).tolist(),
             y=np.concatenate([r_ask, r_deposit[::-1]]).tolist(),
             fill="toself", fillcolor=_FILL_COLOR,
-            line=dict(width=0), showlegend=False, hoverinfo="skip",
+            line={"width": 0}, showlegend=False, hoverinfo="skip",
         ),
         # Tilted midline
         go.Scatter(
             x=xs.tolist(), y=midline_tilted.tolist(), mode="lines",
-            line=dict(color=_TILT_COLOR if tilt > 1e-8 else _MIDLINE_COLOR, width=2.5),
+            line={"color": _TILT_COLOR if tilt > 1e-8 else _MIDLINE_COLOR, "width": 2.5},
             name="Bank midline",
         ),
         # Loan rate
         go.Scatter(
             x=xs.tolist(), y=r_ask.tolist(), mode="lines",
-            line=dict(color=_ASK_COLOR, width=1.5, dash="dash"), name="Loan rate r_L",
+            line={"color": _ASK_COLOR, "width": 1.5, "dash": "dash"}, name="Loan rate r_L",
         ),
         # Deposit rate
         go.Scatter(
             x=xs.tolist(), y=r_deposit.tolist(), mode="lines",
-            line=dict(color=_BID_COLOR, width=1.5, dash="dash"), name="Deposit rate r_D",
+            line={"color": _BID_COLOR, "width": 1.5, "dash": "dash"}, name="Deposit rate r_D",
         ),
         # Position
         go.Scatter(
             x=[x_cur], y=[mid_cur], mode="markers+text",
-            marker=dict(size=12, color=_POSITION_COLOR, symbol="diamond"),
+            marker={"size": 12, "color": _POSITION_COLOR, "symbol": "diamond"},
             text=[f"x={x_cur}, d={day}"], textposition="top center",
             name="Current",
         ),
@@ -1089,26 +1089,26 @@ def _build_yield_curve_frame(
         go.Scatter(
             x=band_x, y=band_y,
             fill="toself", fillcolor=_GRAY_SPREAD,
-            line=dict(width=0), showlegend=False, hoverinfo="skip",
+            line={"width": 0}, showlegend=False, hoverinfo="skip",
         ),
         # 1: VBT mid yield
         go.Scatter(
             x=taus, y=vbt_yields, mode="lines+markers",
-            line=dict(color="#999", width=2),
-            marker=dict(symbol="circle", size=8, color="#999"),
+            line={"color": "#999", "width": 2},
+            marker={"symbol": "circle", "size": 8, "color": "#999"},
             name="VBT mid yield",
         ),
         # 2: Dealer midline yield
         go.Scatter(
             x=taus, y=midline_yields, mode="lines+markers",
-            line=dict(color=_BLACK, width=2.5),
-            marker=dict(symbol="diamond", size=10, color=_BLACK),
+            line={"color": _BLACK, "width": 2.5},
+            marker={"symbol": "diamond", "size": 10, "color": _BLACK},
             name="Dealer midline yield",
         ),
         # 3: invisible placeholder (keeps trace count constant across frames)
         go.Scatter(
             x=[None], y=[None], mode="markers",
-            marker=dict(size=0, opacity=0),
+            marker={"size": 0, "opacity": 0},
             showlegend=False, hoverinfo="skip",
         ),
     ]
@@ -1153,42 +1153,42 @@ def yield_curve_static(
     n_buckets = sum(1 for b in day_df["bucket"].unique() if b in BUCKET_TAU)
 
     fig.update_layout(
-        title=dict(
-            text=f"Yield Curve \u2014 Day {day}",
-            font=dict(size=16, color=_BLACK, family="Georgia, serif"),
-        ),
-        xaxis=dict(
-            title="Representative Maturity \u03c4 (days)",
-            showgrid=False,
-            zeroline=False,
-            linecolor=_BLACK,
-            linewidth=1.5,
-            tickfont=dict(size=11, color="#444"),
-            range=[0, 14],
-        ),
-        yaxis=dict(
-            title="Implied Yield  (1/P \u2212 1)",
-            showgrid=False,
-            zeroline=False,
-            linecolor=_BLACK,
-            linewidth=1.5,
-            tickfont=dict(size=10, color=_BLACK),
-            tickformat=".1%",
-            rangemode="tozero",
-        ),
+        title={
+            "text": f"Yield Curve \u2014 Day {day}",
+            "font": {"size": 16, "color": _BLACK, "family": "Georgia, serif"},
+        },
+        xaxis={
+            "title": "Representative Maturity \u03c4 (days)",
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickfont": {"size": 11, "color": "#444"},
+            "range": [0, 14],
+        },
+        yaxis={
+            "title": "Implied Yield  (1/P \u2212 1)",
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickfont": {"size": 10, "color": _BLACK},
+            "tickformat": ".1%",
+            "rangemode": "tozero",
+        },
         plot_bgcolor="white",
         paper_bgcolor="white",
         height=550,
-        legend=dict(
-            x=0.0, y=-0.18,
-            orientation="h",
-            bgcolor="rgba(250,250,250,0.9)",
-            bordercolor="#CCC",
-            borderwidth=0.5,
-            font=dict(size=10, color="#333"),
-        ),
-        margin=dict(l=80, r=40, t=65, b=120),
-        font=dict(family="Georgia, serif", color=_BLACK),
+        legend={
+            "x": 0.0, "y": -0.18,
+            "orientation": "h",
+            "bgcolor": "rgba(250,250,250,0.9)",
+            "bordercolor": "#CCC",
+            "borderwidth": 0.5,
+            "font": {"size": 10, "color": "#333"},
+        },
+        margin={"l": 80, "r": 40, "t": 65, "b": 120},
+        font={"family": "Georgia, serif", "color": _BLACK},
     )
 
     # Annotation panel
@@ -1196,7 +1196,7 @@ def yield_curve_static(
     fig.add_annotation(
         text=info, xref="paper", yref="paper",
         x=0.0, y=1.01, showarrow=False,
-        font=dict(size=9, color=_GRAY_MID, family="Calibri, sans-serif"),
+        font={"size": 9, "color": _GRAY_MID, "family": "Calibri, sans-serif"},
         align="left", xanchor="left", yanchor="bottom",
     )
 
@@ -1256,76 +1256,76 @@ def yield_curve_animation(
     fig = go.Figure(data=first_traces, frames=frames)
 
     # Day slider
-    sliders = [dict(
-        active=0,
-        currentvalue=dict(prefix="Day: "),
-        pad=dict(t=50),
-        steps=[
-            dict(
-                args=[[str(int(d))], dict(
-                    frame=dict(duration=500, redraw=True),
-                    mode="immediate",
-                )],
-                method="animate",
-                label=str(int(d)),
-            )
+    sliders = [{
+        "active": 0,
+        "currentvalue": {"prefix": "Day: "},
+        "pad": {"t": 50},
+        "steps": [
+            {
+                "args": [[str(int(d))], {
+                    "frame": {"duration": 500, "redraw": True},
+                    "mode": "immediate",
+                }],
+                "method": "animate",
+                "label": str(int(d)),
+            }
             for d in days
         ],
-    )]
+    }]
 
     # Play / Pause buttons
-    updatemenus = [dict(
-        type="buttons", showactive=False,
-        x=0.1, y=0, xanchor="right", yanchor="top",
-        buttons=[
-            dict(label="Play", method="animate",
-                 args=[None, dict(frame=dict(duration=700, redraw=True),
-                                  fromcurrent=True)]),
-            dict(label="Pause", method="animate",
-                 args=[[None], dict(frame=dict(duration=0, redraw=False),
-                                    mode="immediate")]),
+    updatemenus = [{
+        "type": "buttons", "showactive": False,
+        "x": 0.1, "y": 0, "xanchor": "right", "yanchor": "top",
+        "buttons": [
+            {"label": "Play", "method": "animate",
+                 "args": [None, {"frame": {"duration": 700, "redraw": True},
+                                  "fromcurrent": True}]},
+            {"label": "Pause", "method": "animate",
+                 "args": [[None], {"frame": {"duration": 0, "redraw": False},
+                                    "mode": "immediate"}]},
         ],
-    )]
+    }]
 
     fig.update_layout(
-        title=dict(
-            text="Yield Curve Animation",
-            font=dict(size=16, color=_BLACK, family="Georgia, serif"),
-        ),
-        xaxis=dict(
-            title="Representative Maturity \u03c4 (days)",
-            showgrid=False,
-            zeroline=False,
-            linecolor=_BLACK,
-            linewidth=1.5,
-            tickfont=dict(size=11, color="#444"),
-            range=[0, 14],
-        ),
-        yaxis=dict(
-            title="Implied Yield  (1/P \u2212 1)",
-            showgrid=False,
-            zeroline=False,
-            linecolor=_BLACK,
-            linewidth=1.5,
-            tickfont=dict(size=10, color=_BLACK),
-            tickformat=".1%",
-            range=[0, y_upper],
-        ),
+        title={
+            "text": "Yield Curve Animation",
+            "font": {"size": 16, "color": _BLACK, "family": "Georgia, serif"},
+        },
+        xaxis={
+            "title": "Representative Maturity \u03c4 (days)",
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickfont": {"size": 11, "color": "#444"},
+            "range": [0, 14],
+        },
+        yaxis={
+            "title": "Implied Yield  (1/P \u2212 1)",
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickfont": {"size": 10, "color": _BLACK},
+            "tickformat": ".1%",
+            "range": [0, y_upper],
+        },
         plot_bgcolor="white",
         paper_bgcolor="white",
         height=550,
         sliders=sliders,
         updatemenus=updatemenus,
-        legend=dict(
-            x=0.0, y=-0.25,
-            orientation="h",
-            bgcolor="rgba(250,250,250,0.9)",
-            bordercolor="#CCC",
-            borderwidth=0.5,
-            font=dict(size=10, color="#333"),
-        ),
-        margin=dict(l=80, r=40, t=65, b=150),
-        font=dict(family="Georgia, serif", color=_BLACK),
+        legend={
+            "x": 0.0, "y": -0.25,
+            "orientation": "h",
+            "bgcolor": "rgba(250,250,250,0.9)",
+            "bordercolor": "#CCC",
+            "borderwidth": 0.5,
+            "font": {"size": 10, "color": "#333"},
+        },
+        margin={"l": 80, "r": 40, "t": 65, "b": 150},
+        font={"family": "Georgia, serif", "color": _BLACK},
     )
 
     return fig
@@ -1360,7 +1360,7 @@ def yield_curve_timeseries(
         yields = [1.0 / float(v) - 1.0 for v in bdf["midline"]]
         fig.add_trace(go.Scatter(
             x=days, y=yields, mode="lines",
-            line=dict(color=_BLACK, width=2, dash=_DASH_MAP.get(bucket, "solid")),
+            line={"color": _BLACK, "width": 2, "dash": _DASH_MAP.get(bucket, "solid")},
             name=f"{bucket} (\u03c4={BUCKET_TAU.get(bucket, '?')}d)",
         ))
         has_data = True
@@ -1369,41 +1369,41 @@ def yield_curve_timeseries(
         return None
 
     fig.update_layout(
-        title=dict(
-            text="Term Structure Evolution",
-            font=dict(size=16, color=_BLACK, family="Georgia, serif"),
-        ),
-        xaxis=dict(
-            title="Day",
-            showgrid=False,
-            zeroline=False,
-            linecolor=_BLACK,
-            linewidth=1.5,
-            tickfont=dict(size=11, color="#444"),
-        ),
-        yaxis=dict(
-            title="Implied Yield  (1/P \u2212 1)",
-            tickformat=".1%",
-            showgrid=True,
-            gridcolor=_GRAY_LIGHT,
-            zeroline=False,
-            linecolor=_BLACK,
-            linewidth=1.5,
-            tickfont=dict(size=10, color=_BLACK),
-        ),
+        title={
+            "text": "Term Structure Evolution",
+            "font": {"size": 16, "color": _BLACK, "family": "Georgia, serif"},
+        },
+        xaxis={
+            "title": "Day",
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickfont": {"size": 11, "color": "#444"},
+        },
+        yaxis={
+            "title": "Implied Yield  (1/P \u2212 1)",
+            "tickformat": ".1%",
+            "showgrid": True,
+            "gridcolor": _GRAY_LIGHT,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickfont": {"size": 10, "color": _BLACK},
+        },
         plot_bgcolor="white",
         paper_bgcolor="white",
         height=450,
-        legend=dict(
-            x=0.0, y=-0.20,
-            orientation="h",
-            bgcolor="rgba(250,250,250,0.9)",
-            bordercolor="#CCC",
-            borderwidth=0.5,
-            font=dict(size=10, color="#333"),
-        ),
-        margin=dict(l=80, r=40, t=65, b=100),
-        font=dict(family="Georgia, serif", color=_BLACK),
+        legend={
+            "x": 0.0, "y": -0.20,
+            "orientation": "h",
+            "bgcolor": "rgba(250,250,250,0.9)",
+            "bordercolor": "#CCC",
+            "borderwidth": 0.5,
+            "font": {"size": 10, "color": "#333"},
+        },
+        margin={"l": 80, "r": 40, "t": 65, "b": 100},
+        font={"family": "Georgia, serif", "color": _BLACK},
     )
 
     return fig
@@ -1449,7 +1449,7 @@ def _add_yield_curve_sections(
 
 def _fig_to_div(fig: go.Figure, div_id: str = "") -> str:
     """Convert Plotly figure to embeddable HTML div."""
-    return fig.to_html(full_html=False, include_plotlyjs=False, div_id=div_id)
+    return str(fig.to_html(full_html=False, include_plotlyjs=False, div_id=div_id))
 
 
 def build_treynor_dashboard(run_dir: Path) -> str:

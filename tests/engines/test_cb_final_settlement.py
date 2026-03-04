@@ -10,7 +10,6 @@ Tests cover:
 7. Backward compat: no CB → function not called
 """
 
-from decimal import Decimal
 
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.central_bank import CentralBank
@@ -19,7 +18,6 @@ from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.simulation import run_final_cb_settlement
 from bilancio.engines.system import System
-from bilancio.ops.banking import deposit_cash
 
 
 def _make_banking_system(
@@ -72,7 +70,7 @@ class TestBankRepaysSuccessfully:
     def test_loan_repaid_no_defaults(self):
         system = _make_banking_system(n_banks=1, reserves_per_bank=5000)
         # Issue a CB loan (bank borrows 1000)
-        loan_id = system.cb_lend_reserves("bank_1", 1000, day=0)
+        system.cb_lend_reserves("bank_1", 1000, day=0)
 
         # Bank now has 5000 + 1000 = 6000 reserves, owes 1000 * 1.03 = 1030
         result = run_final_cb_settlement(system)

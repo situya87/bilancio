@@ -2,8 +2,6 @@
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.domain.agents.central_bank import CentralBank
 
 

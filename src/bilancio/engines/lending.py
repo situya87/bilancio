@@ -163,13 +163,13 @@ def _get_borrower_exposure_with_info(
 ) -> int:
     """Return lender->borrower exposure using info service when present."""
     if info is not None:
-        return info.get_borrower_exposure(lender_id, borrower_id)
+        return int(info.get_borrower_exposure(lender_id, borrower_id))
     return _get_borrower_exposure(system, lender_id, borrower_id)
 
 
 def _compute_cascade_score(opportunity: dict[str, Any], max_downstream: int) -> float:
     """Compute cascade score used by cascade/blended ranking modes."""
-    norm_downstream = opportunity.get("downstream", 0) / max_downstream
+    norm_downstream: float = opportunity.get("downstream", 0) / max_downstream
     coverage = opportunity.get("coverage_ratio", Decimal("0.5"))
     return float(coverage) * norm_downstream * (1.0 - float(opportunity["p_default"]))
 

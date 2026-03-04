@@ -22,7 +22,6 @@ from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.lending import LendingConfig, run_lending_phase, run_loan_repayments
 from bilancio.engines.system import System
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 
@@ -70,12 +69,12 @@ def _build_lending_system(
 
 def _make_risk_params(**overrides) -> RiskAssessmentParams:
     """Create RiskAssessmentParams with sensible defaults for lending tests."""
-    defaults = dict(
-        lookback_window=10,
-        smoothing_alpha=Decimal("1.0"),
-        initial_prior=Decimal("0.15"),
-        use_issuer_specific=True,
-    )
+    defaults = {
+        "lookback_window": 10,
+        "smoothing_alpha": Decimal("1.0"),
+        "initial_prior": Decimal("0.15"),
+        "use_issuer_specific": True,
+    }
     defaults.update(overrides)
     return RiskAssessmentParams(**defaults)
 
@@ -267,7 +266,7 @@ class TestBlending:
             assessor.update_history(day=day, issuer_id="F01", defaulted=True)
 
         warmup = 10
-        profile = LenderProfile(
+        LenderProfile(
             kappa=Decimal("1.0"),
             risk_assessment_params=params,
             warmup_observations=warmup,
@@ -291,7 +290,7 @@ class TestBlending:
             assessor.update_history(day=day, issuer_id="F01", defaulted=False)
 
         warmup = 10
-        profile = LenderProfile(
+        LenderProfile(
             kappa=Decimal("1.0"),
             risk_assessment_params=params,
             warmup_observations=warmup,

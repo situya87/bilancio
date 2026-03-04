@@ -25,7 +25,6 @@ from bilancio.decision.intentions import (
 )
 from bilancio.decision.profiles import TraderProfile
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

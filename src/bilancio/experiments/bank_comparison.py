@@ -410,52 +410,52 @@ class BankComparisonRunner:
             if self.config.cb_lending_cutoff_day is not None
             else self.config.maturity_days
         )
-        return dict(
-            n_agents=self.config.n_agents,
-            maturity_days=self.config.maturity_days,
-            Q_total=self.config.Q_total,
-            liquidity_mode=self.config.liquidity_mode,
-            liquidity_agent=None,
-            base_seed=self.config.base_seed,
-            default_handling=self.config.default_handling,
-            dealer_enabled=False,  # No dealer in bank-only modes
-            dealer_config=None,
-            balanced_mode=True,
-            face_value=self.config.face_value,
-            outside_mid_ratio=outside_mid_ratio,
+        return {
+            "n_agents": self.config.n_agents,
+            "maturity_days": self.config.maturity_days,
+            "Q_total": self.config.Q_total,
+            "liquidity_mode": self.config.liquidity_mode,
+            "liquidity_agent": None,
+            "base_seed": self.config.base_seed,
+            "default_handling": self.config.default_handling,
+            "dealer_enabled": False,  # No dealer in bank-only modes
+            "dealer_config": None,
+            "balanced_mode": True,
+            "face_value": self.config.face_value,
+            "outside_mid_ratio": outside_mid_ratio,
             # No VBT/Dealer shares (bank_idle/bank_lend skip VBT/Dealer)
-            vbt_share_per_bucket=Decimal("0"),
-            dealer_share_per_bucket=Decimal("0"),
-            rollover_enabled=self.config.rollover_enabled,
-            detailed_dealer_logging=self.config.detailed_logging,
-            executor=self.executor,
-            quiet=self.config.quiet,
-            risk_assessment_enabled=self.config.risk_assessment_enabled,
-            risk_assessment_config=self.config.risk_assessment_config
+            "vbt_share_per_bucket": Decimal("0"),
+            "dealer_share_per_bucket": Decimal("0"),
+            "rollover_enabled": self.config.rollover_enabled,
+            "detailed_dealer_logging": self.config.detailed_logging,
+            "executor": self.executor,
+            "quiet": self.config.quiet,
+            "risk_assessment_enabled": self.config.risk_assessment_enabled,
+            "risk_assessment_config": self.config.risk_assessment_config
             if self.config.risk_assessment_enabled
             else None,
-            risk_aversion=self.config.risk_aversion,
-            planning_horizon=self.config.planning_horizon,
-            aggressiveness=self.config.aggressiveness,
-            default_observability=self.config.default_observability,
-            trading_motive=self.config.trading_motive,
-            lender_mode=False,
-            n_banks=self.config.n_banks,
-            reserve_ratio=self.config.reserve_ratio,
-            credit_risk_loading=self.config.credit_risk_loading,
-            max_borrower_risk=self.config.max_borrower_risk,
-            min_coverage_ratio=self.config.min_coverage_ratio,
-            cb_rate_escalation_slope=self.config.cb_rate_escalation_slope,
-            cb_max_outstanding_ratio=self.config.cb_max_outstanding_ratio,
-            spread_scale=self.config.spread_scale,
-            cb_lending_cutoff_day=effective_cutoff,
-            trading_rounds=self.config.trading_rounds,
+            "risk_aversion": self.config.risk_aversion,
+            "planning_horizon": self.config.planning_horizon,
+            "aggressiveness": self.config.aggressiveness,
+            "default_observability": self.config.default_observability,
+            "trading_motive": self.config.trading_motive,
+            "lender_mode": False,
+            "n_banks": self.config.n_banks,
+            "reserve_ratio": self.config.reserve_ratio,
+            "credit_risk_loading": self.config.credit_risk_loading,
+            "max_borrower_risk": self.config.max_borrower_risk,
+            "min_coverage_ratio": self.config.min_coverage_ratio,
+            "cb_rate_escalation_slope": self.config.cb_rate_escalation_slope,
+            "cb_max_outstanding_ratio": self.config.cb_max_outstanding_ratio,
+            "spread_scale": self.config.spread_scale,
+            "cb_lending_cutoff_day": effective_cutoff,
+            "trading_rounds": self.config.trading_rounds,
             # VBT informedness not relevant but pass defaults
-            alpha_vbt=Decimal("0"),
-            alpha_trader=Decimal("0"),
-            vbt_mid_sensitivity=Decimal("1.0"),
-            vbt_spread_sensitivity=Decimal("0.0"),
-        )
+            "alpha_vbt": Decimal("0"),
+            "alpha_trader": Decimal("0"),
+            "vbt_mid_sensitivity": Decimal("1.0"),
+            "vbt_spread_sensitivity": Decimal("0.0"),
+        }
 
     def _get_idle_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
         """Idle arm: banks hold deposits+reserves, NO bank lending."""
@@ -619,7 +619,7 @@ class BankComparisonRunner:
                             for _rep in range(reps_needed):
                                 seed = self._next_seed()
                                 arm_preps: dict[str, PreparedRun] = {}
-                                for arm_name, phase, getter_name, _regime in arm_defs:
+                                for arm_name, phase, _getter_name, _regime in arm_defs:
                                     runner = runners_cache[(outside_mid_ratio, arm_name)]
                                     arm_preps[arm_name] = runner._prepare_run(
                                         phase=phase,
@@ -670,7 +670,7 @@ class BankComparisonRunner:
 
         # Route results
         combo_results: dict[int, dict[str, Any]] = {}
-        for (_config, run_id, _opts), raw_result in zip(batch_runs, results):
+        for (_config, run_id, _opts), raw_result in zip(batch_runs, results, strict=False):
             combo_idx, arm_name = run_id_to_location[run_id]
             combo_results.setdefault(combo_idx, {})[arm_name] = raw_result
 
@@ -959,7 +959,10 @@ class BankComparisonRunner:
                     "system_loss_lend": str(r.system_loss_lend),
                     "system_loss_pct_idle": str(r.system_loss_pct_idle) if r.system_loss_pct_idle is not None else "",
                     "system_loss_pct_lend": str(r.system_loss_pct_lend) if r.system_loss_pct_lend is not None else "",
-                    "system_loss_bank_lending_effect": str(r.system_loss_bank_lending_effect) if r.system_loss_bank_lending_effect is not None else "",
+                    "system_loss_bank_lending_effect": (
+                        str(r.system_loss_bank_lending_effect)
+                        if r.system_loss_bank_lending_effect is not None else ""
+                    ),
                 }
                 writer.writerow(row)
 
@@ -1039,6 +1042,7 @@ class BankComparisonRunner:
             return
         try:
             import pandas as pd
+
             from bilancio.experiments.sweep_analysis import RingSweepAnalysis
 
             comp_df = pd.read_csv(self.comparison_path)
@@ -1060,7 +1064,7 @@ class BankComparisonRunner:
             for name, path in paths.items():
                 logger.info("Stats %s written to %s", name, path)
             print(f"Statistical analysis written to {self.aggregate_dir}", flush=True)
-        except Exception as e:
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Statistical analysis failed: %s", e)
             print(f"Warning: Statistical analysis failed: {e}", flush=True)
 
@@ -1082,6 +1086,6 @@ class BankComparisonRunner:
             for name, path in paths.items():
                 logger.info("Activity analysis %s: %s", name, path)
             print(f"Mechanism activity analysis written to {analysis_dir}", flush=True)
-        except Exception as e:
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Activity analysis failed: %s", e)
             print(f"Warning: Activity analysis failed: {e}", flush=True)

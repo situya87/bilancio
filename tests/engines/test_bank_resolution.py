@@ -7,8 +7,6 @@ Tests cover:
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.decision.profiles import BankProfile
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.central_bank import CentralBank
@@ -19,25 +17,18 @@ from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.bank_lending import (
     _execute_bank_loan,
     _increase_deposit,
-    run_bank_loan_repayments,
 )
 from bilancio.engines.banking_subsystem import (
-    BankLoanRecord,
     BankingSubsystem,
-    BankTreynorState,
     _get_bank_reserves,
     _get_deposit_at_bank,
-    _get_total_deposits,
     initialize_banking_subsystem,
 )
 from bilancio.engines.settlement import (
     _consume_reserves_from_bank,
-    _create_resolution_deposit,
-    _distribute_pro_rata_recovery,
     _expel_agent,
     _find_surviving_bank,
     _resolve_failed_bank,
-    _resolve_to_cash,
 )
 from bilancio.engines.simulation import (
     _has_outstanding_bank_loans,
@@ -47,7 +38,6 @@ from bilancio.engines.simulation import (
 )
 from bilancio.engines.system import System
 from bilancio.ops.banking import deposit_cash
-
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -147,7 +137,7 @@ class TestWinddownNoBanking:
 
         # run_until_stable should work without errors
         # (wind-down guard checks enable_bank_lending)
-        reports = run_until_stable(
+        run_until_stable(
             system, max_days=5, enable_banking=False, enable_bank_lending=False,
         )
         # Verify no winddown events
@@ -245,13 +235,12 @@ class TestResolveBankCBPriority:
 
     def test_resolve_bank_cb_priority(self):
         system = _make_banking_system(firm_cash=1000, bank_reserves=3000)
-        banking = _init_banking_subsystem(system)
+        _init_banking_subsystem(system)
 
         # Create a CB loan for bank_1 (manually, simulating borrowing)
         system.cb_lend_reserves("bank_1", 1000, day=0)
 
-        initial_reserves = _get_bank_reserves(system, "bank_1")
-        initial_cb_loans = system.state.cb_loans_outstanding
+        _get_bank_reserves(system, "bank_1")
 
         # Mark bank as defaulted (prerequisite for resolution)
         bank = system.state.agents["bank_1"]
@@ -278,7 +267,7 @@ class TestResolveBankUnderwater:
 
     def test_resolve_bank_underwater(self):
         system = _make_banking_system(firm_cash=500, bank_reserves=100, n_banks=1)
-        banking = _init_banking_subsystem(system)
+        _init_banking_subsystem(system)
 
         # Create CB loans exceeding reserves
         # Bank has 100 reserves, create CB loan of 200 (will add 200 reserves via CB lending)
@@ -335,7 +324,7 @@ class TestResolveDepositorSurvivingBank:
 
     def test_resolve_depositor_surviving_bank(self):
         system = _make_banking_system(n_banks=2, firm_cash=1000, bank_reserves=5000)
-        banking = _init_banking_subsystem(system)
+        _init_banking_subsystem(system)
 
         # H_1 has deposit at bank_1. bank_1 fails.
         # H_1 should get reserves at bank_2 (surviving).
@@ -372,7 +361,7 @@ class TestResolveDepositorNoSurvivingBank:
 
     def test_resolve_depositor_no_surviving_bank(self):
         system = _make_banking_system(n_banks=1, n_firms=1, firm_cash=500, bank_reserves=2000)
-        banking = _init_banking_subsystem(system)
+        _init_banking_subsystem(system)
 
         # Only 1 bank, which fails. Depositor has no surviving bank.
         bank = system.state.agents["bank_1"]
@@ -578,7 +567,7 @@ class TestFullSimAllLoansMature:
         assert _has_outstanding_bank_loans(banking)
 
         # Run simulation with bank lending enabled
-        reports = run_until_stable(
+        run_until_stable(
             system,
             max_days=20,
             enable_banking=True,
@@ -695,7 +684,7 @@ class TestFinalCBSettlementWritesOffLiabilities:
         """When a bank defaults in final CB settlement, its BankDeposit
         liabilities are written off (ObligationWrittenOff events logged)."""
         system = _make_banking_system(firm_cash=1000, bank_reserves=100)
-        banking = _init_banking_subsystem(system)
+        _init_banking_subsystem(system)
 
         # Issue a CB loan to bank_1, then drain its reserves so it can't repay.
         system.cb_lend_reserves("bank_1", 5000, day=0)
@@ -761,7 +750,7 @@ class TestWinddownCapComputed:
 
         # Start wind-down at day 10 — need 70+ days of wind-down
         system.state.day = 10
-        days = _run_bank_loan_winddown(system, banking)
+        _run_bank_loan_winddown(system, banking)
 
         # With include_overdue=True, it should resolve on the first day
         # (maturity_day=80 <= current_day=10 is False, but <=80 when day reaches 80)
