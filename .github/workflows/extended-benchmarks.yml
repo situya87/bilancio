@@ -27,6 +27,10 @@ jobs:
             script: scripts/run_stochastic_robustness_benchmark.py
             report_json: temp/stochastic_robustness_benchmark_report.json
             report_md: temp/stochastic_robustness_benchmark_report.md
+          - name: Scientific Comparison Benchmark
+            script: scripts/run_scientific_comparison_benchmark.py
+            report_json: temp/scientific_comparison_benchmark_report.json
+            report_md: temp/scientific_comparison_benchmark_report.md
           - name: Calibration / Stylized-Facts Benchmark
             script: scripts/run_stylized_facts_benchmark.py
             report_json: temp/stylized_facts_benchmark_report.json

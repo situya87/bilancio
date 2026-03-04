@@ -8,8 +8,8 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -48,6 +48,7 @@ def main() -> int:
         ("Metamorphic Behavior Benchmark", "scripts/run_metamorphic_behavior_benchmark.py"),
         ("Long-Horizon Drift Benchmark", "scripts/run_long_horizon_drift_benchmark.py"),
         ("Stochastic Robustness Benchmark", "scripts/run_stochastic_robustness_benchmark.py"),
+        ("Scientific Comparison Benchmark", "scripts/run_scientific_comparison_benchmark.py"),
         ("Calibration / Stylized-Facts Benchmark", "scripts/run_stylized_facts_benchmark.py"),
         ("Scenario Plugin Contract Benchmark", "scripts/run_plugin_contract_benchmark.py"),
         (
@@ -77,7 +78,7 @@ def main() -> int:
 
     report = {
         "benchmark": "Extended Benchmark Suite",
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "generated_at_utc": datetime.now(UTC).isoformat(),
         "status": suite_status,
         "total": len(runs),
         "passed": len(runs) - len(failed),
