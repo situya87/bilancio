@@ -44,8 +44,8 @@ class TestRatingAgencyAgent:
         assert ra.name == "My RA"
         assert ra.kind == AgentKind.RATING_AGENCY
         assert ra.kind == "rating_agency"
-        assert ra.asset_ids == []
-        assert ra.liability_ids == []
+        assert ra.asset_ids == set()
+        assert ra.liability_ids == set()
         assert ra.defaulted is False
 
     def test_kind_not_overridable(self):
@@ -157,8 +157,8 @@ class TestRatingMethodology:
             due_day=5,
         )
         system.state.contracts["PAY_test"] = payable
-        system.state.agents["f0"].liability_ids.append("PAY_test")
-        system.state.agents["f1"].asset_ids.append("PAY_test")
+        system.state.agents["f0"].liability_ids.add("PAY_test")
+        system.state.agents["f1"].asset_ids.add("PAY_test")
 
         profile = RatingProfile()
         p = _compute_rating(None, "f0", 0, profile, system)

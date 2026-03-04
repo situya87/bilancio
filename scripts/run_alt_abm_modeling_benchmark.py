@@ -153,30 +153,31 @@ def build_ring_system(
     ``payable_amount`` to the next agent in the ring.
     """
     system = System(default_mode=default_mode)
-    cb = CentralBank(id="CB1", name="Central Bank", kind="central_bank")
-    bank = Bank(id="B1", name="Bank 1", kind="bank")
-    system.add_agent(cb)
-    system.add_agent(bank)
+    with system.setup():
+        cb = CentralBank(id="CB1", name="Central Bank", kind="central_bank")
+        bank = Bank(id="B1", name="Bank 1", kind="bank")
+        system.add_agent(cb)
+        system.add_agent(bank)
 
-    for i in range(1, n_agents + 1):
-        h = Household(id=f"H{i}", name=f"Household {i}", kind="household")
-        system.add_agent(h)
-        system.mint_cash(f"H{i}", cash_per_agent)
+        for i in range(1, n_agents + 1):
+            h = Household(id=f"H{i}", name=f"Household {i}", kind="household")
+            system.add_agent(h)
+            system.mint_cash(f"H{i}", cash_per_agent)
 
-    for i in range(1, n_agents + 1):
-        from_id = f"H{i}"
-        to_id = f"H{(i % n_agents) + 1}"
-        due_day = 1 + ((i - 1) % maturity_days)
-        p = Payable(
-            id=system.new_contract_id("P"),
-            kind=InstrumentKind.PAYABLE,
-            amount=payable_amount,
-            denom="X",
-            asset_holder_id=to_id,
-            liability_issuer_id=from_id,
-            due_day=due_day,
-        )
-        system.add_contract(p)
+        for i in range(1, n_agents + 1):
+            from_id = f"H{i}"
+            to_id = f"H{(i % n_agents) + 1}"
+            due_day = 1 + ((i - 1) % maturity_days)
+            p = Payable(
+                id=system.new_contract_id("P"),
+                kind=InstrumentKind.PAYABLE,
+                amount=payable_amount,
+                denom="X",
+                asset_holder_id=to_id,
+                liability_issuer_id=from_id,
+                due_day=due_day,
+            )
+            system.add_contract(p)
 
     return system
 
@@ -239,7 +240,7 @@ def total_event_count(system: System) -> int:
 
 def has_negative_cash(system: System) -> bool:
     """Check whether any agent has negative cash balance."""
-    for aid, agent in system.state.agents.items():
+    for _aid, agent in system.state.agents.items():
         cash = 0
         for cid in agent.asset_ids:
             c = system.state.contracts.get(cid)
@@ -563,6 +564,11 @@ def run_category_dealer_effect() -> CategoryResult:
     agents have heterogeneous debt levels. This gives the dealer secondary market
     a chance to help: agents with small debts can sell claims to surplus-cash agents,
     providing liquidity that reduces defaults.
+
+    Note: At small ring sizes with standard VBT parameters and empty initial inventory,
+    the dealer may not produce trades. The mean condition (10 pts) passes because
+    active defaults == passive defaults; the strict improvement (5 pts) may not be
+    achievable — this is a genuine limitation of small-scale simulations.
     """
     seeds = [42, 43, 44]
     passive_defaults: list[int] = []

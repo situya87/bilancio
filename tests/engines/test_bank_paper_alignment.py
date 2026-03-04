@@ -11,25 +11,21 @@ Tests cover:
 
 from decimal import Decimal
 
-from bilancio.banking.types import Quote
 from bilancio.decision.profiles import BankProfile
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.firm import Firm
 from bilancio.domain.instruments.base import InstrumentKind
-from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.banking_subsystem import (
     BankingSubsystem,
     BankLoanRecord,
-    BankTreynorState,
     _get_bank_reserves,
     initialize_banking_subsystem,
 )
 from bilancio.engines.simulation import _run_cb_backstop, run_until_stable
 from bilancio.engines.system import System
 from bilancio.ops.banking import burn_bank_cash, deposit_cash
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -412,7 +408,7 @@ class TestCBFreezeAtStability:
         # (no payables means stability is reached immediately)
         assert not system.state.cb_lending_frozen
 
-        reports = run_until_stable(
+        run_until_stable(
             system,
             max_days=20,
             quiet_days=2,
@@ -477,7 +473,7 @@ class TestIntegration:
 
         # Create a CB loan (matures at day+2)
         current_day = system.state.day
-        loan_id = system.cb_lend_reserves("bank_1", 500, current_day)
+        system.cb_lend_reserves("bank_1", 500, current_day)
 
         # Verify CB loan exists
         cb_loans = [
@@ -496,7 +492,7 @@ class TestIntegration:
 
         # Run the simulation which includes CB loan repayment during run_day
         # Advance to the loan's maturity day
-        reports = run_until_stable(
+        run_until_stable(
             system,
             max_days=10,
             quiet_days=2,

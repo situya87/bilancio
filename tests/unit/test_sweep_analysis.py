@@ -16,10 +16,8 @@ Tests cover:
 
 import csv
 import json
-import math
 import random
 from decimal import Decimal
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -32,7 +30,6 @@ from bilancio.experiments.sweep_analysis import (
     _json_default,
     _result_to_dict,
 )
-
 
 # ============================================================
 # Helpers
@@ -861,12 +858,14 @@ class TestNReplicatesValidation:
 
     def test_config_rejects_zero(self):
         from pydantic import ValidationError
+
         from bilancio.experiments.balanced_comparison import BalancedComparisonConfig
         with pytest.raises(ValidationError):
             BalancedComparisonConfig(n_replicates=0)
 
     def test_config_rejects_negative(self):
         from pydantic import ValidationError
+
         from bilancio.experiments.balanced_comparison import BalancedComparisonConfig
         with pytest.raises(ValidationError):
             BalancedComparisonConfig(n_replicates=-1)

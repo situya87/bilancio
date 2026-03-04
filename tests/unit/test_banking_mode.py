@@ -21,7 +21,6 @@ from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.system import System
 from bilancio.scenarios.ring.compiler import compile_ring_explorer_balanced
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -110,7 +109,7 @@ class TestPolicyBankDeposit:
         """NonBankLender must be allowed to hold BankDeposit instruments."""
         policy = PolicyEngine.default()
         nbl = NonBankLender(id="NBL01", name="Non-Bank Lender")
-        bank = Bank(id="B1", name="Bank 1", kind="bank")
+        Bank(id="B1", name="Bank 1", kind="bank")
 
         deposit = BankDeposit(
             id="DEP_TEST",
@@ -129,7 +128,7 @@ class TestPolicyBankDeposit:
         """Household must be allowed to hold BankDeposit instruments."""
         policy = PolicyEngine.default()
         h = Household(id="H1", name="H1", kind="household")
-        bank = Bank(id="B1", name="Bank 1", kind="bank")
+        Bank(id="B1", name="Bank 1", kind="bank")
 
         deposit = BankDeposit(
             id="DEP_TEST",
@@ -148,7 +147,7 @@ class TestPolicyBankDeposit:
         """Firm must be allowed to hold BankDeposit instruments."""
         policy = PolicyEngine.default()
         f = Firm(id="F1", name="Firm 1", kind="firm")
-        bank = Bank(id="B1", name="Bank 1", kind="bank")
+        Bank(id="B1", name="Bank 1", kind="bank")
 
         deposit = BankDeposit(
             id="DEP_TEST",

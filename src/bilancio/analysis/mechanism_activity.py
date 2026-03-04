@@ -151,9 +151,9 @@ def _analyze_bank_activity(experiment_root: Path, comp_df: pd.DataFrame) -> pd.D
 
 def _parse_bank_events(events_path: Path) -> dict[str, Any]:
     """Extract bank lending metrics from a single run's events.jsonl."""
-    loans_issued: list[dict] = []
-    loans_repaid: list[dict] = []
-    loans_defaulted: list[dict] = []
+    loans_issued: list[dict[str, Any]] = []
+    loans_repaid: list[dict[str, Any]] = []
+    loans_defaulted: list[dict[str, Any]] = []
     cb_freeze_day: int | None = None
     n_payables_settled = 0
     n_payables_rolled = 0
@@ -255,11 +255,11 @@ def _analyze_nbfi_activity(experiment_root: Path, comp_df: pd.DataFrame) -> pd.D
 
 def _parse_nbfi_events(events_path: Path) -> dict[str, Any]:
     """Extract NBFI lending metrics from a single run's events.jsonl."""
-    loans_created: list[dict] = []
-    loans_repaid: list[dict] = []
-    loans_defaulted: list[dict] = []
-    rejections: list[dict] = []
-    agent_defaults: list[dict] = []
+    loans_created: list[dict[str, Any]] = []
+    loans_repaid: list[dict[str, Any]] = []
+    loans_defaulted: list[dict[str, Any]] = []
+    rejections: list[dict[str, Any]] = []
+    agent_defaults: list[dict[str, Any]] = []
     n_payables_settled = 0
     n_payables_rolled = 0
 
@@ -565,5 +565,5 @@ def _safe_mean(df: pd.DataFrame, col: str) -> float | None:
         series = pd.to_numeric(df[col], errors="coerce")
         val = series.mean()
         return float(val) if pd.notna(val) else None
-    except Exception:
+    except (KeyError, ValueError, TypeError):
         return None

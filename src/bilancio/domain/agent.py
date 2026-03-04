@@ -52,8 +52,8 @@ class Agent:
     id: AgentId
     name: str
     kind: str  # Still accepts str for backward compatibility
-    asset_ids: list[InstrId] = field(default_factory=list)
-    liability_ids: list[InstrId] = field(default_factory=list)
-    stock_ids: list[InstrId] = field(default_factory=list)
+    asset_ids: set[InstrId] = field(default_factory=set)
+    liability_ids: set[InstrId] = field(default_factory=set)
+    stock_ids: set[InstrId] = field(default_factory=set)
     defaulted: bool = False
     jurisdiction_id: str | None = None

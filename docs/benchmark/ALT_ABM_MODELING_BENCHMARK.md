@@ -106,7 +106,7 @@ n=25, κ=0.5, Dirichlet c=0.5, maturity=5. Seeds {42, 43, 44}. Each seed: passiv
 - **Mean condition (10 pts):** mean(active_defaults) ≤ mean(passive_defaults)
 - **Strict improvement (5 pts):** At least one seed where active_defaults < passive_defaults
 
-The dealer subsystem should weakly reduce defaults by providing liquidity through secondary market trading. Note: at small ring sizes with standard VBT parameters, the dealer may not produce any trades, limiting its impact.
+The dealer subsystem should weakly reduce defaults by providing liquidity through secondary market trading. Note: at small ring sizes with standard VBT parameters and empty initial inventory, the dealer may not produce trades, so active defaults typically equal passive defaults. The strict improvement condition is a stretch goal.
 
 ### 6. Boundary Behavior (10 pts)
 

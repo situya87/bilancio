@@ -9,26 +9,20 @@ Tests cover:
 - SweepAnalyzer integration (grouping, tables, treatment effects)
 """
 
-import math
 import pytest
 
 from bilancio.stats import (
     ConfidenceInterval,
-    TestResult,
-    CellStats,
-    PairedCellStats,
-    MorrisResult,
+    SweepAnalyzer,
     bootstrap_ci,
-    paired_wilcoxon,
-    paired_t_test,
     cohens_d,
     cohens_d_paired,
+    morris_screening,
+    paired_t_test,
+    paired_wilcoxon,
     summarize_cell,
     summarize_paired_cell,
-    morris_screening,
-    SweepAnalyzer,
 )
-
 
 # ============================================================
 # Bootstrap CI

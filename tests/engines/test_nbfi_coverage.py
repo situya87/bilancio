@@ -6,8 +6,6 @@ and the coverage gate in the NBFI lending engine.
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.domain.agents import Firm
 from bilancio.domain.agents.non_bank_lender import NonBankLender
 from bilancio.domain.instruments.base import InstrumentKind
@@ -63,8 +61,8 @@ def test_quality_adjusted_receivables_excludes_defaulted():
         due_day=3,
     )
     sys.state.contracts["P1"] = p1
-    sys.state.agents["FA"].asset_ids.append("P1")
-    sys.state.agents["FB"].liability_ids.append("P1")
+    sys.state.agents["FA"].asset_ids.add("P1")
+    sys.state.agents["FB"].liability_ids.add("P1")
 
     # Receivable from FC (healthy) - due day 3
     p2 = Payable(
@@ -77,8 +75,8 @@ def test_quality_adjusted_receivables_excludes_defaulted():
         due_day=3,
     )
     sys.state.contracts["P2"] = p2
-    sys.state.agents["FA"].asset_ids.append("P2")
-    sys.state.agents["FC"].liability_ids.append("P2")
+    sys.state.agents["FA"].asset_ids.add("P2")
+    sys.state.agents["FC"].liability_ids.add("P2")
 
     # Quality-adjusted should only count the healthy receivable
     qa = _quality_adjusted_receivables(sys, "FA", current_day=1, horizon=5)
@@ -109,8 +107,8 @@ def test_performing_loan_exposure_excludes_defaulted():
         maturity_days=5,
     )
     sys.state.contracts["L1"] = loan1
-    sys.state.agents["NBFI"].asset_ids.append("L1")
-    sys.state.agents["FA"].liability_ids.append("L1")
+    sys.state.agents["NBFI"].asset_ids.add("L1")
+    sys.state.agents["FA"].liability_ids.add("L1")
 
     # Loan to FB (defaulted)
     loan2 = NonBankLoan(
@@ -125,8 +123,8 @@ def test_performing_loan_exposure_excludes_defaulted():
         maturity_days=5,
     )
     sys.state.contracts["L2"] = loan2
-    sys.state.agents["NBFI"].asset_ids.append("L2")
-    sys.state.agents["FB"].liability_ids.append("L2")
+    sys.state.agents["NBFI"].asset_ids.add("L2")
+    sys.state.agents["FB"].liability_ids.add("L2")
 
     # Performing exposure should only count the healthy loan
     performing = _get_performing_loan_exposure(sys, "NBFI")
@@ -164,7 +162,7 @@ def test_assess_borrower_nbfi_coverage():
         liability_issuer_id="CB",
     )
     sys.state.contracts["C_FA"] = cash
-    sys.state.agents["FA"].asset_ids.append("C_FA")
+    sys.state.agents["FA"].asset_ids.add("C_FA")
 
     # Receivable from FC (healthy)
     p1 = Payable(
@@ -177,7 +175,7 @@ def test_assess_borrower_nbfi_coverage():
         due_day=3,
     )
     sys.state.contracts["PR1"] = p1
-    sys.state.agents["FA"].asset_ids.append("PR1")
+    sys.state.agents["FA"].asset_ids.add("PR1")
 
     # Obligation to FC (due day 3)
     p2 = Payable(
@@ -190,7 +188,7 @@ def test_assess_borrower_nbfi_coverage():
         due_day=3,
     )
     sys.state.contracts["PL1"] = p2
-    sys.state.agents["FA"].liability_ids.append("PL1")
+    sys.state.agents["FA"].liability_ids.add("PL1")
 
     # Loan amount=100, rate=0.10 -> repayment=110
     # Coverage = 100 / 110 ~ 0.909
@@ -226,7 +224,7 @@ def test_coverage_gate_rejects_low_coverage():
         liability_issuer_id="CB",
     )
     sys.state.contracts["C_NBFI"] = lender_cash
-    lender.asset_ids.append("C_NBFI")
+    lender.asset_ids.add("C_NBFI")
 
     # Create a firm with a shortfall but low coverage
     firm = Firm(id="F1", name="Firm 1", kind="firm")
@@ -242,7 +240,7 @@ def test_coverage_gate_rejects_low_coverage():
         liability_issuer_id="CB",
     )
     sys.state.contracts["C_F1"] = firm_cash
-    firm.asset_ids.append("C_F1")
+    firm.asset_ids.add("C_F1")
 
     # Big obligation due soon
     # Also need a dummy agent for the payable holder
@@ -259,8 +257,8 @@ def test_coverage_gate_rejects_low_coverage():
         due_day=2,
     )
     sys.state.contracts["P_F1"] = payable
-    firm.liability_ids.append("P_F1")
-    fc.asset_ids.append("P_F1")
+    firm.liability_ids.add("P_F1")
+    fc.asset_ids.add("P_F1")
 
     # Run with coverage gate enabled (min_coverage=0.5)
     config = LendingConfig(
@@ -274,7 +272,7 @@ def test_coverage_gate_rejects_low_coverage():
     loan_events = [e for e in events if e["kind"] == "NonBankLoanCreated"]
 
     assert len(rejection_events) >= 1, f"Expected rejection event, got events: {events}"
-    assert len(loan_events) == 0, f"Should not create loans for low-coverage borrower"
+    assert len(loan_events) == 0, "Should not create loans for low-coverage borrower"
 
 
 def test_coverage_gate_passes_high_coverage():
@@ -301,7 +299,7 @@ def test_coverage_gate_passes_high_coverage():
         liability_issuer_id="CB",
     )
     sys.state.contracts["C_NBFI"] = lender_cash
-    lender.asset_ids.append("C_NBFI")
+    lender.asset_ids.add("C_NBFI")
 
     # Create a firm with a shortfall but GOOD coverage
     firm = Firm(id="F1", name="Firm 1", kind="firm")
@@ -317,7 +315,7 @@ def test_coverage_gate_passes_high_coverage():
         liability_issuer_id="CB",
     )
     sys.state.contracts["C_F1"] = firm_cash
-    firm.asset_ids.append("C_F1")
+    firm.asset_ids.add("C_F1")
 
     # Dummy creditor
     fc2 = Firm(id="FC2", name="Firm Creditor 2", kind="firm")
@@ -334,8 +332,8 @@ def test_coverage_gate_passes_high_coverage():
         due_day=2,
     )
     sys.state.contracts["P_F1"] = payable
-    firm.liability_ids.append("P_F1")
-    fc2.asset_ids.append("P_F1")
+    firm.liability_ids.add("P_F1")
+    fc2.asset_ids.add("P_F1")
 
     # Large receivable from healthy firm
     receivable = Payable(
@@ -348,8 +346,8 @@ def test_coverage_gate_passes_high_coverage():
         due_day=2,
     )
     sys.state.contracts["R_F1"] = receivable
-    firm.asset_ids.append("R_F1")
-    fc2.liability_ids.append("R_F1")
+    firm.asset_ids.add("R_F1")
+    fc2.liability_ids.add("R_F1")
 
     # Run with coverage gate enabled (min_coverage=0.5)
     config = LendingConfig(

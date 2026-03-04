@@ -2,8 +2,6 @@
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.analysis.balances import agent_balance, system_trial_balance
 from bilancio.domain.agents import Bank, CentralBank, Household
 from bilancio.engines.system import System
@@ -135,15 +133,12 @@ class TestBalanceAnalytics:
         # Ensure all invariants pass
         system.assert_invariants()
 
-    def test_duplicate_ref_invariant(self):
-        """Test the duplicate reference invariant.
+    def test_duplicate_ref_impossible_with_sets(self):
+        """Verify that set-based asset_ids/liability_ids prevent duplicates structurally.
 
-        Creates System with agents.
-        Mints cash.
-        Manually duplicates a reference to trigger the invariant.
-        Verifies the invariant catches the duplicate.
+        With the list→set migration, duplicate references are impossible by construction.
+        This test verifies that .add() on an existing element is a no-op.
         """
-        # Create system and agents
         system = System()
         cb = CentralBank(id="CB01", name="Central Bank", kind="central_bank")
         household = Household(id="HH01", name="Test Household", kind="household")
@@ -151,31 +146,16 @@ class TestBalanceAnalytics:
         system.bootstrap_cb(cb)
         system.add_agent(household)
 
-        # Mint cash
         cash_id = system.mint_cash("HH01", 1000)
-
-        # System should be valid at this point
         system.assert_invariants()
 
-        # Now manually introduce a duplicate reference to test invariant
-        # This simulates a bug where the same contract ID appears twice in asset_ids
-        household.asset_ids.append(cash_id)  # Add duplicate
+        # Adding the same ID again is a no-op for sets
+        size_before = len(household.asset_ids)
+        household.asset_ids.add(cash_id)
+        assert len(household.asset_ids) == size_before
 
-        # The invariant should catch this duplicate
-        with pytest.raises(AssertionError, match="duplicate asset ref"):
-            system.assert_invariants()
-
-        # Remove the duplicate to restore system integrity
-        household.asset_ids.remove(cash_id)
-
-        # System should be valid again
+        # Invariants still hold — no duplicates possible
         system.assert_invariants()
-
-        # Test duplicate liability reference as well
-        cb.liability_ids.append(cash_id)  # Add duplicate liability ref
-
-        with pytest.raises(AssertionError, match="duplicate liability ref"):
-            system.assert_invariants()
 
     def test_comprehensive_multi_agent_scenario(self):
         """Test a complex scenario with multiple agents and instrument types."""

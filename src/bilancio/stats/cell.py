@@ -13,8 +13,8 @@ from collections.abc import Sequence
 
 from bilancio.stats.bootstrap import bootstrap_ci
 from bilancio.stats.effect_size import cohens_d_paired
-from bilancio.stats.significance import paired_wilcoxon, paired_t_test
-from bilancio.stats.types import CellStats, ConfidenceInterval, PairedCellStats
+from bilancio.stats.significance import paired_t_test, paired_wilcoxon
+from bilancio.stats.types import CellStats, PairedCellStats
 
 
 def summarize_cell(
@@ -130,7 +130,7 @@ def summarize_paired_cell(
     )
 
     # Treatment effect (control - treatment)
-    differences = [c - t for c, t in zip(control, treatment)]
+    differences = [c - t for c, t in zip(control, treatment, strict=False)]
     effect_ci = bootstrap_ci(
         differences,
         confidence=confidence,

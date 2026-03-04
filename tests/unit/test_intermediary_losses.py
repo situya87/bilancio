@@ -13,7 +13,6 @@ import pytest
 from bilancio.analysis.report import compute_intermediary_losses, compute_run_level_metrics
 from bilancio.experiments.balanced_comparison import BalancedComparisonResult
 
-
 # ---------------------------------------------------------------------------
 # Helper: minimal kwargs for BalancedComparisonResult
 # ---------------------------------------------------------------------------

@@ -40,7 +40,6 @@ from bilancio.decision.activity import (
 )
 from bilancio.information.estimates import Estimate
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 

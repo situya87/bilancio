@@ -12,22 +12,15 @@ Key behaviors tested:
 
 from __future__ import annotations
 
-from decimal import Decimal
-from typing import Any
-
-from bilancio.config.models import RingExplorerGeneratorConfig
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.household import Household
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
-from bilancio.domain.instruments.means_of_payment import BankDeposit, ReserveDeposit
 from bilancio.domain.policy import PolicyEngine
-from bilancio.engines.settlement import settle_due
 from bilancio.engines.simulation import run_day
 from bilancio.engines.system import System
 from bilancio.ops.banking import deposit_cash
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -215,7 +208,7 @@ class TestRingWithBanksSettlement:
         )
 
         # Run 3 days of simulation
-        for day in range(3):
+        for _day in range(3):
             run_day(sys, enable_dealer=False, enable_lender=False)
 
             # Check bank reserves after each day
@@ -329,7 +322,7 @@ class TestRingInterBankSettlement:
         sys.mint_reserves("B1", 5000)
         sys.mint_reserves("B2", 5000)
 
-        b1_reserves_before = sum(
+        sum(
             sys.state.contracts[cid].amount
             for cid in sys.state.agents["B1"].asset_ids
             if sys.state.contracts.get(cid)

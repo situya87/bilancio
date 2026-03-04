@@ -31,7 +31,6 @@ from bilancio.engines.lending import (
 )
 from bilancio.engines.system import System
 
-
 # ── Setup helpers ───────────────────────────────────────────────────
 
 
@@ -56,7 +55,7 @@ def _add_lender(sys: System, cash: int = 10000) -> str:
         liability_issuer_id="CB",
     )
     sys.state.contracts["C_NBFI"] = c
-    lender.asset_ids.append("C_NBFI")
+    lender.asset_ids.add("C_NBFI")
     return "NBFI"
 
 
@@ -75,7 +74,7 @@ def _add_firm(sys: System, firm_id: str, cash: int = 0) -> str:
             liability_issuer_id="CB",
         )
         sys.state.contracts[cid] = c
-        firm.asset_ids.append(cid)
+        firm.asset_ids.add(cid)
     return firm_id
 
 
@@ -98,8 +97,8 @@ def _add_payable(
         due_day=due_day,
     )
     sys.state.contracts[payable_id] = p
-    sys.state.agents[creditor_id].asset_ids.append(payable_id)
-    sys.state.agents[debtor_id].liability_ids.append(payable_id)
+    sys.state.agents[creditor_id].asset_ids.add(payable_id)
+    sys.state.agents[debtor_id].liability_ids.add(payable_id)
     return payable_id
 
 
@@ -335,7 +334,7 @@ class TestMaturityMatching:
                 min_coverage_ratio=Decimal("0"),
             ),
         )
-        events = run_lending_phase(sys, current_day=0, lending_config=config)
+        run_lending_phase(sys, current_day=0, lending_config=config)
         # Should not crash; loan maturity >= 3 enforced internally
 
 
@@ -927,7 +926,7 @@ class TestActionSpecConfigWiring:
     def test_action_spec_path_includes_046_fields(self):
         """LendingConfig built from action-spec path should include all
         Plan 046 fields when LenderScenarioConfig provides them."""
-        from bilancio.config.models import LenderScenarioConfig, ScenarioConfig
+        from bilancio.config.models import LenderScenarioConfig
 
         # Build a ScenarioConfig with lender settings that exercise Plan 046
         lender_cfg = LenderScenarioConfig(

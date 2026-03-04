@@ -29,7 +29,6 @@ from bilancio.analysis.treynor_viz import (
     yield_curve_timeseries,
 )
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -37,17 +36,17 @@ from bilancio.analysis.treynor_viz import (
 @pytest.fixture
 def dealer_params():
     """Typical dealer parameters for a short bucket."""
-    return dict(
-        vbt_mid=0.855,
-        vbt_spread=0.040,
-        inventory_x=200.0,
-        X_star=660.0,
-        lambda_=0.0295,
-        inside_width=0.00118,
-        ticket_size=20.0,
-        bucket_name="short",
-        day=3,
-    )
+    return {
+        "vbt_mid": 0.855,
+        "vbt_spread": 0.040,
+        "inventory_x": 200.0,
+        "X_star": 660.0,
+        "lambda_": 0.0295,
+        "inside_width": 0.00118,
+        "ticket_size": 20.0,
+        "bucket_name": "short",
+        "day": 3,
+    }
 
 
 @pytest.fixture
@@ -55,41 +54,41 @@ def dealer_snapshots_df():
     """Minimal dealer_state.csv DataFrame with 3 days."""
     rows = []
     for d in [0, 1, 2]:
-        rows.append(dict(
-            day=d,
-            bucket="short",
-            vbt_mid=0.855 - 0.005 * d,
-            vbt_spread=0.040 + 0.002 * d,
-            inventory=d * 3,
-            ticket_size=20,
-            X_star=660,
-            lambda_=0.0295,
-            inside_width=0.00118,
-            midline=0.855,
-            bid=0.834,
-            ask=0.856,
-        ))
+        rows.append({
+            "day": d,
+            "bucket": "short",
+            "vbt_mid": 0.855 - 0.005 * d,
+            "vbt_spread": 0.040 + 0.002 * d,
+            "inventory": d * 3,
+            "ticket_size": 20,
+            "X_star": 660,
+            "lambda_": 0.0295,
+            "inside_width": 0.00118,
+            "midline": 0.855,
+            "bid": 0.834,
+            "ask": 0.856,
+        })
     return pd.DataFrame(rows)
 
 
 @pytest.fixture
 def bank_params():
     """Typical bank pricing parameters."""
-    return dict(
-        i_R=0.01,
-        i_B=0.05,
-        symmetric_capacity=500,
-        ticket_size=20,
-        inventory=100,
-        cash_tightness=0.3,
-        risk_index=0.1,
-        alpha=0.5,
-        gamma=0.2,
-        inside_width=0.008,
-        lambda_=0.2,
-        bank_id="BK01",
-        day=2,
-    )
+    return {
+        "i_R": 0.01,
+        "i_B": 0.05,
+        "symmetric_capacity": 500,
+        "ticket_size": 20,
+        "inventory": 100,
+        "cash_tightness": 0.3,
+        "risk_index": 0.1,
+        "alpha": 0.5,
+        "gamma": 0.2,
+        "inside_width": 0.008,
+        "lambda_": 0.2,
+        "bank_id": "BK01",
+        "day": 2,
+    }
 
 
 @pytest.fixture
@@ -97,21 +96,21 @@ def bank_snapshots_df():
     """Minimal bank_state.csv DataFrame with 3 days."""
     rows = []
     for d in [0, 1, 2]:
-        rows.append(dict(
-            day=d,
-            bank_id="BK01",
-            reserve_remuneration_rate=0.01,
-            cb_borrowing_rate=0.05,
-            symmetric_capacity=500,
-            ticket_size=20,
-            inside_width=0.008,
-            inventory=50 + d * 10,
-            cash_tightness=0.3,
-            risk_index=0.1,
-            alpha=0.5,
-            gamma=0.2,
-            lambda_=0.2,
-        ))
+        rows.append({
+            "day": d,
+            "bank_id": "BK01",
+            "reserve_remuneration_rate": 0.01,
+            "cb_borrowing_rate": 0.05,
+            "symmetric_capacity": 500,
+            "ticket_size": 20,
+            "inside_width": 0.008,
+            "inventory": 50 + d * 10,
+            "cash_tightness": 0.3,
+            "risk_index": 0.1,
+            "alpha": 0.5,
+            "gamma": 0.2,
+            "lambda_": 0.2,
+        })
     return pd.DataFrame(rows)
 
 
@@ -121,26 +120,26 @@ def yield_curve_df():
     rows = []
     for d in [0, 1, 2]:
         # Short bucket: highest price (lowest discount)
-        rows.append(dict(
-            day=d, bucket="short",
-            vbt_mid=0.95 - 0.01 * d, vbt_spread=0.04,
-            midline=0.94 - 0.01 * d, bid=0.92 - 0.01 * d, ask=0.96 - 0.01 * d,
-            inventory=3, ticket_size=20, X_star=660, lambda_=0.03, inside_width=0.001,
-        ))
+        rows.append({
+            "day": d, "bucket": "short",
+            "vbt_mid": 0.95 - 0.01 * d, "vbt_spread": 0.04,
+            "midline": 0.94 - 0.01 * d, "bid": 0.92 - 0.01 * d, "ask": 0.96 - 0.01 * d,
+            "inventory": 3, "ticket_size": 20, "X_star": 660, "lambda_": 0.03, "inside_width": 0.001,
+        })
         # Mid bucket: medium price
-        rows.append(dict(
-            day=d, bucket="mid",
-            vbt_mid=0.85 - 0.02 * d, vbt_spread=0.06,
-            midline=0.84 - 0.02 * d, bid=0.81 - 0.02 * d, ask=0.87 - 0.02 * d,
-            inventory=2, ticket_size=20, X_star=660, lambda_=0.03, inside_width=0.001,
-        ))
+        rows.append({
+            "day": d, "bucket": "mid",
+            "vbt_mid": 0.85 - 0.02 * d, "vbt_spread": 0.06,
+            "midline": 0.84 - 0.02 * d, "bid": 0.81 - 0.02 * d, "ask": 0.87 - 0.02 * d,
+            "inventory": 2, "ticket_size": 20, "X_star": 660, "lambda_": 0.03, "inside_width": 0.001,
+        })
         # Long bucket: lowest price (highest discount)
-        rows.append(dict(
-            day=d, bucket="long",
-            vbt_mid=0.75 - 0.03 * d, vbt_spread=0.08,
-            midline=0.73 - 0.03 * d, bid=0.69 - 0.03 * d, ask=0.77 - 0.03 * d,
-            inventory=1, ticket_size=20, X_star=660, lambda_=0.03, inside_width=0.001,
-        ))
+        rows.append({
+            "day": d, "bucket": "long",
+            "vbt_mid": 0.75 - 0.03 * d, "vbt_spread": 0.08,
+            "midline": 0.73 - 0.03 * d, "bid": 0.69 - 0.03 * d, "ask": 0.77 - 0.03 * d,
+            "inventory": 1, "ticket_size": 20, "X_star": 660, "lambda_": 0.03, "inside_width": 0.001,
+        })
     return pd.DataFrame(rows)
 
 
@@ -181,9 +180,9 @@ class TestDealerPricingPlane:
     def test_vbt_bounds(self, dealer_params):
         """Ask curve should not exceed A and bid curve should not go below B."""
         M = dealer_params["vbt_mid"]
-        O = dealer_params["vbt_spread"]
-        A = M + O / 2
-        B = M - O / 2
+        spread = dealer_params["vbt_spread"]
+        A = M + spread / 2
+        B = M - spread / 2
         fig = dealer_pricing_plane(**dealer_params)
         ask_trace = [t for t in fig.data if t.name == "a(x) ask"][0]
         bid_trace = [t for t in fig.data if t.name == "b(x) bid"][0]
@@ -210,9 +209,9 @@ class TestDealerPricingPlane:
     def test_y_axis_ticks(self, dealer_params):
         """Y-axis should have ticks at B, M, A."""
         M = dealer_params["vbt_mid"]
-        O = dealer_params["vbt_spread"]
-        A = M + O / 2
-        B = M - O / 2
+        spread = dealer_params["vbt_spread"]
+        A = M + spread / 2
+        B = M - spread / 2
         fig = dealer_pricing_plane(**dealer_params)
         tick_vals = list(fig.layout.yaxis.tickvals)
         assert len(tick_vals) == 3
@@ -855,10 +854,10 @@ class TestYieldCurveTimeseries:
 
     def test_single_bucket(self):
         df = pd.DataFrame([
-            dict(day=0, bucket="short", vbt_mid=0.95, vbt_spread=0.04,
-                 midline=0.94, bid=0.92, ask=0.96),
-            dict(day=1, bucket="short", vbt_mid=0.94, vbt_spread=0.04,
-                 midline=0.93, bid=0.91, ask=0.95),
+            {"day": 0, "bucket": "short", "vbt_mid": 0.95, "vbt_spread": 0.04,
+                 "midline": 0.94, "bid": 0.92, "ask": 0.96},
+            {"day": 1, "bucket": "short", "vbt_mid": 0.94, "vbt_spread": 0.04,
+                 "midline": 0.93, "bid": 0.91, "ask": 0.95},
         ])
         fig = yield_curve_timeseries(df)
         assert isinstance(fig, go.Figure)

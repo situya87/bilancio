@@ -121,7 +121,7 @@ def _offer_post_sweep_analysis(
             click.echo(f'\n  Open with: open "{first_path}"')
         else:
             click.echo("  No analysis outputs generated.")
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
         click.echo(f"  Post-sweep analysis failed: {e}")
 
 
@@ -1371,7 +1371,7 @@ def sweep_nbfi(
         name_prefix=job_id,
         n_agents=n_agents,
         maturity_days=maturity_days,
-        Q_total=q_total,
+        Q_total=Decimal(q_total),
         base_seed=base_seed,
         n_replicates=n_replicates,
         kappas=_decimal_list(kappas),
@@ -1399,7 +1399,7 @@ def sweep_nbfi(
     completed = sum(1 for r in results if r.lending_effect is not None)
     improved = sum(1 for r in results if r.lending_effect and r.lending_effect > 0)
 
-    click.echo(f"\nNBFI comparison complete!")
+    click.echo("\nNBFI comparison complete!")
     click.echo(f"  Total combos: {len(results)}")
     click.echo(f"  Completed: {completed}")
     click.echo(f"  Lending helped: {improved}")
@@ -1429,7 +1429,10 @@ def sweep_nbfi(
 @click.option("--quiet/--no-quiet", default=True, help="Suppress per-event output")
 @click.option("--n-banks", type=int, default=5, help="Number of banks")
 @click.option("--reserve-ratio", type=Decimal, default=Decimal("0.50"), help="Initial reserves / total deposits")
-@click.option("--credit-risk-loading", type=Decimal, default=Decimal("0.5"), help="Bank sensitivity to borrower risk (0=flat rate, 0.5=credit-sensitive)")
+@click.option(
+    "--credit-risk-loading", type=Decimal, default=Decimal("0.5"),
+    help="Bank sensitivity to borrower risk (0=flat rate, 0.5=credit-sensitive)",
+)
 @click.option("--max-borrower-risk", type=Decimal, default=Decimal("0.4"), help="Credit rationing threshold (reject if P_default > this)")
 @click.option("--min-coverage-ratio", type=Decimal, default=Decimal("0"), help="Min coverage ratio for loan approval")
 @click.option("--cb-rate-escalation-slope", type=Decimal, default=Decimal("0.05"), help="CB cost pressure slope")
@@ -1503,7 +1506,7 @@ def sweep_bank(
         name_prefix=job_id,
         n_agents=n_agents,
         maturity_days=maturity_days,
-        Q_total=q_total,
+        Q_total=Decimal(q_total),
         base_seed=base_seed,
         n_replicates=n_replicates,
         kappas=_decimal_list(kappas),
@@ -1537,7 +1540,7 @@ def sweep_bank(
     completed = sum(1 for r in results if r.bank_lending_effect is not None)
     improved = sum(1 for r in results if r.bank_lending_effect and r.bank_lending_effect > 0)
 
-    click.echo(f"\nBank lending comparison complete!")
+    click.echo("\nBank lending comparison complete!")
     click.echo(f"  Total combos: {len(results)}")
     click.echo(f"  Completed: {completed}")
     click.echo(f"  Lending helped: {improved}")

@@ -47,7 +47,7 @@ def _reassign_payable_owner(
     if old_agent and contract_id in old_agent.asset_ids:
         old_agent.asset_ids.remove(contract_id)
     if new_agent and contract_id not in new_agent.asset_ids:
-        new_agent.asset_ids.append(contract_id)
+        new_agent.asset_ids.add(contract_id)
 
     # Update the payable's ownership fields
     payable.asset_holder_id = new_owner
@@ -206,7 +206,7 @@ def estimate_forward_stress(
     total_due = Decimal(0)
     total_cash = Decimal(0)
 
-    for agent_id, agent in system.state.agents.items():
+    for _agent_id, agent in system.state.agents.items():
         if agent.defaulted:
             continue
 
@@ -541,7 +541,7 @@ def _sync_payable_ownership(
                 old_holder_agent.asset_ids.remove(payable_id)
 
             if new_holder_agent and payable_id not in new_holder_agent.asset_ids:
-                new_holder_agent.asset_ids.append(payable_id)
+                new_holder_agent.asset_ids.add(payable_id)
 
             # Update payable's holder_id (secondary market holder)
             # Keep asset_holder_id as the original creditor

@@ -64,7 +64,7 @@ def cohens_d_paired(
     if n < 2:
         raise ValueError(f"Need >= 2 pairs, got {n}")
 
-    differences = [c - t for c, t in zip(control, treatment)]
+    differences = [c - t for c, t in zip(control, treatment, strict=False)]
     mean_d = sum(differences) / n
     var_d = sum((d - mean_d) ** 2 for d in differences) / (n - 1)
     sd_d = math.sqrt(var_d)

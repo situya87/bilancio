@@ -41,7 +41,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Any
 
 from bilancio.stats.cell import summarize_cell, summarize_paired_cell
 from bilancio.stats.sensitivity import morris_screening
@@ -84,11 +85,11 @@ class CellTable:
     metric: str
     rows: list[CellTableRow]
 
-    def to_dicts(self) -> list[dict]:
+    def to_dicts(self) -> list[dict[str, Any]]:
         """Flatten to list of dicts for CSV/DataFrame conversion."""
         result = []
         for row in self.rows:
-            d = dict(row.params)
+            d: dict[str, Any] = dict(row.params)
             d["n"] = row.stats.n
             d["mean"] = row.stats.mean
             d["std"] = row.stats.std
@@ -111,11 +112,11 @@ class EffectTable:
     treatment_suffix: str
     rows: list[EffectTableRow]
 
-    def to_dicts(self) -> list[dict]:
+    def to_dicts(self) -> list[dict[str, Any]]:
         """Flatten to list of dicts for CSV/DataFrame conversion."""
         result = []
         for row in self.rows:
-            d = dict(row.params)
+            d: dict[str, Any] = dict(row.params)
             s = row.stats
             d["n_pairs"] = s.n_pairs
             d["control_mean"] = s.control.mean
@@ -130,7 +131,7 @@ class EffectTable:
             result.append(d)
         return result
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, Any]:
         """Aggregate summary across all cells."""
         if not self.rows:
             return {}
@@ -179,15 +180,15 @@ class SweepAnalyzer:
 
     def __init__(
         self,
-        records: Sequence[dict],
+        records: Sequence[dict[str, Any]],
         param_fields: Sequence[str],
     ) -> None:
         self.records = list(records)
         self.param_fields = list(param_fields)
-        self._cells: dict[CellKey, list[dict]] | None = None
+        self._cells: dict[CellKey, list[dict[str, Any]]] | None = None
 
     @property
-    def cells(self) -> dict[CellKey, list[dict]]:
+    def cells(self) -> dict[CellKey, list[dict[str, Any]]]:
         """Lazily group records into cells."""
         if self._cells is None:
             self._cells = self._group_into_cells()
@@ -364,9 +365,9 @@ class SweepAnalyzer:
 
     # --- Internal helpers ---
 
-    def _group_into_cells(self) -> dict[CellKey, list[dict]]:
+    def _group_into_cells(self) -> dict[CellKey, list[dict[str, Any]]]:
         """Group records by parameter values."""
-        cells: dict[CellKey, list[dict]] = defaultdict(list)
+        cells: dict[CellKey, list[dict[str, Any]]] = defaultdict(list)
         for record in self.records:
             key = CellKey(
                 values=tuple(
@@ -377,7 +378,7 @@ class SweepAnalyzer:
         return dict(cells)
 
     def _extract_metric(
-        self, records: list[dict], field: str
+        self, records: list[dict[str, Any]], field: str
     ) -> list[float]:
         """Extract numeric values for a field, skipping None/missing."""
         values = []
@@ -392,7 +393,7 @@ class SweepAnalyzer:
 
     def _extract_paired_metrics(
         self,
-        records: list[dict],
+        records: list[dict[str, Any]],
         control_field: str,
         treatment_field: str,
     ) -> tuple[list[float], list[float]]:

@@ -7,15 +7,14 @@ import pytest
 from bilancio.analysis.balances import agent_balance
 from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.system import System
-
 from dashboards.simulator.lib.bridge import (
+    _find_central_bank,
     add_agent,
     create_cb_loan,
     create_payable,
     mint_cash,
     mint_reserves,
     replay_action,
-    _find_central_bank,
 )
 
 

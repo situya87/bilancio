@@ -28,12 +28,12 @@ class TestFlowSensitivityConfig:
 
     def test_config_rejects_negative(self) -> None:
         """flow_sensitivity must be >= 0."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             BalancedDealerConfig(enabled=True, flow_sensitivity=Decimal("-0.1"))
 
     def test_config_rejects_above_one(self) -> None:
         """flow_sensitivity must be <= 1."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             BalancedDealerConfig(enabled=True, flow_sensitivity=Decimal("1.1"))
 
     def test_vbt_profile_receives_value(self) -> None:

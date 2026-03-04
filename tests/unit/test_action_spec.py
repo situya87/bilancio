@@ -1,23 +1,24 @@
 """Unit tests for action spec data model and factories."""
 
-import pytest
 from decimal import Decimal
 
+import pytest
+
 from bilancio.decision.action_spec import (
-    ActionDef,
-    ActionSpec,
     VALID_ACTIONS,
     VALID_PHASES,
+    ActionDef,
+    ActionSpec,
     resolve_strategy,
 )
-from bilancio.decision.profile_factory import build_profile, PROFILE_REGISTRY
+from bilancio.decision.intentions import LiquidityDrivenSeller, SurplusBuyer
+from bilancio.decision.profile_factory import PROFILE_REGISTRY, build_profile
 from bilancio.decision.profiles import (
     LenderProfile,
     RatingProfile,
     TraderProfile,
     VBTProfile,
 )
-from bilancio.decision.intentions import LiquidityDrivenSeller, SurplusBuyer
 from bilancio.decision.protocols import LinearPricer
 
 
@@ -191,7 +192,7 @@ class TestActionSpecConfigRoundTrip:
     """Test dict -> Pydantic -> domain dataclass round trip."""
 
     def test_yaml_dict_to_config(self):
-        from bilancio.config.models import ActionSpecConfig, ActionDefConfig
+        from bilancio.config.models import ActionSpecConfig
 
         # Simulate what YAML parsing would produce
         yaml_dict = {
@@ -254,7 +255,7 @@ class TestActionSpecConfigRoundTrip:
     def test_invalid_action_rejected(self):
         from bilancio.config.models import ActionSpecConfig
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             ActionSpecConfig(
                 kind="household",
                 actions=[{"action": "fly_to_moon", "phase": "B2_Settlement"}],
@@ -263,7 +264,7 @@ class TestActionSpecConfigRoundTrip:
     def test_invalid_phase_rejected(self):
         from bilancio.config.models import ActionSpecConfig
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             ActionSpecConfig(
                 kind="household",
                 actions=[{"action": "settle", "phase": "B_Nonexistent"}],
@@ -272,7 +273,7 @@ class TestActionSpecConfigRoundTrip:
     def test_invalid_kind_rejected(self):
         from bilancio.config.models import ActionSpecConfig
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             ActionSpecConfig(
                 kind="alien",
                 actions=[{"action": "settle", "phase": "B2_Settlement"}],
@@ -281,7 +282,7 @@ class TestActionSpecConfigRoundTrip:
     def test_invalid_profile_type_rejected(self):
         from bilancio.config.models import ActionSpecConfig
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             ActionSpecConfig(
                 kind="household",
                 actions=[{"action": "settle", "phase": "B2_Settlement"}],
@@ -291,7 +292,7 @@ class TestActionSpecConfigRoundTrip:
     def test_invalid_information_rejected(self):
         from bilancio.config.models import ActionSpecConfig
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             ActionSpecConfig(
                 kind="household",
                 actions=[{"action": "settle", "phase": "B2_Settlement"}],

@@ -90,7 +90,7 @@ class TestPayWithDeposits:
         """If debtor has a stale asset_id (contract removed), it should be skipped."""
         system, cb, debtor, creditor = _system_with_firms()
         # Add a stale reference
-        debtor.asset_ids.append("STALE_ID")
+        debtor.asset_ids.add("STALE_ID")
         result = _pay_with_deposits(system, debtor.id, creditor.id, 100)
         assert result == 0
 
@@ -154,7 +154,7 @@ class TestPayWithDeposits:
         deposit_cash(system, "H1", "B1", 200)
 
         # Add stale ref to creditor
-        creditor.asset_ids.append("STALE_REF")
+        creditor.asset_ids.add("STALE_REF")
 
         result = _pay_with_deposits(system, debtor.id, creditor.id, 50)
         assert result == 50
@@ -175,7 +175,7 @@ class TestPayWithCash:
     def test_stale_asset_reference_skipped(self):
         """Stale asset_id in debtor's list is gracefully skipped."""
         system, _, debtor, creditor = _system_with_firms()
-        debtor.asset_ids.append("STALE_CASH")
+        debtor.asset_ids.add("STALE_CASH")
         result = _pay_with_cash(system, debtor.id, creditor.id, 100)
         assert result == 0
 
@@ -227,7 +227,7 @@ class TestPayBankToBank:
         b2 = Bank(id="B2", name="B2", kind="bank")
         system.add_agent(b1)
         system.add_agent(b2)
-        b1.asset_ids.append("STALE_RESERVE")
+        b1.asset_ids.add("STALE_RESERVE")
         result = _pay_bank_to_bank_with_reserves(system, "B1", "B2", 100)
         assert result == 0
 
@@ -353,7 +353,7 @@ class TestRemoveContract:
         # Simulate secondary market transfer: holder_id set, asset moved
         p.holder_id = third.id
         creditor.asset_ids.remove(p.id)
-        third.asset_ids.append(p.id)
+        third.asset_ids.add(p.id)
         _remove_contract(system, p.id)
         assert p.id not in system.state.contracts
         assert p.id not in third.asset_ids
@@ -367,7 +367,7 @@ class TestRemoveContract:
         # Simulate: holder_id set but asset_ids not cleaned (inconsistent state)
         p.holder_id = third.id
         # Don't remove from creditor's asset_ids (simulate inconsistency)
-        third.asset_ids.append(p.id)
+        third.asset_ids.add(p.id)
         _remove_contract(system, p.id)
         assert p.id not in creditor.asset_ids
         assert p.id not in third.asset_ids

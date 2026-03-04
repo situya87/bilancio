@@ -2,10 +2,8 @@
 
 from decimal import Decimal
 
-import pytest
-
-from bilancio.decision.factories import create_assessor, observability_from_profile
 from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
+from bilancio.decision.factories import create_assessor, observability_from_profile
 from bilancio.information.levels import AccessLevel
 from bilancio.information.noise import EstimationNoise, LagNoise, SampleNoise
 from bilancio.information.profile import CategoryAccess, InformationProfile

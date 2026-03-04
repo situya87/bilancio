@@ -253,7 +253,7 @@ class TestFreezeDefaultResetsStability:
         system = _make_banking_system(reserves=200)
 
         # Create CB loan due on day 2 (issuance_day=0 + 2)
-        loan_id = system.cb_lend_reserves("bank_1", 100, day=0)
+        system.cb_lend_reserves("bank_1", 100, day=0)
 
         # Consume all reserves so bank can't repay
         bank = system.state.agents["bank_1"]

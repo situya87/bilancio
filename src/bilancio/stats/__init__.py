@@ -12,6 +12,12 @@ All functions operate on plain numeric arrays and make no assumptions
 about the underlying simulation model.
 """
 
+from bilancio.stats.analyzer import SweepAnalyzer
+from bilancio.stats.bootstrap import bootstrap_ci
+from bilancio.stats.cell import summarize_cell, summarize_paired_cell
+from bilancio.stats.effect_size import cohens_d, cohens_d_paired
+from bilancio.stats.sensitivity import morris_screening
+from bilancio.stats.significance import paired_t_test, paired_wilcoxon
 from bilancio.stats.types import (
     CellStats,
     ConfidenceInterval,
@@ -19,12 +25,6 @@ from bilancio.stats.types import (
     PairedCellStats,
     TestResult,
 )
-from bilancio.stats.bootstrap import bootstrap_ci
-from bilancio.stats.cell import summarize_cell, summarize_paired_cell
-from bilancio.stats.effect_size import cohens_d, cohens_d_paired
-from bilancio.stats.significance import paired_t_test, paired_wilcoxon
-from bilancio.stats.sensitivity import morris_screening
-from bilancio.stats.analyzer import SweepAnalyzer
 
 __all__ = [
     "CellStats",

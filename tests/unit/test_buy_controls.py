@@ -9,8 +9,6 @@ Covers:
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
 from bilancio.dealer.models import DealerState, Ticket, VBTState
 from bilancio.dealer.trading import TradeExecutor
@@ -22,7 +20,6 @@ from bilancio.decision.risk_assessment import (
     RiskAssessor,
     TradeGate,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,7 +50,7 @@ def _make_ticket(
 def _make_vbt(
     bucket_id: str = "short",
     M: Decimal = Decimal("0.80"),
-    O: Decimal = Decimal("0.10"),
+    spread: Decimal = Decimal("0.10"),
     flow_sensitivity: Decimal = Decimal("0"),
     inventory: list | None = None,
     cash: Decimal = Decimal("1000"),
@@ -62,7 +59,7 @@ def _make_vbt(
         bucket_id=bucket_id,
         agent_id=f"vbt_{bucket_id}",
         M=M,
-        O=O,
+        O=spread,
         inventory=list(inventory) if inventory else [],
         cash=cash,
         flow_sensitivity=flow_sensitivity,
@@ -189,15 +186,15 @@ class TestVBTAskWidening:
     def test_vbt_ask_widens_with_outflow(self):
         """With flow_sensitivity > 0 and net outflow, ask should be higher."""
         M = Decimal("0.80")
-        O = Decimal("0.10")
+        spread = Decimal("0.10")
 
         # Baseline: no flow sensitivity
-        vbt_base = _make_vbt(M=M, O=O, flow_sensitivity=Decimal("0"))
+        vbt_base = _make_vbt(M=M, spread=spread, flow_sensitivity=Decimal("0"))
         ask_base = vbt_base.A
 
         # With flow sensitivity and accumulated outflow (in face-value units)
         face = Decimal("20")
-        vbt_flow = _make_vbt(M=M, O=O, flow_sensitivity=Decimal("0.5"))
+        vbt_flow = _make_vbt(M=M, spread=spread, flow_sensitivity=Decimal("0.5"))
         # Simulate: VBT started with 10 tickets (face=20 each → 200 total), sold 5 → 100 face
         vbt_flow.cumulative_outflow = face * 5  # 100 face-value units sold
         vbt_flow.cumulative_inflow = Decimal("0")
@@ -213,10 +210,10 @@ class TestVBTAskWidening:
     def test_vbt_ask_no_change_without_outflow(self):
         """With flow_sensitivity > 0 but no outflow, ask unchanged."""
         M = Decimal("0.80")
-        O = Decimal("0.10")
+        spread = Decimal("0.10")
 
-        vbt_base = _make_vbt(M=M, O=O, flow_sensitivity=Decimal("0"))
-        vbt_flow = _make_vbt(M=M, O=O, flow_sensitivity=Decimal("0.5"))
+        vbt_base = _make_vbt(M=M, spread=spread, flow_sensitivity=Decimal("0"))
+        vbt_flow = _make_vbt(M=M, spread=spread, flow_sensitivity=Decimal("0.5"))
         # No outflow
         vbt_flow.cumulative_outflow = Decimal("0")
         vbt_flow.cumulative_inflow = Decimal("0")
@@ -228,7 +225,7 @@ class TestVBTAskWidening:
         """Even with large flow premium, ask cannot exceed 1.0."""
         vbt = _make_vbt(
             M=Decimal("0.95"),
-            O=Decimal("0.10"),
+            spread=Decimal("0.10"),
             flow_sensitivity=Decimal("5.0"),
         )
         vbt.cumulative_outflow = Decimal("100")
@@ -241,16 +238,16 @@ class TestVBTAskWidening:
     def test_vbt_ask_net_outflow_only(self):
         """Ask premium applies only when outflow > inflow."""
         M = Decimal("0.80")
-        O = Decimal("0.10")
+        spread = Decimal("0.10")
         sensitivity = Decimal("0.5")
 
-        vbt = _make_vbt(M=M, O=O, flow_sensitivity=sensitivity)
+        vbt = _make_vbt(M=M, spread=spread, flow_sensitivity=sensitivity)
         # More inflow than outflow -> net inflow, no premium
         vbt.cumulative_outflow = Decimal("3")
         vbt.cumulative_inflow = Decimal("5")
         vbt.recompute_quotes()
 
-        vbt_base = _make_vbt(M=M, O=O, flow_sensitivity=Decimal("0"))
+        vbt_base = _make_vbt(M=M, spread=spread, flow_sensitivity=Decimal("0"))
         assert vbt.A == vbt_base.A
 
 
@@ -372,7 +369,7 @@ class TestBackwardCompatibility:
         # VBT: flow_sensitivity=0 -> no ask widening even with outflow
         vbt = _make_vbt(
             M=Decimal("0.80"),
-            O=Decimal("0.10"),
+            spread=Decimal("0.10"),
             flow_sensitivity=Decimal("0"),
         )
         vbt.cumulative_outflow = Decimal("100")

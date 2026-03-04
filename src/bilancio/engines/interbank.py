@@ -25,8 +25,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from bilancio.core.errors import ValidationError
 from bilancio.core.events import EventKind
 
 if TYPE_CHECKING:
@@ -46,7 +47,7 @@ class InterbankOrder:
     limit_rate: Decimal
     remaining: int = 0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.remaining == 0:
             self.remaining = self.quantity
 
@@ -56,7 +57,7 @@ class AuctionResult:
     """Result of the interbank call auction."""
 
     clearing_rate: Decimal | None  # r* (None if no trades)
-    trades: list[dict] = field(default_factory=list)  # [{lender, borrower, amount}]
+    trades: list[dict[str, Any]] = field(default_factory=list)  # [{lender, borrower, amount}]
     unfilled_borrowers: list[tuple[str, int]] = field(default_factory=list)
     total_volume: int = 0
 
@@ -64,7 +65,7 @@ class AuctionResult:
 def compute_interbank_obligations(
     current_day: int,
     banking: BankingSubsystem,
-) -> list[tuple[str, str, int, "InterbankLoan"]]:
+) -> list[tuple[str, str, int, InterbankLoan]]:
     """Identify overnight interbank loans maturing today.
 
     Returns list of (borrower_bank, lender_bank, repayment_amount, loan)
@@ -86,7 +87,7 @@ def compute_interbank_obligations(
 
 
 def compute_reserve_positions(
-    system: "System",
+    system: System,
     banking: BankingSubsystem,
     net_obligations: dict[str, int],
 ) -> dict[str, int]:
@@ -235,7 +236,7 @@ def clear_auction(
             total_volume=0,
         )
 
-    trades: list[dict] = []
+    trades: list[dict[str, Any]] = []
     total_volume = 0
     ask_idx = 0
     bid_idx = 0
@@ -276,26 +277,26 @@ def clear_auction(
         clearing_rate = (marginal_ask + marginal_bid) / 2
 
     # Unfilled borrowers
-    unfilled: list[tuple[str, int]] = []
+    remaining_unfilled: list[tuple[str, int]] = []
     for i in range(bid_idx, len(borrower_bids)):
         b = borrower_bids[i]
         if b.remaining > 0:
-            unfilled.append((b.bank_id, b.remaining))
+            remaining_unfilled.append((b.bank_id, b.remaining))
 
     return AuctionResult(
         clearing_rate=clearing_rate,
         trades=trades,
-        unfilled_borrowers=unfilled,
+        unfilled_borrowers=remaining_unfilled,
         total_volume=total_volume,
     )
 
 
 def run_interbank_auction(
-    system: "System",
+    system: System,
     current_day: int,
     banking: BankingSubsystem,
     net_obligations: dict[str, int],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Run the interbank call auction: positions → rates → order book → r* → trades.
 
     Orchestrates the full auction pipeline:
@@ -310,7 +311,7 @@ def run_interbank_auction(
     """
     from bilancio.engines.banking_subsystem import InterbankLoan
 
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
 
     # 1. Reserve positions
     positions = compute_reserve_positions(system, banking, net_obligations)
@@ -336,7 +337,7 @@ def run_interbank_auction(
 
             try:
                 system.transfer_reserves(lender_id, borrower_id, amount)
-            except Exception:
+            except (ValueError, ValidationError):
                 logger.warning(
                     "Interbank auction transfer failed: %s -> %s, amount=%d",
                     lender_id, borrower_id, amount,
@@ -402,8 +403,8 @@ def run_interbank_auction(
 def finalize_interbank_repayments(
     current_day: int,
     banking: BankingSubsystem,
-    obligations: list[tuple[str, str, int, "InterbankLoan"]],
-) -> list[dict]:
+    obligations: list[tuple[str, str, int, InterbankLoan]],
+) -> list[dict[str, Any]]:
     """Remove matured interbank loans from the book and emit events.
 
     Called AFTER settlement has occurred (the repayment amounts were
@@ -419,7 +420,7 @@ def finalize_interbank_repayments(
     Returns:
         List of InterbankRepaid event dicts.
     """
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
 
     # Collect loan objects that matured today
     matured_loans = {id(ob[3]) for ob in obligations}

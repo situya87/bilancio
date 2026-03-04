@@ -25,9 +25,9 @@ See Also:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from bilancio.decision.activity import (
     Action,
@@ -799,12 +799,13 @@ def bind_activities(
     result: list[ActivityProfile] = []
     for act in activities:
         binding_value = role_map.get(act.activity_type)
+        is_dc = dataclasses.is_dataclass(act)
         if (
             binding_value is not None
-            and dataclasses.is_dataclass(act)
+            and is_dc
             and hasattr(act, "instrument_class")
         ):
-            result.append(dataclasses.replace(act, instrument_class=binding_value))
+            result.append(dataclasses.replace(act, instrument_class=binding_value))  # type: ignore[type-var]
         else:
             result.append(act)
     return tuple(result)

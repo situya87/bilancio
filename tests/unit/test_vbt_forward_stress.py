@@ -2,8 +2,6 @@
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.decision.profiles import VBTProfile
 from bilancio.decision.valuers import CreditAdjustedVBTPricing
 from bilancio.domain.agents.central_bank import CentralBank

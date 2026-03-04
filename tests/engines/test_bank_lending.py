@@ -18,6 +18,7 @@ from bilancio.domain.agents.firm import Firm
 from bilancio.domain.instruments.bank_loan import BankLoan
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
+from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.bank_lending import (
     _execute_bank_loan,
     _find_eligible_borrowers,
@@ -26,14 +27,11 @@ from bilancio.engines.bank_lending import (
     run_bank_loan_repayments,
 )
 from bilancio.engines.banking_subsystem import (
-    BankLoanRecord,
     _get_deposit_at_bank,
     initialize_banking_subsystem,
 )
 from bilancio.engines.system import System
-from bilancio.domain.policy import PolicyEngine
 from bilancio.ops.banking import deposit_cash
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -147,8 +145,8 @@ class TestFindEligibleBorrowers:
             due_day=2,
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         eligible = _find_eligible_borrowers(system, subsystem, current_day=0)
 
@@ -185,8 +183,8 @@ class TestFindEligibleBorrowers:
             due_day=2,
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         eligible = _find_eligible_borrowers(system, subsystem, current_day=0)
 
@@ -220,8 +218,8 @@ class TestFindEligibleBorrowers:
             due_day=2,
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         eligible = _find_eligible_borrowers(system, subsystem, current_day=0)
 
@@ -442,8 +440,8 @@ def _setup_lending_scenario():
         due_day=2,
     )
     system.state.contracts[payable.id] = payable
-    system.state.agents["H_1"].liability_ids.append(payable.id)
-    system.state.agents["H_2"].asset_ids.append(payable.id)
+    system.state.agents["H_1"].liability_ids.add(payable.id)
+    system.state.agents["H_2"].asset_ids.add(payable.id)
 
     # Refresh quotes so banks can lend
     subsystem.refresh_all_quotes(system, current_day=0)
@@ -485,7 +483,7 @@ class TestFoolMeOnce:
         assert "H_1" not in subsystem.defaulted_borrowers
 
         # Drain H_1's deposit so repayment fails (force default)
-        deposit = _get_deposit_at_bank(system, "H_1", "bank_1")
+        _get_deposit_at_bank(system, "H_1", "bank_1")
         # Find the deposit instrument and zero it
         for cid in list(system.state.agents["H_1"].asset_ids):
             contract = system.state.contracts.get(cid)
@@ -669,8 +667,8 @@ class TestSettlementForecast:
             due_day=0,
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         net = subsystem.compute_settlement_forecasts(system, current_day=0)
 
@@ -704,8 +702,8 @@ class TestSettlementForecast:
             due_day=0,
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         net = subsystem.compute_settlement_forecasts(system, current_day=0)
 
@@ -738,8 +736,8 @@ class TestSettlementForecast:
             due_day=0,
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         net = subsystem.compute_settlement_forecasts(system, current_day=0)
 
@@ -769,8 +767,8 @@ class TestSettlementForecast:
             due_day=5,  # Not today
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         net = subsystem.compute_settlement_forecasts(system, current_day=0)
 
@@ -814,7 +812,7 @@ class TestSettlementForecast:
             holder_id="H_3",  # secondary market holder at bank_1
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
 
         net = subsystem.compute_settlement_forecasts(system, current_day=0)
 
@@ -873,8 +871,8 @@ class TestSettlementForecast:
             due_day=0,
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         net = subsystem.compute_settlement_forecasts(system, current_day=0)
 
@@ -918,8 +916,8 @@ class TestProjectedReserveCheck:
             due_day=0,
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         # Also create a payable that creates a shortfall for H_1
         payable2 = Payable(
@@ -932,8 +930,8 @@ class TestProjectedReserveCheck:
             due_day=2,
         )
         system.state.contracts[payable2.id] = payable2
-        system.state.agents["H_1"].liability_ids.append(payable2.id)
-        system.state.agents["H_2"].asset_ids.append(payable2.id)
+        system.state.agents["H_1"].liability_ids.add(payable2.id)
+        system.state.agents["H_2"].asset_ids.add(payable2.id)
 
         # Refresh quotes — this now includes settlement forecasts
         subsystem.refresh_all_quotes(system, current_day=0)
@@ -979,8 +977,8 @@ class TestProjectedReserveCheck:
             due_day=0,
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         # Create shortfall for H_1
         payable2 = Payable(
@@ -993,8 +991,8 @@ class TestProjectedReserveCheck:
             due_day=2,
         )
         system.state.contracts[payable2.id] = payable2
-        system.state.agents["H_1"].liability_ids.append(payable2.id)
-        system.state.agents["H_2"].asset_ids.append(payable2.id)
+        system.state.agents["H_1"].liability_ids.add(payable2.id)
+        system.state.agents["H_2"].asset_ids.add(payable2.id)
 
         # Refresh quotes
         subsystem.refresh_all_quotes(system, current_day=0)
@@ -1035,8 +1033,8 @@ class TestProjectedReserveCheck:
             due_day=0,
         )
         system.state.contracts[payable.id] = payable
-        system.state.agents["H_1"].liability_ids.append(payable.id)
-        system.state.agents["H_2"].asset_ids.append(payable.id)
+        system.state.agents["H_1"].liability_ids.add(payable.id)
+        system.state.agents["H_2"].asset_ids.add(payable.id)
 
         # Refresh WITHOUT settlement forecast (manually set to 0)
         bank_state = subsystem.banks["bank_1"]

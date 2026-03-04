@@ -195,7 +195,7 @@ def fire_sale_indicator(
     prev_sell_prices: list[Decimal] = []
     prev_volumes: list[int] = []
 
-    for i, day in enumerate(days):
+    for _i, day in enumerate(days):
         sell_avg = avg_by_day[day].get("sell_avg")
         sell_vol = vol_by_day.get(day, {}).get("sells", 0)
 

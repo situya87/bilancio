@@ -2,8 +2,6 @@
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.banking.types import Quote
 from bilancio.decision.profiles import BankProfile
 from bilancio.domain.agents.bank import Bank
@@ -13,7 +11,6 @@ from bilancio.domain.policy import PolicyEngine
 from bilancio.engines.bank_interest import accrue_deposit_interest
 from bilancio.engines.banking_subsystem import (
     BankingSubsystem,
-    BankTreynorState,
     _get_deposit_at_bank,
     initialize_banking_subsystem,
 )

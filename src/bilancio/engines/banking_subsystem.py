@@ -128,7 +128,7 @@ class BankTreynorState:
         system: System,
         current_day: int,
         n_banks: int = 1,
-        interbank_loans: list | None = None,
+        interbank_loans: list[InterbankLoan] | None = None,
     ) -> Quote:
         """Recompute (r_D, r_L) from bank's current balance sheet.
 
@@ -346,7 +346,7 @@ class BankingSubsystem:
 
         Returns {bank_id: net_outflow} where positive = reserves leave.
         """
-        net: dict[str, int] = {bid: 0 for bid in self.banks}
+        net: dict[str, int] = dict.fromkeys(self.banks, 0)
 
         for contract in system.state.contracts.values():
             if contract.kind != InstrumentKind.PAYABLE:
@@ -725,7 +725,7 @@ def initialize_banking_subsystem(
     # Create BankTreynorState for each bank
     banks: dict[str, BankTreynorState] = {}
     for bank_id in bank_ids:
-        reserves = _get_bank_reserves(system, bank_id)
+        _get_bank_reserves(system, bank_id)
         deposits = _get_bank_deposits_total(system, bank_id)
 
         # Reserve target = ratio * deposits

@@ -59,6 +59,10 @@ from bilancio.dealer.models import (
 from bilancio.dealer.risk_assessment import RiskAssessmentParams, RiskAssessor
 from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.dealer.trading import TradeExecutor
+from bilancio.decision.intentions import (
+    collect_buy_intentions,
+    collect_sell_intentions,
+)
 from bilancio.decision.profiles import TraderProfile, VBTProfile
 from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
@@ -77,16 +81,6 @@ from bilancio.engines.dealer_sync import (
     _update_ticket_maturities,
     _update_vbt_credit_mids,
 )
-from bilancio.engines.dealer_trades import (
-    _build_eligible_buyers,
-    _build_eligible_sellers,
-    _execute_interleaved_order_flow,
-)
-from bilancio.decision.intentions import (
-    collect_buy_intentions,
-    collect_sell_intentions,
-)
-from bilancio.engines.matching import DealerMatchingEngine
 
 # --- Submodule imports (implementation) ---
 from bilancio.engines.dealer_wiring import (
@@ -98,6 +92,7 @@ from bilancio.engines.dealer_wiring import (
     _initialize_market_makers,
     _initialize_traders,
 )
+from bilancio.engines.matching import DealerMatchingEngine
 
 
 @dataclass

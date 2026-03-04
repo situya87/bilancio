@@ -158,7 +158,7 @@ def test_settle_obligation_is_atomic():
 
     # Fix the corruption and verify we can still settle properly
     h1_from_sys = sys.state.agents["H1"]
-    h1_from_sys.liability_ids.append(d_id)
+    h1_from_sys.liability_ids.add(d_id)
     sys.settle_obligation(d_id)
     assert d_id not in sys.state.contracts
 

@@ -9,8 +9,6 @@ P2: update_cb_corridor resets the base corridor each call when
 
 from decimal import Decimal
 
-import pytest
-
 from bilancio.banking.pricing_kernel import PricingParams
 from bilancio.decision.profiles import BankProfile
 from bilancio.domain.agent import Agent, AgentKind
@@ -24,9 +22,7 @@ from bilancio.engines.banking_subsystem import (
     BankLoanRecord,
     BankTreynorState,
 )
-from bilancio.engines.state import State
 from bilancio.engines.system import System
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -42,14 +38,14 @@ def _make_system_with_agents(*agents: Agent) -> System:
 
 def _default_pricing_params(**overrides) -> PricingParams:
     """Return sensible PricingParams for tests."""
-    defaults = dict(
-        reserve_remuneration_rate=Decimal("0.01"),
-        cb_borrowing_rate=Decimal("0.03"),
-        reserve_target=1000,
-        symmetric_capacity=500,
-        ticket_size=100,
-        reserve_floor=500,
-    )
+    defaults = {
+        "reserve_remuneration_rate": Decimal("0.01"),
+        "cb_borrowing_rate": Decimal("0.03"),
+        "reserve_target": 1000,
+        "symmetric_capacity": 500,
+        "ticket_size": 100,
+        "reserve_floor": 500,
+    }
     defaults.update(overrides)
     return PricingParams(**defaults)
 
@@ -83,8 +79,8 @@ class TestWithdrawalForecastDeduplication:
             asset_holder_id="firm_1",
             liability_issuer_id="bank_1",
         )
-        firm.asset_ids.append("dep_1")
-        bank.liability_ids.append("dep_1")
+        firm.asset_ids.add("dep_1")
+        bank.liability_ids.add("dep_1")
 
         # -- Wire into system --
         system = _make_system_with_agents(bank, firm)
@@ -146,9 +142,9 @@ class TestWithdrawalForecastDeduplication:
             asset_holder_id="firm_b",
             liability_issuer_id="bank_1",
         )
-        firm_a.asset_ids.append("dep_a")
-        firm_b.asset_ids.append("dep_b")
-        bank.liability_ids.extend(["dep_a", "dep_b"])
+        firm_a.asset_ids.add("dep_a")
+        firm_b.asset_ids.add("dep_b")
+        bank.liability_ids.update(["dep_a", "dep_b"])
 
         system = _make_system_with_agents(bank, firm_a, firm_b)
         system.state.contracts["dep_a"] = dep_a
@@ -199,8 +195,8 @@ class TestWithdrawalForecastDeduplication:
             asset_holder_id="firm_1",
             liability_issuer_id="bank_1",
         )
-        firm.asset_ids.append("dep_1")
-        bank.liability_ids.append("dep_1")
+        firm.asset_ids.add("dep_1")
+        bank.liability_ids.add("dep_1")
 
         system = _make_system_with_agents(bank, firm)
         system.state.contracts["dep_1"] = deposit
