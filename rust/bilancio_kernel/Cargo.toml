@@ -1,0 +1,12 @@
+[package]
+name = "bilancio_kernel"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "bilancio_kernel"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.25", features = ["extension-module"] }
+rust_decimal = "1.37"

@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from bilancio.engines.dealer_integration import DealerSubsystem
     from bilancio.engines.system import System
 
-from bilancio.dealer.kernel import recompute_dealer_state
 from bilancio.dealer.metrics import (
     TicketOutcome,
     TradeRecord,
@@ -323,7 +322,7 @@ def _execute_sell_trade(
             if sell_dealer_snap is not None:
                 _restore_dealer_derived(dealer, sell_dealer_snap)
             else:
-                recompute_dealer_state(dealer, vbt, subsystem.params)
+                subsystem._recompute_fn(dealer, vbt, subsystem.params)
             events.append({
                 "kind": "sell_rejected_concentration",
                 "day": current_day,
@@ -347,7 +346,7 @@ def _execute_sell_trade(
                 vbt.cash += price_delta
             else:
                 dealer.cash += price_delta
-            recompute_dealer_state(dealer, vbt, subsystem.params)
+            subsystem._recompute_fn(dealer, vbt, subsystem.params)
 
         # Scale price by ticket face value
         # The dealer module returns unit price (per S=1), but our tickets have actual face values
@@ -635,7 +634,7 @@ def _reverse_buy_and_recompute(
     if dealer_snap is not None:
         _restore_dealer_derived(dealer, dealer_snap)
     else:
-        recompute_dealer_state(dealer, vbt, subsystem.params)
+        subsystem._recompute_fn(dealer, vbt, subsystem.params)
 
 
 def _compute_upcoming_obligations(
@@ -665,7 +664,7 @@ def _apply_buy_price_adjustment(
             vbt.cash -= price_delta
         else:
             dealer.cash -= price_delta
-        recompute_dealer_state(dealer, vbt, subsystem.params)
+        subsystem._recompute_fn(dealer, vbt, subsystem.params)
 
 
 def _check_buy_risk_preview(

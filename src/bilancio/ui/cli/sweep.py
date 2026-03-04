@@ -231,6 +231,7 @@ def sweep_list() -> None:
 @click.option("--prune-ineligible", is_flag=True, default=False, help="Skip zero-resource agents")
 @click.option("--incremental-intentions", is_flag=True, default=False, help="Incremental intention queues")
 @click.option("--matching-order", type=click.Choice(["random", "urgency"]), default=None, help="Matching order")
+@click.option("--dealer-backend", type=click.Choice(["python", "native"]), default=None, help="Kernel backend (native=Rust)")
 @click.pass_context
 def sweep_ring(
     ctx: click.Context,
@@ -273,6 +274,7 @@ def sweep_ring(
     prune_ineligible: bool,
     incremental_intentions: bool,
     matching_order: str | None,
+    dealer_backend: str | None,
 ) -> None:
     """Run the Kalecki ring experiment sweep."""
     sweep_config: RingSweepConfig | None = None
@@ -436,6 +438,8 @@ def sweep_ring(
         perf_kwargs["incremental_intentions"] = True
     if matching_order:
         perf_kwargs["matching_order"] = matching_order
+    if dealer_backend:
+        perf_kwargs["dealer_backend"] = dealer_backend
     perf_preset_val = perf_kwargs.pop("preset", "compatible") if perf_kwargs else "compatible"
     performance = PerformanceConfig.create(perf_preset_val, **perf_kwargs) if perf_kwargs else None
 
@@ -985,6 +989,7 @@ def sweep_comparison(
 @click.option("--prune-ineligible", is_flag=True, default=False, help="Skip zero-resource agents")
 @click.option("--incremental-intentions", is_flag=True, default=False, help="Incremental intention queues")
 @click.option("--matching-order", type=click.Choice(["random", "urgency"]), default=None, help="Matching order")
+@click.option("--dealer-backend", type=click.Choice(["python", "native"]), default=None, help="Kernel backend (native=Rust)")
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -1052,6 +1057,7 @@ def sweep_balanced(
     prune_ineligible: bool,
     incremental_intentions: bool,
     matching_order: str | None,
+    dealer_backend: str | None,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -1156,6 +1162,8 @@ def sweep_balanced(
         perf_kwargs_bal["incremental_intentions"] = True
     if matching_order:
         perf_kwargs_bal["matching_order"] = matching_order
+    if dealer_backend:
+        perf_kwargs_bal["dealer_backend"] = dealer_backend
     perf_preset_val_bal = perf_kwargs_bal.pop("preset", "compatible") if perf_kwargs_bal else "compatible"
     performance = PerformanceConfig.create(perf_preset_val_bal, **perf_kwargs_bal) if perf_kwargs_bal else None
 

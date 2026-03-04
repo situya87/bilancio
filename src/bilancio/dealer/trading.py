@@ -26,6 +26,7 @@ import random
 from copy import deepcopy
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from bilancio.core.ids import AgentId
 
@@ -91,6 +92,7 @@ class TradeExecutor:
         params: KernelParams,
         rng: random.Random | None = None,
         layoff_threshold: Decimal = Decimal("0"),
+        recompute_fn: Any = None,
     ):
         """
         Initialize trade executor.
@@ -99,10 +101,13 @@ class TradeExecutor:
             params: Kernel parameters including ticket size S
             rng: Optional random number generator (default: new Random instance)
             layoff_threshold: Inventory ratio below which VBT injects cash into dealer (0 = disabled)
+            recompute_fn: Kernel recompute callable (default: Python recompute_dealer_state).
+                Swapped to the Rust native version via PerformanceConfig.dealer_backend.
         """
         self.params = params
         self.rng = rng or random.Random()
         self.layoff_threshold = layoff_threshold
+        self._recompute_fn = recompute_fn or recompute_dealer_state
 
     def execute_customer_sell(
         self,
@@ -163,7 +168,7 @@ class TradeExecutor:
                 if vbt.cash >= needed_cash:
                     vbt.cash -= needed_cash
                     dealer.cash += needed_cash
-                    recompute_dealer_state(dealer, vbt, self.params)
+                    self._recompute_fn(dealer, vbt, self.params)
                     is_interior = can_interior_buy(dealer, self.params)
 
         if is_interior:
@@ -182,7 +187,7 @@ class TradeExecutor:
             ticket.owner_id = dealer.agent_id
 
             # Recompute dealer state after trade
-            recompute_dealer_state(dealer, vbt, self.params)
+            self._recompute_fn(dealer, vbt, self.params)
 
             # C1: Double-entry assertion
             if check_assertions:
@@ -221,7 +226,7 @@ class TradeExecutor:
 
             # Dealer state unchanged - recompute to update quotes based on VBT state
             # (VBT anchors may have changed, affecting dealer quotes)
-            recompute_dealer_state(dealer, vbt, self.params)
+            self._recompute_fn(dealer, vbt, self.params)
 
             # C4: Verify dealer balance sheet unchanged
             if check_assertions:
@@ -317,7 +322,7 @@ class TradeExecutor:
             ticket.owner_id = buyer_id
 
             # Recompute dealer state after trade
-            recompute_dealer_state(dealer, vbt, self.params)
+            self._recompute_fn(dealer, vbt, self.params)
 
             # C1: Double-entry assertion
             if check_assertions:
@@ -362,7 +367,7 @@ class TradeExecutor:
             ticket.owner_id = buyer_id
 
             # Dealer state unchanged - recompute to update quotes based on VBT state
-            recompute_dealer_state(dealer, vbt, self.params)
+            self._recompute_fn(dealer, vbt, self.params)
 
             # C4: Verify dealer balance sheet unchanged
             if check_assertions:
@@ -488,13 +493,13 @@ class TradeExecutor:
             dealer.inventory.remove(ticket)
             dealer.cash += execution_price
             ticket.owner_id = buyer_id
-            recompute_dealer_state(dealer, vbt, self.params)
+            self._recompute_fn(dealer, vbt, self.params)
         else:
             # Passthrough: VBT provides the ticket
             vbt.inventory.remove(ticket)
             vbt.cash += execution_price
             ticket.owner_id = buyer_id
-            recompute_dealer_state(dealer, vbt, self.params)
+            self._recompute_fn(dealer, vbt, self.params)
 
         return ExecutionResult(
             executed=True,

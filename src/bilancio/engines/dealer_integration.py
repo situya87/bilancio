@@ -225,6 +225,14 @@ class DealerSubsystem:
     # (descending) and buyers by surplus (descending).
     matching_order: str = "random"
 
+    # Performance option E: kernel recompute function.
+    # Defaults to the Python implementation; swapped to the Rust native
+    # version when ``PerformanceConfig.dealer_backend == "native"``.
+    _recompute_fn: Any = field(default=None)
+
+    def __post_init__(self) -> None:
+        if self._recompute_fn is None:
+            self._recompute_fn = recompute_dealer_state
 
 
 def get_trader_assessor(subsystem: DealerSubsystem, trader_id: AgentId) -> RiskAssessor | None:
@@ -369,7 +377,9 @@ def initialize_dealer_subsystem(
     _ensure_dealer_vbt_agents(system, dealer_config.buckets)
 
     # Initialize trade executor
-    subsystem.executor = TradeExecutor(subsystem.params, subsystem.rng)
+    subsystem.executor = TradeExecutor(
+        subsystem.params, subsystem.rng, recompute_fn=subsystem._recompute_fn,
+    )
 
     # Step 1: Convert Payables to Tickets
     serial_counter = _convert_payables_to_tickets(subsystem, system, current_day)
@@ -536,7 +546,8 @@ def initialize_balanced_dealer_subsystem(
 
     # Initialize trade executor (with layoff threshold for VBT credit facility)
     subsystem.executor = TradeExecutor(
-        subsystem.params, subsystem.rng, layoff_threshold=subsystem.layoff_threshold
+        subsystem.params, subsystem.rng, layoff_threshold=subsystem.layoff_threshold,
+        recompute_fn=subsystem._recompute_fn,
     )
 
     # Step 1: Convert Payables to Tickets
@@ -697,7 +708,7 @@ def run_dealer_trading_phase(
     # Phase 2: Recompute dealer quotes for all buckets
     for bucket_id, dealer in subsystem.dealers.items():
         vbt = subsystem.vbts[bucket_id]
-        recompute_dealer_state(dealer, vbt, subsystem.params)
+        subsystem._recompute_fn(dealer, vbt, subsystem.params)
 
     # Capture daily snapshots for metrics (Section 8.1)
     _capture_dealer_snapshots(subsystem, current_day)
@@ -759,7 +770,7 @@ def run_dealer_trading_phase(
             if subsystem.dirty_bucket_recompute:
                 # Option G: only recompute buckets that had a successful trade.
                 for bucket_id in subsystem._dirty_buckets:
-                    recompute_dealer_state(
+                    subsystem._recompute_fn(
                         subsystem.dealers[bucket_id],
                         subsystem.vbts[bucket_id],
                         subsystem.params,
@@ -768,7 +779,7 @@ def run_dealer_trading_phase(
             else:
                 for bucket_id, dealer in subsystem.dealers.items():
                     vbt = subsystem.vbts[bucket_id]
-                    recompute_dealer_state(dealer, vbt, subsystem.params)
+                    subsystem._recompute_fn(dealer, vbt, subsystem.params)
 
     # Clear the intention cache at the end of the day so stale state
     # does not leak into the next day's trading.

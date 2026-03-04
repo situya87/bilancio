@@ -373,6 +373,20 @@ def run_day(
         if performance and performance.matching_order != "random":
             system.state.dealer_subsystem.matching_order = performance.matching_order
 
+        # Thread performance Option E (dealer_backend) to the subsystem
+        if performance and performance.dealer_backend == "native":
+            from bilancio.dealer.kernel_native import (
+                NATIVE_AVAILABLE,
+                recompute_dealer_state_native,
+            )
+
+            if NATIVE_AVAILABLE:
+                system.state.dealer_subsystem._recompute_fn = recompute_dealer_state_native
+                if system.state.dealer_subsystem.executor is not None:
+                    system.state.dealer_subsystem.executor._recompute_fn = (
+                        recompute_dealer_state_native
+                    )
+
         # Run dealer trading and collect events
         dealer_events = run_dealer_trading_phase(system.state.dealer_subsystem, system, current_day)
         system.state.events.extend(dealer_events)
