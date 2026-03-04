@@ -338,7 +338,7 @@ def save_run_to_supabase(
     image=image,
     volumes={RESULTS_MOUNT_PATH: results_volume},
     secrets=_secrets,
-    timeout=3600,  # 60 minutes max per simulation
+    timeout=7200,  # 2 hours max per simulation
     memory=2048,  # 2GB RAM
 )
 def run_simulation(

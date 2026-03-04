@@ -232,6 +232,12 @@ class BankComparisonConfig(BaseModel):
     # Detailed logging
     detailed_logging: bool = Field(default=False, description="Enable detailed CSV logging")
 
+    # Performance optimization flags
+    performance: dict[str, Any] = Field(
+        default_factory=dict,
+        description="PerformanceConfig flags dict (e.g. {'fast_atomic': True})",
+    )
+
 
 class BankComparisonRunner:
     """Runs bank_idle vs bank_lend comparison experiments.
@@ -455,7 +461,17 @@ class BankComparisonRunner:
             "alpha_trader": Decimal("0"),
             "vbt_mid_sensitivity": Decimal("1.0"),
             "vbt_spread_sensitivity": Decimal("0.0"),
+            # Performance flags
+            "performance": self._get_performance(),
         }
+
+    def _get_performance(self) -> Any:
+        """Build PerformanceConfig from stored dict, or None if empty."""
+        if not self.config.performance:
+            return None
+        from bilancio.core.performance import PerformanceConfig
+
+        return PerformanceConfig.from_dict(self.config.performance)
 
     def _get_idle_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
         """Idle arm: banks hold deposits+reserves, NO bank lending."""

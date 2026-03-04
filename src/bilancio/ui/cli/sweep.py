@@ -373,6 +373,27 @@ def sweep_ring(
     if job_id is None:
         job_id = generate_job_id()
 
+    # Build performance flags dict for job metadata (actual PerformanceConfig built later)
+    _perf_dict: dict[str, object] = {}
+    if perf_preset:
+        _perf_dict["preset"] = perf_preset
+    if fast_atomic:
+        _perf_dict["fast_atomic"] = True
+    if preview_buy:
+        _perf_dict["preview_buy"] = True
+    if cache_dealer_quotes:
+        _perf_dict["cache_dealer_quotes"] = True
+    if dirty_bucket_recompute:
+        _perf_dict["dirty_bucket_recompute"] = True
+    if prune_ineligible:
+        _perf_dict["prune_ineligible"] = True
+    if incremental_intentions:
+        _perf_dict["incremental_intentions"] = True
+    if matching_order:
+        _perf_dict["matching_order"] = matching_order
+    if dealer_backend:
+        _perf_dict["dealer_backend"] = dealer_backend
+
     # Create job manager and job config
     manager: JobManager | None = None
     try:
@@ -391,6 +412,7 @@ def sweep_ring(
             cloud=cloud,
             maturity_days=maturity_days,
             seeds=[base_seed],
+            performance=_perf_dict,
         )
 
         job = manager.create_job(
@@ -418,28 +440,10 @@ def sweep_ring(
         )
         console.print("[cyan]Cloud execution enabled[/cyan]")
 
-    # Build PerformanceConfig from CLI flags
+    # Build PerformanceConfig from CLI flags (reuse _perf_dict built earlier)
     from bilancio.core.performance import PerformanceConfig
 
-    perf_kwargs: dict[str, object] = {}
-    if perf_preset:
-        perf_kwargs["preset"] = perf_preset
-    if fast_atomic:
-        perf_kwargs["fast_atomic"] = True
-    if preview_buy:
-        perf_kwargs["preview_buy"] = True
-    if cache_dealer_quotes:
-        perf_kwargs["cache_dealer_quotes"] = True
-    if dirty_bucket_recompute:
-        perf_kwargs["dirty_bucket_recompute"] = True
-    if prune_ineligible:
-        perf_kwargs["prune_ineligible"] = True
-    if incremental_intentions:
-        perf_kwargs["incremental_intentions"] = True
-    if matching_order:
-        perf_kwargs["matching_order"] = matching_order
-    if dealer_backend:
-        perf_kwargs["dealer_backend"] = dealer_backend
+    perf_kwargs = dict(_perf_dict)  # copy so pop doesn't mutate _perf_dict
     perf_preset_val = perf_kwargs.pop("preset", "compatible") if perf_kwargs else "compatible"
     performance = PerformanceConfig.create(perf_preset_val, **perf_kwargs) if perf_kwargs else None
 
@@ -1084,6 +1088,27 @@ def sweep_balanced(
     if job_id is None:
         job_id = generate_job_id()
 
+    # Build performance flags dict for job metadata (actual PerformanceConfig built later)
+    _perf_dict_bal: dict[str, object] = {}
+    if perf_preset:
+        _perf_dict_bal["preset"] = perf_preset
+    if fast_atomic:
+        _perf_dict_bal["fast_atomic"] = True
+    if preview_buy:
+        _perf_dict_bal["preview_buy"] = True
+    if cache_dealer_quotes:
+        _perf_dict_bal["cache_dealer_quotes"] = True
+    if dirty_bucket_recompute:
+        _perf_dict_bal["dirty_bucket_recompute"] = True
+    if prune_ineligible:
+        _perf_dict_bal["prune_ineligible"] = True
+    if incremental_intentions:
+        _perf_dict_bal["incremental_intentions"] = True
+    if matching_order:
+        _perf_dict_bal["matching_order"] = matching_order
+    if dealer_backend:
+        _perf_dict_bal["dealer_backend"] = dealer_backend
+
     # Create job manager with Supabase cloud storage
     manager: JobManager | None = None
     try:
@@ -1100,6 +1125,7 @@ def sweep_balanced(
             outside_mid_ratios=_decimal_list(outside_mid_ratios),
             maturity_days=maturity_days,
             seeds=[base_seed],
+            performance=_perf_dict_bal,
         )
 
         # Create and start job
@@ -1142,28 +1168,10 @@ def sweep_balanced(
     if alpha_vbt > 0 or alpha_trader > 0:
         click.echo(f"Informedness enabled (alpha_vbt={alpha_vbt}, alpha_trader={alpha_trader})")
 
-    # Build PerformanceConfig from CLI flags
+    # Build PerformanceConfig from CLI flags (reuse _perf_dict_bal built earlier)
     from bilancio.core.performance import PerformanceConfig
 
-    perf_kwargs_bal: dict[str, object] = {}
-    if perf_preset:
-        perf_kwargs_bal["preset"] = perf_preset
-    if fast_atomic:
-        perf_kwargs_bal["fast_atomic"] = True
-    if preview_buy:
-        perf_kwargs_bal["preview_buy"] = True
-    if cache_dealer_quotes:
-        perf_kwargs_bal["cache_dealer_quotes"] = True
-    if dirty_bucket_recompute:
-        perf_kwargs_bal["dirty_bucket_recompute"] = True
-    if prune_ineligible:
-        perf_kwargs_bal["prune_ineligible"] = True
-    if incremental_intentions:
-        perf_kwargs_bal["incremental_intentions"] = True
-    if matching_order:
-        perf_kwargs_bal["matching_order"] = matching_order
-    if dealer_backend:
-        perf_kwargs_bal["dealer_backend"] = dealer_backend
+    perf_kwargs_bal = dict(_perf_dict_bal)  # copy so pop doesn't mutate _perf_dict_bal
     perf_preset_val_bal = perf_kwargs_bal.pop("preset", "compatible") if perf_kwargs_bal else "compatible"
     performance = PerformanceConfig.create(perf_preset_val_bal, **perf_kwargs_bal) if perf_kwargs_bal else None
 
@@ -1526,6 +1534,7 @@ def sweep_nbfi(
 @click.option("--cb-rate-escalation-slope", type=Decimal, default=Decimal("0.05"), help="CB cost pressure slope")
 @click.option("--cb-max-outstanding-ratio", type=Decimal, default=Decimal("2.0"), help="CB lending cap")
 @click.option("--default-handling", type=str, default="expel-agent", help="Default handling mode")
+@click.option("--fast-atomic", is_flag=True, default=False, help="Disable deepcopy in safe phases (30x+ speedup)")
 @click.option(
     "--post-analysis",
     type=str,
@@ -1556,6 +1565,7 @@ def sweep_bank(
     cb_rate_escalation_slope: Decimal,
     cb_max_outstanding_ratio: Decimal,
     default_handling: str,
+    fast_atomic: bool,
     post_analysis: str | None,
 ) -> None:
     """Run bank lending experiment (Plan 043).
@@ -1590,6 +1600,10 @@ def sweep_bank(
         )
         click.echo("Cloud execution enabled")
 
+    perf_dict_bank: dict[str, object] = {}
+    if fast_atomic:
+        perf_dict_bank["fast_atomic"] = True
+
     config = BankComparisonConfig(
         name_prefix=job_id,
         n_agents=n_agents,
@@ -1612,6 +1626,7 @@ def sweep_bank(
         min_coverage_ratio=min_coverage_ratio,
         cb_rate_escalation_slope=cb_rate_escalation_slope,
         cb_max_outstanding_ratio=cb_max_outstanding_ratio,
+        performance=perf_dict_bank,
     )
 
     runner = BankComparisonRunner(config=config, out_dir=out_dir, executor=executor, job_id=job_id, enable_supabase=cloud)
