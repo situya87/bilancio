@@ -329,6 +329,7 @@ def run_interbank_auction(
 
     # 5. Execute trades at r*
     executed_volume = 0
+    executed_trades = 0
     if result.clearing_rate is not None and result.trades:
         for trade in result.trades:
             lender_id = trade["lender"]
@@ -346,6 +347,7 @@ def run_interbank_auction(
                 continue
 
             executed_volume += amount
+            executed_trades += 1
 
             # Record interbank loan (overnight, due tomorrow)
             ib_loan = InterbankLoan(
@@ -375,7 +377,7 @@ def run_interbank_auction(
         "day": current_day,
         "clearing_rate": str(result.clearing_rate) if result.clearing_rate else None,
         "total_volume": executed_volume,
-        "n_trades": len(result.trades),
+        "n_trades": executed_trades,
         "n_unfilled": len(result.unfilled_borrowers),
     })
 
@@ -393,7 +395,7 @@ def run_interbank_auction(
         current_day,
         result.clearing_rate,
         executed_volume,
-        len(result.trades),
+        executed_trades,
         len(result.unfilled_borrowers),
     )
 

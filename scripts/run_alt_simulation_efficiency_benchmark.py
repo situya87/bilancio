@@ -395,6 +395,8 @@ def category_cold_start() -> tuple[CategoryResult, list[CriticalCheck]]:
     print("  Category 2: Cold Start Cost")
 
     times: list[float] = []
+    statuses: list[str] = []
+    returncodes: list[int | None] = []
     for trial in range(3):
         print(f"    Trial {trial + 1}/3 ...", end=" ", flush=True)
         t0 = perf_counter()
@@ -408,27 +410,38 @@ def category_cold_start() -> tuple[CategoryResult, list[CriticalCheck]]:
             )
             elapsed = perf_counter() - t0
             status = "ok" if result.returncode == 0 else f"rc={result.returncode}"
+            returncode: int | None = result.returncode
         except subprocess.TimeoutExpired:
             elapsed = perf_counter() - t0
             status = "timeout"
+            returncode = None
         times.append(elapsed)
+        statuses.append(status)
+        returncodes.append(returncode)
         print(f"{elapsed:.3f}s ({status})")
 
     median_time = statistics.median(times)
+    all_imports_ok = all(rc == 0 for rc in returncodes)
 
     # Score: <= 1s -> 10, >= 3s -> 0
-    pts = lerp_score(median_time, full_at=1.0, zero_at=3.0, max_points=10)
+    pts = lerp_score(median_time, full_at=1.0, zero_at=3.0, max_points=10) if all_imports_ok else 0.0
 
     checks = [
         CriticalCheck(
             code="cold_start::under_5s",
-            passed=median_time < 5.0,
-            message=f"median_import_time={median_time:.3f}s (gate: <5.0s)",
+            passed=all_imports_ok and median_time < 5.0,
+            message=(
+                f"median_import_time={median_time:.3f}s, "
+                f"all_imports_ok={all_imports_ok} (gate: import ok + <5.0s)"
+            ),
         ),
     ]
 
     details = {
         "times": [round(t, 4) for t in times],
+        "statuses": statuses,
+        "returncodes": returncodes,
+        "all_imports_ok": all_imports_ok,
         "median_time": round(median_time, 4),
     }
 

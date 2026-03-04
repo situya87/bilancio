@@ -474,6 +474,33 @@ class TestRunInterbankAuction:
         trade_events = [e for e in events if e["kind"] == "InterbankAuctionTrade"]
         assert len(trade_events) == 0
 
+    def test_summary_counts_only_executed_trades(self, monkeypatch):
+        """Summary n_trades must exclude trades that failed during reserve transfer."""
+        system = _make_banking_system()
+        system.transfer_reserves("bank_2", "bank_1", 3000)
+
+        banking = _make_initialized_banking(system, target_1=2000, target_2=5000)
+        banking.banks["bank_1"].pricing_params.reserve_remuneration_rate = Decimal("0.02")
+        banking.banks["bank_1"].pricing_params.cb_borrowing_rate = Decimal("0.08")
+        banking.banks["bank_2"].pricing_params.reserve_remuneration_rate = Decimal("0.02")
+        banking.banks["bank_2"].pricing_params.cb_borrowing_rate = Decimal("0.08")
+
+        # Force transfer failure so auction has proposed trades but zero executions.
+        def _raise_transfer(_from: str, _to: str, _amount: int) -> None:
+            raise ValueError("forced transfer failure")
+
+        monkeypatch.setattr(system, "transfer_reserves", _raise_transfer)
+        events = run_interbank_auction(system, current_day=0, banking=banking, net_obligations={})
+
+        summary = next(e for e in events if e["kind"] == "InterbankAuction")
+        trade_events = [e for e in events if e["kind"] == "InterbankAuctionTrade"]
+        unfilled_events = [e for e in events if e["kind"] == "InterbankUnfilled"]
+
+        assert len(trade_events) == 0
+        assert summary["n_trades"] == 0
+        assert summary["total_volume"] == 0
+        assert len(unfilled_events) >= 1
+
 
 # ---------------------------------------------------------------------------
 # TestComputeCombinedNets
