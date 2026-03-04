@@ -1582,6 +1582,24 @@ class BalancedComparisonRunner:
         Uses batch execution if the executor supports it (CloudExecutor),
         otherwise falls back to sequential execution (LocalExecutor).
         """
+        # Sweep-level viability check (V3, V7)
+        try:
+            from bilancio.specification.trade_viability import check_sweep_viability
+
+            sweep_report = check_sweep_viability(
+                kappas=self.config.kappas,
+                n_agents=self.config.n_agents,
+                maturity_days=self.config.maturity_days,
+            )
+            if not sweep_report.all_viable:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "Sweep viability: %s", sweep_report.diagnostics
+                )
+        except Exception:
+            pass
+
         # Check if executor supports batch execution
         if hasattr(self.executor, "execute_batch"):
             return self._run_all_batch()

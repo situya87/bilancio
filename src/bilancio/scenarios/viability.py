@@ -6,6 +6,7 @@ for a given set of parameters, without running a full simulation.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -351,5 +352,240 @@ def check_interbank_viability(
         auction_capacity_viable=auction_capacity_viable,
         bank_vs_liquidation_viable=bank_vs_liquidation_viable,
         cb_backstop_viable=cb_backstop_viable,
+        diagnostics=diagnostics,
+    )
+
+
+@dataclass
+class SimulationViabilityReport:
+    """Result of per-run simulation viability checks (V4, V5, V6, V9)."""
+
+    dealer_capacity_viable: bool      # V4
+    lending_viable: bool              # V5
+    temporal_spread_viable: bool      # V6
+    parameters_consistent: bool       # V9
+    diagnostics: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def all_viable(self) -> bool:
+        return (
+            self.dealer_capacity_viable
+            and self.lending_viable
+            and self.temporal_spread_viable
+            and self.parameters_consistent
+        )
+
+
+def check_simulation_viability(
+    *,
+    kappa: Decimal,
+    n_agents: int,
+    maturity_days: int,
+    face_value: Decimal,
+    Q_total: Decimal,
+    mu: Decimal,
+    dealer_share: Decimal,
+    vbt_share: Decimal,
+    outside_mid_ratio: Decimal = Decimal("1.0"),
+    K_star: int | None = None,
+    lender_enabled: bool = False,
+    lender_base_rate: Decimal = Decimal("0.05"),
+    lender_risk_premium_scale: Decimal = Decimal("0.20"),
+    buy_reserve_fraction: Decimal = Decimal("1.0"),
+) -> SimulationViabilityReport:
+    """Check per-run simulation viability (V4, V5, V6, V9).
+
+    All checks are informational — they log warnings but never block execution.
+
+    V4 — Dealer capacity: warns if K_star too small or too large.
+    V5 — Lending viability: warns if lending enabled but kappa makes it
+          very expensive or unnecessary.
+    V6 — Temporal spread: fails if maturity_days < 2; warns about
+          front/back-loaded stress and buy_reserve_fraction >= 1.
+    V9 — Parameter consistency: fails on impossible configurations.
+    """
+    warnings: list[str] = []
+    diagnostics: dict[str, Any] = {}
+
+    one = Decimal(1)
+    zero = Decimal(0)
+
+    # ── V4: Dealer capacity (informational) ──────────────────────────
+    dealer_capacity_viable = True
+
+    if K_star is None:
+        P = kappa_informed_prior(kappa)
+        M = outside_mid_ratio * (one - P)
+        total_claims_per_bucket = Decimal(n_agents) * face_value / Decimal(3)
+        n_dealer_tickets = int(total_claims_per_bucket * dealer_share / face_value)
+        dealer_cash = Decimal(n_dealer_tickets) * M * face_value
+        dealer_x = face_value * n_dealer_tickets
+        V = M * dealer_x + dealer_cash
+        if M * face_value > zero:
+            K_star = int(V / (M * face_value))
+        else:
+            K_star = 0
+
+    diagnostics["K_star"] = K_star
+
+    if K_star < 3:
+        warnings.append(
+            f"V4: dealer capacity very small (K*={K_star} < 3) — passthrough"
+        )
+    if K_star > n_agents // 2:
+        warnings.append(
+            f"V4: dealer never constrained (K*={K_star} > n/2={n_agents // 2})"
+        )
+
+    # ── V5: Lending viability (informational) ────────────────────────
+    lending_viable = True
+
+    if lender_enabled:
+        p_lender = one / (one + kappa)
+        rate = lender_base_rate + lender_risk_premium_scale * p_lender
+        diagnostics["lending_rate"] = float(rate)
+        diagnostics["p_lender"] = float(p_lender)
+
+        if kappa < Decimal("0.3"):
+            warnings.append(
+                f"V5: expensive loans at kappa={kappa} "
+                f"(rate={float(rate):.4f})"
+            )
+        if kappa > Decimal("3"):
+            warnings.append(
+                f"V5: lending unnecessary at kappa={kappa} "
+                "(few borrowers need credit)"
+            )
+
+    # ── V6: Temporal spread ──────────────────────────────────────────
+    temporal_spread_viable = maturity_days >= 2
+
+    if maturity_days < 2:
+        warnings.append(
+            f"V6: maturity_days={maturity_days} < 2 — no temporal dynamics"
+        )
+    elif maturity_days < 5:
+        warnings.append(
+            f"V6: maturity_days={maturity_days} < 5 — limited temporal spread"
+        )
+
+    if mu == zero:
+        warnings.append("V6: mu=0 — front-loaded stress")
+    if mu == one:
+        warnings.append("V6: mu=1 — back-loaded stress")
+
+    if buy_reserve_fraction >= one:
+        warnings.append(
+            f"V6: buy_reserve_fraction={buy_reserve_fraction} >= 1 "
+            "— buyers disappear after day 0"
+        )
+
+    # ── V9: Parameter consistency ────────────────────────────────────
+    consistency_failures: list[str] = []
+
+    if dealer_share + vbt_share > one:
+        consistency_failures.append(
+            f"dealer_share + vbt_share = {dealer_share + vbt_share} > 1"
+        )
+    if face_value > Q_total:
+        consistency_failures.append(
+            f"face_value={face_value} > Q_total={Q_total}"
+        )
+    if n_agents < 3:
+        consistency_failures.append(f"n_agents={n_agents} < 3")
+    if Q_total <= zero:
+        consistency_failures.append(f"Q_total={Q_total} <= 0")
+    if maturity_days < 1:
+        consistency_failures.append(f"maturity_days={maturity_days} < 1")
+
+    parameters_consistent = len(consistency_failures) == 0
+    if consistency_failures:
+        diagnostics["consistency_failures"] = consistency_failures
+        warnings.extend(f"V9: {f}" for f in consistency_failures)
+
+    diagnostics["warnings"] = warnings
+
+    return SimulationViabilityReport(
+        dealer_capacity_viable=dealer_capacity_viable,
+        lending_viable=lending_viable,
+        temporal_spread_viable=temporal_spread_viable,
+        parameters_consistent=parameters_consistent,
+        diagnostics=diagnostics,
+    )
+
+
+@dataclass
+class SweepViabilityReport:
+    """Result of sweep-level viability checks (V3, V7)."""
+
+    two_way_trading_viable: bool   # V3
+    effect_detectable: bool        # V7
+    diagnostics: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def all_viable(self) -> bool:
+        return self.two_way_trading_viable and self.effect_detectable
+
+
+def check_sweep_viability(
+    *,
+    kappas: Sequence[Decimal],
+    n_agents: int,
+    maturity_days: int,
+) -> SweepViabilityReport:
+    """Check sweep-level viability (V3, V7).
+
+    V3 — Two-way trading: fails if ALL kappas < 0.3 (sells only) or
+          ALL kappas > 2 (buys only).
+    V7 — Effect detectable: fails if n_agents < 10, maturity_days < 5,
+          no kappa < 1, or fewer than 2 distinct kappas.
+    """
+    warnings: list[str] = []
+    diagnostics: dict[str, Any] = {}
+
+    kappa_list = list(kappas)
+    diagnostics["kappa_count"] = len(kappa_list)
+
+    # ── V3: Two-way trading ──────────────────────────────────────────
+    low = Decimal("0.3")
+    high = Decimal("2")
+
+    all_below = all(k < low for k in kappa_list)
+    all_above = all(k > high for k in kappa_list)
+    two_way_trading_viable = not all_below and not all_above
+
+    if all_below:
+        warnings.append(
+            "V3: all kappas < 0.3 — sells only, no buyers"
+        )
+    if all_above:
+        warnings.append(
+            "V3: all kappas > 2 — buys only, no sellers"
+        )
+
+    # ── V7: Effect detectable ────────────────────────────────────────
+    effect_failures: list[str] = []
+
+    if n_agents < 10:
+        effect_failures.append(f"n_agents={n_agents} < 10")
+    if maturity_days < 5:
+        effect_failures.append(f"maturity_days={maturity_days} < 5")
+    if not any(k < Decimal("1") for k in kappa_list):
+        effect_failures.append("no kappa < 1")
+    if len(set(kappa_list)) < 2:
+        effect_failures.append(
+            f"fewer than 2 distinct kappas ({len(set(kappa_list))})"
+        )
+
+    effect_detectable = len(effect_failures) == 0
+    if effect_failures:
+        diagnostics["effect_failures"] = effect_failures
+        warnings.extend(f"V7: {f}" for f in effect_failures)
+
+    diagnostics["warnings"] = warnings
+
+    return SweepViabilityReport(
+        two_way_trading_viable=two_way_trading_viable,
+        effect_detectable=effect_detectable,
         diagnostics=diagnostics,
     )
