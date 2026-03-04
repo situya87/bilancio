@@ -24,6 +24,7 @@ References:
 import logging
 import random
 from copy import deepcopy
+from dataclasses import dataclass
 from decimal import Decimal
 
 from bilancio.core.ids import AgentId
@@ -43,6 +44,22 @@ from .kernel import (
 from .models import DealerState, Ticket, VBTState
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BuyPreview:
+    """Preview of a customer buy trade -- no state mutation."""
+
+    feasible: bool
+    ticket: Ticket | None
+    price: Decimal  # unit price
+    scaled_price: Decimal  # price * face (set by caller after preview)
+    is_passthrough: bool
+    is_interior: bool
+    bucket_id: str
+    # Snapshot of dealer state BEFORE the hypothetical trade
+    dealer_a_before: Decimal = Decimal(0)
+    dealer_x_before: Decimal = Decimal(0)
 
 
 class TradeExecutor:
@@ -370,6 +387,121 @@ class TradeExecutor:
                 is_passthrough=True,
                 ticket=ticket,
             )
+
+    def preview_customer_buy(
+        self,
+        dealer: DealerState,
+        vbt: VBTState,
+        buyer_id: AgentId,
+        issuer_preference: AgentId | None = None,
+    ) -> BuyPreview:
+        """Compute a customer buy trade preview WITHOUT mutating state.
+
+        Returns a ``BuyPreview`` describing what *would* happen if the buy
+        were committed.  The dealer, VBT, and ticket inventories are
+        untouched.
+
+        The caller should inspect the preview, run all rejection gates,
+        and then call ``commit_customer_buy`` only if every gate passes.
+        """
+        is_interior = can_interior_sell(dealer, self.params)
+
+        if is_interior:
+            execution_price = dealer.ask
+            # Check that inventory is non-empty (same as execute path)
+            if not dealer.inventory:
+                return BuyPreview(
+                    feasible=False,
+                    ticket=None,
+                    price=Decimal(0),
+                    scaled_price=Decimal(0),
+                    is_passthrough=False,
+                    is_interior=True,
+                    bucket_id=dealer.bucket_id,
+                    dealer_a_before=Decimal(dealer.a),
+                    dealer_x_before=dealer.x,
+                )
+            # Select ticket (read-only peek -- does not remove from list)
+            ticket = self._select_ticket_to_sell(dealer.inventory, issuer_preference)
+            return BuyPreview(
+                feasible=True,
+                ticket=ticket,
+                price=execution_price,
+                scaled_price=Decimal(0),  # set by caller
+                is_passthrough=False,
+                is_interior=True,
+                bucket_id=dealer.bucket_id,
+                dealer_a_before=Decimal(dealer.a),
+                dealer_x_before=dealer.x,
+            )
+        else:
+            # Passthrough at VBT ask
+            execution_price = vbt.A
+            if not vbt.inventory:
+                return BuyPreview(
+                    feasible=False,
+                    ticket=None,
+                    price=Decimal(0),
+                    scaled_price=Decimal(0),
+                    is_passthrough=True,
+                    is_interior=False,
+                    bucket_id=dealer.bucket_id,
+                    dealer_a_before=Decimal(dealer.a),
+                    dealer_x_before=dealer.x,
+                )
+            ticket = self._select_ticket_to_sell(vbt.inventory, issuer_preference)
+            return BuyPreview(
+                feasible=True,
+                ticket=ticket,
+                price=execution_price,
+                scaled_price=Decimal(0),  # set by caller
+                is_passthrough=True,
+                is_interior=False,
+                bucket_id=dealer.bucket_id,
+                dealer_a_before=Decimal(dealer.a),
+                dealer_x_before=dealer.x,
+            )
+
+    def commit_customer_buy(
+        self,
+        preview: BuyPreview,
+        dealer: DealerState,
+        vbt: VBTState,
+        buyer_id: AgentId,
+    ) -> ExecutionResult:
+        """Commit a previously-previewed buy trade, mutating state.
+
+        The *preview* MUST have ``feasible=True`` and a non-None ticket.
+        The price used is the one recorded in the preview (not re-read
+        from dealer/VBT state) so the committed trade matches exactly.
+
+        Between ``preview_customer_buy`` and this call, no other trade
+        may execute in the same bucket (same loop iteration guarantee).
+        """
+        assert preview.feasible and preview.ticket is not None
+
+        ticket = preview.ticket
+        execution_price = preview.price
+
+        if preview.is_interior:
+            # Interior buy: dealer sells from own inventory
+            dealer.inventory.remove(ticket)
+            dealer.cash += execution_price
+            ticket.owner_id = buyer_id
+            recompute_dealer_state(dealer, vbt, self.params)
+        else:
+            # Passthrough: VBT provides the ticket
+            vbt.inventory.remove(ticket)
+            vbt.cash += execution_price
+            ticket.owner_id = buyer_id
+            recompute_dealer_state(dealer, vbt, self.params)
+
+        return ExecutionResult(
+            executed=True,
+            price=execution_price,
+            is_passthrough=preview.is_passthrough,
+            ticket=ticket,
+        )
 
     def _select_ticket_to_sell(
         self,

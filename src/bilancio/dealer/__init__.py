@@ -57,7 +57,7 @@ from .simulation import (
     DealerRingConfig,
     DealerRingSimulation,
 )
-from .trading import TradeExecutor
+from .trading import BuyPreview, TradeExecutor
 
 __all__ = [
     # Models
@@ -88,6 +88,7 @@ __all__ = [
     # Events
     "EventLog",
     # Trading
+    "BuyPreview",
     "TradeExecutor",
     # Simulation
     "DaySnapshot",

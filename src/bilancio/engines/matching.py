@@ -56,6 +56,8 @@ class DealerMatchingEngine:
         sell_intentions: list[SellIntention],
         buy_intentions: list[BuyIntention],
         events: list[dict[str, object]],
+        *,
+        matching_order: str = "random",
     ) -> None:
         """Match sell and buy intentions against dealer quotes.
 
@@ -68,8 +70,11 @@ class DealerMatchingEngine:
         3. Process any remaining buys (dealer sells from inventory or
            passthroughs from VBT).
 
-        Both lists are shuffled independently so no agent has a
-        positional advantage.
+        When *matching_order* is ``"random"`` (the default), both lists
+        are shuffled independently so no agent has a positional
+        advantage.  When ``"urgency"``, sellers are sorted by
+        descending urgency (most liquidity-stressed first) and buyers
+        by descending priority (most cash-rich first).
 
         Parameters
         ----------
@@ -86,6 +91,10 @@ class DealerMatchingEngine:
             Intentions produced by the buy-decision strategy.
         events:
             Mutable list to which trade-event dicts are appended.
+        matching_order:
+            ``"random"`` (default) shuffles intentions randomly.
+            ``"urgency"`` sorts sellers by descending urgency and
+            buyers by descending surplus priority.
         """
         # Lazy imports to break circular dependency
         # (dealer_integration ↔ dealer_trades ↔ matching)
@@ -94,13 +103,21 @@ class DealerMatchingEngine:
             _execute_sell_trade,
         )
 
-        # --- Mutable copies so callers keep their originals intact ---
-        sell_order: list[SellIntention] = list(sell_intentions)
-        buy_order: list[BuyIntention] = list(buy_intentions)
-
-        # --- Randomise execution order ---
-        subsystem.rng.shuffle(sell_order)
-        subsystem.rng.shuffle(buy_order)
+        if matching_order == "urgency":
+            # Option D: sort sellers by urgency (most stressed first),
+            # buyers by priority (most cash-rich first).
+            sell_order = sorted(
+                sell_intentions, key=lambda s: s.urgency, reverse=True,
+            )
+            buy_order = sorted(
+                buy_intentions, key=lambda b: b.priority, reverse=True,
+            )
+        else:
+            # Default: randomise execution order
+            sell_order = list(sell_intentions)
+            buy_order = list(buy_intentions)
+            subsystem.rng.shuffle(sell_order)
+            subsystem.rng.shuffle(buy_order)
 
         # --- Build execution budgets from subsystem cash (not system) ---
         # Subsystem dealer/VBT cash is the live, authoritative value that

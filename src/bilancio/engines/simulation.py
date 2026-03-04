@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
+from bilancio.core.performance import fast_atomic_scope
 from bilancio.domain.agent import AgentKind
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.cb_loan import CBLoan
@@ -15,6 +16,7 @@ from bilancio.engines.clearing import settle_intraday_nets
 from bilancio.engines.settlement import _remove_contract, rollover_settled_payables, settle_due
 
 if TYPE_CHECKING:
+    from bilancio.core.performance import PerformanceConfig
     from bilancio.engines.system import System
 
 logger = logging.getLogger(__name__)
@@ -253,6 +255,7 @@ def run_day(
     enable_rating: bool = False,
     enable_banking: bool = False,
     enable_bank_lending: bool = False,
+    performance: PerformanceConfig | None = None,
 ) -> None:
     """
     Run a single day's simulation with three phases.
@@ -275,6 +278,7 @@ def run_day(
     """
     current_day = system.state.day
     rollover_enabled = getattr(system.state, "rollover_enabled", False)
+    fast = performance.fast_atomic if performance else False
     logger.debug("run_day: day=%d phase=%s", current_day, system.state.phase)
 
     # Phase A: Log PhaseA event (reserved)
@@ -298,24 +302,25 @@ def run_day(
         # but keep guard to ensure the simulation loop stability
         raise
 
-    # SubphaseB_Rating: Run rating agency phase (optional)
-    if enable_rating and system.state.rating_config is not None:
-        system.log("SubphaseB_Rating")
-        from bilancio.engines.rating import run_rating_phase
+    with fast_atomic_scope(system, fast):
+        # SubphaseB_Rating: Run rating agency phase (optional)
+        if enable_rating and system.state.rating_config is not None:
+            system.log("SubphaseB_Rating")
+            from bilancio.engines.rating import run_rating_phase
 
-        rating_events = run_rating_phase(system, current_day, system.state.rating_config)
-        system.state.events.extend(rating_events)
+            rating_events = run_rating_phase(system, current_day, system.state.rating_config)
+            system.state.events.extend(rating_events)
 
-        # Log rating estimates if enabled
-        if system.state.estimate_logging_enabled:
-            _log_rating_estimates(system, current_day)
+            # Log rating estimates if enabled
+            if system.state.estimate_logging_enabled:
+                _log_rating_estimates(system, current_day)
 
-    # SubphaseB_BankQuotes: Refresh bank quotes (optional)
-    banking_sub = getattr(system.state, "banking_subsystem", None)
-    if enable_banking and banking_sub is not None:
-        system.log("SubphaseB_BankQuotes")
-        banking_sub.update_cb_corridor(system)
-        banking_sub.refresh_all_quotes(system, current_day)
+        # SubphaseB_BankQuotes: Refresh bank quotes (optional)
+        banking_sub = getattr(system.state, "banking_subsystem", None)
+        if enable_banking and banking_sub is not None:
+            system.log("SubphaseB_BankQuotes")
+            banking_sub.update_cb_corridor(system)
+            banking_sub.refresh_all_quotes(system, current_day)
 
     # SubphaseB_Lending: Non-bank lending phase (optional)
     # Runs BEFORE dealer trading so firms can borrow to cover shortfalls
@@ -344,6 +349,30 @@ def run_day(
             sync_dealer_to_system,
         )
 
+        # Thread performance Option B (prune_ineligible) to the subsystem
+        if performance and performance.prune_ineligible:
+            system.state.dealer_subsystem.prune_ineligible = True
+
+        # Thread performance Option C (cache_dealer_quotes) to the subsystem
+        if performance and performance.cache_dealer_quotes:
+            system.state.dealer_subsystem.cache_dealer_quotes = True
+
+        # Thread performance Option F (preview_buy) to the subsystem
+        if performance and performance.preview_buy:
+            system.state.dealer_subsystem.preview_buy = True
+
+        # Thread performance Option G (dirty_bucket_recompute) to the subsystem
+        if performance and performance.dirty_bucket_recompute:
+            system.state.dealer_subsystem.dirty_bucket_recompute = True
+
+        # Thread performance Option H (incremental_intentions) to the subsystem
+        if performance and performance.incremental_intentions:
+            system.state.dealer_subsystem.incremental_intentions = True
+
+        # Thread performance Option D (matching_order) to the subsystem
+        if performance and performance.matching_order != "random":
+            system.state.dealer_subsystem.matching_order = performance.matching_order
+
         # Run dealer trading and collect events
         dealer_events = run_dealer_trading_phase(system.state.dealer_subsystem, system, current_day)
         system.state.events.extend(dealer_events)
@@ -364,12 +393,13 @@ def run_day(
         banking_sub.refresh_all_quotes(system, current_day)
 
     # Plan 024: Rollover - create new payables for settled ones
-    if rollover_enabled and settled_for_rollover:
-        system.log("SubphaseB_Rollover")
-        dealer_active = enable_dealer and system.state.dealer_subsystem is not None
-        rollover_settled_payables(
-            system, current_day, settled_for_rollover, dealer_active=dealer_active
-        )
+    with fast_atomic_scope(system, fast):
+        if rollover_enabled and settled_for_rollover:
+            system.log("SubphaseB_Rollover")
+            dealer_active = enable_dealer and system.state.dealer_subsystem is not None
+            rollover_settled_payables(
+                system, current_day, settled_for_rollover, dealer_active=dealer_active
+            )
 
     # Phase C: Clear intraday nets + interbank auction
     system.log("PhaseC")
@@ -415,61 +445,62 @@ def run_day(
         settle_intraday_nets(system, current_day)
 
     # Phase D: CB corridor maintenance (interest + loan repayment)
-    has_cb = any(agent.kind == AgentKind.CENTRAL_BANK for agent in system.state.agents.values())
-    if has_cb:
-        system.credit_reserve_interest(current_day)
-        for loan_id in system.get_cb_loans_due(current_day):
-            loan = system.state.contracts.get(loan_id)
-            if loan is None:
-                continue
-            assert isinstance(loan, CBLoan)
-            bank_id = loan.liability_issuer_id
-            try:
-                system.cb_repay_loan(loan_id, bank_id)
-            except (ValueError, ValidationError):
-                # Bank can't repay — try refinancing
-                repayment = loan.repayment_amount
+    with fast_atomic_scope(system, fast):
+        has_cb = any(agent.kind == AgentKind.CENTRAL_BANK for agent in system.state.agents.values())
+        if has_cb:
+            system.credit_reserve_interest(current_day)
+            for loan_id in system.get_cb_loans_due(current_day):
+                loan = system.state.contracts.get(loan_id)
+                if loan is None:
+                    continue
+                assert isinstance(loan, CBLoan)
+                bank_id = loan.liability_issuer_id
                 try:
-                    system.cb_lend_reserves(bank_id, repayment, current_day)
                     system.cb_repay_loan(loan_id, bank_id)
-                    logger.debug(
-                        "CB loan refinanced: bank=%s loan=%s amount=%d",
-                        bank_id, loan_id, repayment,
-                    )
                 except (ValueError, ValidationError):
-                    # Refinancing failed (frozen or cap exceeded)
-                    if system.state.cb_lending_frozen:
-                        # Bank defaults: write off loan, mark as defaulted
-                        bank_agent = system.state.agents.get(bank_id)
-                        if bank_agent and not bank_agent.defaulted:
-                            bank_agent.defaulted = True
-                            system.state.defaulted_agent_ids.add(bank_id)
+                    # Bank can't repay — try refinancing
+                    repayment = loan.repayment_amount
+                    try:
+                        system.cb_lend_reserves(bank_id, repayment, current_day)
+                        system.cb_repay_loan(loan_id, bank_id)
+                        logger.debug(
+                            "CB loan refinanced: bank=%s loan=%s amount=%d",
+                            bank_id, loan_id, repayment,
+                        )
+                    except (ValueError, ValidationError):
+                        # Refinancing failed (frozen or cap exceeded)
+                        if system.state.cb_lending_frozen:
+                            # Bank defaults: write off loan, mark as defaulted
+                            bank_agent = system.state.agents.get(bank_id)
+                            if bank_agent and not bank_agent.defaulted:
+                                bank_agent.defaulted = True
+                                system.state.defaulted_agent_ids.add(bank_id)
+                                system.log(
+                                    "BankDefaultCBFreeze",
+                                    bank_id=bank_id,
+                                    loan_id=loan_id,
+                                    amount=loan.amount,
+                                    day=current_day,
+                                )
+                                logger.info(
+                                    "Bank %s defaulted (CB frozen, can't repay %d)",
+                                    bank_id, loan.amount,
+                                )
+                            # Per-loan writeoff event (emitted for every loan,
+                            # not just the first one that triggers bank default)
                             system.log(
-                                "BankDefaultCBFreeze",
+                                "CBLoanFreezeWrittenOff",
                                 bank_id=bank_id,
                                 loan_id=loan_id,
                                 amount=loan.amount,
                                 day=current_day,
                             )
-                            logger.info(
-                                "Bank %s defaulted (CB frozen, can't repay %d)",
-                                bank_id, loan.amount,
+                            _remove_contract(system, loan_id)
+                        else:
+                            logger.warning(
+                                "CB loan repayment failed even after refinancing: bank=%s loan=%s",
+                                bank_id, loan_id,
                             )
-                        # Per-loan writeoff event (emitted for every loan,
-                        # not just the first one that triggers bank default)
-                        system.log(
-                            "CBLoanFreezeWrittenOff",
-                            bank_id=bank_id,
-                            loan_id=loan_id,
-                            amount=loan.amount,
-                            day=current_day,
-                        )
-                        _remove_contract(system, loan_id)
-                    else:
-                        logger.warning(
-                            "CB loan repayment failed even after refinancing: bank=%s loan=%s",
-                            bank_id, loan_id,
-                        )
 
     # Non-bank loan repayment
     has_lender = any(
@@ -799,6 +830,7 @@ def run_until_stable(
     enable_bank_lending: bool = False,
     enable_final_cb_settlement: bool | None = None,
     cb_lending_cutoff_day: int | None = None,
+    performance: PerformanceConfig | None = None,
 ) -> list[DayReport]:
     """
     Advance day by day until the system is stable:
@@ -845,6 +877,7 @@ def run_until_stable(
             enable_rating=enable_rating,
             enable_banking=enable_banking,
             enable_bank_lending=enable_bank_lending,
+            performance=performance,
         )
         impacted = _impacted_today(system, day_before)
         defaults = _defaults_today(system, day_before)

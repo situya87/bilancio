@@ -27,6 +27,27 @@ from bilancio.dealer.models import (
     VBTState,
 )
 
+# ── Option C: snapshot / restore dealer derived fields ──────────────
+# The 13 derived fields that recompute_dealer_state() sets.
+# Restoring them from a snapshot is O(13 assignments) vs O(~50 Decimal
+# ops) for a full recompute.
+
+_DEALER_DERIVED_FIELDS = (
+    "a", "x", "V", "K_star", "X_star", "N", "lambda_", "I",
+    "midline", "bid", "ask", "is_pinned_bid", "is_pinned_ask",
+)
+
+
+def _snapshot_dealer_derived(dealer: DealerState) -> dict:
+    """Snapshot the 13 derived fields of a DealerState."""
+    return {k: getattr(dealer, k) for k in _DEALER_DERIVED_FIELDS}
+
+
+def _restore_dealer_derived(dealer: DealerState, snap: dict) -> None:
+    """Restore dealer derived fields from snapshot."""
+    for k, v in snap.items():
+        setattr(dealer, k, v)
+
 
 def _get_issuer_price_adjustment(subsystem: DealerSubsystem, issuer_id: str) -> Decimal:
     """Returns price multiplier for issuer-specific pricing.
@@ -280,6 +301,10 @@ def _execute_sell_trade(
     ):
         return Decimal(0)
 
+    # Option C: snapshot dealer derived fields before kernel mutation.
+    use_cache = getattr(subsystem, "cache_dealer_quotes", False)
+    sell_dealer_snap = _snapshot_dealer_derived(dealer) if use_cache else None
+
     # Execute customer sell
     assert subsystem.executor is not None
     result = subsystem.executor.execute_customer_sell(dealer, vbt, ticket, check_assertions=False)
@@ -295,7 +320,10 @@ def _execute_sell_trade(
             dealer.inventory.remove(ticket)
             dealer.cash += result.price
             ticket.owner_id = trader_id
-            recompute_dealer_state(dealer, vbt, subsystem.params)
+            if sell_dealer_snap is not None:
+                _restore_dealer_derived(dealer, sell_dealer_snap)
+            else:
+                recompute_dealer_state(dealer, vbt, subsystem.params)
             events.append({
                 "kind": "sell_rejected_concentration",
                 "day": current_day,
@@ -365,6 +393,13 @@ def _execute_sell_trade(
             payer_id = f"vbt_{bucket_id}" if result.is_passthrough else f"dealer_{bucket_id}"
             dealer_budgets[payer_id] = dealer_budgets.get(payer_id, Decimal(0)) - scaled_price
 
+        # Option G: mark bucket dirty so inter-round recompute can skip clean buckets.
+        subsystem._dirty_buckets.add(bucket_id)
+
+        # Option H: invalidate trader so intentions are refreshed next round.
+        if subsystem._intention_cache is not None:
+            subsystem._intention_cache.invalidate(trader_id)
+
         return scaled_price
 
     return Decimal(0)
@@ -409,11 +444,16 @@ def _check_buy_risk_assessment(
     bucket_id: str,
     current_day: int,
     events: list[dict[str, object]],
+    dealer_snap: dict | None = None,
 ) -> bool:
     """Check risk assessment for a buy trade and reverse if rejected.
 
     Returns True if the trade was rejected (should skip to next bucket).
     Returns False if the trade is acceptable or no risk assessor is configured.
+
+    When *dealer_snap* is provided (Option C), the dealer's derived
+    fields are restored from the snapshot on rejection, avoiding a
+    stale-state window.
     """
     from bilancio.engines.dealer_integration import get_trader_assessor
 
@@ -444,6 +484,8 @@ def _check_buy_risk_assessment(
 
     # Trader rejects - reverse the transaction
     _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
+    if dealer_snap is not None:
+        _restore_dealer_derived(dealer, dealer_snap)
     events.append(
         {
             "kind": "buy_rejected",
@@ -580,10 +622,20 @@ def _reverse_buy_and_recompute(
     vbt: VBTState,
     result: ExecutionResult,
     bucket_id: str,
+    dealer_snap: dict | None = None,
 ) -> None:
-    """Reverse buy execution and recompute dealer/VBT state."""
+    """Reverse buy execution and recompute dealer/VBT state.
+
+    When *dealer_snap* is provided (Option C: cache_dealer_quotes),
+    the dealer's derived fields are restored from the snapshot instead
+    of being recomputed from scratch.  This is O(13 assignments) vs
+    O(~50 Decimal ops).
+    """
     _reverse_buy_to_dealer(dealer, vbt, result, bucket_id)
-    recompute_dealer_state(dealer, vbt, subsystem.params)
+    if dealer_snap is not None:
+        _restore_dealer_derived(dealer, dealer_snap)
+    else:
+        recompute_dealer_state(dealer, vbt, subsystem.params)
 
 
 def _compute_upcoming_obligations(
@@ -616,6 +668,214 @@ def _apply_buy_price_adjustment(
         recompute_dealer_state(dealer, vbt, subsystem.params)
 
 
+def _check_buy_risk_preview(
+    subsystem: DealerSubsystem,
+    trader: TraderState,
+    trader_id: str,
+    ticket: Ticket,
+    unit_price: Decimal,
+    bucket_id: str,
+    current_day: int,
+    events: list[dict[str, object]],
+) -> bool:
+    """Risk assessment gate for the preview-buy path.
+
+    Same logic as ``_check_buy_risk_assessment`` but operates on raw
+    ticket/price values instead of an ``ExecutionResult``.  Because no
+    kernel mutation has occurred, there is nothing to reverse on
+    rejection -- the function simply logs a ``buy_rejected`` event.
+
+    Returns True if the trade is REJECTED, False if acceptable.
+    """
+    from bilancio.engines.dealer_integration import get_trader_assessor
+
+    assessor = get_trader_assessor(subsystem, trader_id)
+    if not assessor:
+        return False
+
+    asset_value = sum(
+        (assessor.expected_value(t, current_day) for t in trader.tickets_owned),
+        Decimal(0),
+    )
+    asset_value += assessor.expected_value(ticket, current_day)
+
+    if assessor.should_buy(
+        ticket=ticket,
+        dealer_ask=unit_price,
+        current_day=current_day,
+        trader_cash=trader.cash,
+        trader_shortfall=trader.shortfall(current_day),
+        trader_asset_value=asset_value,
+    ):
+        return False  # Trade accepted
+
+    events.append(
+        {
+            "kind": "buy_rejected",
+            "day": current_day,
+            "phase": "simulation",
+            "trader_id": trader_id,
+            "ticket_id": ticket.id,
+            "bucket": bucket_id,
+            "offered_price": float(unit_price),
+            "expected_value": float(assessor.expected_value(ticket, current_day)),
+            "threshold": float(
+                assessor.params.base_risk_premium
+                * assessor.params.buy_premium_multiplier
+            ),
+            "reason": "ev_below_price_threshold",
+        }
+    )
+    return True  # Trade rejected
+
+
+def _execute_buy_trade_preview(
+    subsystem: DealerSubsystem,
+    trader_id: str,
+    current_day: int,
+    events: list[dict[str, object]],
+    dealer_budgets: dict[str, Decimal] | None = None,
+    max_spend: Decimal = Decimal("Inf"),
+) -> Decimal:
+    """Preview-then-commit buy path (Option F).
+
+    Same semantics as ``_execute_buy_trade`` but never mutates kernel
+    state until all rejection gates pass.  This eliminates every
+    ``_reverse_buy_and_recompute`` call and the ``deepcopy`` overhead
+    they induce.
+    """
+    from bilancio.dealer.trading import BuyPreview  # noqa: F811 (local import to avoid circular)
+
+    trader = subsystem.traders[trader_id]
+    buy_profile = trader.profile or subsystem.trader_profile
+    motive = buy_profile.trading_motive
+    bucket_ids = _build_buy_bucket_order(subsystem, motive)
+
+    for bucket_id in bucket_ids:
+        dealer = subsystem.dealers[bucket_id]
+        vbt = subsystem.vbts[bucket_id]
+
+        # Check if dealer or VBT has inventory
+        if not dealer.inventory and not vbt.inventory:
+            continue
+
+        # Capture pre-trade state for metrics (Section 8.1, 8.4)
+        pre_dealer_inventory = dealer.a
+        pre_dealer_cash = dealer.cash
+        pre_dealer_bid = dealer.bid
+        pre_dealer_ask = dealer.ask
+        pre_trader_cash = trader.cash
+        pre_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
+
+        # Safety margin gate: don't let underwater agents buy
+        if pre_safety_margin < 0:
+            continue
+
+        # --- PREVIEW (read-only) ---
+        assert subsystem.executor is not None
+        preview: BuyPreview = subsystem.executor.preview_customer_buy(
+            dealer, vbt, trader_id,
+        )
+
+        if not preview.feasible or preview.ticket is None:
+            continue
+
+        ticket = preview.ticket
+
+        # Risk assessment gate (no mutation to undo on rejection)
+        if _check_buy_risk_preview(
+            subsystem, trader, trader_id, ticket,
+            preview.price, bucket_id, current_day, events,
+        ):
+            continue
+
+        # Liquidity-only gate
+        if motive == "liquidity_only" and not _is_liquidity_buy(trader, ticket, current_day):
+            continue
+
+        # Issuer-specific price adjustment (Feature 1)
+        price_factor = _get_issuer_price_adjustment(subsystem, ticket.issuer_id)
+        adjusted_price = preview.price * price_factor
+        scaled_price = adjusted_price * ticket.face
+
+        # Solvency check
+        if trader.cash < scaled_price:
+            continue
+
+        # Budget enforcement
+        if scaled_price > max_spend:
+            continue
+
+        # --- Speculative trader-side mutations (cheap to reverse) ---
+        trader.tickets_owned.append(ticket)
+        trader.cash -= scaled_price
+
+        # Cash-only obligation coverage check
+        horizon = buy_profile.buy_horizon
+        upcoming_obligations = _compute_upcoming_obligations(trader, current_day, horizon)
+        if trader.cash < upcoming_obligations:
+            trader.cash += scaled_price
+            trader.tickets_owned.pop()
+            continue
+
+        # Post-buy safety margin check
+        post_safety_margin = _compute_trader_safety_margin(subsystem, trader_id)
+        if post_safety_margin < 0:
+            trader.cash += scaled_price
+            trader.tickets_owned.pop()
+            continue
+
+        # --- COMMIT (single kernel mutation) ---
+        result = subsystem.executor.commit_customer_buy(preview, dealer, vbt, trader_id)
+
+        # Align dealer/VBT cash with adjusted price
+        _apply_buy_price_adjustment(subsystem, dealer, vbt, result, adjusted_price)
+
+        # Track VBT flow
+        if result.is_passthrough:
+            vbt.cumulative_outflow += ticket.face
+
+        # Record trade in metrics, ticket outcomes, and events
+        _record_buy_trade(
+            subsystem,
+            trader_id,
+            trader,
+            ticket,
+            bucket_id,
+            current_day,
+            scaled_price,
+            adjusted_price,
+            result.is_passthrough,
+            pre_dealer_inventory,
+            pre_dealer_cash,
+            pre_dealer_bid,
+            pre_dealer_ask,
+            pre_trader_cash,
+            pre_safety_margin,
+            post_safety_margin,
+            dealer,
+            vbt,
+            trader.cash,
+            events,
+        )
+
+        # Update dealer/VBT cash budget
+        if dealer_budgets is not None:
+            payee_id = f"vbt_{bucket_id}" if result.is_passthrough else f"dealer_{bucket_id}"
+            dealer_budgets[payee_id] = dealer_budgets.get(payee_id, Decimal(0)) + scaled_price
+
+        # Option G: mark bucket dirty so inter-round recompute can skip clean buckets.
+        subsystem._dirty_buckets.add(bucket_id)
+
+        # Option H: invalidate trader so intentions are refreshed next round.
+        if subsystem._intention_cache is not None:
+            subsystem._intention_cache.invalidate(trader_id)
+
+        return scaled_price
+
+    return Decimal(0)
+
+
 def _execute_buy_trade(
     subsystem: DealerSubsystem,
     trader_id: str,
@@ -625,6 +885,13 @@ def _execute_buy_trade(
     max_spend: Decimal = Decimal("Inf"),
 ) -> Decimal:
     """Process a single buy trade attempt for a trader. Returns cash drained from ring."""
+
+    # Option F: preview-then-commit path (no execute-then-reverse)
+    if getattr(subsystem, "preview_buy", False):
+        return _execute_buy_trade_preview(
+            subsystem, trader_id, current_day, events, dealer_budgets, max_spend,
+        )
+
     trader = subsystem.traders[trader_id]
 
     # Bucket ordering depends on trading motive
@@ -651,6 +918,12 @@ def _execute_buy_trade(
         if pre_safety_margin < 0:
             continue
 
+        # Option C: snapshot dealer derived fields before kernel mutation.
+        # If the trade is reversed, we restore from this snapshot instead
+        # of calling recompute_dealer_state() (~50 Decimal ops → 13 assignments).
+        use_cache = getattr(subsystem, "cache_dealer_quotes", False)
+        dealer_snap = _snapshot_dealer_derived(dealer) if use_cache else None
+
         # Execute customer buy
         assert subsystem.executor is not None
         result = subsystem.executor.execute_customer_buy(
@@ -671,6 +944,7 @@ def _execute_buy_trade(
             bucket_id,
             current_day,
             events,
+            dealer_snap=dealer_snap,
         ):
             continue  # Risk rejected, try next bucket
 
@@ -678,7 +952,7 @@ def _execute_buy_trade(
 
         # Liquidity-only gate: reject buys of tickets maturing after earliest obligation
         if motive == "liquidity_only" and not _is_liquidity_buy(trader, ticket, current_day):
-            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id)
+            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id, dealer_snap=dealer_snap)
             continue
 
         # Apply issuer-specific price adjustment (Feature 1)
@@ -688,12 +962,12 @@ def _execute_buy_trade(
 
         # Pre-trade solvency check: trader must be able to afford scaled price
         if trader.cash < scaled_price:
-            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id)
+            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id, dealer_snap=dealer_snap)
             continue  # Try next bucket
 
         # Budget enforcement: trader must not spend more than declared surplus
         if scaled_price > max_spend:
-            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id)
+            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id, dealer_snap=dealer_snap)
             continue  # Try next bucket (cheaper ticket might exist)
 
         # Update trader state
@@ -709,7 +983,7 @@ def _execute_buy_trade(
         if trader.cash < upcoming_obligations:
             trader.cash += scaled_price
             trader.tickets_owned.pop()
-            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id)
+            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id, dealer_snap=dealer_snap)
             continue  # Try next bucket
 
         # Post-buy safety margin check: reverse if buy makes trader underwater
@@ -717,7 +991,7 @@ def _execute_buy_trade(
         if post_safety_margin < 0:
             trader.cash += scaled_price
             trader.tickets_owned.pop()
-            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id)
+            _reverse_buy_and_recompute(subsystem, dealer, vbt, result, bucket_id, dealer_snap=dealer_snap)
             continue  # Try next bucket
 
         # Align dealer/VBT cash with adjusted price after all rejection gates.
@@ -758,6 +1032,13 @@ def _execute_buy_trade(
         if dealer_budgets is not None:
             payee_id = f"vbt_{bucket_id}" if result.is_passthrough else f"dealer_{bucket_id}"
             dealer_budgets[payee_id] = dealer_budgets.get(payee_id, Decimal(0)) + scaled_price
+
+        # Option G: mark bucket dirty so inter-round recompute can skip clean buckets.
+        subsystem._dirty_buckets.add(bucket_id)
+
+        # Option H: invalidate trader so intentions are refreshed next round.
+        if subsystem._intention_cache is not None:
+            subsystem._intention_cache.invalidate(trader_id)
 
         return scaled_price  # One buy per trader per batch
 

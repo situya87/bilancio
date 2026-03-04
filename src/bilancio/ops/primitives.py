@@ -86,11 +86,19 @@ def consume(system: System, instr_id: str, amount: int) -> None:
     instr = system.state.contracts[instr_id]
     if amount <= 0 or amount > instr.amount:
         raise ValidationError("invalid consume amount")
+    # -- undo log instrumentation (scaffold) --
+    undo_log = getattr(system, "_undo_log", None)
+    if undo_log is not None:
+        undo_log.record_setattr(instr, "amount", instr.amount)
     instr.amount -= amount
     logger.debug("consume %s: amount=%d (remaining=%d)", instr_id, amount, instr.amount)
     if instr.amount == 0:
         holder = system.state.agents[instr.asset_holder_id]
         issuer = system.state.agents[instr.liability_issuer_id]
+        if undo_log is not None:
+            undo_log.record_set_remove(holder.asset_ids, instr_id)
+            undo_log.record_set_remove(issuer.liability_ids, instr_id)
+            undo_log.record_dict_del(system.state.contracts, instr_id, instr)
         holder.asset_ids.remove(instr_id)
         issuer.liability_ids.remove(instr_id)
         del system.state.contracts[instr_id]

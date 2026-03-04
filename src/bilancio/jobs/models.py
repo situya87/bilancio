@@ -29,6 +29,7 @@ class JobConfig:
     outside_mid_ratios: list[Decimal] = field(default_factory=lambda: [Decimal("1")])
     maturity_days: int = 5
     seeds: list[int] = field(default_factory=lambda: [42])
+    performance: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -42,6 +43,7 @@ class JobConfig:
             "outside_mid_ratios": [str(r) for r in self.outside_mid_ratios],
             "maturity_days": self.maturity_days,
             "seeds": self.seeds,
+            "performance": self.performance,
         }
 
     @classmethod
@@ -57,6 +59,7 @@ class JobConfig:
             outside_mid_ratios=[Decimal(r) for r in data.get("outside_mid_ratios", ["1"])],
             maturity_days=data.get("maturity_days", 5),
             seeds=data.get("seeds", [42]),
+            performance=data.get("performance", {}),
         )
 
 

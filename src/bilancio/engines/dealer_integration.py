@@ -62,6 +62,8 @@ from bilancio.dealer.trading import TradeExecutor
 from bilancio.decision.intentions import (
     collect_buy_intentions,
     collect_sell_intentions,
+    init_intention_cache,
+    refresh_intentions,
 )
 from bilancio.decision.profiles import TraderProfile, VBTProfile
 from bilancio.domain.agent import AgentKind
@@ -196,6 +198,31 @@ class DealerSubsystem:
     # Concentration limit (Feature 3): max fraction of total dealer inventory
     # from a single issuer.  0 = disabled (no limit).
     dealer_concentration_limit: Decimal = Decimal(0)
+
+    # Performance option C: snapshot/restore dealer derived fields on reversal.
+    cache_dealer_quotes: bool = False
+
+    # Performance option F: preview-then-commit buy path.
+    preview_buy: bool = False
+
+    # Performance option B: prune traders with no tickets AND no cash before
+    # collecting intentions each round.
+    prune_ineligible: bool = False
+
+    # Performance option G: only recompute dealer state for buckets where a
+    # trade occurred (dirty buckets) instead of all 3 buckets every round.
+    dirty_bucket_recompute: bool = False
+    _dirty_buckets: set = field(default_factory=set)
+
+    # Performance option H: maintain persistent intention queues across
+    # trading rounds; only re-evaluate traders whose state changed.
+    incremental_intentions: bool = False
+    _intention_cache: Any = None
+
+    # Performance option D: matching order for sell/buy intention lists.
+    # "random" (default) shuffles; "urgency" sorts sellers by stress
+    # (descending) and buyers by surplus (descending).
+    matching_order: str = "random"
 
 
 
@@ -569,6 +596,20 @@ def initialize_balanced_dealer_subsystem(
     return subsystem
 
 
+def _prune_ineligible_traders(subsystem: DealerSubsystem) -> set[str]:
+    """Return the set of trader IDs that can potentially trade.
+
+    A trader is eligible if it has any tickets (can sell) OR any cash (can buy).
+    Traders with neither are skipped during intention collection, avoiding
+    unnecessary shortfall/surplus calculations.
+    """
+    eligible: set[str] = set()
+    for trader_id, trader in subsystem.traders.items():
+        if trader.tickets_owned or trader.cash > 0:
+            eligible.add(trader_id)
+    return eligible
+
+
 def run_dealer_trading_phase(
     subsystem: DealerSubsystem, system: System, current_day: int
 ) -> list[dict[str, object]]:
@@ -668,9 +709,34 @@ def run_dealer_trading_phase(
     # re-matches against dealer quotes.  Dealer state is recomputed between
     # rounds to reflect updated inventory/cash.
     n_rounds = getattr(subsystem, "trading_rounds", 1)
+    cache = None  # Option H intention cache (initialised in round 0 if enabled)
     for _round in range(n_rounds):
-        sell_intentions = collect_sell_intentions(subsystem, current_day)
-        buy_intentions = collect_buy_intentions(subsystem, current_day)
+        # Performance option B: pre-filter traders that definitely cannot trade.
+        eligible: set[str] | None = None
+        if subsystem.prune_ineligible:
+            eligible = _prune_ineligible_traders(subsystem)
+
+        # Option H: incremental intention queues across rounds.
+        if subsystem.incremental_intentions:
+            if _round == 0:
+                cache = init_intention_cache(
+                    subsystem, current_day, eligible_traders=eligible,
+                )
+                subsystem._intention_cache = cache
+            else:
+                assert cache is not None
+                refresh_intentions(
+                    cache, subsystem, current_day, eligible_traders=eligible,
+                )
+            sell_intentions = list(cache.sell_queue.values())
+            buy_intentions = list(cache.buy_queue.values())
+        else:
+            sell_intentions = collect_sell_intentions(
+                subsystem, current_day, eligible_traders=eligible,
+            )
+            buy_intentions = collect_buy_intentions(
+                subsystem, current_day, eligible_traders=eligible,
+            )
 
         if not sell_intentions and not buy_intentions:
             break  # No one wants to trade — stop early
@@ -682,13 +748,28 @@ def run_dealer_trading_phase(
             sell_intentions,
             buy_intentions,
             events,
+            matching_order=subsystem.matching_order,
         )
 
         # Recompute dealer quotes between rounds (updated inventory/cash)
         if _round < n_rounds - 1:
-            for bucket_id, dealer in subsystem.dealers.items():
-                vbt = subsystem.vbts[bucket_id]
-                recompute_dealer_state(dealer, vbt, subsystem.params)
+            if subsystem.dirty_bucket_recompute:
+                # Option G: only recompute buckets that had a successful trade.
+                for bucket_id in subsystem._dirty_buckets:
+                    recompute_dealer_state(
+                        subsystem.dealers[bucket_id],
+                        subsystem.vbts[bucket_id],
+                        subsystem.params,
+                    )
+                subsystem._dirty_buckets.clear()
+            else:
+                for bucket_id, dealer in subsystem.dealers.items():
+                    vbt = subsystem.vbts[bucket_id]
+                    recompute_dealer_state(dealer, vbt, subsystem.params)
+
+    # Clear the intention cache at the end of the day so stale state
+    # does not leak into the next day's trading.
+    subsystem._intention_cache = None
 
     return events
 
