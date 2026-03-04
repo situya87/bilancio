@@ -95,6 +95,7 @@ class LocalExecutor:
                 detailed_dealer_logging=options.detailed_dealer_logging,
                 run_id=options.run_id or run_id,
                 regime=options.regime or "",
+                performance=options.performance,
             )
 
             execution_time_ms = int((time.time() - start_time) * 1000)

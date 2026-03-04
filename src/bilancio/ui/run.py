@@ -1,10 +1,15 @@
 """Orchestration logic for running Bilancio simulations."""
 
+from __future__ import annotations
+
 import sys
 from collections.abc import Callable
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from bilancio.core.performance import PerformanceConfig
 
 from rich.console import Console
 from rich.prompt import Confirm
@@ -69,6 +74,7 @@ def run_scenario(
     run_id: str = "",
     regime: str = "",
     progress_callback: Callable[[int, int], None] | None = None,
+    performance: PerformanceConfig | None = None,
 ) -> None:
     """Run a Bilancio simulation scenario.
 
@@ -83,6 +89,7 @@ def run_scenario(
         export: Dictionary with export paths (balances_csv, events_jsonl)
         html_output: Optional path to export HTML with colored output
         progress_callback: Optional callback(current_day, max_days) for progress tracking
+        performance: Optional performance tuning configuration
     """
     # Load configuration
     console.print("[dim]Loading scenario...[/dim]")
@@ -343,6 +350,7 @@ def run_scenario(
             enable_banking=enable_banking,
             enable_bank_lending=enable_bank_lending,
             cb_lending_cutoff_day=_cb_lending_cutoff_day,
+            performance=performance,
         )
     else:
         days_data = run_until_stable_mode(
@@ -361,6 +369,7 @@ def run_scenario(
             enable_bank_lending=enable_bank_lending,
             cb_lending_cutoff_day=_cb_lending_cutoff_day,
             progress_callback=progress_callback,
+            performance=performance,
         )
 
     # Export results if requested
@@ -494,6 +503,7 @@ def run_step_mode(
     enable_banking: bool = False,
     enable_bank_lending: bool = False,
     cb_lending_cutoff_day: int | None = None,
+    performance: PerformanceConfig | None = None,
 ) -> list[dict[str, Any]]:
     """Run simulation in step-by-step mode.
 
@@ -544,6 +554,7 @@ def run_step_mode(
                 enable_rating=enable_rating,
                 enable_banking=enable_banking,
                 enable_bank_lending=enable_bank_lending,
+                performance=performance,
             )
             from bilancio.engines.simulation import (
                 DayReport,
@@ -704,6 +715,7 @@ def run_until_stable_mode(
     enable_bank_lending: bool = False,
     cb_lending_cutoff_day: int | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
+    performance: PerformanceConfig | None = None,
 ) -> list[dict[str, Any]]:
     """Run simulation until stable state is reached.
 
@@ -766,6 +778,7 @@ def run_until_stable_mode(
                 enable_rating=enable_rating,
                 enable_banking=enable_banking,
                 enable_bank_lending=enable_bank_lending,
+                performance=performance,
             )
             impacted = _impacted_today(system, day_before)
             defaults = _defaults_today(system, day_before)

@@ -231,6 +231,8 @@ class CloudExecutor:
             result["outside_mid_ratio"] = options.outside_mid_ratio
         if options.seed is not None:
             result["seed"] = options.seed
+        if options.performance is not None:
+            result["performance"] = options.performance.to_dict()
         return result
 
     @retry_transient(max_retries=2)

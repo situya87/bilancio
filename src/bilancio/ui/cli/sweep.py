@@ -223,6 +223,14 @@ def sweep_list() -> None:
     help="Default handling mode for runs",
 )
 @click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
+@click.option("--perf-preset", type=click.Choice(["compatible", "fast", "aggressive"]), default=None, help="Performance preset")
+@click.option("--fast-atomic", is_flag=True, default=False, help="Disable deepcopy in safe phases")
+@click.option("--preview-buy", is_flag=True, default=False, help="Preview-then-commit buy path")
+@click.option("--cache-dealer-quotes", is_flag=True, default=False, help="Snapshot/restore dealer state")
+@click.option("--dirty-bucket-recompute", is_flag=True, default=False, help="Only recompute traded buckets")
+@click.option("--prune-ineligible", is_flag=True, default=False, help="Skip zero-resource agents")
+@click.option("--incremental-intentions", is_flag=True, default=False, help="Incremental intention queues")
+@click.option("--matching-order", type=click.Choice(["random", "urgency"]), default=None, help="Matching order")
 @click.pass_context
 def sweep_ring(
     ctx: click.Context,
@@ -257,6 +265,14 @@ def sweep_ring(
     name_prefix: str,
     default_handling: str,
     job_id: str | None,
+    perf_preset: str | None,
+    fast_atomic: bool,
+    preview_buy: bool,
+    cache_dealer_quotes: bool,
+    dirty_bucket_recompute: bool,
+    prune_ineligible: bool,
+    incremental_intentions: bool,
+    matching_order: str | None,
 ) -> None:
     """Run the Kalecki ring experiment sweep."""
     sweep_config: RingSweepConfig | None = None
@@ -400,6 +416,29 @@ def sweep_ring(
         )
         console.print("[cyan]Cloud execution enabled[/cyan]")
 
+    # Build PerformanceConfig from CLI flags
+    from bilancio.core.performance import PerformanceConfig
+
+    perf_kwargs: dict[str, object] = {}
+    if perf_preset:
+        perf_kwargs["preset"] = perf_preset
+    if fast_atomic:
+        perf_kwargs["fast_atomic"] = True
+    if preview_buy:
+        perf_kwargs["preview_buy"] = True
+    if cache_dealer_quotes:
+        perf_kwargs["cache_dealer_quotes"] = True
+    if dirty_bucket_recompute:
+        perf_kwargs["dirty_bucket_recompute"] = True
+    if prune_ineligible:
+        perf_kwargs["prune_ineligible"] = True
+    if incremental_intentions:
+        perf_kwargs["incremental_intentions"] = True
+    if matching_order:
+        perf_kwargs["matching_order"] = matching_order
+    perf_preset_val = perf_kwargs.pop("preset", "compatible") if perf_kwargs else "compatible"
+    performance = PerformanceConfig.create(perf_preset_val, **perf_kwargs) if perf_kwargs else None
+
     q_total_dec = Decimal(str(q_total))
     runner = RingSweepRunner(
         out_dir,
@@ -414,6 +453,7 @@ def sweep_ring(
         dealer_enabled=dealer_enabled,
         dealer_config=dealer_config,
         executor=executor,
+        performance=performance,
     )
 
     console.print(f"[dim]Output directory: {out_dir}[/dim]")
@@ -937,6 +977,14 @@ def sweep_comparison(
     default=None,
     help="Post-sweep analysis: 'all', 'none', or comma-separated list (drilldowns,deltas,dynamics,narrative). Default: interactive prompt.",
 )
+@click.option("--perf-preset", type=click.Choice(["compatible", "fast", "aggressive"]), default=None, help="Performance preset")
+@click.option("--fast-atomic", is_flag=True, default=False, help="Disable deepcopy in safe phases")
+@click.option("--preview-buy", is_flag=True, default=False, help="Preview-then-commit buy path")
+@click.option("--cache-dealer-quotes", is_flag=True, default=False, help="Snapshot/restore dealer state")
+@click.option("--dirty-bucket-recompute", is_flag=True, default=False, help="Only recompute traded buckets")
+@click.option("--prune-ineligible", is_flag=True, default=False, help="Skip zero-resource agents")
+@click.option("--incremental-intentions", is_flag=True, default=False, help="Incremental intention queues")
+@click.option("--matching-order", type=click.Choice(["random", "urgency"]), default=None, help="Matching order")
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -996,6 +1044,14 @@ def sweep_balanced(
     dealer_concentration_limit: Decimal,
     equalize_bank_capacity: bool,
     post_analysis: str | None,
+    perf_preset: str | None,
+    fast_atomic: bool,
+    preview_buy: bool,
+    cache_dealer_quotes: bool,
+    dirty_bucket_recompute: bool,
+    prune_ineligible: bool,
+    incremental_intentions: bool,
+    matching_order: str | None,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -1080,6 +1136,29 @@ def sweep_balanced(
     if alpha_vbt > 0 or alpha_trader > 0:
         click.echo(f"Informedness enabled (alpha_vbt={alpha_vbt}, alpha_trader={alpha_trader})")
 
+    # Build PerformanceConfig from CLI flags
+    from bilancio.core.performance import PerformanceConfig
+
+    perf_kwargs_bal: dict[str, object] = {}
+    if perf_preset:
+        perf_kwargs_bal["preset"] = perf_preset
+    if fast_atomic:
+        perf_kwargs_bal["fast_atomic"] = True
+    if preview_buy:
+        perf_kwargs_bal["preview_buy"] = True
+    if cache_dealer_quotes:
+        perf_kwargs_bal["cache_dealer_quotes"] = True
+    if dirty_bucket_recompute:
+        perf_kwargs_bal["dirty_bucket_recompute"] = True
+    if prune_ineligible:
+        perf_kwargs_bal["prune_ineligible"] = True
+    if incremental_intentions:
+        perf_kwargs_bal["incremental_intentions"] = True
+    if matching_order:
+        perf_kwargs_bal["matching_order"] = matching_order
+    perf_preset_val_bal = perf_kwargs_bal.pop("preset", "compatible") if perf_kwargs_bal else "compatible"
+    performance = PerformanceConfig.create(perf_preset_val_bal, **perf_kwargs_bal) if perf_kwargs_bal else None
+
     config = BalancedComparisonConfig(
         n_agents=n_agents,
         maturity_days=maturity_days,
@@ -1134,6 +1213,7 @@ def sweep_balanced(
         issuer_specific_pricing=issuer_specific_pricing,
         flow_sensitivity=flow_sensitivity,
         dealer_concentration_limit=dealer_concentration_limit,
+        performance=performance.to_dict() if performance else {},
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)

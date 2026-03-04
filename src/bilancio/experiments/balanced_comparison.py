@@ -25,6 +25,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from bilancio.core.performance import PerformanceConfig
 from bilancio.experiments.ring import PreparedRun, RingRunSummary, RingSweepRunner
 from bilancio.runners import LocalExecutor, RunOptions, SimulationExecutor
 
@@ -728,6 +729,11 @@ class BalancedComparisonConfig(BaseModel):
         description="Max fraction of dealer inventory from single issuer (0=disabled)",
     )
 
+    # Performance optimization
+    performance: dict[str, Any] = Field(
+        default_factory=dict, description="Performance optimization flags (PerformanceConfig)"
+    )
+
 
 class BalancedComparisonRunner:
     """
@@ -1116,6 +1122,7 @@ class BalancedComparisonRunner:
             issuer_specific_pricing=self.config.issuer_specific_pricing,
             flow_sensitivity=self.config.flow_sensitivity,
             dealer_concentration_limit=self.config.dealer_concentration_limit,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
     def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1174,6 +1181,7 @@ class BalancedComparisonRunner:
             issuer_specific_pricing=self.config.issuer_specific_pricing,
             flow_sensitivity=self.config.flow_sensitivity,
             dealer_concentration_limit=self.config.dealer_concentration_limit,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
     def _get_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1239,6 +1247,7 @@ class BalancedComparisonRunner:
             issuer_specific_pricing=self.config.issuer_specific_pricing,
             flow_sensitivity=self.config.flow_sensitivity,
             dealer_concentration_limit=self.config.dealer_concentration_limit,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
     def _get_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1309,6 +1318,7 @@ class BalancedComparisonRunner:
             issuer_specific_pricing=self.config.issuer_specific_pricing,
             flow_sensitivity=self.config.flow_sensitivity,
             dealer_concentration_limit=self.config.dealer_concentration_limit,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
     def _get_dealer_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1384,6 +1394,7 @@ class BalancedComparisonRunner:
             issuer_specific_pricing=self.config.issuer_specific_pricing,
             flow_sensitivity=self.config.flow_sensitivity,
             dealer_concentration_limit=self.config.dealer_concentration_limit,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
     def _get_bank_passive_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1440,6 +1451,7 @@ class BalancedComparisonRunner:
             issuer_specific_pricing=self.config.issuer_specific_pricing,
             flow_sensitivity=self.config.flow_sensitivity,
             dealer_concentration_limit=self.config.dealer_concentration_limit,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
     def _get_bank_dealer_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1501,6 +1513,7 @@ class BalancedComparisonRunner:
             issuer_specific_pricing=self.config.issuer_specific_pricing,
             flow_sensitivity=self.config.flow_sensitivity,
             dealer_concentration_limit=self.config.dealer_concentration_limit,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
     def _get_bank_dealer_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1574,6 +1587,7 @@ class BalancedComparisonRunner:
             issuer_specific_pricing=self.config.issuer_specific_pricing,
             flow_sensitivity=self.config.flow_sensitivity,
             dealer_concentration_limit=self.config.dealer_concentration_limit,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
     def run_all(self) -> list[BalancedComparisonResult]:

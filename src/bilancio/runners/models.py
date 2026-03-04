@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bilancio.storage.models import RunStatus
+
+if TYPE_CHECKING:
+    from bilancio.core.performance import PerformanceConfig
 
 
 @dataclass
@@ -49,6 +52,9 @@ class RunOptions:
     detailed_dealer_logging: bool = False
     run_id: str | None = None
     regime: str | None = None
+
+    # Performance optimization
+    performance: PerformanceConfig | None = None
 
     # Run parameters (for Supabase tracking in cloud execution)
     kappa: float | None = None

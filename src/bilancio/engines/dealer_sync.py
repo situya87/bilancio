@@ -179,6 +179,10 @@ def _pool_desk_cash(subsystem: DealerSubsystem) -> None:
         for vbt in subsystem.vbts.values():
             vbt.cash = per_desk
 
+    # Option G: pooling redistributes cash across all desks, so all buckets
+    # need recomputation in the next round.
+    subsystem._dirty_buckets.update(subsystem.dealers.keys())
+
 
 def estimate_forward_stress(
     system: System,

@@ -79,6 +79,16 @@ class System:
         if not self.policy.can_issue(issuer, c):
             raise ValidationError(f"{issuer.kind} cannot issue {c.kind}")
 
+        # -- undo log instrumentation (scaffold) --
+        undo_log = getattr(self, "_undo_log", None)
+        if undo_log is not None:
+            from bilancio.core.undo_log import _MISSING
+
+            old_contract = self.state.contracts.get(c.id, _MISSING)
+            undo_log.record_dict_set(self.state.contracts, c.id, old_contract)
+            undo_log.record_set_add(holder.asset_ids, c.id)
+            undo_log.record_set_add(issuer.liability_ids, c.id)
+
         self.state.contracts[c.id] = c
         holder.asset_ids.add(c.id)
         issuer.liability_ids.add(c.id)
@@ -88,7 +98,15 @@ class System:
         due_day = c.due_day
         if due_day is not None:
             if due_day not in self.state.contracts_by_due_day:
+                if undo_log is not None:
+                    undo_log.record_dict_set(
+                        self.state.contracts_by_due_day, due_day, _MISSING
+                    )
                 self.state.contracts_by_due_day[due_day] = []
+            if undo_log is not None:
+                undo_log.record_list_append(
+                    self.state.contracts_by_due_day[due_day], c.id
+                )
             self.state.contracts_by_due_day[due_day].append(c.id)
 
     # ---- events
@@ -170,6 +188,12 @@ class System:
         )
         with atomic(self):
             self.add_contract(c)
+            # -- undo log instrumentation (scaffold) --
+            undo_log = getattr(self, "_undo_log", None)
+            if undo_log is not None:
+                undo_log.record_setattr(
+                    self.state, "cb_cash_outstanding", self.state.cb_cash_outstanding
+                )
             self.state.cb_cash_outstanding += amount
             # Include alias if provided (for UI linking)
             if alias is not None:
@@ -201,6 +225,12 @@ class System:
                     break
             if remaining != 0:
                 raise ValidationError("insufficient cash to retire")
+            # -- undo log instrumentation (scaffold) --
+            undo_log = getattr(self, "_undo_log", None)
+            if undo_log is not None:
+                undo_log.record_setattr(
+                    self.state, "cb_cash_outstanding", self.state.cb_cash_outstanding
+                )
             self.state.cb_cash_outstanding -= amount
             self.log("CashRetired", frm=from_agent_id, amount=amount)
 

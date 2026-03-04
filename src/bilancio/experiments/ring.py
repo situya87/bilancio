@@ -19,6 +19,7 @@ from bilancio.experiments.sampling import (
     generate_grid_params,
     generate_lhs_params,
 )
+from bilancio.core.performance import PerformanceConfig
 from bilancio.runners import ExecutionResult, LocalExecutor, RunOptions
 from bilancio.runners.protocols import SimulationExecutor
 from bilancio.scenarios import compile_ring_explorer
@@ -332,6 +333,7 @@ class RingSweepRunner:
         flow_sensitivity: Decimal = Decimal("0.0"),
         dealer_concentration_limit: Decimal = Decimal("0"),
         reserve_ratio: Decimal | None = None,
+        performance: PerformanceConfig | None = None,
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -395,6 +397,7 @@ class RingSweepRunner:
         self.flow_sensitivity = flow_sensitivity
         self.dealer_concentration_limit = dealer_concentration_limit
         self.reserve_ratio = reserve_ratio
+        self.performance = performance
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -922,6 +925,7 @@ class RingSweepRunner:
             detailed_dealer_logging=self.detailed_dealer_logging,
             run_id=run_id,
             regime=regime,
+            performance=self.performance,
             # Run parameters for Supabase tracking
             kappa=float(kappa),
             concentration=float(concentration),
@@ -1332,6 +1336,7 @@ class RingSweepRunner:
             detailed_dealer_logging=self.detailed_dealer_logging,
             run_id=run_id,
             regime=regime,
+            performance=self.performance,
             # Run parameters for Supabase tracking
             kappa=float(kappa),
             concentration=float(concentration),
