@@ -118,8 +118,7 @@ fn recompute_dealer_state_native(
     };
     let k_star = k_star_dec
         .to_i64()
-        .unwrap_or(0)
-        .max(0);
+        .unwrap_or(0);
     let x_star = s * Decimal::from(k_star);
     let n = k_star + 1;
 
@@ -230,17 +229,21 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.a, 3);
-        assert_eq!(result.x, "0.80");
+        // x = inventory_count * ticket_size = 3 * 1 = 3
+        assert_eq!(result.x, "3");
 
-        // V = 0.80 * 3 + 50 = 52.4
+        // V = M * x + cash = 0.80 * 3 + 50 = 52.4
         let v = Decimal::from_str(&result.v_val).unwrap();
         assert_eq!(v, Decimal::from_str("52.40").unwrap());
 
         // K* = floor(52.4 / 0.80) = 65
         assert_eq!(result.k_star, 65);
 
-        assert!(!result.is_pinned_bid || !result.is_pinned_ask || true);
-        // Quotes should be valid
+        // With high capacity, interior quotes are not pinned
+        assert!(!result.is_pinned_bid);
+        assert!(!result.is_pinned_ask);
+
+        // Quotes should be valid: bid <= ask
         let bid = Decimal::from_str(&result.bid).unwrap();
         let ask = Decimal::from_str(&result.ask).unwrap();
         assert!(bid <= ask, "bid {} > ask {}", bid, ask);
