@@ -628,6 +628,37 @@ class RingSweepRunner:
             except EXTERNAL_SERVICE_ERRORS as exc:
                 _viability_logger.debug("Viability check skipped: %s", exc)
 
+        # Pre-simulation interbank viability check for banking runs
+        if self.n_banks > 0:
+            import logging
+
+            _ib_viability_logger = logging.getLogger(__name__)
+            try:
+                from bilancio.specification.trade_viability import (
+                    check_interbank_viability,
+                )
+
+                ib_report = check_interbank_viability(
+                    kappa=kappa,
+                    n_banks=self.n_banks,
+                    reserve_target_ratio=Decimal("0.10"),
+                    total_deposits_estimate=int(self.Q_total),
+                    credit_risk_loading=self.credit_risk_loading,
+                    outside_mid_ratio=self.outside_mid_ratio,
+                    cb_rate_escalation_slope=self.cb_rate_escalation_slope,
+                    cb_max_outstanding_ratio=self.cb_max_outstanding_ratio,
+                )
+                if not ib_report.all_viable:
+                    _ib_viability_logger.warning(
+                        "Interbank viability check failed for kappa=%s: %s",
+                        kappa,
+                        ib_report.diagnostics,
+                    )
+            except EXTERNAL_SERVICE_ERRORS as exc:
+                _ib_viability_logger.debug(
+                    "Interbank viability check skipped: %s", exc,
+                )
+
         run_uuid = uuid.uuid4().hex[:12]
         run_id = f"{phase}_{label}_{run_uuid}" if label else f"{phase}_{run_uuid}"
         run_dir = self.runs_dir / run_id

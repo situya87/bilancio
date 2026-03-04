@@ -170,3 +170,186 @@ def check_trade_viability(
         buy_viable=buy_viable,
         diagnostics=diagnostics,
     )
+
+
+@dataclass
+class InterbankViabilityReport:
+    """Result of a pre-simulation interbank viability check."""
+
+    corridor_viable: bool
+    reserve_target_viable: bool
+    auction_capacity_viable: bool
+    bank_vs_liquidation_viable: bool  # V8
+    cb_backstop_viable: bool
+    diagnostics: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def all_viable(self) -> bool:
+        return (
+            self.corridor_viable
+            and self.reserve_target_viable
+            and self.auction_capacity_viable
+            and self.bank_vs_liquidation_viable
+            and self.cb_backstop_viable
+        )
+
+
+def check_interbank_viability(
+    kappa: Decimal,
+    n_banks: int,
+    reserve_target_ratio: Decimal,
+    total_deposits_estimate: int,
+    r_base: Decimal = Decimal("0.01"),
+    r_stress: Decimal = Decimal("0.04"),
+    omega_base: Decimal = Decimal("0.01"),
+    omega_stress: Decimal = Decimal("0.02"),
+    credit_risk_loading: Decimal = Decimal("0"),
+    initial_prior: Decimal = Decimal("0.15"),
+    outside_spread: Decimal = Decimal("0.04"),
+    outside_mid_ratio: Decimal = Decimal("1.0"),
+    cb_rate_escalation_slope: Decimal = Decimal("0.05"),
+    cb_max_outstanding_ratio: Decimal = Decimal("2.0"),
+) -> InterbankViabilityReport:
+    """Check whether interbank market parameters are viable before simulation.
+
+    Performs five checks on corridor bounds, reserve targets, auction capacity,
+    bank-vs-sell cost comparison (V8), and CB backstop configuration.
+
+    Args:
+        kappa: System liquidity ratio L0/S1.
+        n_banks: Number of banks participating in the interbank market.
+        reserve_target_ratio: Fraction of deposits each bank targets as reserves.
+        total_deposits_estimate: Estimated total deposits across all banks.
+        r_base: Base policy rate (corridor midpoint at zero stress).
+        r_stress: Additional rate component at maximum stress.
+        omega_base: Base corridor width.
+        omega_stress: Additional corridor width at maximum stress.
+        credit_risk_loading: Multiplier for credit risk in bank lending rate.
+        initial_prior: Prior default probability (no-history agents).
+        outside_spread: Bid-ask spread in the secondary market (short bucket).
+        outside_mid_ratio: Base mid-price / face ratio before credit adjustment.
+        cb_rate_escalation_slope: CB rate escalation per unit of outstanding.
+        cb_max_outstanding_ratio: Maximum CB lending as ratio of bank capital.
+
+    Returns:
+        InterbankViabilityReport with per-check booleans and diagnostics.
+    """
+    warnings: list[str] = []
+    diagnostics: dict[str, Any] = {}
+
+    # ── Check 1: Corridor bounds ──────────────────────────────────────
+    # stress_factor mirrors BankProfile._stress_factor
+    one = Decimal(1)
+    zero = Decimal(0)
+    stress_factor = max(zero, one - kappa) / (one + kappa)
+    diagnostics["stress_factor"] = float(stress_factor)
+
+    M = r_base + r_stress * stress_factor
+    omega = omega_base + omega_stress * stress_factor
+    r_floor = M - omega / 2
+    r_ceiling = M + omega / 2
+
+    diagnostics["corridor_mid"] = float(M)
+    diagnostics["corridor_width"] = float(omega)
+    diagnostics["r_floor"] = float(r_floor)
+    diagnostics["r_ceiling"] = float(r_ceiling)
+
+    corridor_viable = omega > zero and r_floor >= zero and r_ceiling > r_floor
+
+    if not corridor_viable:
+        reasons: list[str] = []
+        if omega <= zero:
+            reasons.append("omega <= 0")
+        if r_floor < zero:
+            reasons.append("r_floor < 0")
+        if r_ceiling <= r_floor:
+            reasons.append("r_ceiling <= r_floor")
+        diagnostics["corridor_fail_reasons"] = reasons
+
+    if corridor_viable and omega < Decimal("0.001"):
+        warnings.append(
+            f"corridor nearly collapsed: omega={float(omega):.6f}"
+        )
+    if corridor_viable and r_ceiling > Decimal("0.20"):
+        warnings.append(
+            f"extreme ceiling rate: r_ceiling={float(r_ceiling):.4f}"
+        )
+
+    # ── Check 2: Reserve target ───────────────────────────────────────
+    computed_target = int(reserve_target_ratio * total_deposits_estimate)
+    diagnostics["reserve_target"] = computed_target
+
+    reserve_target_viable = (
+        reserve_target_ratio > zero and computed_target > 0
+    )
+
+    if not reserve_target_viable:
+        diagnostics["reserve_target_fail_reason"] = (
+            "reserve_target_ratio <= 0"
+            if reserve_target_ratio <= zero
+            else "computed_target <= 0"
+        )
+
+    if reserve_target_viable and computed_target < 10:
+        warnings.append(
+            f"reserve target very small: {computed_target}"
+        )
+
+    # ── Check 3: Auction capacity ─────────────────────────────────────
+    auction_capacity_viable = n_banks >= 2
+    diagnostics["n_banks"] = n_banks
+
+    if not auction_capacity_viable:
+        diagnostics["auction_fail_reason"] = "n_banks < 2"
+
+    if auction_capacity_viable and n_banks < 3:
+        warnings.append(
+            f"only {n_banks} banks — limited price discovery"
+        )
+
+    # ── Check 4: V8 — bank vs liquidation cost ────────────────────────
+    # Informational: always True
+    bank_vs_liquidation_viable = True
+
+    bank_rate_approx = M + credit_risk_loading * initial_prior
+    sell_haircut = initial_prior + outside_spread / 2
+
+    diagnostics["bank_rate_approx"] = float(bank_rate_approx)
+    diagnostics["sell_haircut"] = float(sell_haircut)
+
+    if credit_risk_loading == zero:
+        warnings.append(
+            "credit_risk_loading=0: bank always cheapest (no credit sensitivity)"
+        )
+    if bank_rate_approx > sell_haircut:
+        warnings.append(
+            f"bank borrowing ({float(bank_rate_approx):.4f}) more expensive "
+            f"than selling ({float(sell_haircut):.4f}) — unusual"
+        )
+
+    # ── Check 5: CB backstop ──────────────────────────────────────────
+    # Informational: always True
+    cb_backstop_viable = True
+
+    diagnostics["cb_rate_escalation_slope"] = float(cb_rate_escalation_slope)
+    diagnostics["cb_max_outstanding_ratio"] = float(cb_max_outstanding_ratio)
+
+    if cb_rate_escalation_slope == zero:
+        warnings.append(
+            "cb_rate_escalation_slope=0: no cost pressure on CB usage"
+        )
+    if cb_max_outstanding_ratio == zero:
+        warnings.append(
+            "cb_max_outstanding_ratio=0: uncapped CB lending"
+        )
+
+    diagnostics["warnings"] = warnings
+
+    return InterbankViabilityReport(
+        corridor_viable=corridor_viable,
+        reserve_target_viable=reserve_target_viable,
+        auction_capacity_viable=auction_capacity_viable,
+        bank_vs_liquidation_viable=bank_vs_liquidation_viable,
+        cb_backstop_viable=cb_backstop_viable,
+        diagnostics=diagnostics,
+    )
