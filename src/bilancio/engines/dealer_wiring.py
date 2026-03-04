@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from bilancio.engines.dealer_integration import DealerSubsystem
     from bilancio.engines.system import System
 
-from bilancio.dealer.kernel import recompute_dealer_state
 from bilancio.dealer.models import (
     BucketConfig,
     DealerState,
@@ -200,7 +199,7 @@ def _initialize_market_makers(
         # Dealer/VBT will acquire inventory by buying from traders during trading
 
         # Run kernel to compute initial quotes
-        recompute_dealer_state(dealer, vbt, subsystem.params)
+        subsystem._recompute_fn(dealer, vbt, subsystem.params)
 
         # Capture initial equity for P&L calculation (Section 8.2)
         # E_0^(b) = C_0^(b) + M * a_0^(b) * S
@@ -459,7 +458,7 @@ def _initialize_balanced_market_makers(
         subsystem.dealers[bucket_id] = dealer
 
         # Compute dealer quotes
-        recompute_dealer_state(dealer, vbt, subsystem.params)
+        subsystem._recompute_fn(dealer, vbt, subsystem.params)
 
         # Capture initial equity (dealer cash + VBT mid x dealer inventory x S)
         initial_equity = dealer.cash + vbt.M * dealer.a * subsystem.params.S
