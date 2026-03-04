@@ -107,6 +107,7 @@ class Job:
     error: str | None = None
     notes: str | None = None
     events: list[JobEvent] = field(default_factory=list)
+    provenance: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -122,6 +123,7 @@ class Job:
             "error": self.error,
             "notes": self.notes,
             "events": [e.to_dict() for e in self.events],
+            "provenance": self.provenance,
         }
 
     @classmethod
@@ -141,4 +143,5 @@ class Job:
             error=data.get("error"),
             notes=data.get("notes"),
             events=[JobEvent.from_dict(e) for e in data.get("events", [])],
+            provenance=data.get("provenance", {}),
         )

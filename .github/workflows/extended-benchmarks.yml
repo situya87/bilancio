@@ -55,6 +55,14 @@ jobs:
             script: scripts/run_failure_injection_integration_benchmark.py
             report_json: temp/failure_injection_integration_benchmark_report.json
             report_md: temp/failure_injection_integration_benchmark_report.md
+          - name: Regression Benchmark
+            script: scripts/run_regression_benchmark.py
+            report_json: temp/regression_benchmark_report.json
+            report_md: temp/regression_benchmark_report.md
+          - name: Failure-Mode Benchmark
+            script: scripts/run_failure_mode_benchmark.py
+            report_json: temp/failure_mode_benchmark_report.json
+            report_md: temp/failure_mode_benchmark_report.md
 
     steps:
       - name: Checkout repository

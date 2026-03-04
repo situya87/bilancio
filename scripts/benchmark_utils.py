@@ -188,6 +188,38 @@ def build_markdown_report(
     return "\n".join(lines).rstrip() + "\n"
 
 
+def check_operational_budget(
+    elapsed_seconds: float,
+    peak_memory_mb: float | None = None,
+    *,
+    wall_time_budget_seconds: float = 300.0,
+    memory_budget_mb: float = 2048.0,
+) -> dict[str, Any]:
+    """Check if operational budgets are met.
+
+    Args:
+        elapsed_seconds: Wall time in seconds.
+        peak_memory_mb: Peak memory usage in MB (None if not measured).
+        wall_time_budget_seconds: Maximum allowed wall time.
+        memory_budget_mb: Maximum allowed peak memory.
+
+    Returns:
+        Dict with budget check results.
+    """
+    wall_ok = elapsed_seconds <= wall_time_budget_seconds
+    mem_ok = peak_memory_mb is None or peak_memory_mb <= memory_budget_mb
+
+    return {
+        "wall_time_seconds": round(elapsed_seconds, 3),
+        "wall_time_budget_seconds": wall_time_budget_seconds,
+        "wall_time_ok": wall_ok,
+        "peak_memory_mb": round(peak_memory_mb, 1) if peak_memory_mb is not None else None,
+        "memory_budget_mb": memory_budget_mb,
+        "memory_ok": mem_ok,
+        "all_ok": wall_ok and mem_ok,
+    }
+
+
 def write_reports(report: dict[str, Any], markdown: str, out_json: Path, out_md: Path) -> None:
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_md.parent.mkdir(parents=True, exist_ok=True)

@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
+from bilancio.provenance import collect_provenance
+
 from .job_id import generate_job_id
 from .models import Job, JobConfig, JobEvent, JobStatus
 
@@ -136,6 +138,7 @@ class JobManager:
             description=description,
             config=config,
             notes=notes,
+            provenance=collect_provenance(),
         )
 
         # Record creation event

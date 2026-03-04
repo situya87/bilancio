@@ -484,6 +484,7 @@ def run_simulation(
             "error": None,
             "modal_call_id": modal_call_id,
             "metrics": metrics,  # Include computed metrics in return
+            "performance_config": perf_dict,
         }
 
     except EXTERNAL_OPERATION_ERRORS as e:
@@ -517,6 +518,7 @@ def run_simulation(
             "error": str(e),
             "modal_call_id": modal_call_id,
             "metrics": {},
+            "performance_config": options.get("performance"),
         }
 
 

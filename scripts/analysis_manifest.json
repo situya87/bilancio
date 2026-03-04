@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "primary_endpoints": [
+    {
+      "metric": "delta_total",
+      "label": "Default rate",
+      "direction": "lower_is_better",
+      "mde": 0.05,
+      "alpha": 0.05,
+      "power": 0.80
+    },
+    {
+      "metric": "phi_total",
+      "label": "Clearing rate",
+      "direction": "higher_is_better",
+      "mde": 0.05,
+      "alpha": 0.05,
+      "power": 0.80
+    }
+  ],
+  "hypothesis_families": [
+    {
+      "name": "trading_effect",
+      "endpoints": ["delta_total"],
+      "multiple_testing": "benjamini_hochberg",
+      "alpha": 0.05
+    }
+  ],
+  "design": {
+    "type": "paired",
+    "control": "passive",
+    "treatment": "active",
+    "pairing_key": ["kappa", "concentration", "mu", "seed"]
+  }
+}

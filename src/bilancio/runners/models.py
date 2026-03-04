@@ -104,3 +104,6 @@ class ExecutionResult:
 
     # Computed metrics (from cloud execution)
     metrics: dict[str, Any] | None = None
+
+    # Performance configuration used for this run
+    performance_config: dict[str, Any] | None = None

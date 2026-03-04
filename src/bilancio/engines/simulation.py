@@ -386,6 +386,11 @@ def run_day(
                     system.state.dealer_subsystem.executor._recompute_fn = (
                         recompute_dealer_state_native
                     )
+            else:
+                logger.warning(
+                    "dealer_backend='native' requested but Rust extension unavailable; "
+                    "falling back to Python"
+                )
 
         # Run dealer trading and collect events
         dealer_events = run_dealer_trading_phase(system.state.dealer_subsystem, system, current_day)

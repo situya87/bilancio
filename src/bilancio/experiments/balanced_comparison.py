@@ -17,6 +17,7 @@ import csv
 import json
 import logging
 import time
+import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
@@ -941,6 +942,19 @@ class BalancedComparisonRunner:
         self.config = config
         self.base_dir = out_dir
         self.executor: SimulationExecutor = executor or LocalExecutor()
+
+        # Deprecation warnings for banking arms (WI-5: use 'bilancio sweep bank' instead)
+        if (
+            self.config.enable_bank_passive
+            or self.config.enable_bank_dealer
+            or self.config.enable_bank_dealer_nbfi
+        ):
+            warnings.warn(
+                "Banking arms in balanced comparison are deprecated. "
+                "Use 'bilancio sweep bank' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         # Cloud-only mode: skip local processing when using cloud executor
         # Modal already saves runs to Supabase, so no need to duplicate

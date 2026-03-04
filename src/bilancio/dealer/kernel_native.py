@@ -58,7 +58,11 @@ def recompute_dealer_state_native(
     The function signature and in-place mutation semantics are identical
     to :func:`bilancio.dealer.kernel.recompute_dealer_state`.
     """
-    assert _native_fn is not None, "Rust extension not available"
+    if _native_fn is None:
+        raise RuntimeError(
+            "Rust extension not available. Install with: "
+            "cd rust/bilancio_kernel && maturin develop --release"
+        )
 
     result = _native_fn(
         inventory_count=len(dealer.inventory),

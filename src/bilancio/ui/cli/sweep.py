@@ -845,17 +845,17 @@ def sweep_comparison(
 @click.option(
     "--enable-bank-passive/--no-bank-passive",
     default=False,
-    help="Enable arm: banks + passive dealer",
+    help="[DEPRECATED: use 'bilancio sweep bank'] Enable arm: banks + passive dealer",
 )
 @click.option(
     "--enable-bank-dealer/--no-bank-dealer",
     default=False,
-    help="Enable arm: banks + active dealer",
+    help="[DEPRECATED: use 'bilancio sweep bank'] Enable arm: banks + active dealer",
 )
 @click.option(
     "--enable-bank-dealer-nbfi/--no-bank-dealer-nbfi",
     default=False,
-    help="Enable arm: banks + active dealer + NBFI",
+    help="[DEPRECATED: use 'bilancio sweep bank'] Enable arm: banks + active dealer + NBFI",
 )
 @click.option(
     "--n-banks-for-banking",
@@ -1076,6 +1076,9 @@ def sweep_balanced(
       - active/: All active dealer runs
       - aggregate/comparison.csv: C vs D metrics
       - aggregate/summary.json: Aggregate statistics
+
+    Note: For bank lending experiments, use 'bilancio sweep bank' instead
+    of the deprecated --enable-bank-* flags.
     """
     from bilancio.experiments.balanced_comparison import (
         BalancedComparisonConfig,
