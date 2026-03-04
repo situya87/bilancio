@@ -2108,7 +2108,7 @@ class BalancedComparisonRunner:
             if all_run_ids:
                 try:
                     self.executor.compute_aggregate_metrics(all_run_ids)
-                except (ValueError, KeyError, TypeError, OSError) as e:
+                except EXTERNAL_OPERATION_ERRORS as e:
                     print(f"\nWarning: Aggregate metrics computation failed: {e}", flush=True)
                     print("Local comparison.csv is still available.", flush=True)
 
@@ -3253,7 +3253,7 @@ class BalancedComparisonRunner:
             for name, path in paths.items():
                 logger.info("Stats %s written to %s", name, path)
             print(f"Statistical analysis written to {self.aggregate_dir}", flush=True)
-        except (ValueError, KeyError, TypeError, OSError, ImportError) as e:
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Statistical analysis failed: %s", e)
             print(f"Warning: Statistical analysis failed: {e}", flush=True)
 
@@ -3275,7 +3275,7 @@ class BalancedComparisonRunner:
             for name, path in paths.items():
                 logger.info("Activity analysis %s: %s", name, path)
             print(f"Mechanism activity analysis written to {analysis_dir}", flush=True)
-        except (ValueError, KeyError, TypeError, OSError, ImportError) as e:
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Activity analysis failed: %s", e)
             print(f"Warning: Activity analysis failed: {e}", flush=True)
 

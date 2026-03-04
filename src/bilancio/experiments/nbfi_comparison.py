@@ -967,7 +967,7 @@ class NBFIComparisonRunner:
             for name, path in paths.items():
                 logger.info("Stats %s written to %s", name, path)
             print(f"Statistical analysis written to {self.aggregate_dir}", flush=True)
-        except (ValueError, KeyError, TypeError, OSError, ImportError) as e:
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Statistical analysis failed: %s", e)
             print(f"Warning: Statistical analysis failed: {e}", flush=True)
 
@@ -989,6 +989,6 @@ class NBFIComparisonRunner:
             for name, path in paths.items():
                 logger.info("Activity analysis %s: %s", name, path)
             print(f"Mechanism activity analysis written to {analysis_dir}", flush=True)
-        except (ValueError, KeyError, TypeError, OSError, ImportError) as e:
+        except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Activity analysis failed: %s", e)
             print(f"Warning: Activity analysis failed: {e}", flush=True)
