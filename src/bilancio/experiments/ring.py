@@ -14,12 +14,12 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from bilancio.analysis.metrics_computer import MetricsComputer
 from bilancio.config.models import RingExplorerGeneratorConfig
+from bilancio.core.performance import PerformanceConfig
 from bilancio.experiments.sampling import (
     generate_frontier_params,
     generate_grid_params,
     generate_lhs_params,
 )
-from bilancio.core.performance import PerformanceConfig
 from bilancio.runners import ExecutionResult, LocalExecutor, RunOptions
 from bilancio.runners.protocols import SimulationExecutor
 from bilancio.scenarios import compile_ring_explorer
@@ -334,6 +334,7 @@ class RingSweepRunner:
         dealer_concentration_limit: Decimal = Decimal("0"),
         reserve_ratio: Decimal | None = None,
         performance: PerformanceConfig | None = None,
+        adapt_preset: str = "static",
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -398,6 +399,7 @@ class RingSweepRunner:
         self.dealer_concentration_limit = dealer_concentration_limit
         self.reserve_ratio = reserve_ratio
         self.performance = performance
+        self.adapt_preset = adapt_preset
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -1300,6 +1302,28 @@ class RingSweepRunner:
                     "preventive_lending": self.lender_preventive_lending,
                     "prevention_threshold": str(self.lender_prevention_threshold),
                 }
+
+        # Plan 050: Adaptive profile overrides
+        if self.adapt_preset and self.adapt_preset != "static":
+            from bilancio.decision.adaptive import build_adaptive_overrides
+            overrides = build_adaptive_overrides(
+                self.adapt_preset, kappa, mu, concentration, self.maturity_days, self.n_agents,
+            )
+            # Merge trader overrides into balanced_dealer section
+            if "balanced_dealer" in scenario:
+                for key, value in overrides.get("trader", {}).items():
+                    scenario["balanced_dealer"][key] = str(value) if isinstance(value, Decimal) else value
+                # Merge VBT overrides
+                for key, value in overrides.get("vbt", {}).items():
+                    scenario["balanced_dealer"][key] = str(value) if isinstance(value, Decimal) else value
+            # Merge risk_params overrides
+            risk_section = scenario.get("dealer", {}).get("risk_assessment", {})
+            for key, value in overrides.get("risk_params", {}).items():
+                risk_section[key] = str(value) if isinstance(value, Decimal) else value
+            # Merge lender overrides
+            if "lender" in scenario:
+                for key, value in overrides.get("lender", {}).items():
+                    scenario["lender"][key] = str(value) if isinstance(value, Decimal) else value
 
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})

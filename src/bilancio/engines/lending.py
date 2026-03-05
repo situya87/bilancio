@@ -764,14 +764,66 @@ def run_lending_phase(
         List of lending event dicts for aggregation
     """
     config = lending_config or LendingConfig()
-    portfolio, screener, selector, pricer = _resolve_protocols(config)
     events: list[dict[str, Any]] = []
+    profile = config.lender_profile
+
+    # Plan 050: Adaptive capital conservation — scale exposure limits by utilization
+    effective_config = config
+    if profile is not None and getattr(profile, "adaptive_capital_conservation", False):
+        from bilancio.domain.instruments.base import InstrumentKind as IK
+
+        lender_id_check = _find_active_lender(system)
+        if lender_id_check is not None:
+            lender_agent = system.state.agents.get(lender_id_check)
+            if lender_agent is not None:
+                total_assets = Decimal("0")
+                total_loans = Decimal("0")
+                for cid in lender_agent.asset_ids:
+                    contract = system.state.contracts.get(cid)
+                    if contract is not None:
+                        total_assets += Decimal(contract.amount)
+                        if contract.kind == IK.NON_BANK_LOAN:
+                            total_loans += Decimal(contract.amount)
+                if total_assets > 0:
+                    utilization = total_loans / total_assets
+                    conservation = max(Decimal("0.2"), Decimal("1") - utilization)
+                    from dataclasses import replace as dc_replace
+
+                    effective_config = dc_replace(
+                        config,
+                        max_single_exposure=config.max_single_exposure * conservation,
+                        max_total_exposure=config.max_total_exposure * conservation,
+                    )
+
+    # Plan 050: Adaptive prevention threshold — lower when defaults accelerate
+    effective_prevention_threshold: Decimal | None = None
+    if (
+        profile is not None
+        and getattr(profile, "adaptive_prevention", False)
+        and config.risk_assessor is not None
+        and config.risk_assessor.payment_history
+    ):
+        recent_5 = [
+            (d, dflt) for d, _, dflt in config.risk_assessor.payment_history
+            if d >= current_day - 5
+        ]
+        recent_2 = [
+            (d, dflt) for d, _, dflt in config.risk_assessor.payment_history
+            if d >= current_day - 2
+        ]
+        if len(recent_5) > 3 and len(recent_2) > 0:
+            rate_5 = sum(1 for _, dflt in recent_5 if dflt) / len(recent_5)
+            rate_2 = sum(1 for _, dflt in recent_2 if dflt) / len(recent_2)
+            if rate_2 > rate_5:  # defaults accelerating
+                effective_prevention_threshold = config.prevention_threshold * Decimal("0.7")
+
+    portfolio, screener, selector, pricer = _resolve_protocols(effective_config)
 
     lender_id = _find_active_lender(system)
     if lender_id is None:
         return events
 
-    info = _build_information_service(system, config, lender_id)
+    info = _build_information_service(system, effective_config, lender_id)
     capacity = _compute_available_lending_capacity(system, lender_id, portfolio, info)
     if capacity is None:
         return events
@@ -782,7 +834,7 @@ def run_lending_phase(
     opportunities = _collect_lending_opportunities(
         system,
         current_day,
-        config,
+        effective_config,
         lender_id,
         initial_capital,
         info,
@@ -793,25 +845,55 @@ def run_lending_phase(
         events,
     )
 
-    _rank_opportunities(opportunities, config)
+    # Plan 050: Adaptive rates — apply rate multiplier from portfolio losses
+    if profile is not None and getattr(profile, "adaptive_rates", False):
+        rate_multiplier = Decimal("1")
+        if (
+            config.risk_assessor is not None
+            and config.risk_assessor.payment_history
+        ):
+            recent = [
+                (d, did, dflt)
+                for d, did, dflt in config.risk_assessor.payment_history
+                if d >= current_day - 5
+            ]
+            if recent:
+                realized = sum(1 for _, _, dflt in recent if dflt) / max(1, len(recent))
+                expected = float(profile.base_default_estimate)
+                if realized > expected:
+                    excess = min(1.0, (realized - expected) / max(0.01, expected))
+                    rate_multiplier = Decimal("1") + Decimal(str(excess))
+        if rate_multiplier > Decimal("1"):
+            for opp in opportunities:
+                opp["rate"] = opp["rate"] * rate_multiplier
+
+    _rank_opportunities(opportunities, effective_config)
     remaining_capital = _execute_ranked_opportunities(
         system,
         current_day,
-        config,
+        effective_config,
         lender_id,
         selector,
-        config.lender_profile,
+        effective_config.lender_profile,
         opportunities,
         available,
         events,
     )
 
-    profile = config.lender_profile
     if config.preventive_lending and remaining_capital > 0 and profile is not None:
+        # Plan 050: Use effective prevention threshold if computed
+        prevention_config = effective_config
+        if effective_prevention_threshold is not None:
+            from dataclasses import replace as dc_replace_p
+
+            prevention_config = dc_replace_p(
+                effective_config,
+                prevention_threshold=effective_prevention_threshold,
+            )
         preventive_opps = _collect_preventive_opportunities(
             system,
             current_day,
-            config,
+            prevention_config,
             lender_id,
             initial_capital,
             info,
@@ -827,7 +909,7 @@ def run_lending_phase(
             system,
             current_day,
             lender_id,
-            config,
+            prevention_config,
             profile,
             preventive_opps,
             remaining_capital,

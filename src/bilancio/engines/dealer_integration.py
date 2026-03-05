@@ -196,6 +196,9 @@ class DealerSubsystem:
     issuer_default_probs: dict[str, Decimal] = field(default_factory=dict)
     system_default_prob: Decimal = Decimal(0)
 
+    # Observed default rate (Plan 050: within-run adaptation)
+    observed_default_rate: Decimal = Decimal("0")
+
     # Concentration limit (Feature 3): max fraction of total dealer inventory
     # from a single issuer.  0 = disabled (no limit).
     dealer_concentration_limit: Decimal = Decimal(0)
@@ -229,6 +232,10 @@ class DealerSubsystem:
     # Defaults to the Python implementation; swapped to the Rust native
     # version when ``PerformanceConfig.dealer_backend == "native"``.
     _recompute_fn: Any = field(default=None)
+
+    # Plan 050: Effective buy_reserve_fraction (adaptive reserves)
+    # Updated daily in run_dealer_trading_phase when adaptive_reserves=True.
+    effective_buy_reserve_fraction: Decimal | None = None
 
     def __post_init__(self) -> None:
         if self._recompute_fn is None:
@@ -683,6 +690,39 @@ def run_dealer_trading_phase(
         return []
 
     events: list[dict[str, object]] = []
+
+    # Plan 050: Adaptive risk aversion — update buy premium from observed defaults
+    if subsystem.trader_profile.adaptive_risk_aversion and subsystem.risk_assessor:
+        n_total = len(system.state.agents)
+        n_defaulted = len(system.state.defaulted_agent_ids)
+        observed = Decimal(n_defaulted) / Decimal(max(n_total, 1))
+        base_ra = subsystem.trader_profile.risk_aversion
+        effective_ra = base_ra + (Decimal("1") - base_ra) * min(
+            Decimal("1"), observed / Decimal("0.3")
+        )
+        new_buy_premium = Decimal("0.01") + Decimal("0.02") * effective_ra
+        new_buy_multiplier = Decimal("1.0") + effective_ra
+        # Update shared risk assessor's trade gate
+        subsystem.risk_assessor.trade_gate.buy_risk_premium = new_buy_premium
+        subsystem.risk_assessor.trade_gate.buy_premium_multiplier = new_buy_multiplier
+        # Update per-trader assessors if any
+        for assessor in subsystem.trader_assessors.values():
+            assessor.trade_gate.buy_risk_premium = new_buy_premium
+            assessor.trade_gate.buy_premium_multiplier = new_buy_multiplier
+
+    # Plan 050: Adaptive reserves — adjust buy_reserve_fraction from stress
+    if subsystem.trader_profile.adaptive_reserves:
+        n_total = len(system.state.agents)
+        n_defaulted = len(system.state.defaulted_agent_ids)
+        observed = Decimal(n_defaulted) / Decimal(max(n_total, 1))
+        stress = observed / Decimal("0.3")
+        base = subsystem.trader_profile.buy_reserve_fraction
+        effective_reserve = base + (Decimal("1") - base) * min(
+            Decimal("1"), stress * Decimal("0.5")
+        )
+        subsystem.effective_buy_reserve_fraction = effective_reserve
+    else:
+        subsystem.effective_buy_reserve_fraction = None  # use profile default
 
     # Phase 0.5: Clean up tickets whose payables were removed
     _cleanup_orphaned_tickets(subsystem, system)

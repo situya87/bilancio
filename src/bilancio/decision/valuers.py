@@ -159,5 +159,46 @@ class CreditAdjustedVBTPricing:
         """
         return base_spread + self.spread_sensitivity * p_default
 
+    def compute_mid_term_adjusted(
+        self, p_default: Decimal, initial_prior: Decimal,
+        tau: int, term_strength: Decimal = Decimal("0.5"),
+    ) -> Decimal:
+        """Per-bucket M using discrete hazard rate: M = rho * (1-h)^tau.
+
+        The term structure adjusts the mid price for remaining time to maturity,
+        so longer-dated tickets are priced lower (more time for issuer to default).
+
+        Args:
+            p_default: Current default probability estimate.
+            initial_prior: Initial prior probability (for sensitivity blending).
+            tau: Remaining days to maturity for this bucket.
+            term_strength: Dampening for hazard rate (0=ignore, 1=full).
+
+        Returns:
+            Credit-adjusted mid price with term structure.
+        """
+        h = term_strength * p_default
+        survival = (Decimal(1) - h) ** tau
+        raw_M = self.outside_mid_ratio * survival
+        initial_M = self.outside_mid_ratio * (Decimal(1) - initial_prior)
+        return initial_M + self.mid_sensitivity * (raw_M - initial_M)
+
+    def compute_spread_convex(self, base_spread: Decimal, p_default: Decimal) -> Decimal:
+        """Convex spread: O = base + sensitivity * p^2 / (1-p).
+
+        Unlike the linear spread formula, this produces convex widening:
+        small p -> small widening, large p -> rapid widening.
+
+        Args:
+            base_spread: Base spread for this bucket.
+            p_default: Current default probability.
+
+        Returns:
+            Spread with convex risk adjustment.
+        """
+        if p_default >= Decimal(1):
+            return base_spread + self.spread_sensitivity
+        return base_spread + self.spread_sensitivity * (p_default ** 2) / (Decimal(1) - p_default)
+
 
 __all__ = ["EVHoldValuer", "CoverageRatioValuer", "CreditAdjustedVBTPricing"]

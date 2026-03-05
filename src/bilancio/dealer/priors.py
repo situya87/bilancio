@@ -31,4 +31,26 @@ def kappa_informed_prior(kappa: Decimal) -> Decimal:
     return Decimal("0.05") + Decimal("0.15") * stress
 
 
-__all__ = ["kappa_informed_prior"]
+def scenario_informed_prior(kappa: Decimal, mu: Decimal, c: Decimal) -> Decimal:
+    """Extended prior incorporating mu (timing) and c (concentration).
+
+    Adds small corrections for:
+    - Front-loaded timing (low mu → higher stress)
+    - Concentrated debt (low c → higher stress)
+
+    Args:
+        kappa: System liquidity ratio.
+        mu: Maturity timing skew (0=early, 1=late).
+        c: Dirichlet concentration (lower=more unequal).
+
+    Returns:
+        Estimated default probability in [0.05, 0.20].
+    """
+    stress_kappa = max(Decimal(0), Decimal(1) - kappa) / (Decimal(1) + kappa)
+    stress_mu = (Decimal(1) - mu) ** 2
+    stress_c = Decimal(1) / (Decimal(1) + c)
+    combined = stress_kappa + Decimal("0.05") * stress_mu + Decimal("0.05") * stress_c
+    return Decimal("0.05") + Decimal("0.15") * min(combined, Decimal(1))
+
+
+__all__ = ["kappa_informed_prior", "scenario_informed_prior"]

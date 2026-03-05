@@ -56,6 +56,10 @@ class CentralBank(Agent):
     # P_0 = kappa_informed_prior(κ), set at scenario compilation
     kappa_prior: Decimal = field(default=Decimal("0"))  # 0 = disabled (backward compat)
 
+    # Adaptive flags (Plan 050)
+    adaptive_betas: bool = field(default=False)       # [PRE] beta_scale = 1/(1+5*expected)
+    adaptive_early_warning: bool = field(default=False)  # [RUN] bank stress signal
+
     # Dynamic corridor adjustment: deviation from expectation
     # surprise_t = max(0, P_realized_t - P_0)
     # mid_t = mid_0 + beta_mid × surprise_t
@@ -112,7 +116,7 @@ class CentralBank(Agent):
         return outstanding + amount <= cap
 
     def compute_corridor(
-        self, n_defaulted: int, n_total: int
+        self, n_defaulted: int, n_total: int, *, bank_stress: Decimal = Decimal("0")
     ) -> tuple[Decimal, Decimal]:
         """Compute dynamic corridor based on deviation from expectation.
 
@@ -145,9 +149,20 @@ class CentralBank(Agent):
         p_realized = Decimal(n_defaulted) / Decimal(max(n_total, 1))
         surprise = max(Decimal(0), p_realized - self.kappa_prior)
 
+        # When adaptive_betas, scale betas inversely with expected default rate
+        effective_beta_mid = self.beta_mid
+        effective_beta_width = self.beta_width
+        if self.adaptive_betas and self.kappa_prior > 0:
+            beta_scale = Decimal(1) / (Decimal(1) + Decimal(5) * self.kappa_prior)
+            effective_beta_mid = self.beta_mid * beta_scale
+            effective_beta_width = self.beta_width * beta_scale
+
+        # When adaptive_early_warning, blend bank stress into surprise
+        combined = surprise + Decimal("0.3") * bank_stress if self.adaptive_early_warning else surprise
+
         # Adjust mid and width
-        mid = base_mid + self.beta_mid * surprise
-        width = base_width + self.beta_width * surprise
+        mid = base_mid + effective_beta_mid * combined
+        width = base_width + effective_beta_width * combined
 
         r_floor = max(Decimal(0), mid - width / 2)
         r_ceiling = mid + width / 2

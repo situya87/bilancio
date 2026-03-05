@@ -8,6 +8,7 @@ at runtime; the directive below silences mypy for this single error code.
 # mypy: disable-error-code="union-attr"
 
 import logging
+import warnings
 from decimal import Decimal
 from typing import Any
 
@@ -696,6 +697,19 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 flow_sensitivity=config.balanced_dealer.flow_sensitivity,
             )
 
+            if config.balanced_dealer.alpha_vbt > 0:
+                warnings.warn(
+                    "alpha_vbt is deprecated (Plan 050). Use --adapt=calibrated instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            if config.balanced_dealer.alpha_trader > 0:
+                warnings.warn(
+                    "alpha_trader is deprecated (Plan 050). Use --adapt=calibrated instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
             system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
                 system,
                 dealer_ring_config,
@@ -1002,6 +1016,19 @@ def _init_dealer_from_action_specs(
     if bd.issuer_specific_pricing and risk_params is not None:
         from dataclasses import replace as dc_replace
         risk_params = dc_replace(risk_params, use_issuer_specific=True)
+
+    if bd.alpha_vbt > 0:
+        warnings.warn(
+            "alpha_vbt is deprecated (Plan 050). Use --adapt=calibrated instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    if bd.alpha_trader > 0:
+        warnings.warn(
+            "alpha_trader is deprecated (Plan 050). Use --adapt=calibrated instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
         system,

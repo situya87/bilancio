@@ -776,13 +776,13 @@ def sweep_comparison(
     "--alpha-vbt",
     type=Decimal,
     default=Decimal("0"),
-    help="VBT informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0)",
+    help="[DEPRECATED] VBT informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0). Use --adapt=calibrated instead.",
 )
 @click.option(
     "--alpha-trader",
     type=Decimal,
     default=Decimal("0"),
-    help="Trader informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0)",
+    help="[DEPRECATED] Trader informedness: 0=naive prior, 1=fully kappa-informed pricing (default: 0). Use --adapt=calibrated instead.",
 )
 @click.option(
     "--risk-aversion",
@@ -994,6 +994,10 @@ def sweep_comparison(
 @click.option("--incremental-intentions", is_flag=True, default=False, help="Incremental intention queues")
 @click.option("--matching-order", type=click.Choice(["random", "urgency"]), default=None, help="Matching order")
 @click.option("--dealer-backend", type=click.Choice(["python", "native"]), default=None, help="Kernel backend (native=Rust)")
+@click.option(
+    "--adapt", type=click.Choice(["static", "calibrated", "responsive", "full"]),
+    default="static", help="Adaptive profile preset (Plan 050)",
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -1062,6 +1066,7 @@ def sweep_balanced(
     incremental_intentions: bool,
     matching_order: str | None,
     dealer_backend: str | None,
+    adapt: str,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -1232,6 +1237,7 @@ def sweep_balanced(
         issuer_specific_pricing=issuer_specific_pricing,
         flow_sensitivity=flow_sensitivity,
         dealer_concentration_limit=dealer_concentration_limit,
+        adapt=adapt,
         performance=performance.to_dict() if performance else {},
     )
 
