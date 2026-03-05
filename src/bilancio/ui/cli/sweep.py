@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import click
 from click.core import ParameterSource
@@ -19,6 +20,9 @@ from bilancio.experiments.ring import (
 from bilancio.jobs import JobConfig, JobManager, create_job_manager, generate_job_id
 
 from .utils import _as_decimal_list, console
+
+if TYPE_CHECKING:
+    from bilancio.core.performance import PerformanceConfig
 
 CLI_HANDLED_ERRORS = (
     click.ClickException,
@@ -35,6 +39,18 @@ CLI_HANDLED_ERRORS = (
 )
 
 VALID_POST_ANALYSES = ("drilldowns", "deltas", "dynamics", "narrative")
+
+
+def _build_performance_config(perf_options: dict[str, object]) -> PerformanceConfig | None:
+    """Build a PerformanceConfig from collected CLI options."""
+    if not perf_options:
+        return None
+
+    from bilancio.core.performance import PerformanceConfig
+
+    perf_kwargs: dict[str, Any] = dict(perf_options)
+    preset = str(perf_kwargs.pop("preset", "compatible"))
+    return PerformanceConfig.create(preset, **perf_kwargs)
 
 
 def _offer_post_sweep_analysis(
@@ -441,11 +457,7 @@ def sweep_ring(
         console.print("[cyan]Cloud execution enabled[/cyan]")
 
     # Build PerformanceConfig from CLI flags (reuse _perf_dict built earlier)
-    from bilancio.core.performance import PerformanceConfig
-
-    perf_kwargs = dict(_perf_dict)  # copy so pop doesn't mutate _perf_dict
-    perf_preset_val = perf_kwargs.pop("preset", "compatible") if perf_kwargs else "compatible"
-    performance = PerformanceConfig.create(perf_preset_val, **perf_kwargs) if perf_kwargs else None
+    performance = _build_performance_config(_perf_dict)
 
     q_total_dec = Decimal(str(q_total))
     runner = RingSweepRunner(
@@ -1177,11 +1189,7 @@ def sweep_balanced(
         click.echo(f"Informedness enabled (alpha_vbt={alpha_vbt}, alpha_trader={alpha_trader})")
 
     # Build PerformanceConfig from CLI flags (reuse _perf_dict_bal built earlier)
-    from bilancio.core.performance import PerformanceConfig
-
-    perf_kwargs_bal = dict(_perf_dict_bal)  # copy so pop doesn't mutate _perf_dict_bal
-    perf_preset_val_bal = perf_kwargs_bal.pop("preset", "compatible") if perf_kwargs_bal else "compatible"
-    performance = PerformanceConfig.create(perf_preset_val_bal, **perf_kwargs_bal) if perf_kwargs_bal else None
+    performance = _build_performance_config(_perf_dict_bal)
 
     config = BalancedComparisonConfig(
         n_agents=n_agents,

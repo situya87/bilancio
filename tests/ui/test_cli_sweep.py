@@ -6,10 +6,8 @@ Mocks actual runner classes to avoid executing real simulations.
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from bilancio.ui.cli import cli
@@ -431,6 +429,57 @@ class TestSweepPerformanceFlags:
         # Performance object should exist since we passed flags
         assert perf is not None
 
+    @patch("bilancio.ui.cli.sweep.aggregate_runs")
+    @patch("bilancio.ui.cli.sweep.render_dashboard")
+    @patch("bilancio.ui.cli.sweep.RingSweepRunner")
+    @patch("bilancio.ui.cli.sweep.create_job_manager")
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-perf-preset-only")
+    def test_ring_performance_preset_only(
+        self,
+        mock_gen_id,
+        mock_create_jm,
+        mock_runner_cls,
+        mock_render,
+        mock_agg,
+        tmp_path,
+    ):
+        """sweep ring keeps preset-only performance configs."""
+        mock_manager = MagicMock()
+        mock_create_jm.return_value = mock_manager
+        mock_runner = MagicMock()
+        mock_runner.registry_dir = tmp_path / "registry"
+        mock_runner.aggregate_dir = tmp_path / "aggregate"
+        (tmp_path / "registry").mkdir()
+        (tmp_path / "aggregate").mkdir()
+        mock_runner_cls.return_value = mock_runner
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "sweep",
+                "ring",
+                "--out-dir",
+                str(tmp_path / "ring_out"),
+                "--kappas",
+                "1.0",
+                "--concentrations",
+                "1",
+                "--mus",
+                "0",
+                "--perf-preset",
+                "fast",
+            ],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        perf = mock_runner_cls.call_args[1]["performance"]
+        assert perf is not None
+        assert perf.preset == "fast"
+        assert perf.fast_atomic is True
+        assert perf.cache_dealer_quotes is True
+        assert perf.dirty_bucket_recompute is True
+
     @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
     @patch(
         "bilancio.experiments.balanced_comparison.BalancedComparisonRunner.run_all",
@@ -483,6 +532,58 @@ class TestSweepPerformanceFlags:
         assert config_arg.performance is not None
         perf = config_arg.performance
         assert perf.get("fast_atomic") is True or getattr(perf, "fast_atomic", None) is True
+
+    @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
+    @patch(
+        "bilancio.experiments.balanced_comparison.BalancedComparisonRunner.run_all",
+        return_value=[],
+    )
+    @patch(
+        "bilancio.experiments.balanced_comparison.BalancedComparisonRunner.__init__",
+        return_value=None,
+    )
+    @patch("bilancio.ui.cli.sweep.create_job_manager")
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-balanced-preset-only")
+    def test_balanced_performance_preset_only(
+        self,
+        mock_gen_id,
+        mock_create_jm,
+        mock_runner_init,
+        mock_run_all,
+        mock_post,
+        tmp_path,
+    ):
+        """sweep balanced keeps preset-only performance configs."""
+        mock_manager = MagicMock()
+        mock_create_jm.return_value = mock_manager
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "sweep",
+                "balanced",
+                "--out-dir",
+                str(tmp_path / "balanced_out"),
+                "--kappas",
+                "0.5",
+                "--concentrations",
+                "1",
+                "--mus",
+                "0",
+                "--perf-preset",
+                "fast",
+            ],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        init_call = mock_runner_init.call_args
+        config_arg = init_call[1].get("config") or init_call[0][0]
+        perf = config_arg.performance
+        assert perf["preset"] == "fast"
+        assert perf["fast_atomic"] is True
+        assert perf["cache_dealer_quotes"] is True
+        assert perf["dirty_bucket_recompute"] is True
 
 
 class TestSweepBalancedMissingRequired:
