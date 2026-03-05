@@ -42,15 +42,15 @@ The original full Plan 050 specification has been archived at:
 - `adaptive_issuer_specific` via `use_issuer_specific` override.
 - Lender pre-run calibration flags via value overrides (`risk_aversion`, `max_loan_maturity`).
 
-### Deferred or still incomplete
+### Resolved (W0 cleanup, March 2026)
 
-- `adaptive_per_bucket_tracking` (deferred).
-- `adaptive_issuer_pricing` (deferred).
-- `adaptive_profit_target` runtime behavior not implemented.
-- Preset `stress_horizon` propagation incomplete in scenario path.
-- `adaptive_stress_horizon` not enforced as an active behavioral switch.
-- `scenario_informed_prior(kappa, mu, c)` exists but is not used.
-- `adaptive_escalation` remains roadmap language, not active code.
+- `adaptive_per_bucket_tracking` — de-scoped and removed (no engine consumer).
+- `adaptive_issuer_pricing` — de-scoped and removed (no engine consumer).
+- `adaptive_profit_target` — removed (dead code, never consumed).
+- `adaptive_stress_horizon` — boolean flag removed; `stress_horizon` int value wired through pipeline.
+- `stress_horizon` — added to `BalancedDealerConfig`, wired through `apply.py`.
+- `scenario_informed_prior` — deprecated (kept for reference, not integrated).
+- `adaptive_escalation` — confirmed never existed in code.
 
 ## Execution Rule
 

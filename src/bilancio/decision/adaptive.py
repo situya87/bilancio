@@ -81,7 +81,6 @@ def build_adaptive_overrides(
         # VBT: term structure, adaptive base spreads, stress horizon
         overrides["vbt"]["adaptive_term_structure"] = True
         overrides["vbt"]["adaptive_base_spreads"] = True
-        overrides["vbt"]["adaptive_stress_horizon"] = True
         overrides["vbt"]["stress_horizon"] = max(3, min(20, maturity_days))
 
         # Bank: corridor incorporates mu, c
@@ -93,7 +92,6 @@ def build_adaptive_overrides(
             Decimal("0.3") + Decimal("0.3") * max(Decimal(0), Decimal(1) - kappa)))
         overrides["lender"]["adaptive_risk_aversion"] = True
         overrides["lender"]["risk_aversion"] = lender_ra
-        overrides["lender"]["adaptive_profit_target"] = True
         overrides["lender"]["adaptive_loan_maturity"] = True
         overrides["lender"]["max_loan_maturity"] = max(2, min(maturity_days, 10))
 
@@ -108,8 +106,6 @@ def build_adaptive_overrides(
         overrides["risk_params"]["adaptive_ev_term_structure"] = True
 
         overrides["vbt"]["adaptive_convex_spreads"] = True
-        # adaptive_per_bucket_tracking and adaptive_issuer_pricing deferred —
-        # engine consumers not yet implemented (Plan 050 WI-3D/3E)
 
         overrides["lender"]["adaptive_rates"] = True
         overrides["lender"]["adaptive_capital_conservation"] = True
