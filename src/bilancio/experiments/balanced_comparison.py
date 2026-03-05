@@ -1621,23 +1621,14 @@ class BalancedComparisonRunner:
         Uses batch execution if the executor supports it (CloudExecutor),
         otherwise falls back to sequential execution (LocalExecutor).
         """
-        # Sweep-level viability check (V3, V7)
+        # Pre-flight viability checks (stored for post-sweep validation)
+        self._preflight = None
         try:
-            from bilancio.specification.trade_viability import check_sweep_viability
+            from bilancio.scenarios.sweep_diagnostics import run_preflight_checks
 
-            sweep_report = check_sweep_viability(
-                kappas=self.config.kappas,
-                n_agents=self.config.n_agents,
-                maturity_days=self.config.maturity_days,
-            )
-            if not sweep_report.all_viable:
-                import logging
-
-                logging.getLogger(__name__).warning(
-                    "Sweep viability: %s", sweep_report.diagnostics
-                )
-        except Exception:
-            pass
+            self._preflight = run_preflight_checks(self.config)
+        except Exception as e:
+            logger.warning("Pre-flight checks failed: %s", e)
 
         # Check if executor supports batch execution
         if hasattr(self.executor, "execute_batch"):
@@ -2143,6 +2134,7 @@ class BalancedComparisonRunner:
         self._write_summary_json()
         self._write_stats_analysis()
         self._write_activity_analysis()
+        self._write_viability_validation()
 
         # Compute aggregate metrics on Modal (if using cloud executor)
         if hasattr(self.executor, "compute_aggregate_metrics"):
@@ -2277,6 +2269,7 @@ class BalancedComparisonRunner:
         self._write_summary_json()
         self._write_stats_analysis()
         self._write_activity_analysis()
+        self._write_viability_validation()
 
         total_time = time.time() - self._start_time
         print(
@@ -3335,6 +3328,30 @@ class BalancedComparisonRunner:
         except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Activity analysis failed: %s", e)
             print(f"Warning: Activity analysis failed: {e}", flush=True)
+
+    def _write_viability_validation(self) -> None:
+        """Run post-sweep viability validation against pre-flight predictions."""
+        if self.skip_local_processing:
+            return
+        preflight = getattr(self, "_preflight", None)
+        if preflight is None or not self.comparison_results:
+            return
+        try:
+            from bilancio.scenarios.sweep_diagnostics import run_postsweep_validation
+
+            postflight = run_postsweep_validation(
+                preflight,
+                self.comparison_results,
+                aggregate_dir=self.aggregate_dir,
+            )
+            logger.info(
+                "Viability validation: %d/%d checks matched",
+                sum(1 for c in postflight.checks if c.match),
+                len(postflight.checks),
+            )
+        except EXTERNAL_OPERATION_ERRORS as e:
+            logger.warning("Viability validation failed: %s", e)
+            print(f"Warning: Viability validation failed: {e}", flush=True)
 
 
 def run_balanced_comparison_sweep(

@@ -1243,6 +1243,16 @@ def sweep_balanced(
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)
 
+    # Pre-flight viability checks
+    preflight = None
+    try:
+        from bilancio.scenarios.sweep_diagnostics import run_preflight_checks
+
+        preflight = run_preflight_checks(config)
+        preflight.print_summary()
+    except CLI_HANDLED_ERRORS as e:
+        click.echo(f"Warning: Pre-flight checks failed: {e}")
+
     try:
         results = runner.run_all()
 
@@ -1306,6 +1316,18 @@ def sweep_balanced(
             status = "OK" if counts["failed"] == 0 else f"{counts['failed']} FAILED"
             click.echo(f"  {arm_name}: {counts['completed']}/{len(results)} ({status})")
         click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
+
+        # Post-sweep viability validation
+        if preflight is not None and results:
+            try:
+                from bilancio.scenarios.sweep_diagnostics import run_postsweep_validation
+
+                postflight = run_postsweep_validation(
+                    preflight, results, aggregate_dir=out_dir / "aggregate"
+                )
+                postflight.print_summary()
+            except CLI_HANDLED_ERRORS as e:
+                click.echo(f"Warning: Post-sweep validation failed: {e}")
 
         _offer_post_sweep_analysis(out_dir, "dealer", post_analysis, cloud=cloud)
 
@@ -1642,6 +1664,16 @@ def sweep_bank(
 
     click.echo(f"Job ID: {job_id}")
 
+    # Pre-flight viability checks
+    preflight = None
+    try:
+        from bilancio.scenarios.sweep_diagnostics import run_preflight_checks
+
+        preflight = run_preflight_checks(config)
+        preflight.print_summary()
+    except CLI_HANDLED_ERRORS as e:
+        click.echo(f"Warning: Pre-flight checks failed: {e}")
+
     kappas_list = _decimal_list(kappas)
     n_combos = len(kappas_list) * len(_decimal_list(concentrations)) * len(_decimal_list(mus)) * len(_decimal_list(outside_mid_ratios))
     n_runs = n_combos * 2  # idle + lend
@@ -1657,6 +1689,18 @@ def sweep_bank(
     click.echo(f"  Completed: {completed}")
     click.echo(f"  Lending helped: {improved}")
     click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
+
+    # Post-sweep viability validation
+    if preflight is not None and results:
+        try:
+            from bilancio.scenarios.sweep_diagnostics import run_postsweep_validation
+
+            postflight = run_postsweep_validation(
+                preflight, results, aggregate_dir=out_dir / "aggregate"
+            )
+            postflight.print_summary()
+        except CLI_HANDLED_ERRORS as e:
+            click.echo(f"Warning: Post-sweep validation failed: {e}")
 
     _offer_post_sweep_analysis(out_dir, "bank", post_analysis, cloud=cloud)
 

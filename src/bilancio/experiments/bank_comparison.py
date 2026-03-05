@@ -576,6 +576,15 @@ class BankComparisonRunner:
 
     def run_all(self) -> list[BankComparisonResult]:
         """Execute all comparisons, batch or sequential."""
+        # Pre-flight viability checks (stored for post-sweep validation)
+        self._preflight = None
+        try:
+            from bilancio.scenarios.sweep_diagnostics import run_preflight_checks
+
+            self._preflight = run_preflight_checks(self.config)
+        except Exception as e:
+            logger.warning("Pre-flight checks failed: %s", e)
+
         if hasattr(self.executor, "execute_batch"):
             return self._run_all_batch()
         else:
@@ -720,6 +729,7 @@ class BankComparisonRunner:
         self._write_summary_json()
         self._write_stats_analysis()
         self._write_activity_analysis()
+        self._write_viability_validation()
 
         total_time = time.time() - self._start_time
         print(
@@ -811,6 +821,7 @@ class BankComparisonRunner:
         self._write_summary_json()
         self._write_stats_analysis()
         self._write_activity_analysis()
+        self._write_viability_validation()
 
         total_time = time.time() - self._start_time
         print(
@@ -1105,3 +1116,27 @@ class BankComparisonRunner:
         except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Activity analysis failed: %s", e)
             print(f"Warning: Activity analysis failed: {e}", flush=True)
+
+    def _write_viability_validation(self) -> None:
+        """Run post-sweep viability validation against pre-flight predictions."""
+        if self.skip_local_processing:
+            return
+        preflight = getattr(self, "_preflight", None)
+        if preflight is None or not self.comparison_results:
+            return
+        try:
+            from bilancio.scenarios.sweep_diagnostics import run_postsweep_validation
+
+            postflight = run_postsweep_validation(
+                preflight,
+                self.comparison_results,
+                aggregate_dir=self.aggregate_dir,
+            )
+            logger.info(
+                "Viability validation: %d/%d checks matched",
+                sum(1 for c in postflight.checks if c.match),
+                len(postflight.checks),
+            )
+        except EXTERNAL_OPERATION_ERRORS as e:
+            logger.warning("Viability validation failed: %s", e)
+            print(f"Warning: Viability validation failed: {e}", flush=True)
