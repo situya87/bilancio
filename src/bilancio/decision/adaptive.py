@@ -104,13 +104,12 @@ def build_adaptive_overrides(
     if in_run:
         overrides["trader"]["adaptive_risk_aversion"] = True
         overrides["trader"]["adaptive_reserves"] = True
-        overrides["trader"]["adaptive_ev_term_structure"] = True
 
         overrides["risk_params"]["adaptive_ev_term_structure"] = True
 
         overrides["vbt"]["adaptive_convex_spreads"] = True
-        overrides["vbt"]["adaptive_per_bucket_tracking"] = True
-        overrides["vbt"]["adaptive_issuer_pricing"] = True
+        # adaptive_per_bucket_tracking and adaptive_issuer_pricing deferred —
+        # engine consumers not yet implemented (Plan 050 WI-3D/3E)
 
         overrides["lender"]["adaptive_rates"] = True
         overrides["lender"]["adaptive_capital_conservation"] = True

@@ -590,6 +590,20 @@ class RiskAssessmentConfig(BaseModel):
         Decimal("1.0"), description="Multiplier for buy threshold (same premium as sellers)"
     )
 
+    # Plan 050: Adaptive flags
+    adaptive_lookback: bool = Field(
+        default=False, description="[PRE] Lookback window scales with maturity_days"
+    )
+    adaptive_issuer_specific: bool = Field(
+        default=False, description="[PRE] Activates use_issuer_specific"
+    )
+    adaptive_ev_term_structure: bool = Field(
+        default=False, description="[RUN] EV uses (1-h)^tau term structure"
+    )
+    term_strength: Decimal = Field(
+        default=Decimal("0.5"), description="Hazard rate dampening"
+    )
+
     @field_validator("lookback_window")
     @classmethod
     def lookback_positive(cls, v: int) -> int:
@@ -819,6 +833,43 @@ class BalancedDealerConfig(BaseModel):
         description="Max fraction of dealer inventory from single issuer (0=disabled)",
     )
 
+    # Plan 050: Adaptive flags (trader)
+    adaptive_planning_horizon: bool = Field(
+        default=False, description="[PRE] Scale planning_horizon with maturity_days"
+    )
+    adaptive_risk_aversion: bool = Field(
+        default=False, description="[RUN] Effective risk aversion responds to observed defaults"
+    )
+    adaptive_reserves: bool = Field(
+        default=False, description="[RUN] Buy reserve fraction responds to stress"
+    )
+    adaptive_ev_term_structure: bool = Field(
+        default=False, description="[RUN] EV uses maturity-dependent p_default"
+    )
+
+    # Plan 050: Adaptive flags (VBT)
+    adaptive_term_structure: bool = Field(
+        default=False, description="[PRE] Per-bucket M uses discrete hazard rate"
+    )
+    adaptive_base_spreads: bool = Field(
+        default=False, description="[PRE] Base spreads scale with kappa stress"
+    )
+    adaptive_stress_horizon: bool = Field(
+        default=False, description="[PRE] Stress horizon scales with maturity_days"
+    )
+    adaptive_convex_spreads: bool = Field(
+        default=False, description="[RUN] Convex spread widening"
+    )
+    adaptive_per_bucket_tracking: bool = Field(
+        default=False, description="[RUN] Per-bucket default rate tracking"
+    )
+    adaptive_issuer_pricing: bool = Field(
+        default=False, description="[RUN] Inventory-weighted issuer pricing"
+    )
+    term_strength: Decimal = Field(
+        default=Decimal("0.5"), description="Dampening for term-structure hazard rate"
+    )
+
     @field_validator("trading_motive")
     @classmethod
     def validate_trading_motive(cls, v: str) -> str:
@@ -961,6 +1012,26 @@ class LenderScenarioConfig(BaseModel):
     prevention_threshold: Decimal = Field(
         default=Decimal("0.3"), gt=Decimal("0"), lt=Decimal("1"),
         description="Min issuer default probability to trigger preventive lending"
+    )
+
+    # Plan 050: Adaptive flags
+    adaptive_risk_aversion: bool = Field(
+        default=False, description="[PRE] Risk aversion calibrates to kappa"
+    )
+    adaptive_profit_target: bool = Field(
+        default=False, description="[PRE] Profit target anchors to CB corridor"
+    )
+    adaptive_loan_maturity: bool = Field(
+        default=False, description="[PRE] Max loan maturity scales with maturity_days"
+    )
+    adaptive_rates: bool = Field(
+        default=False, description="[RUN] Daily rate multiplier from portfolio losses"
+    )
+    adaptive_capital_conservation: bool = Field(
+        default=False, description="[RUN] Scale exposure limits by utilization"
+    )
+    adaptive_prevention: bool = Field(
+        default=False, description="[RUN] Dynamic prevention threshold"
     )
 
 

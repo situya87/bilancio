@@ -812,6 +812,11 @@ class RingSweepRunner:
         else:
             scenario = compile_ring_explorer(generator_config, source_path=None)
 
+        # Ensure mu and concentration are in _balanced_config for run.py to use
+        if "_balanced_config" in scenario:
+            scenario["_balanced_config"].setdefault("mu", float(mu))
+            scenario["_balanced_config"].setdefault("concentration", float(concentration))
+
         # Add dealer config: always for active mode, also for balanced passive
         # (passive balanced runs need the subsystem initialized for PnL tracking)
         if self.dealer_enabled or self.balanced_mode:
@@ -1225,6 +1230,11 @@ class RingSweepRunner:
         else:
             scenario = compile_ring_explorer(generator_config, source_path=None)
 
+        # Ensure mu and concentration are in _balanced_config for run.py to use
+        if "_balanced_config" in scenario:
+            scenario["_balanced_config"].setdefault("mu", float(mu))
+            scenario["_balanced_config"].setdefault("concentration", float(concentration))
+
         # Add dealer config: always for active mode, also for balanced passive
         # (passive balanced runs need the subsystem initialized for PnL tracking)
         if self.dealer_enabled or self.balanced_mode:
@@ -1324,6 +1334,12 @@ class RingSweepRunner:
             if "lender" in scenario:
                 for key, value in overrides.get("lender", {}).items():
                     scenario["lender"][key] = str(value) if isinstance(value, Decimal) else value
+            # Merge bank and CB overrides into _balanced_config
+            balanced_config = scenario.get("_balanced_config", {})
+            for key, value in overrides.get("bank", {}).items():
+                balanced_config[key] = str(value) if isinstance(value, Decimal) else value
+            for key, value in overrides.get("cb", {}).items():
+                balanced_config[key] = str(value) if isinstance(value, Decimal) else value
 
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})

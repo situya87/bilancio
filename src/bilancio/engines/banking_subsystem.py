@@ -712,6 +712,8 @@ def initialize_banking_subsystem(
     trader_banks: dict[str, list[str]] | None = None,
     infra_banks: dict[str, str] | None = None,
     risk_assessor: Any = None,
+    mu: Decimal | None = None,
+    c: Decimal | None = None,
 ) -> BankingSubsystem:
     """Initialize the banking subsystem from the current system state.
 
@@ -725,6 +727,8 @@ def initialize_banking_subsystem(
         maturity_days: Scenario maturity days (for loan maturity calc).
         trader_banks: Trader -> bank assignment map.
         infra_banks: Infrastructure agent -> bank assignment map.
+        mu: Maturity timing skew (for adaptive corridor).
+        c: Dirichlet concentration (for adaptive corridor).
     """
     from bilancio.domain.agent import AgentKind
 
@@ -738,9 +742,9 @@ def initialize_banking_subsystem(
     if not bank_ids:
         raise ValueError("No bank agents found in system")
 
-    # Derive corridor rates from kappa
-    r_floor = bank_profile.r_floor(kappa)
-    r_ceiling = bank_profile.r_ceiling(kappa)
+    # Derive corridor rates from kappa (and optionally mu, c for adaptive corridor)
+    r_floor = bank_profile.r_floor(kappa, mu, c)
+    r_ceiling = bank_profile.r_ceiling(kappa, mu, c)
 
     # Compute loan maturity
     loan_mat = bank_profile.loan_maturity(maturity_days)
