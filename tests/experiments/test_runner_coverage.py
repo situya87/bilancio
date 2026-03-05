@@ -57,6 +57,7 @@ def _make_summary(
     total_loss: int = 250,
     total_loss_pct: float | None = 0.025,
     intermediary_loss_total: float = 30.0,
+    nbfi_loans_created: int = 0,
     initial_intermediary_capital: float = 500.0,
     S_total: float = 10000.0,
     dealer_metrics: dict | None = None,
@@ -87,6 +88,7 @@ def _make_summary(
         total_loss=total_loss,
         total_loss_pct=total_loss_pct,
         intermediary_loss_total=intermediary_loss_total,
+        nbfi_loans_created=nbfi_loans_created,
         initial_intermediary_capital=initial_intermediary_capital,
         S_total=S_total,
         dealer_metrics=dealer_metrics,
@@ -585,7 +587,12 @@ class TestBalancedBuildResultFromSummaries:
 
         passive = _make_summary(run_id="p", phase="passive", delta_total=Decimal("0.40"))
         active = _make_summary(run_id="a", phase="active", delta_total=Decimal("0.30"))
-        lender = _make_summary(run_id="l", phase="lender", delta_total=Decimal("0.25"))
+        lender = _make_summary(
+            run_id="l",
+            phase="lender",
+            delta_total=Decimal("0.25"),
+            nbfi_loans_created=7,
+        )
 
         result = runner._build_result_from_summaries(
             arm_summaries={"passive": passive, "active": active, "lender": lender},
@@ -597,6 +604,7 @@ class TestBalancedBuildResultFromSummaries:
         assert result.delta_lender == Decimal("0.25")
         assert result.lender_status == "completed"
         assert result.lending_effect == Decimal("0.15")
+        assert result.total_loans == 7
 
 
 # =============================================================================
