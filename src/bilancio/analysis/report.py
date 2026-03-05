@@ -206,6 +206,7 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
     nbfi_loan_loss = 0
     bank_credit_loss = 0
     cb_backstop_loss = 0
+    nbfi_loans_created = 0
 
     for e in events:
         kind = e.get("kind", "")
@@ -262,6 +263,10 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
             cash_available = int(e.get("cash_available", 0))
             nbfi_loan_loss += max(0, amount_owed - cash_available)
 
+        # NBFI loans created count
+        if kind in ("NonBankLoanCreated", "NonBankLoanCreatedPreventive"):
+            nbfi_loans_created += 1
+
         # Bank credit losses from defaulted customer loans
         if kind == "BankLoanDefault":
             repayment_due = int(e.get("repayment_due", 0))
@@ -291,6 +296,7 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         "payable_default_loss": payable_default_loss,
         "total_loss": total_loss,
         "nbfi_loan_loss": nbfi_loan_loss,
+        "nbfi_loans_created": nbfi_loans_created,
         "bank_credit_loss": bank_credit_loss,
         "cb_backstop_loss": cb_backstop_loss,
     }

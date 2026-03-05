@@ -180,6 +180,7 @@ def compute_metrics_from_events(events_path: str, dealer_metrics_path: str | Non
         ),
         # Intermediary loss metrics
         "nbfi_loan_loss": run_level.get("nbfi_loan_loss", 0),
+        "nbfi_loans_created": run_level.get("nbfi_loans_created", 0),
         "bank_credit_loss": run_level.get("bank_credit_loss", 0),
         "cb_backstop_loss": run_level.get("cb_backstop_loss", 0),
         "dealer_vbt_loss": _compute_dealer_vbt_loss(dealer_metrics_path),

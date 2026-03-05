@@ -2372,6 +2372,7 @@ class BalancedComparisonRunner:
                 "total_loss_pct_lender": lender_result.total_loss_pct,
                 "intermediary_loss_lender": lender_result.intermediary_loss_total,
                 "intermediary_capital_lender": lender_result.initial_intermediary_capital,
+                "total_loans": lender_result.nbfi_loans_created,
             }
 
         # Run dealer+lender (optional fourth arm — combined mode)
@@ -2404,6 +2405,7 @@ class BalancedComparisonRunner:
                 "total_loss_pct_dealer_lender": dl_result.total_loss_pct,
                 "intermediary_loss_dealer_lender": dl_result.intermediary_loss_total,
                 "intermediary_capital_dealer_lender": dl_result.initial_intermediary_capital,
+                "total_loans": dl_result.nbfi_loans_created,
             }
 
         # Run bank+passive (optional — banking arm E)
