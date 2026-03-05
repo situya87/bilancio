@@ -420,7 +420,7 @@ class TestRunScenarioErrors:
         """Invalid YAML content raises an error."""
         bad_file = tmp_path / "bad.yaml"
         bad_file.write_text("not: a: valid: scenario: {{{}}")
-        with pytest.raises((SystemExit, Exception)):
+        with pytest.raises((SystemExit, yaml.YAMLError)):
             run_scenario(bad_file, max_days=1)
 
     def test_empty_agents_returns_none(self, tmp_path):

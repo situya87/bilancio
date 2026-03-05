@@ -29,10 +29,19 @@ def _check_or_true(node: ast.Assert, filepath: str, violations: list[str]) -> No
                 return
 
 
+def _has_exception_name(node: ast.expr) -> bool:
+    """Return True if *node* is ``Exception`` or a tuple containing it."""
+    if isinstance(node, ast.Name) and node.id == "Exception":
+        return True
+    if isinstance(node, ast.Tuple):
+        return any(_has_exception_name(elt) for elt in node.elts)
+    return False
+
+
 def _check_pytest_raises_exception(
     node: ast.With, filepath: str, violations: list[str]
 ) -> None:
-    """Detect `pytest.raises(Exception)` (over-broad catch)."""
+    """Detect ``pytest.raises(Exception)`` and ``pytest.raises((X, Exception))``."""
     for item in node.items:
         call = item.context_expr
         if not isinstance(call, ast.Call):
@@ -42,7 +51,7 @@ def _check_pytest_raises_exception(
         if isinstance(func, ast.Attribute) and func.attr == "raises":
             if isinstance(func.value, ast.Name) and func.value.id == "pytest":
                 for arg in call.args:
-                    if isinstance(arg, ast.Name) and arg.id == "Exception":
+                    if _has_exception_name(arg):
                         violations.append(
                             f"{filepath}:{node.lineno}: over-broad exception catch "
                             f"(pytest.raises(Exception))"
@@ -52,7 +61,7 @@ def _check_pytest_raises_exception(
 def _check_bare_except_pass(
     node: ast.ExceptHandler, filepath: str, violations: list[str]
 ) -> None:
-    """Detect `except Exception: pass` (bare exception swallowing)."""
+    """Detect ``except Exception: pass`` and ``except (X, Exception): pass``."""
     if node.type is None:
         # bare `except:` without a type
         if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
@@ -61,7 +70,7 @@ def _check_bare_except_pass(
             )
         return
 
-    if isinstance(node.type, ast.Name) and node.type.id == "Exception":
+    if _has_exception_name(node.type):
         if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
             violations.append(
                 f"{filepath}:{node.lineno}: bare 'except Exception: pass' "
