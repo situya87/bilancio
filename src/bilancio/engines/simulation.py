@@ -453,7 +453,7 @@ def run_day(
 
         # 6. Finalize overnight repayments (remove from book)
         repay_events = finalize_interbank_repayments(
-            current_day, banking_sub, ib_obligations,
+            system, current_day, banking_sub, ib_obligations,
         )
         system.state.events.extend(repay_events)
 
@@ -767,17 +767,20 @@ def _run_bank_loan_winddown(system: System, banking_sub: Any) -> int:
         ib_obligations = compute_interbank_obligations(current_day, banking_sub)
         # During wind-down, interbank repayments are simple reserve transfers
         # (no auction needed — just settle maturing loans directly)
-        for borrower, lender, repayment, _loan in ib_obligations:
+        settled_obligations = []
+        for borrower, lender, repayment, loan in ib_obligations:
             try:
                 system.transfer_reserves(borrower, lender, repayment)
+                settled_obligations.append((borrower, lender, repayment, loan))
             except (ValueError, ValidationError):
                 # Borrower can't repay — CB backstop will handle
+                # Do NOT finalize: contract stays on balance sheet as unpaid
                 logger.warning(
                     "Wind-down interbank repayment failed: %s -> %s amount=%d",
                     borrower, lender, repayment,
                 )
         ib_repay_events = finalize_interbank_repayments(
-            current_day, banking_sub, ib_obligations,
+            system, current_day, banking_sub, settled_obligations,
         )
         system.state.events.extend(ib_repay_events)
 

@@ -57,6 +57,7 @@ class InterbankLoan:
     rate: Decimal
     issuance_day: int
     maturity_day: int
+    contract_id: str | None = None  # link to real instrument in system.state.contracts
 
     @property
     def repayment_amount(self) -> int:

@@ -646,7 +646,7 @@ class TestFinalizeInterbankRepayments:
 
         obligations = [("bank_2", "bank_1", 105, loan)]
 
-        events = finalize_interbank_repayments(1, banking, obligations)
+        events = finalize_interbank_repayments(system, 1, banking, obligations)
 
         assert len(banking.interbank_loans) == 0
         assert len(events) == 1
@@ -677,7 +677,7 @@ class TestFinalizeInterbankRepayments:
 
         obligations = [("bank_2", "bank_1", 105, loan_mature)]
 
-        finalize_interbank_repayments(1, banking, obligations)
+        finalize_interbank_repayments(system, 1, banking, obligations)
 
         assert len(banking.interbank_loans) == 1
         assert banking.interbank_loans[0] is loan_future
@@ -698,7 +698,7 @@ class TestFinalizeInterbankRepayments:
         banking.interbank_loans.append(loan)
 
         obligations = [("bank_2", "bank_1", 105, loan)]
-        events = finalize_interbank_repayments(2, banking, obligations)
+        events = finalize_interbank_repayments(system, 2, banking, obligations)
 
         e = events[0]
         assert e["kind"] == "InterbankRepaid"

@@ -20,6 +20,7 @@ class InstrumentKind(str, Enum):
     CB_LOAN = "cb_loan"
     NON_BANK_LOAN = "non_bank_loan"
     BANK_LOAN = "bank_loan"
+    INTERBANK_LOAN = "interbank_loan"
     DELIVERY_OBLIGATION = "delivery_obligation"
 
     def __str__(self) -> str:
