@@ -290,6 +290,87 @@ class TestContractIdLinked:
             assert contract.issuance_day == loan.issuance_day
 
 
+class TestFailedRepaymentPreservesContract:
+    """Verify that failed repayments do NOT remove contracts from balance sheets."""
+
+    def test_failed_finalize_keeps_contract(self):
+        """If obligation is excluded from finalize, contract stays on balance sheet."""
+        system = _make_banking_system()
+        banking = _make_initialized_banking(system)
+        events = _run_auction_with_trade(system, banking, day=5)
+
+        trade_events = [e for e in events if e["kind"] == "InterbankAuctionTrade"]
+        assert len(trade_events) >= 1
+        contract_id = trade_events[0]["contract_id"]
+        lender_id = trade_events[0]["lender"]
+        borrower_id = trade_events[0]["borrower"]
+
+        # Compute obligations but finalize with an EMPTY list
+        # (simulating wind-down where all transfers failed)
+        _obligations = compute_interbank_obligations(6, banking)
+        assert len(_obligations) >= 1
+        finalize_interbank_repayments(system, 6, banking, [])
+
+        # Contract must still exist on balance sheets
+        assert contract_id in system.state.contracts
+        assert contract_id in system.state.agents[lender_id].asset_ids
+        assert contract_id in system.state.agents[borrower_id].liability_ids
+
+    def test_partial_failure_keeps_unsettled(self):
+        """When only some obligations settle, unsettled contracts survive."""
+        # Create system with 3 banks: surplus bank_1, deficit bank_2 and bank_3
+        system = System(policy=PolicyEngine.default())
+        cb = CentralBank(id="cb", name="CB", kind="central_bank")
+        bank1 = Bank(id="bank_1", name="Bank 1", kind="bank")
+        bank2 = Bank(id="bank_2", name="Bank 2", kind="bank")
+        bank3 = Bank(id="bank_3", name="Bank 3", kind="bank")
+        firm1 = Firm(id="H_1", name="Firm 1", kind="firm")
+        firm2 = Firm(id="H_2", name="Firm 2", kind="firm")
+        firm3 = Firm(id="H_3", name="Firm 3", kind="firm")
+        for a in [cb, bank1, bank2, bank3, firm1, firm2, firm3]:
+            system.add_agent(a)
+        for fid, bid, cash, reserves in [
+            ("H_1", "bank_1", 500, 10000),
+            ("H_2", "bank_2", 500, 1000),
+            ("H_3", "bank_3", 500, 1000),
+        ]:
+            system.mint_cash(to_agent_id=fid, amount=cash)
+            deposit_cash(system, fid, bid, cash)
+            system.mint_reserves(to_bank_id=bid, amount=reserves)
+
+        profile = BankProfile()
+        banking = initialize_banking_subsystem(
+            system=system, bank_profile=profile,
+            kappa=Decimal("1.0"), maturity_days=10,
+        )
+        for bid in ["bank_1", "bank_2", "bank_3"]:
+            banking.banks[bid].pricing_params.reserve_target = 5000
+
+        # Run auction — bank_1 (surplus) lends to bank_2 and/or bank_3
+        auction_events = run_interbank_auction(system, 5, banking, net_obligations={})
+        trade_events = [e for e in auction_events if e["kind"] == "InterbankAuctionTrade"]
+
+        if len(trade_events) < 2:
+            # Need at least 2 trades to test partial failure
+            return
+
+        # Finalize only the first obligation (simulate second failed)
+        all_obligations = compute_interbank_obligations(6, banking)
+        settled = all_obligations[:1]
+        unsettled_loan = all_obligations[1][3]
+
+        finalize_interbank_repayments(system, 6, banking, settled)
+
+        # The settled contract should be removed
+        settled_cid = settled[0][3].contract_id
+        assert settled_cid not in system.state.contracts
+
+        # The unsettled contract must still exist
+        unsettled_cid = unsettled_loan.contract_id
+        assert unsettled_cid is not None
+        assert unsettled_cid in system.state.contracts
+
+
 class TestPolicyAllowsBankToBank:
     """Verify PolicyEngine accepts interbank loans between banks."""
 
