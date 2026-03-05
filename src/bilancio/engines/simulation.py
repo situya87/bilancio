@@ -453,7 +453,7 @@ def run_day(
 
         # 6. Finalize overnight repayments (remove from book)
         repay_events = finalize_interbank_repayments(
-            current_day, banking_sub, ib_obligations,
+            system, current_day, banking_sub, ib_obligations,
         )
         system.state.events.extend(repay_events)
 
@@ -777,7 +777,7 @@ def _run_bank_loan_winddown(system: System, banking_sub: Any) -> int:
                     borrower, lender, repayment,
                 )
         ib_repay_events = finalize_interbank_repayments(
-            current_day, banking_sub, ib_obligations,
+            system, current_day, banking_sub, ib_obligations,
         )
         system.state.events.extend(ib_repay_events)
 

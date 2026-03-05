@@ -309,6 +309,8 @@ def run_interbank_auction(
 
     Returns list of event dicts.
     """
+    from bilancio.domain.instruments.base import InstrumentKind as IK
+    from bilancio.domain.instruments.interbank_loan import InterbankLoanContract
     from bilancio.engines.banking_subsystem import InterbankLoan
 
     events: list[dict[str, Any]] = []
@@ -360,6 +362,21 @@ def run_interbank_auction(
             )
             banking.interbank_loans.append(ib_loan)
 
+            # Create real instrument on balance sheets
+            contract_id = system.new_contract_id("IBL")
+            ib_contract = InterbankLoanContract(
+                id=contract_id,
+                kind=IK.INTERBANK_LOAN,
+                amount=amount,
+                denom="X",
+                asset_holder_id=lender_id,
+                liability_issuer_id=borrower_id,
+                rate=result.clearing_rate,
+                issuance_day=current_day,
+            )
+            system.add_contract(ib_contract)
+            ib_loan.contract_id = contract_id
+
             # Emit trade event
             events.append({
                 "kind": EventKind.INTERBANK_AUCTION_TRADE.value,
@@ -369,6 +386,7 @@ def run_interbank_auction(
                 "amount": amount,
                 "rate": str(result.clearing_rate),
                 "maturity_day": current_day + 1,
+                "contract_id": contract_id,
             })
 
     # 6. Emit auction summary event
@@ -403,6 +421,7 @@ def run_interbank_auction(
 
 
 def finalize_interbank_repayments(
+    system: System,
     current_day: int,
     banking: BankingSubsystem,
     obligations: list[tuple[str, str, int, InterbankLoan]],
@@ -414,6 +433,7 @@ def finalize_interbank_repayments(
     cleans up the loan records.
 
     Args:
+        system: System instance for contract removal.
         current_day: Current simulation day.
         banking: BankingSubsystem with interbank_loans list.
         obligations: List of (borrower, lender, amount, loan) from
@@ -422,12 +442,18 @@ def finalize_interbank_repayments(
     Returns:
         List of InterbankRepaid event dicts.
     """
+    from bilancio.engines.settlement import _remove_contract
+
     events: list[dict[str, Any]] = []
 
     # Collect loan objects that matured today
     matured_loans = {id(ob[3]) for ob in obligations}
 
     for borrower, lender, repayment, loan in obligations:
+        # Remove real instrument from balance sheets
+        if loan.contract_id is not None:
+            _remove_contract(system, loan.contract_id)
+
         events.append({
             "kind": EventKind.INTERBANK_REPAID.value,
             "day": current_day,

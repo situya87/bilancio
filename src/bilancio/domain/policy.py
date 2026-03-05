@@ -15,6 +15,7 @@ from bilancio.domain.instruments.base import Instrument, InstrumentKind
 from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.domain.instruments.credit import Payable
 from bilancio.domain.instruments.delivery import DeliveryObligation
+from bilancio.domain.instruments.interbank_loan import InterbankLoanContract
 from bilancio.domain.instruments.means_of_payment import BankDeposit, Cash, ReserveDeposit
 from bilancio.domain.instruments.non_bank_loan import NonBankLoan
 
@@ -46,6 +47,7 @@ class PolicyEngine:
                 DeliveryObligation: (Agent,),  # any agent can promise to deliver
                 NonBankLoan: (Agent,),  # any agent can be a borrower (issuer of liability)
                 BankLoan: (Agent,),  # any agent can be a borrower (issuer of liability)
+                InterbankLoanContract: (Bank,),  # borrower bank issues liability
             },
             holders={
                 Cash: (Agent,),
@@ -62,6 +64,7 @@ class PolicyEngine:
                 DeliveryObligation: (Agent,),  # any agent can hold a delivery claim
                 NonBankLoan: (NonBankLender,),  # only non-bank lenders hold loans as assets
                 BankLoan: (Bank,),  # only banks hold loans as assets
+                InterbankLoanContract: (Bank,),  # lender bank holds as asset
             },
             mop_rank={
                 AgentKind.HOUSEHOLD: [InstrumentKind.BANK_DEPOSIT, InstrumentKind.CASH],
