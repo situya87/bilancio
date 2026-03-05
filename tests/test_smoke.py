@@ -41,15 +41,13 @@ def test_core_imports():
 def test_domain_imports():
     """Test that domain modules can be imported."""
     from bilancio.domain.agent import Agent
-    from bilancio.domain.instruments.contract import BaseContract, Contract
-    from bilancio.domain.instruments.policy import BasePolicy, Policy
+    from bilancio.domain.instruments.contract import BaseContract
+    from bilancio.domain.instruments.policy import BasePolicy
 
-    # Test that base classes exist
-    assert Agent is not None
-    assert Contract is not None
-    assert BaseContract is not None
-    assert Policy is not None
-    assert BasePolicy is not None
+    # Test that base classes are properly defined
+    assert hasattr(Agent, "__init__")
+    assert hasattr(BaseContract, "id") and hasattr(BaseContract, "parties")
+    assert hasattr(BasePolicy, "evaluate")
 
 
 def test_ops_imports():

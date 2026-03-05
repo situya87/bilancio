@@ -16,8 +16,6 @@ from bilancio.dealer.metrics import (
     RunMetrics,
     TraderSnapshot,
 )
-from bilancio.dealer.models import DEFAULT_BUCKETS
-from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.domain.agents import CentralBank, Household
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
@@ -26,6 +24,7 @@ from bilancio.engines.dealer_integration import (
     run_dealer_trading_phase,
 )
 from bilancio.engines.system import System
+from tests.conftest import create_dealer_config
 
 
 def create_test_system_with_ring():
@@ -37,11 +36,9 @@ def create_test_system_with_ring():
     """
     sys = System()
 
-    # Add central bank
     cb = CentralBank(id="CB", name="Central Bank", kind="central_bank")
     sys.add_agent(cb)
 
-    # Create households
     households = []
     for i in range(5):
         h = Household(id=f"h{i}", name=f"Household {i}", kind="household")
@@ -49,7 +46,6 @@ def create_test_system_with_ring():
         sys.mint_cash(h.id, 100)
         households.append(h)
 
-    # Create ring of debt (each owes 50 to the next)
     for i in range(5):
         creditor_id = households[(i + 1) % 5].id
         debtor_id = households[i].id
@@ -67,25 +63,6 @@ def create_test_system_with_ring():
         sys.add_contract(payable)
 
     return sys, households
-
-
-def create_dealer_config():
-    """Create a test dealer configuration."""
-    return DealerRingConfig(
-        ticket_size=Decimal(1),
-        buckets=list(DEFAULT_BUCKETS),
-        dealer_share=Decimal("0.25"),
-        vbt_share=Decimal("0.50"),
-        vbt_anchors={
-            "short": (Decimal("1.0"), Decimal("0.20")),
-            "mid": (Decimal("1.0"), Decimal("0.30")),
-            "long": (Decimal("1.0"), Decimal("0.40")),
-        },
-        phi_M=Decimal("0.1"),
-        phi_O=Decimal("0.1"),
-        clip_nonneg_B=True,
-        seed=42,
-    )
 
 
 class TestMetricsInitialization:

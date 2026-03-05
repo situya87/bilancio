@@ -3,6 +3,7 @@
 from decimal import Decimal
 
 import pytest
+from pydantic import ValidationError
 
 from bilancio.domain.jurisdiction import (
     BankingRules,
@@ -315,7 +316,7 @@ class TestConfigModels:
             ScenarioConfig,
         )
 
-        with pytest.raises(Exception, match="unknown jurisdiction"):
+        with pytest.raises(ValidationError, match="unknown jurisdiction"):
             ScenarioConfig(
                 name="test",
                 agents=[
@@ -333,7 +334,7 @@ class TestConfigModels:
             ScenarioConfig,
         )
 
-        with pytest.raises(Exception, match="unknown institutional agent"):
+        with pytest.raises(ValidationError, match="unknown institutional agent"):
             ScenarioConfig(
                 name="test",
                 agents=[

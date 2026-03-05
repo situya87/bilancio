@@ -10,6 +10,7 @@ import json
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -19,7 +20,6 @@ from bilancio.ui.cli.volume import (
     get_volume_contents,
     parse_modal_date,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -102,7 +102,7 @@ class TestVolumeHelpers:
         """get_volume_contents raises ClickException on failure."""
         mock_result = _mock_subprocess_ls([], returncode=1, stderr="Modal not found")
         with patch("subprocess.run", return_value=mock_result):
-            with pytest.raises(Exception, match="Failed to list volume"):
+            with pytest.raises(click.ClickException, match="Failed to list volume"):
                 get_volume_contents("bilancio-results")
 
     def test_delete_volume_path_success(self):

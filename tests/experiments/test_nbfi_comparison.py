@@ -11,16 +11,15 @@ from __future__ import annotations
 import csv
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from bilancio.experiments.nbfi_comparison import (
     NBFIComparisonConfig,
     NBFIComparisonResult,
     NBFIComparisonRunner,
 )
-
 
 # =============================================================================
 # Helpers
@@ -322,12 +321,12 @@ class TestNBFIComparisonConfigValidation:
 
     def test_n_replicates_must_be_ge_1(self):
         """n_replicates must be >= 1."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             NBFIComparisonConfig(n_replicates=0)
 
     def test_trading_rounds_must_be_ge_1(self):
         """trading_rounds must be >= 1."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             NBFIComparisonConfig(trading_rounds=0)
 
 
@@ -707,3 +706,128 @@ class TestFormatTime:
         config = NBFIComparisonConfig()
         runner = NBFIComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
         assert runner._format_time(3720) == "1h 2m"
+
+
+# =============================================================================
+# 11. Missing lender arm graceful handling
+# =============================================================================
+
+
+class TestMissingLenderArmHandling:
+    """Tests for NBFIComparisonResult when lender arm fails but idle succeeds."""
+
+    def test_lending_effect_none_when_lend_failed(self):
+        """lending_effect is None when lend arm failed (delta_lend=None)."""
+        result = _make_result(
+            delta_idle=Decimal("0.5"),
+            delta_lend=None,
+            lend_status="failed",
+        )
+        assert result.lending_effect is None
+        assert result.lending_relief_ratio is None
+
+    def test_idle_metrics_still_available_when_lend_failed(self):
+        """Idle arm metrics should still be accessible when lend arm failed."""
+        result = _make_result(
+            delta_idle=Decimal("0.5"),
+            phi_idle=Decimal("0.8"),
+            delta_lend=None,
+            phi_lend=None,
+            lend_status="failed",
+        )
+        assert result.delta_idle == Decimal("0.5")
+        assert result.phi_idle == Decimal("0.8")
+
+    def test_csv_handles_failed_lend_arm(self, tmp_path: Path):
+        """CSV writes properly when lend arm failed (None values become empty)."""
+        config = NBFIComparisonConfig()
+        runner = NBFIComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [
+            _make_result(
+                delta_idle=Decimal("0.5"),
+                delta_lend=None,
+                phi_lend=None,
+                lend_status="failed",
+            )
+        ]
+        runner._write_comparison_csv()
+
+        csv_path = tmp_path / "aggregate" / "comparison.csv"
+        with csv_path.open("r") as fh:
+            reader = csv.DictReader(fh)
+            rows = list(reader)
+
+        assert rows[0]["delta_idle"] == "0.5"
+        assert rows[0]["delta_lend"] == ""
+        assert rows[0]["lending_effect"] == ""
+        assert rows[0]["lend_status"] == "failed"
+
+
+# =============================================================================
+# 12. Config round-trip comprehensive
+# =============================================================================
+
+
+class TestNBFIConfigRoundTripComprehensive:
+    """Comprehensive config serialization round-trip tests for NBFI."""
+
+    def test_round_trip_identity_for_default_config(self):
+        """model_dump then model_validate on default config produces identical object."""
+        original = NBFIComparisonConfig()
+        dumped = original.model_dump()
+        restored = NBFIComparisonConfig.model_validate(dumped)
+        assert original.model_dump() == restored.model_dump()
+
+    def test_round_trip_with_all_lender_params_customized(self):
+        """Round-trip preserves all custom lender parameters."""
+        original = NBFIComparisonConfig(
+            lender_share=Decimal("0.25"),
+            lender_base_rate=Decimal("0.10"),
+            lender_risk_premium_scale=Decimal("0.40"),
+            lender_max_single_exposure=Decimal("0.30"),
+            lender_max_total_exposure=Decimal("0.95"),
+            lender_maturity_days=5,
+            lender_horizon=10,
+            risk_aversion=Decimal("0.7"),
+            planning_horizon=5,
+            n_banks=7,
+            reserve_multiplier=20.0,
+        )
+        dumped = original.model_dump()
+        restored = NBFIComparisonConfig.model_validate(dumped)
+
+        assert restored.lender_share == original.lender_share
+        assert restored.lender_base_rate == original.lender_base_rate
+        assert restored.lender_risk_premium_scale == original.lender_risk_premium_scale
+        assert restored.lender_max_single_exposure == original.lender_max_single_exposure
+        assert restored.lender_max_total_exposure == original.lender_max_total_exposure
+        assert restored.lender_maturity_days == original.lender_maturity_days
+        assert restored.lender_horizon == original.lender_horizon
+        assert restored.risk_aversion == original.risk_aversion
+        assert restored.planning_horizon == original.planning_horizon
+        assert restored.n_banks == original.n_banks
+        assert restored.reserve_multiplier == original.reserve_multiplier
+
+
+# =============================================================================
+# 13. Comparison CSV header validation
+# =============================================================================
+
+
+class TestNBFIComparisonCSVHeaders:
+    """Verify comparison.csv column headers match COMPARISON_FIELDS."""
+
+    def test_csv_columns_match_comparison_fields_exactly(self, tmp_path: Path):
+        """CSV header set should equal COMPARISON_FIELDS set."""
+        config = NBFIComparisonConfig()
+        runner = NBFIComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [_make_result()]
+        runner._write_comparison_csv()
+
+        csv_path = tmp_path / "aggregate" / "comparison.csv"
+        with csv_path.open("r") as fh:
+            reader = csv.DictReader(fh)
+            header = reader.fieldnames
+
+        assert header is not None
+        assert set(header) == set(NBFIComparisonRunner.COMPARISON_FIELDS)

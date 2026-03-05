@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from bilancio.config.apply import create_agent
+from bilancio.core.errors import ValidationError
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.engines.system import System
 from bilancio.ops.primitives import (
@@ -83,13 +84,13 @@ class TestSplit:
     def test_split_invalid_amount_zero(self):
         sys = _make_system()
         cid = sys.mint_cash("H1", 100)
-        with pytest.raises(Exception, match="invalid split amount"):
+        with pytest.raises(ValidationError, match="invalid split amount"):
             split(sys, cid, 0)
 
     def test_split_amount_exceeds(self):
         sys = _make_system()
         cid = sys.mint_cash("H1", 100)
-        with pytest.raises(Exception, match="invalid split amount"):
+        with pytest.raises(ValidationError, match="invalid split amount"):
             split(sys, cid, 200)
 
     def test_split_non_divisible_raises(self):
@@ -106,7 +107,7 @@ class TestSplit:
             due_day=5,
         )
         sys.add_contract(payable)
-        with pytest.raises(Exception, match="not divisible"):
+        with pytest.raises(ValidationError, match="not divisible"):
             split(sys, "P1", 50)
 
 
@@ -123,7 +124,7 @@ class TestMerge:
         sys = _make_system()
         c1 = sys.mint_cash("H1", 100)
         c2 = sys.mint_cash("H2", 50)
-        with pytest.raises(Exception, match="not fungible"):
+        with pytest.raises(ValidationError, match="not fungible"):
             merge(sys, c1, c2)
 
 
@@ -145,13 +146,13 @@ class TestConsume:
     def test_consume_invalid_amount(self):
         sys = _make_system()
         cid = sys.mint_cash("H1", 100)
-        with pytest.raises(Exception, match="invalid consume amount"):
+        with pytest.raises(ValidationError, match="invalid consume amount"):
             consume(sys, cid, 0)
 
     def test_consume_exceeds_amount(self):
         sys = _make_system()
         cid = sys.mint_cash("H1", 100)
-        with pytest.raises(Exception, match="invalid consume amount"):
+        with pytest.raises(ValidationError, match="invalid consume amount"):
             consume(sys, cid, 200)
 
 

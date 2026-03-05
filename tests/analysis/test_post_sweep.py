@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -468,7 +468,7 @@ class TestAnalysisDispatching:
             patch("bilancio.analysis.post_sweep._run_narrative") as mock_nr,
         ):
             mock_nr.return_value = out_dir / "narrative_report.html"
-            results = run_post_sweep_analysis(
+            run_post_sweep_analysis(
                 sweep_dir, "dealer", ["narrative"], output_dir=out_dir
             )
             assert mock_nr.called
@@ -613,3 +613,318 @@ class TestBankSweepIntegration:
             # Verify the kappas passed to the analysis function
             call_args = mock_nr.call_args
             assert call_args[0][1] == [0.25, 1.0]
+
+
+# ---------------------------------------------------------------------------
+# 16. Golden output test — narrative content verification
+# ---------------------------------------------------------------------------
+
+
+class TestNarrativeGoldenOutput:
+    """Verify narrative HTML contains expected text fragments from known CSV data."""
+
+    def test_narrative_contains_kappa_values(self, tmp_path: Path):
+        """Narrative HTML should contain the kappa values from comparison.csv."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        csv_content = _minimal_csv_content(kappas=[0.3, 1.0, 2.0])
+        (agg / "comparison.csv").write_text(csv_content)
+        for arm in ("passive", "active"):
+            (tmp_path / arm / "runs").mkdir(parents=True)
+        sp = _resolve_sweep_paths(tmp_path, "dealer")
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, [0.3, 1.0, 2.0], out_dir)
+        content = result.read_text()
+        assert "0.3" in content
+        assert "1.0" in content
+        assert "2.0" in content
+
+    def test_narrative_reports_positive_trading_effect(self, tmp_path: Path):
+        """When treatment reduces defaults, narrative should say 'improved'."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        # delta_passive=0.5, delta_active=0.2 => effect = +0.3 (positive = improved)
+        csv_content = (
+            "kappa,concentration,mu,outside_mid_ratio,seed,"
+            "delta_passive,delta_active,phi_passive,phi_active,"
+            "trading_effect,passive_run_id,active_run_id\n"
+            "0.5,1,0,0.9,42,0.5,0.2,0.5,0.8,0.3,p1,a1\n"
+        )
+        (agg / "comparison.csv").write_text(csv_content)
+        for arm in ("passive", "active"):
+            (tmp_path / arm / "runs").mkdir(parents=True)
+        sp = _resolve_sweep_paths(tmp_path, "dealer")
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, [0.5], out_dir)
+        content = result.read_text()
+        assert "improved" in content
+
+    def test_narrative_reports_negative_trading_effect(self, tmp_path: Path):
+        """When treatment increases defaults, narrative should say 'did not improve'."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        # delta_passive=0.2, delta_active=0.5 => effect = -0.3 (negative = worsened)
+        csv_content = (
+            "kappa,concentration,mu,outside_mid_ratio,seed,"
+            "delta_passive,delta_active,phi_passive,phi_active,"
+            "trading_effect,passive_run_id,active_run_id\n"
+            "0.5,1,0,0.9,42,0.2,0.5,0.8,0.5,-0.3,p1,a1\n"
+        )
+        (agg / "comparison.csv").write_text(csv_content)
+        for arm in ("passive", "active"):
+            (tmp_path / arm / "runs").mkdir(parents=True)
+        sp = _resolve_sweep_paths(tmp_path, "dealer")
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, [0.5], out_dir)
+        content = result.read_text()
+        assert "did not improve" in content
+
+    def test_narrative_run_count_matches(self, tmp_path: Path):
+        """Narrative should report the correct number of runs."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        csv_content = _minimal_csv_content(kappas=[0.25, 0.5, 1.0])
+        (agg / "comparison.csv").write_text(csv_content)
+        for arm in ("passive", "active"):
+            (tmp_path / arm / "runs").mkdir(parents=True)
+        sp = _resolve_sweep_paths(tmp_path, "dealer")
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, [0.25, 0.5, 1.0], out_dir)
+        content = result.read_text()
+        # 3 rows => 3 runs
+        assert "<strong>3</strong>" in content
+
+
+# ---------------------------------------------------------------------------
+# 17. Single kappa edge case in narrative
+# ---------------------------------------------------------------------------
+
+
+class TestSingleKappaNarrative:
+    """Tests for narrative report with exactly one kappa value."""
+
+    def test_single_kappa_summary_table_has_one_row(self, tmp_path: Path):
+        """Summary table should have exactly one data row for a single kappa."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        csv_content = _minimal_csv_content(kappas=[0.5])
+        (agg / "comparison.csv").write_text(csv_content)
+        for arm in ("passive", "active"):
+            (tmp_path / arm / "runs").mkdir(parents=True)
+        sp = _resolve_sweep_paths(tmp_path, "dealer")
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, [0.5], out_dir)
+        content = result.read_text()
+        # Count <tr> in the summary-table tbody — should be 1
+        # Find the section between <tbody> and </tbody>
+        tbody_start = content.find("<tbody>")
+        tbody_end = content.find("</tbody>", tbody_start)
+        tbody_section = content[tbody_start:tbody_end]
+        row_count = tbody_section.count("<tr>")
+        assert row_count == 1
+
+
+# ---------------------------------------------------------------------------
+# 18. All-zero trading effects
+# ---------------------------------------------------------------------------
+
+
+class TestAllZeroTradingEffects:
+    """Tests for narrative when delta_passive == delta_active for all rows."""
+
+    def test_zero_effect_narrative_consistency(self, tmp_path: Path):
+        """When all effects are zero, narrative should report 0 improved and 0 worsened."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        # All rows: delta_passive == delta_active (effect = 0)
+        csv_content = (
+            "kappa,concentration,mu,outside_mid_ratio,seed,"
+            "delta_passive,delta_active,phi_passive,phi_active,"
+            "trading_effect,passive_run_id,active_run_id\n"
+            "0.25,1,0,0.9,42,0.3,0.3,0.7,0.7,0.0,p1,a1\n"
+            "0.5,1,0,0.9,43,0.2,0.2,0.8,0.8,0.0,p2,a2\n"
+            "1.0,1,0,0.9,44,0.1,0.1,0.9,0.9,0.0,p3,a3\n"
+        )
+        (agg / "comparison.csv").write_text(csv_content)
+        for arm in ("passive", "active"):
+            (tmp_path / arm / "runs").mkdir(parents=True)
+        sp = _resolve_sweep_paths(tmp_path, "dealer")
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, [0.25, 0.5, 1.0], out_dir)
+        content = result.read_text()
+        # Mean effect should be +0.0000
+        assert "+0.0000" in content
+        # "did not improve" because mean_effect is 0 (not > 0)
+        assert "did not improve" in content
+
+    def test_zero_effect_consistency_pct(self, tmp_path: Path):
+        """When all effects are zero, consistency section should show 0%."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        csv_content = (
+            "kappa,concentration,mu,outside_mid_ratio,seed,"
+            "delta_passive,delta_active,phi_passive,phi_active,"
+            "trading_effect,passive_run_id,active_run_id\n"
+            "0.5,1,0,0.9,42,0.3,0.3,0.7,0.7,0.0,p1,a1\n"
+        )
+        (agg / "comparison.csv").write_text(csv_content)
+        for arm in ("passive", "active"):
+            (tmp_path / arm / "runs").mkdir(parents=True)
+        sp = _resolve_sweep_paths(tmp_path, "dealer")
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, [0.5], out_dir)
+        content = result.read_text()
+        # "0% of runs" improved
+        assert "0%" in content
+
+
+# ---------------------------------------------------------------------------
+# 19. Missing arm data (only passive arm in comparison.csv)
+# ---------------------------------------------------------------------------
+
+
+class TestMissingArmData:
+    """Tests for narrative with incomplete data (missing treatment arm)."""
+
+    def test_missing_active_delta_skips_row(self, tmp_path: Path):
+        """When delta_active is empty, the row should be skipped in effect computation."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        csv_content = (
+            "kappa,concentration,mu,outside_mid_ratio,seed,"
+            "delta_passive,delta_active,phi_passive,phi_active,"
+            "trading_effect,passive_run_id,active_run_id\n"
+            "0.5,1,0,0.9,42,0.3,,0.7,,0.0,p1,\n"
+            "1.0,1,0,0.9,43,0.2,0.1,0.8,0.9,0.1,p2,a2\n"
+        )
+        (agg / "comparison.csv").write_text(csv_content)
+        for arm in ("passive", "active"):
+            (tmp_path / arm / "runs").mkdir(parents=True)
+        sp = _resolve_sweep_paths(tmp_path, "dealer")
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        # The row with empty delta_active should be skipped.
+        # The second row has effect = 0.2 - 0.1 = 0.1
+        result = _run_narrative(sp, [0.5, 1.0], out_dir)
+        content = result.read_text()
+        # Should still produce a valid report (1 valid run)
+        assert "Executive Summary" in content
+
+
+# ---------------------------------------------------------------------------
+# 20. Summary table row count matches unique kappa values
+# ---------------------------------------------------------------------------
+
+
+class TestSummaryTableRowCount:
+    """Verify the summary table row count matches the number of unique kappa combos."""
+
+    def test_summary_rows_match_kappa_count(self, tmp_path: Path):
+        """Number of rows in the kappa summary table matches unique kappa values."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        kappas = [0.25, 0.5, 1.0, 2.0, 4.0]
+        csv_content = _minimal_csv_content(kappas=kappas)
+        (agg / "comparison.csv").write_text(csv_content)
+        for arm in ("passive", "active"):
+            (tmp_path / arm / "runs").mkdir(parents=True)
+        sp = _resolve_sweep_paths(tmp_path, "dealer")
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, kappas, out_dir)
+        content = result.read_text()
+        # Count data rows in the summary table
+        tbody_start = content.find("<tbody>")
+        tbody_end = content.find("</tbody>", tbody_start)
+        tbody_section = content[tbody_start:tbody_end]
+        row_count = tbody_section.count("<tr>")
+        assert row_count == len(kappas)
+
+    def test_summary_rows_with_duplicate_kappas(self, tmp_path: Path):
+        """When CSV has multiple rows with same kappa (different seeds), they group."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        # Two rows with kappa=0.5 (different seeds) and one with kappa=1.0
+        csv_content = (
+            "kappa,concentration,mu,outside_mid_ratio,seed,"
+            "delta_passive,delta_active,phi_passive,phi_active,"
+            "trading_effect,passive_run_id,active_run_id\n"
+            "0.5,1,0,0.9,42,0.3,0.2,0.7,0.8,0.1,p1,a1\n"
+            "0.5,1,0,0.9,43,0.35,0.25,0.65,0.75,0.1,p2,a2\n"
+            "1.0,1,0,0.9,44,0.1,0.05,0.9,0.95,0.05,p3,a3\n"
+        )
+        (agg / "comparison.csv").write_text(csv_content)
+        for arm in ("passive", "active"):
+            (tmp_path / arm / "runs").mkdir(parents=True)
+        sp = _resolve_sweep_paths(tmp_path, "dealer")
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, [0.5, 1.0], out_dir)
+        content = result.read_text()
+        # Should have 2 rows (kappa 0.5 and kappa 1.0)
+        tbody_start = content.find("<tbody>")
+        tbody_end = content.find("</tbody>", tbody_start)
+        tbody_section = content[tbody_start:tbody_end]
+        row_count = tbody_section.count("<tr>")
+        assert row_count == 2
+
+
+# ---------------------------------------------------------------------------
+# 21. Bank narrative golden output
+# ---------------------------------------------------------------------------
+
+
+class TestBankNarrativeGoldenOutput:
+    """Verify bank sweep narrative produces expected content."""
+
+    def test_bank_narrative_uses_bank_labels(self, bank_sweep_dir: Path):
+        """Bank narrative should use Bank-specific labels (Bank Lending, Bank Idle)."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        sp = _resolve_sweep_paths(bank_sweep_dir, "bank")
+        out_dir = bank_sweep_dir / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, [0.5], out_dir)
+        content = result.read_text()
+        assert "Bank Lending" in content
+        assert "Bank Idle" in content
+
+    def test_bank_narrative_has_executive_summary(self, bank_sweep_dir: Path):
+        """Bank narrative should contain Executive Summary section."""
+        from bilancio.analysis.post_sweep import _run_narrative
+
+        sp = _resolve_sweep_paths(bank_sweep_dir, "bank")
+        out_dir = bank_sweep_dir / "analysis"
+        out_dir.mkdir()
+        result = _run_narrative(sp, [0.5], out_dir)
+        content = result.read_text()
+        assert "Executive Summary" in content
+        assert "Effect by Liquidity Level" in content
+        assert "Key Findings" in content

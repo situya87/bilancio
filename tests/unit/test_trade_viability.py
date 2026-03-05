@@ -199,7 +199,7 @@ class TestCheckInterbankViability:
         )
         assert report.corridor_viable is True
         # Low kappa -> higher stress factor -> wider corridor
-        assert report.diagnostics["corridor_width"] > report.diagnostics["corridor_mid"] * 0.5 or True  # just check viable
+        assert report.diagnostics["corridor_width"] > Decimal("0")
 
     def test_single_bank_fails_auction_capacity(self):
         """n_banks=1 -> auction_capacity_viable=False."""

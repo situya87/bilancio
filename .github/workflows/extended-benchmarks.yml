@@ -92,3 +92,27 @@ jobs:
             ${{ matrix.report_json }}
             ${{ matrix.report_md }}
           if-no-files-found: warn
+
+  native-parity:
+    name: Native Kernel Parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run native parity tests
+        run: |
+          PYTHONPATH=src python -m pytest tests/dealer/test_kernel_native_parity.py -v --no-cov

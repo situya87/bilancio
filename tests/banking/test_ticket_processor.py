@@ -14,33 +14,14 @@ References:
 
 from decimal import Decimal
 
-from bilancio.banking.pricing_kernel import PricingParams
-from bilancio.banking.state import BankDealerState, CentralBankParams
+from bilancio.banking.state import BankDealerState
 from bilancio.banking.ticket_processor import (
     TicketProcessor,
     process_inter_bank_payment,
     process_intra_bank_payment,
 )
 from bilancio.banking.types import Ticket, TicketType
-
-
-def create_standard_params() -> tuple[CentralBankParams, PricingParams]:
-    """Create standard test parameters."""
-    cb_params = CentralBankParams(
-        reserve_remuneration_rate=Decimal("0.01"),
-        cb_borrowing_rate=Decimal("0.03"),
-    )
-
-    pricing_params = PricingParams(
-        reserve_remuneration_rate=cb_params.reserve_remuneration_rate,
-        cb_borrowing_rate=cb_params.cb_borrowing_rate,
-        reserve_target=100000,
-        symmetric_capacity=50000,
-        ticket_size=10000,
-        reserve_floor=10000,
-    )
-
-    return cb_params, pricing_params
+from tests.banking.conftest import create_standard_params
 
 
 def create_processor(
