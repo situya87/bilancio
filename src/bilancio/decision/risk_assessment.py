@@ -72,6 +72,12 @@ class RiskAssessmentParams:
     )  # No-history default prior (can be overridden by informedness)
     earning_motive_premium: Decimal = Decimal("0.0")  # 0 = disabled (backward compat)
 
+    # Adaptive flags (Plan 050)
+    adaptive_lookback: bool = False           # [PRE] lookback_window scales with maturity_days
+    adaptive_issuer_specific: bool = False    # [PRE] activates use_issuer_specific
+    adaptive_ev_term_structure: bool = False  # [RUN] EV uses (1-h)^tau term structure
+    term_strength: Decimal = Decimal("0.5")   # hazard rate dampening
+
 
 # ---------------------------------------------------------------------------
 # Stage 1: Belief Tracker
@@ -269,9 +275,12 @@ class EVValuer:
     injected, delegates to it instead of using the built-in formula.
     """
 
-    def __init__(self, belief_source: BeliefTracker, instrument_valuer: InstrumentValuer | None = None):
+    def __init__(self, belief_source: BeliefTracker, instrument_valuer: InstrumentValuer | None = None,
+                 *, term_structure: bool = False, term_strength: Decimal = Decimal("0.5")):
         self.belief_source = belief_source
         self.instrument_valuer = instrument_valuer
+        self.term_structure = term_structure
+        self.term_strength = term_strength
 
     def expected_value(self, ticket: Ticket, current_day: int) -> Decimal:
         """
@@ -293,6 +302,11 @@ class EVValuer:
             result: Decimal = self.instrument_valuer.value_decimal(ticket, current_day)
             return result
         p_default = self.belief_source.estimate_default_prob(ticket.issuer_id, current_day)
+        if self.term_structure:
+            remaining_tau = max(1, ticket.maturity_day - current_day)
+            h = self.term_strength * p_default
+            survival = (Decimal(1) - h) ** remaining_tau
+            return survival * ticket.face
         ev = (Decimal(1) - p_default) * ticket.face
         return ev
 
@@ -585,7 +599,11 @@ class RiskAssessor:
             initial_prior=params.initial_prior,
             use_issuer_specific=params.use_issuer_specific,
         )
-        self.valuer = EVValuer(self.belief_tracker, instrument_valuer)
+        self.valuer = EVValuer(
+            self.belief_tracker, instrument_valuer,
+            term_structure=params.adaptive_ev_term_structure,
+            term_strength=params.term_strength,
+        )
         self.position_assessor = PositionAssessor(
             base_risk_premium=params.base_risk_premium,
             urgency_sensitivity=params.urgency_sensitivity,

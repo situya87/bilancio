@@ -28,6 +28,12 @@ class TraderProfile:
     buy_reserve_fraction: Decimal = Decimal("1.0")  # reserve 100% of upcoming dues before buying
     trading_motive: str = "liquidity_only"
 
+    # Adaptive flags (Plan 050)
+    adaptive_planning_horizon: bool = False   # [PRE] scale planning_horizon with maturity_days
+    adaptive_risk_aversion: bool = False      # [RUN] effective_ra responds to observed defaults
+    adaptive_reserves: bool = False           # [RUN] buy_reserve_fraction responds to stress
+    adaptive_ev_term_structure: bool = False  # [RUN] EV uses maturity-dependent p_default
+
     def __post_init__(self) -> None:
         if not (1 <= self.planning_horizon <= 20):
             raise ValueError("planning_horizon must be between 1 and 20")
@@ -92,6 +98,15 @@ class VBTProfile:
     forward_weight: Decimal = Decimal("0.0")  # 0 = disabled (backward compat)
     stress_horizon: int = 5  # days to look ahead for stress estimation
     flow_sensitivity: Decimal = Decimal("0.0")  # 0 = disabled (backward compat)
+
+    # Adaptive flags (Plan 050)
+    adaptive_term_structure: bool = False     # [PRE] per-bucket M = rho * (1-h)^tau
+    adaptive_base_spreads: bool = False       # [PRE] base spreads scale with kappa stress
+    adaptive_stress_horizon: bool = False     # [PRE] stress_horizon scales with maturity_days
+    adaptive_convex_spreads: bool = False     # [RUN] O = base + sens * p^2/(1-p)
+    adaptive_per_bucket_tracking: bool = False  # [RUN] per-bucket default rates
+    adaptive_issuer_pricing: bool = False     # [RUN] inventory-weighted issuer p_default
+    term_strength: Decimal = Decimal("0.5")   # dampening for term-structure hazard rate
 
 
 @dataclass(frozen=True)
@@ -172,6 +187,14 @@ class LenderProfile:
     # Phase 4: Preventive lending (Plan 046)
     preventive_lending: bool = False
     prevention_threshold: Decimal = Decimal("0.3")  # min issuer p_default to trigger
+
+    # Adaptive flags (Plan 050)
+    adaptive_risk_aversion: bool = False      # [PRE] risk_aversion calibrates to kappa
+    adaptive_profit_target: bool = False      # [PRE] profit_target anchors to CB corridor
+    adaptive_loan_maturity: bool = False      # [PRE] max_loan_maturity scales with maturity_days
+    adaptive_rates: bool = False              # [RUN] daily rate multiplier from portfolio losses
+    adaptive_capital_conservation: bool = False  # [RUN] scale exposure limits by utilization
+    adaptive_prevention: bool = False         # [RUN] dynamic prevention threshold
 
     def __post_init__(self) -> None:
         if self.kappa <= Decimal("0"):
@@ -263,6 +286,9 @@ class BankProfile:
     max_total_exposure_ratio: Decimal = Decimal("1.50")  # Max total loans as multiple of initial reserves
     max_daily_lending_ratio: Decimal = Decimal("0.50")  # Max new loans per day as fraction of current reserves
 
+    # Adaptive flags (Plan 050)
+    adaptive_corridor: bool = False           # [PRE] corridor_mid/width incorporate mu, c
+
     def __post_init__(self) -> None:
         if self.r_base < Decimal("0"):
             raise ValueError("r_base must be non-negative")
@@ -297,21 +323,32 @@ class BankProfile:
         """Common stress factor: max(0, 1-kappa) / (1+kappa)."""
         return max(Decimal("0"), Decimal("1") - kappa) / (Decimal("1") + kappa)
 
-    def corridor_mid(self, kappa: Decimal) -> Decimal:
-        """r_mid = r_base + r_stress * max(0, 1-kappa) / (1+kappa)."""
+    def _combined_stress(self, kappa: Decimal, mu: Decimal, c: Decimal) -> Decimal:
+        """Combined stress factor incorporating mu (timing) and c (concentration)."""
+        base = self._stress_factor(kappa)
+        timing_stress = (Decimal("1") - mu) ** 2  # front-loaded = more stress
+        concentration_stress = Decimal("1") / (Decimal("1") + c)  # lower c = more stress
+        return base + Decimal("0.05") * timing_stress + Decimal("0.05") * concentration_stress
+
+    def corridor_mid(self, kappa: Decimal, mu: Decimal | None = None, c: Decimal | None = None) -> Decimal:
+        """r_mid = r_base + r_stress * stress_factor."""
+        if self.adaptive_corridor and mu is not None and c is not None:
+            return self.r_base + self.r_stress * self._combined_stress(kappa, mu, c)
         return self.r_base + self.r_stress * self._stress_factor(kappa)
 
-    def corridor_width(self, kappa: Decimal) -> Decimal:
-        """Omega = omega_base + omega_stress * max(0, 1-kappa) / (1+kappa)."""
+    def corridor_width(self, kappa: Decimal, mu: Decimal | None = None, c: Decimal | None = None) -> Decimal:
+        """Omega = omega_base + omega_stress * stress_factor."""
+        if self.adaptive_corridor and mu is not None and c is not None:
+            return self.omega_base + self.omega_stress * self._combined_stress(kappa, mu, c)
         return self.omega_base + self.omega_stress * self._stress_factor(kappa)
 
-    def r_floor(self, kappa: Decimal) -> Decimal:
+    def r_floor(self, kappa: Decimal, mu: Decimal | None = None, c: Decimal | None = None) -> Decimal:
         """Reserve remuneration rate (CB floor)."""
-        return self.corridor_mid(kappa) - self.corridor_width(kappa) / 2
+        return self.corridor_mid(kappa, mu, c) - self.corridor_width(kappa, mu, c) / 2
 
-    def r_ceiling(self, kappa: Decimal) -> Decimal:
+    def r_ceiling(self, kappa: Decimal, mu: Decimal | None = None, c: Decimal | None = None) -> Decimal:
         """CB lending rate (corridor ceiling)."""
-        return self.corridor_mid(kappa) + self.corridor_width(kappa) / 2
+        return self.corridor_mid(kappa, mu, c) + self.corridor_width(kappa, mu, c) / 2
 
     def loan_maturity(self, maturity_days: int) -> int:
         """Bank loan maturity in days."""

@@ -8,6 +8,7 @@ at runtime; the directive below silences mypy for this single error code.
 # mypy: disable-error-code="union-attr"
 
 import logging
+import warnings
 from decimal import Decimal
 from typing import Any
 
@@ -670,6 +671,11 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 urgency_sensitivity=config.dealer.risk_assessment.urgency_sensitivity,
                 use_issuer_specific=config.dealer.risk_assessment.use_issuer_specific,
                 buy_premium_multiplier=config.dealer.risk_assessment.buy_premium_multiplier,
+                # Plan 050 adaptive flags
+                adaptive_lookback=config.dealer.risk_assessment.adaptive_lookback,
+                adaptive_issuer_specific=config.dealer.risk_assessment.adaptive_issuer_specific,
+                adaptive_ev_term_structure=config.dealer.risk_assessment.adaptive_ev_term_structure,
+                term_strength=config.dealer.risk_assessment.term_strength,
             )
 
             # Enable per-issuer tracking in BeliefTracker when issuer-specific pricing is on
@@ -688,13 +694,39 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 default_observability=config.balanced_dealer.default_observability,
                 buy_reserve_fraction=config.balanced_dealer.buy_reserve_fraction,
                 trading_motive=config.balanced_dealer.trading_motive,
+                # Plan 050 adaptive flags
+                adaptive_planning_horizon=config.balanced_dealer.adaptive_planning_horizon,
+                adaptive_risk_aversion=config.balanced_dealer.adaptive_risk_aversion,
+                adaptive_reserves=config.balanced_dealer.adaptive_reserves,
+                adaptive_ev_term_structure=config.balanced_dealer.adaptive_ev_term_structure,
             )
             vbt_profile = VBTProfile(
                 mid_sensitivity=config.balanced_dealer.vbt_mid_sensitivity,
                 spread_sensitivity=config.balanced_dealer.vbt_spread_sensitivity,
                 spread_scale=config.balanced_dealer.spread_scale,
                 flow_sensitivity=config.balanced_dealer.flow_sensitivity,
+                # Plan 050 adaptive flags
+                adaptive_term_structure=config.balanced_dealer.adaptive_term_structure,
+                adaptive_base_spreads=config.balanced_dealer.adaptive_base_spreads,
+                adaptive_stress_horizon=config.balanced_dealer.adaptive_stress_horizon,
+                adaptive_convex_spreads=config.balanced_dealer.adaptive_convex_spreads,
+                adaptive_per_bucket_tracking=config.balanced_dealer.adaptive_per_bucket_tracking,
+                adaptive_issuer_pricing=config.balanced_dealer.adaptive_issuer_pricing,
+                term_strength=config.balanced_dealer.term_strength,
             )
+
+            if config.balanced_dealer.alpha_vbt > 0:
+                warnings.warn(
+                    "alpha_vbt is deprecated (Plan 050). Use --adapt=calibrated instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            if config.balanced_dealer.alpha_trader > 0:
+                warnings.warn(
+                    "alpha_trader is deprecated (Plan 050). Use --adapt=calibrated instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
 
             system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
                 system,
@@ -746,6 +778,13 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 coverage_penalty_scale=config.lender.coverage_penalty_scale,
                 preventive_lending=config.lender.preventive_lending,
                 prevention_threshold=config.lender.prevention_threshold,
+                # Plan 050 adaptive flags
+                adaptive_risk_aversion=config.lender.adaptive_risk_aversion,
+                adaptive_profit_target=config.lender.adaptive_profit_target,
+                adaptive_loan_maturity=config.lender.adaptive_loan_maturity,
+                adaptive_rates=config.lender.adaptive_rates,
+                adaptive_capital_conservation=config.lender.adaptive_capital_conservation,
+                adaptive_prevention=config.lender.adaptive_prevention,
             )
 
         # Create NBFI RiskAssessor when profile has risk_assessment_params
@@ -944,13 +983,27 @@ def _init_dealer_from_action_specs(
         )
 
     if trader_profile is None:
-        trader_profile = TraderProfile()
+        trader_profile = TraderProfile(
+            # Plan 050 adaptive flags
+            adaptive_planning_horizon=bd.adaptive_planning_horizon,
+            adaptive_risk_aversion=bd.adaptive_risk_aversion,
+            adaptive_reserves=bd.adaptive_reserves,
+            adaptive_ev_term_structure=bd.adaptive_ev_term_structure,
+        )
     if vbt_profile is None:
         vbt_profile = VBTProfile(
             mid_sensitivity=bd.vbt_mid_sensitivity,
             spread_sensitivity=bd.vbt_spread_sensitivity,
             spread_scale=bd.spread_scale,
             flow_sensitivity=bd.flow_sensitivity,
+            # Plan 050 adaptive flags
+            adaptive_term_structure=bd.adaptive_term_structure,
+            adaptive_base_spreads=bd.adaptive_base_spreads,
+            adaptive_stress_horizon=bd.adaptive_stress_horizon,
+            adaptive_convex_spreads=bd.adaptive_convex_spreads,
+            adaptive_per_bucket_tracking=bd.adaptive_per_bucket_tracking,
+            adaptive_issuer_pricing=bd.adaptive_issuer_pricing,
+            term_strength=bd.term_strength,
         )
 
     # Read risk_assessment from dealer config
@@ -963,6 +1016,11 @@ def _init_dealer_from_action_specs(
             urgency_sensitivity=config.dealer.risk_assessment.urgency_sensitivity,
             use_issuer_specific=config.dealer.risk_assessment.use_issuer_specific,
             buy_premium_multiplier=config.dealer.risk_assessment.buy_premium_multiplier,
+            # Plan 050 adaptive flags
+            adaptive_lookback=config.dealer.risk_assessment.adaptive_lookback,
+            adaptive_issuer_specific=config.dealer.risk_assessment.adaptive_issuer_specific,
+            adaptive_ev_term_structure=config.dealer.risk_assessment.adaptive_ev_term_structure,
+            term_strength=config.dealer.risk_assessment.term_strength,
         )
 
     # Build bucket configs from dealer config or defaults
@@ -1002,6 +1060,19 @@ def _init_dealer_from_action_specs(
     if bd.issuer_specific_pricing and risk_params is not None:
         from dataclasses import replace as dc_replace
         risk_params = dc_replace(risk_params, use_issuer_specific=True)
+
+    if bd.alpha_vbt > 0:
+        warnings.warn(
+            "alpha_vbt is deprecated (Plan 050). Use --adapt=calibrated instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    if bd.alpha_trader > 0:
+        warnings.warn(
+            "alpha_trader is deprecated (Plan 050). Use --adapt=calibrated instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     system.state.dealer_subsystem = initialize_balanced_dealer_subsystem(
         system,

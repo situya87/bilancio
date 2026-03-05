@@ -394,6 +394,12 @@ def _initialize_balanced_market_makers(
         for k in BASE_SPREAD_BY_BUCKET:
             BASE_SPREAD_BY_BUCKET[k] = BASE_SPREAD_BY_BUCKET[k] * vbt_profile.spread_scale
 
+    # Adaptive base spreads: scale with stress (Plan 050)
+    if vbt_profile is not None and getattr(vbt_profile, 'adaptive_base_spreads', False):
+        stress_factor = shared_prior / Decimal("0.15")  # normalized: 1.0 at baseline, >1 under stress
+        for k in BASE_SPREAD_BY_BUCKET:
+            BASE_SPREAD_BY_BUCKET[k] = BASE_SPREAD_BY_BUCKET[k] * max(Decimal("1"), stress_factor)
+
     # VBT mid = ρ × (1 - P_prior) via pricing model for consistency
     if subsystem.vbt_pricing_model is not None:
         credit_adjusted_mid = subsystem.vbt_pricing_model.compute_mid(

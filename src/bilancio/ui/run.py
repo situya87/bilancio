@@ -245,10 +245,12 @@ def run_scenario(
             _credit_risk_loading = Decimal(str(_balanced_cfg.get("credit_risk_loading", 0)))
             _max_borrower_risk = Decimal(str(_balanced_cfg.get("max_borrower_risk", "1.0")))
             _min_coverage_ratio = Decimal(str(_balanced_cfg.get("min_coverage_ratio", 0)))
+            _adaptive_corridor = _balanced_cfg.get("adaptive_corridor", False)
             bank_profile = BankProfile(
                 credit_risk_loading=_credit_risk_loading,
                 max_borrower_risk=_max_borrower_risk,
                 min_coverage_ratio=_min_coverage_ratio,
+                adaptive_corridor=_adaptive_corridor,
             )
             # Get kappa: prefer _balanced_config (written by compiler), then balanced_dealer, then default
             _kappa_str = (
@@ -265,6 +267,11 @@ def run_scenario(
                 _maturity_days = raw_scenario.get("run", {}).get("max_days", 10)
             _trader_banks = _balanced_cfg.get("trader_bank_assignments", {})
             _infra_banks = _balanced_cfg.get("infra_bank_assignments", {})
+            # Read mu and concentration for adaptive corridor (Plan 050)
+            _mu_raw = _balanced_cfg.get("mu")
+            _mu_val = Decimal(str(_mu_raw)) if _mu_raw is not None else None
+            _c_raw = _balanced_cfg.get("concentration")
+            _c_val = Decimal(str(_c_raw)) if _c_raw is not None else None
 
             banking_sub = initialize_banking_subsystem(
                 system,
@@ -273,6 +280,8 @@ def run_scenario(
                 _maturity_days,
                 trader_banks=_trader_banks,
                 infra_banks=_infra_banks,
+                mu=_mu_val,
+                c=_c_val,
             )
             system.state.banking_subsystem = banking_sub
             # Wire risk assessor for credit-risk-adjusted bank lending
@@ -317,8 +326,11 @@ def run_scenario(
             for _agent in system.state.agents.values():
                 if isinstance(_agent, _CB2):
                     _agent.kappa_prior = _kip(_kappa_val)
-                    _agent.reserve_remuneration_rate = bank_profile.r_floor(_kappa_val)
-                    _agent.cb_lending_rate = bank_profile.r_ceiling(_kappa_val)
+                    _agent.reserve_remuneration_rate = bank_profile.r_floor(_kappa_val, _mu_val, _c_val)
+                    _agent.cb_lending_rate = bank_profile.r_ceiling(_kappa_val, _mu_val, _c_val)
+                    # Plan 050: Set CB adaptive flags from _balanced_config
+                    _agent.adaptive_betas = _balanced_cfg.get("adaptive_betas", False)
+                    _agent.adaptive_early_warning = _balanced_cfg.get("adaptive_early_warning", False)
                     break
 
             enable_banking = True

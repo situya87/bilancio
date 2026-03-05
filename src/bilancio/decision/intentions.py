@@ -126,6 +126,7 @@ class SurplusBuyer:
         horizon: int,
         profile: TraderProfile,
         face_value: Decimal,
+        effective_buy_reserve_fraction: Decimal | None = None,
     ) -> BuyIntention | None:
         # Liquidity-only motive: skip agents with no upcoming liabilities.
         if profile.trading_motive == "liquidity_only":
@@ -136,7 +137,13 @@ class SurplusBuyer:
         for day_offset in range(horizon + 1):
             total_upcoming_dues += trader.payment_due(current_day + day_offset)
 
-        reserved = profile.buy_reserve_fraction * total_upcoming_dues
+        # Plan 050: Use adaptive buy_reserve_fraction if provided
+        buy_reserve_frac = (
+            effective_buy_reserve_fraction
+            if effective_buy_reserve_fraction is not None
+            else profile.buy_reserve_fraction
+        )
+        reserved = buy_reserve_frac * total_upcoming_dues
         surplus = trader.cash - reserved
         threshold = face_value * profile.surplus_threshold_factor
 
@@ -244,6 +251,11 @@ def collect_buy_intentions(
     if strategy is None:
         strategy = SurplusBuyer()
 
+    # Plan 050: Adaptive buy_reserve_fraction from subsystem
+    effective_buy_reserve_fraction = getattr(
+        subsystem, "effective_buy_reserve_fraction", None
+    )
+
     intentions: list[BuyIntention] = []
     for trader_id, trader in subsystem.traders.items():
         if eligible_traders is not None and trader_id not in eligible_traders:
@@ -258,6 +270,7 @@ def collect_buy_intentions(
             trader_horizon,
             trader_profile,
             subsystem.face_value,
+            effective_buy_reserve_fraction=effective_buy_reserve_fraction,
         )
         if intention is not None:
             intentions.append(intention)

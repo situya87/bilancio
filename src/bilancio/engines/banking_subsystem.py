@@ -510,7 +510,13 @@ class BankingSubsystem:
         if cb.kappa_prior > 0:
             n_total = len(system.state.agents)
             n_defaulted = len(system.state.defaulted_agent_ids)
-            r_floor, r_ceiling = cb.compute_corridor(n_defaulted, n_total)
+            # Plan 050: Compute bank stress signal for early warning
+            bank_stress = Decimal("0")
+            if cb.adaptive_early_warning:
+                bank_stress = self._compute_bank_stress(system)
+            r_floor, r_ceiling = cb.compute_corridor(
+                n_defaulted, n_total, bank_stress=bank_stress
+            )
             for bank_state in self.banks.values():
                 bank_state.pricing_params.reserve_remuneration_rate = r_floor
                 bank_state.pricing_params.cb_borrowing_rate = r_ceiling
@@ -530,6 +536,24 @@ class BankingSubsystem:
             escalation_increment = cb.rate_escalation_slope * utilization
             for bank_state in self.banks.values():
                 bank_state.pricing_params.cb_borrowing_rate += escalation_increment
+
+    def _compute_bank_stress(self, system: System) -> Decimal:
+        """Compute aggregate bank stress from reserve ratios.
+
+        Returns a value in [0, 1] representing average reserve shortfall
+        across all banks, where 0 = all banks at target and 1 = all banks
+        have zero reserves.
+        """
+        if not self.banks:
+            return Decimal("0")
+        total_stress = Decimal("0")
+        for bank_state in self.banks.values():
+            reserves = _get_bank_reserves(system, bank_state.bank_id)
+            target = bank_state.pricing_params.reserve_target
+            if target > 0:
+                shortfall = max(0, target - reserves)
+                total_stress += Decimal(shortfall) / Decimal(target)
+        return total_stress / Decimal(len(self.banks))
 
     def _get_agent_banks(self, agent_id: str) -> list[str]:
         """Get list of bank_ids for an agent."""
@@ -688,6 +712,8 @@ def initialize_banking_subsystem(
     trader_banks: dict[str, list[str]] | None = None,
     infra_banks: dict[str, str] | None = None,
     risk_assessor: Any = None,
+    mu: Decimal | None = None,
+    c: Decimal | None = None,
 ) -> BankingSubsystem:
     """Initialize the banking subsystem from the current system state.
 
@@ -701,6 +727,8 @@ def initialize_banking_subsystem(
         maturity_days: Scenario maturity days (for loan maturity calc).
         trader_banks: Trader -> bank assignment map.
         infra_banks: Infrastructure agent -> bank assignment map.
+        mu: Maturity timing skew (for adaptive corridor).
+        c: Dirichlet concentration (for adaptive corridor).
     """
     from bilancio.domain.agent import AgentKind
 
@@ -714,9 +742,9 @@ def initialize_banking_subsystem(
     if not bank_ids:
         raise ValueError("No bank agents found in system")
 
-    # Derive corridor rates from kappa
-    r_floor = bank_profile.r_floor(kappa)
-    r_ceiling = bank_profile.r_ceiling(kappa)
+    # Derive corridor rates from kappa (and optionally mu, c for adaptive corridor)
+    r_floor = bank_profile.r_floor(kappa, mu, c)
+    r_ceiling = bank_profile.r_ceiling(kappa, mu, c)
 
     # Compute loan maturity
     loan_mat = bank_profile.loan_maturity(maturity_days)

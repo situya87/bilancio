@@ -265,6 +265,7 @@ def _update_vbt_credit_mids(
 
     # Store system-wide default prob (needed for issuer-specific adjustment delta)
     subsystem.system_default_prob = p_default
+    subsystem.observed_default_rate = p_default
 
     # Compute per-issuer default probs when issuer-specific pricing is enabled
     if subsystem.issuer_specific_pricing:
@@ -295,14 +296,40 @@ def _update_vbt_credit_mids(
         else:
             new_M = pricing_model.compute_mid(p_default, initial_prior)
 
+        BUCKET_TAU_MIDPOINTS = {"short": 2, "mid": 6, "long": 12}
+
+        # Determine whether forward blending is applicable for term structure
+        forward_blending = vbt_profile.forward_weight > 0 and system is not None
+
         for bucket_id, vbt in subsystem.vbts.items():
-            vbt.M = new_M
+            if vbt_profile.adaptive_term_structure:
+                tau = BUCKET_TAU_MIDPOINTS.get(bucket_id, 6)
+                p_blend = p_default  # Default to system-wide
+                if forward_blending:
+                    p_forward = estimate_forward_stress(
+                        system, current_day, vbt_profile.stress_horizon
+                    )
+                    p_blend = (
+                        (Decimal(1) - vbt_profile.forward_weight) * p_default
+                        + vbt_profile.forward_weight * p_forward
+                    )
+                vbt.M = pricing_model.compute_mid_term_adjusted(
+                    p_blend, initial_prior, tau, vbt_profile.term_strength,
+                )
+            else:
+                vbt.M = new_M  # existing single-value behavior
+
             # Per-bucket base spread for daily update (falls back to initial_spread)
             base_O = subsystem.base_spread_by_bucket.get(
                 bucket_id,
                 subsystem.initial_spread_by_bucket.get(bucket_id, vbt.O),
             )
-            vbt.O = pricing_model.compute_spread(base_O, p_default)
+
+            if vbt_profile.adaptive_convex_spreads:
+                vbt.O = pricing_model.compute_spread_convex(base_O, p_default)
+            else:
+                vbt.O = pricing_model.compute_spread(base_O, p_default)
+
             vbt.recompute_quotes()
     else:
         # Legacy inline logic (backward compatibility)
