@@ -5,6 +5,7 @@ Verifies that:
 2. Overrides survive the full pipeline: build_overrides → YAML merge → Pydantic → profile
 3. Preset progression is monotonic (static ⊂ calibrated ∪ responsive ⊂ full)
 4. A regression guard detects when an override is silently dropped
+5. Run-level wiring survives _prepare_run → run_scenario → run_day
 """
 
 from __future__ import annotations
@@ -20,8 +21,11 @@ from bilancio.config.models import (
     RiskAssessmentConfig,
 )
 from bilancio.decision.adaptive import build_adaptive_overrides
+from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.experiments.ring import RingSweepRunner
 from bilancio.decision.profiles import BankProfile, LenderProfile, TraderProfile, VBTProfile
 from bilancio.decision.risk_assessment import RiskAssessmentParams
+from bilancio.ui.run import run_scenario
 
 # ── Shared helpers ──────────────────────────────────────────────────
 
@@ -402,3 +406,102 @@ class TestRegressionGuard:
                         f"Override flag {bucket}.{k} has no corresponding field "
                         f"on {profile_cls.__name__}"
                     )
+
+
+class TestRunLevelPresetPipeline:
+    """Run-level E2E: --adapt must survive _prepare_run -> run_scenario -> run_day."""
+
+    @staticmethod
+    def _runner(tmp_path, preset: str) -> RingSweepRunner:
+        return RingSweepRunner(
+            out_dir=tmp_path / f"run_{preset}",
+            name_prefix="adapt_e2e",
+            n_agents=8,
+            maturity_days=12,
+            Q_total=Decimal("200"),
+            liquidity_mode="uniform",
+            liquidity_agent=None,
+            base_seed=42,
+            dealer_enabled=True,
+            balanced_mode=True,
+            n_banks=1,  # Ensure bank/CB adaptive flags are exercised.
+            adapt_preset=preset,
+        )
+
+    @staticmethod
+    def _capture_runtime_flags(monkeypatch, scenario_path) -> dict[str, bool | int | None]:
+        from bilancio.engines import simulation as sim_mod
+
+        observed: dict[str, bool | int | None] = {}
+        original_run_day = sim_mod.run_day
+
+        def wrapped_run_day(system, *args, **kwargs):
+            if not observed:
+                subsystem = system.state.dealer_subsystem
+                assert subsystem is not None
+                observed["trader_adaptive_risk_aversion"] = (
+                    subsystem.trader_profile.adaptive_risk_aversion
+                )
+                observed["vbt_adaptive_convex_spreads"] = (
+                    subsystem.vbt_profile.adaptive_convex_spreads
+                )
+                observed["vbt_stress_horizon"] = subsystem.vbt_profile.stress_horizon
+
+                cb = next(
+                    (a for a in system.state.agents.values() if isinstance(a, CentralBank)),
+                    None,
+                )
+                assert cb is not None
+                observed["cb_adaptive_betas"] = cb.adaptive_betas
+                observed["cb_adaptive_early_warning"] = cb.adaptive_early_warning
+            return original_run_day(system, *args, **kwargs)
+
+        monkeypatch.setattr(sim_mod, "run_day", wrapped_run_day)
+        run_scenario(
+            scenario_path,
+            mode="until_stable",
+            max_days=2,
+            quiet_days=1,
+            show="none",
+        )
+        assert observed, "Expected wrapped run_day to capture runtime flags"
+        return observed
+
+    def test_static_vs_full_differs_in_runtime_objects(self, tmp_path, monkeypatch):
+        static_runner = self._runner(tmp_path, "static")
+        static_prepared = static_runner._prepare_run(
+            phase="grid",
+            kappa=Decimal("1"),
+            concentration=Decimal("1"),
+            mu=Decimal("0.5"),
+            monotonicity=Decimal("0"),
+            seed=1,
+        )
+        static_obs = self._capture_runtime_flags(monkeypatch, static_prepared.scenario_path)
+
+        full_runner = self._runner(tmp_path, "full")
+        full_prepared = full_runner._prepare_run(
+            phase="grid",
+            kappa=Decimal("1"),
+            concentration=Decimal("1"),
+            mu=Decimal("0.5"),
+            monotonicity=Decimal("0"),
+            seed=1,
+        )
+        full_obs = self._capture_runtime_flags(monkeypatch, full_prepared.scenario_path)
+
+        # Trader/VBT RUN flags must differ at runtime.
+        assert static_obs["trader_adaptive_risk_aversion"] is False
+        assert full_obs["trader_adaptive_risk_aversion"] is True
+        assert static_obs["vbt_adaptive_convex_spreads"] is False
+        assert full_obs["vbt_adaptive_convex_spreads"] is True
+
+        # PRE numeric calibration should differ at runtime (maturity_days=12).
+        assert static_obs["vbt_stress_horizon"] == 5
+        assert full_obs["vbt_stress_horizon"] == 12
+
+        # Bank/CB adaptive flags must differ at runtime.
+        assert static_obs["cb_adaptive_betas"] is False
+        assert full_obs["cb_adaptive_betas"] is True
+        assert static_obs["cb_adaptive_early_warning"] is False
+        assert full_obs["cb_adaptive_early_warning"] is True

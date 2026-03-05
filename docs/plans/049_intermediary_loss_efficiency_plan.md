@@ -94,12 +94,13 @@ Metric definition guardrail:
 - [x] Ensure adaptive overrides survive scenario validation — fixed `stress_horizon` pipeline gap (was silently dropped by Pydantic).
 - [x] Merge all override buckets — all 6 buckets now wire through; `stress_horizon` added to `BalancedDealerConfig`.
 - [x] Resolve declared-but-unused adaptive flags — removed 4 dead flags (`adaptive_profit_target`, `adaptive_stress_horizon`, `adaptive_per_bucket_tracking`, `adaptive_issuer_pricing`); deprecated `scenario_informed_prior`.
-- [x] Add end-to-end tests — `tests/integration/test_adaptive_preset_e2e.py` (29 tests covering all 4 presets through full pipeline).
+- [x] Add end-to-end tests — `tests/integration/test_adaptive_preset_e2e.py` (30 tests covering all 4 presets through full pipeline).
+- [x] Add run-level execution-path test — `TestRunLevelPresetPipeline` runs `_prepare_run -> run_scenario -> run_day` and verifies static vs full preset differences on runtime trader/VBT/CB objects.
 - [x] Add a regression check — `TestRegressionGuard` verifies all override keys are accepted by Pydantic models and have matching profile fields.
 
 Acceptance:
 
-- `--adapt` presets produce observable and test-verified runtime differences where expected. ✓
+- `--adapt` presets produce observable and test-verified runtime differences where expected (including run-level execution path). ✓
 - Unsupported adaptive options fail loudly or are absent from public preset output (no silent no-op behavior). ✓
 
 ### W1. Frontier Instrumentation and Reporting
