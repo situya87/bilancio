@@ -11,16 +11,16 @@ from __future__ import annotations
 import csv
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from bilancio.experiments.bank_comparison import (
     BankComparisonConfig,
     BankComparisonResult,
     BankComparisonRunner,
 )
-
 
 # =============================================================================
 # Helpers
@@ -283,12 +283,12 @@ class TestBankComparisonConfigValidation:
 
     def test_n_replicates_must_be_ge_1(self):
         """n_replicates must be >= 1."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             BankComparisonConfig(n_replicates=0)
 
     def test_trading_rounds_must_be_ge_1(self):
         """trading_rounds must be >= 1."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             BankComparisonConfig(trading_rounds=0)
 
 
@@ -870,3 +870,160 @@ class TestFormatTime:
         config = BankComparisonConfig()
         runner = BankComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
         assert runner._format_time(3720) == "1h 2m"
+
+
+# =============================================================================
+# 13. Comparison.csv header validation
+# =============================================================================
+
+
+class TestBankComparisonCSVHeaders:
+    """Verify comparison.csv column headers match COMPARISON_FIELDS."""
+
+    def test_csv_columns_match_comparison_fields_exactly(self, tmp_path: Path):
+        """CSV header set should equal COMPARISON_FIELDS set."""
+        config = BankComparisonConfig()
+        runner = BankComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [_make_result()]
+        runner._write_comparison_csv()
+
+        csv_path = tmp_path / "aggregate" / "comparison.csv"
+        with csv_path.open("r") as fh:
+            reader = csv.DictReader(fh)
+            header = reader.fieldnames
+
+        assert header is not None
+        assert set(header) == set(BankComparisonRunner.COMPARISON_FIELDS)
+
+    def test_csv_has_bank_specific_columns(self, tmp_path: Path):
+        """CSV must have bank-specific columns (cb_*, deposit_*, delta_bank_*)."""
+        config = BankComparisonConfig()
+        runner = BankComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [_make_result()]
+        runner._write_comparison_csv()
+
+        csv_path = tmp_path / "aggregate" / "comparison.csv"
+        with csv_path.open("r") as fh:
+            reader = csv.DictReader(fh)
+            header = reader.fieldnames
+
+        bank_columns = [
+            "cb_loans_created_idle",
+            "cb_interest_total_idle",
+            "delta_bank_idle",
+            "deposit_loss_gross_idle",
+            "deposit_loss_pct_idle",
+            "cb_loans_created_lend",
+            "delta_bank_lend",
+            "deposit_loss_effect",
+        ]
+        for col in bank_columns:
+            assert col in header, f"Missing bank column: {col}"
+
+
+# =============================================================================
+# 14. Config round-trip comprehensive
+# =============================================================================
+
+
+class TestBankConfigRoundTripComprehensive:
+    """Comprehensive config serialization round-trip tests for Bank."""
+
+    def test_round_trip_identity_for_default_config(self):
+        """model_dump then model_validate on default config produces identical object."""
+        original = BankComparisonConfig()
+        dumped = original.model_dump()
+        restored = BankComparisonConfig.model_validate(dumped)
+        assert original.model_dump() == restored.model_dump()
+
+    def test_round_trip_with_all_bank_params_customized(self):
+        """Round-trip preserves all custom bank and CB parameters."""
+        original = BankComparisonConfig(
+            n_banks=10,
+            reserve_ratio=Decimal("0.30"),
+            credit_risk_loading=Decimal("1.0"),
+            max_borrower_risk=Decimal("0.6"),
+            min_coverage_ratio=Decimal("1.5"),
+            cb_rate_escalation_slope=Decimal("0.10"),
+            cb_max_outstanding_ratio=Decimal("3.0"),
+            cb_lending_cutoff_day=7,
+            risk_aversion=Decimal("0.7"),
+            planning_horizon=5,
+        )
+        dumped = original.model_dump()
+        restored = BankComparisonConfig.model_validate(dumped)
+
+        assert restored.n_banks == original.n_banks
+        assert restored.reserve_ratio == original.reserve_ratio
+        assert restored.credit_risk_loading == original.credit_risk_loading
+        assert restored.max_borrower_risk == original.max_borrower_risk
+        assert restored.min_coverage_ratio == original.min_coverage_ratio
+        assert restored.cb_rate_escalation_slope == original.cb_rate_escalation_slope
+        assert restored.cb_max_outstanding_ratio == original.cb_max_outstanding_ratio
+        assert restored.cb_lending_cutoff_day == original.cb_lending_cutoff_day
+        assert restored.risk_aversion == original.risk_aversion
+        assert restored.planning_horizon == original.planning_horizon
+
+    def test_round_trip_with_performance_flags(self):
+        """Round-trip preserves performance configuration."""
+        original = BankComparisonConfig(
+            performance={"fast_atomic": True, "skip_html": True}
+        )
+        dumped = original.model_dump()
+        restored = BankComparisonConfig.model_validate(dumped)
+        assert restored.performance == original.performance
+
+
+# =============================================================================
+# 15. Missing lend arm handling
+# =============================================================================
+
+
+class TestBankMissingLendArm:
+    """Tests for BankComparisonResult when lend arm fails but idle succeeds."""
+
+    def test_bank_lending_effect_none_when_lend_failed(self):
+        """bank_lending_effect is None when lend arm failed."""
+        result = _make_result(
+            delta_idle=Decimal("0.5"),
+            delta_lend=None,
+            lend_status="failed",
+        )
+        assert result.bank_lending_effect is None
+        assert result.bank_lending_relief_ratio is None
+
+    def test_idle_metrics_available_when_lend_failed(self):
+        """Idle arm metrics remain accessible when lend arm failed."""
+        result = _make_result(
+            delta_idle=Decimal("0.5"),
+            phi_idle=Decimal("0.8"),
+            delta_lend=None,
+            phi_lend=None,
+            lend_status="failed",
+        )
+        assert result.delta_idle == Decimal("0.5")
+        assert result.phi_idle == Decimal("0.8")
+
+    def test_csv_writes_failed_lend_arm_properly(self, tmp_path: Path):
+        """CSV handles failed lend arm with empty strings for None values."""
+        config = BankComparisonConfig()
+        runner = BankComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [
+            _make_result(
+                delta_idle=Decimal("0.5"),
+                delta_lend=None,
+                phi_lend=None,
+                lend_status="failed",
+            )
+        ]
+        runner._write_comparison_csv()
+
+        csv_path = tmp_path / "aggregate" / "comparison.csv"
+        with csv_path.open("r") as fh:
+            reader = csv.DictReader(fh)
+            rows = list(reader)
+
+        assert rows[0]["delta_idle"] == "0.5"
+        assert rows[0]["delta_lend"] == ""
+        assert rows[0]["bank_lending_effect"] == ""
+        assert rows[0]["lend_status"] == "failed"

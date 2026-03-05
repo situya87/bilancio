@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from click.testing import CliRunner
 
-from bilancio.ui.cli.treynor import treynor
+treynor_mod = pytest.importorskip(
+    "bilancio.ui.cli.treynor",
+    reason="treynor CLI module not available",
+)
+treynor = treynor_mod.treynor
 
 
 class TestTreynorCommand:

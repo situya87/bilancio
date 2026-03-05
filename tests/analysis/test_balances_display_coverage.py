@@ -7,13 +7,10 @@ build_t_account_rows, display_agent_t_account (simple + rich).
 
 from __future__ import annotations
 
-from decimal import Decimal
-
 from bilancio.analysis.balances import agent_balance
 from bilancio.analysis.visualization.balances import (
-    _display_simple_agent_balance,
-    _display_simple_multiple_agent_balances,
     _cells,
+    _display_simple_multiple_agent_balances,
     _fmt_qty,
     _fmt_val,
     build_t_account_rows,
@@ -28,7 +25,6 @@ from bilancio.config.apply import create_agent
 from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.system import System
-
 
 # ============================================================================
 # Helpers
@@ -245,12 +241,12 @@ class TestDisplayAgentTAccountRenderable:
     def test_returns_renderable(self):
         sys = _make_system()
         result = display_agent_t_account_renderable(sys, "H1")
-        assert result is not None
+        assert hasattr(result, "columns")  # Rich Table has columns
 
     def test_with_payable(self):
         sys = _make_system_with_payable()
         result = display_agent_t_account_renderable(sys, "H1")
-        assert result is not None
+        assert hasattr(result, "columns")
 
 
 # ============================================================================

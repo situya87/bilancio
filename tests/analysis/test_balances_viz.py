@@ -39,10 +39,8 @@ from bilancio.analysis.visualization.balances import (
 )
 from bilancio.analysis.visualization.common import RICH_AVAILABLE, BalanceRow, TAccount
 from bilancio.domain.agents import Bank, CentralBank, Household
-from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.engines.system import System
 from bilancio.ops.banking import deposit_cash
-
 
 # ============================================================================
 # Fixtures
@@ -254,7 +252,7 @@ class TestDisplayAgentTAccountRenderable:
         if not RICH_AVAILABLE:
             pytest.skip("Rich not available")
         result = display_agent_t_account_renderable(simple_system, "BK01")
-        assert result is not None
+        assert hasattr(result, "columns")  # Rich Table has columns
 
     def test_agent_name_in_title(self, simple_system):
         """When agent has a name different from ID, title shows both."""
@@ -579,7 +577,8 @@ class TestNonFinancialDisplayPaths:
         if not RICH_AVAILABLE:
             pytest.skip("Rich not available")
         display_agent_balance_table(system_with_delivery_obligations, "HH01", format="rich")
-        capsys.readouterr()
+        captured = capsys.readouterr()
+        assert captured.out
 
     def test_simple_multiple_with_delivery_obligations(
         self, system_with_delivery_obligations, capsys
@@ -600,7 +599,8 @@ class TestNonFinancialDisplayPaths:
         display_multiple_agent_balances(
             system_with_delivery_obligations, ["HH01", "HH02"], format="rich"
         )
-        capsys.readouterr()
+        captured = capsys.readouterr()
+        assert captured.out
 
     def test_renderable_with_delivery_obligations(self, system_with_delivery_obligations):
         """Renderable functions handle delivery obligations."""
@@ -609,14 +609,14 @@ class TestNonFinancialDisplayPaths:
         result = display_agent_balance_table_renderable(
             system_with_delivery_obligations, "HH01", format="rich"
         )
-        assert result is not None
+        assert hasattr(result, "columns")
 
     def test_t_account_with_delivery_obligations(self, system_with_delivery_obligations):
         """T-account renderable handles delivery obligations."""
         if not RICH_AVAILABLE:
             pytest.skip("Rich not available")
         result = display_agent_t_account_renderable(system_with_delivery_obligations, "HH01")
-        assert result is not None
+        assert hasattr(result, "columns")
 
 
 # ============================================================================
@@ -644,7 +644,7 @@ class TestNegativeNetFinancial:
             pytest.skip("Rich not available")
         # CB has negative net financial (liabilities > assets)
         result = display_agent_balance_table_renderable(simple_system, "CB01", format="rich")
-        assert result is not None
+        assert hasattr(result, "columns")
 
 
 # ============================================================================

@@ -11,8 +11,6 @@ Key behaviors tested:
 
 from decimal import Decimal
 
-from bilancio.dealer.models import DEFAULT_BUCKETS
-from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.domain.agents.bank import Bank
 from bilancio.domain.agents.central_bank import CentralBank
 from bilancio.domain.agents.household import Household
@@ -30,31 +28,13 @@ from bilancio.engines.dealer_sync import (
     _sync_trader_cash_to_system,
 )
 from bilancio.engines.system import System
+from tests.conftest import create_dealer_config
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 TRADER_IDS = ["H1", "H2", "H3"]
-
-
-def create_dealer_config() -> DealerRingConfig:
-    """Standard dealer configuration for testing."""
-    return DealerRingConfig(
-        ticket_size=Decimal(1),
-        buckets=list(DEFAULT_BUCKETS),
-        dealer_share=Decimal("0.25"),
-        vbt_share=Decimal("0.50"),
-        vbt_anchors={
-            "short": (Decimal("1.0"), Decimal("0.20")),
-            "mid": (Decimal("1.0"), Decimal("0.30")),
-            "long": (Decimal("1.0"), Decimal("0.40")),
-        },
-        phi_M=Decimal("0.1"),
-        phi_O=Decimal("0.1"),
-        clip_nonneg_B=True,
-        seed=42,
-    )
 
 
 def create_system_with_deposits() -> System:

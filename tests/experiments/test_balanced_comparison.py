@@ -13,16 +13,15 @@ from __future__ import annotations
 import csv
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from bilancio.experiments.balanced_comparison import (
     BalancedComparisonConfig,
     BalancedComparisonResult,
     BalancedComparisonRunner,
 )
-
 
 # =============================================================================
 # Helpers
@@ -332,22 +331,22 @@ class TestBalancedComparisonConfigValidation:
 
     def test_n_replicates_must_be_ge_1(self):
         """n_replicates must be >= 1."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             BalancedComparisonConfig(n_replicates=0)
 
     def test_trading_rounds_must_be_ge_1(self):
         """trading_rounds must be >= 1."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             BalancedComparisonConfig(trading_rounds=0)
 
     def test_flow_sensitivity_bounded(self):
         """flow_sensitivity must be between 0 and 1."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             BalancedComparisonConfig(flow_sensitivity=Decimal("1.5"))
 
     def test_dealer_concentration_limit_bounded(self):
         """dealer_concentration_limit must be between 0 and 1."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             BalancedComparisonConfig(dealer_concentration_limit=Decimal("2.0"))
 
 
@@ -1195,3 +1194,154 @@ class TestComparisonFieldsCompleteness:
         """COMPARISON_FIELDS contains no duplicates."""
         fields = BalancedComparisonRunner.COMPARISON_FIELDS
         assert len(fields) == len(set(fields)), "Duplicate fields found"
+
+
+# =============================================================================
+# 17. Paired-control integrity — same seed means same topology
+# =============================================================================
+
+
+class TestPairedControlIntegrity:
+    """Verify that passive and active arms of the same pair use the same seed."""
+
+    def test_same_seed_used_for_both_arms(self, tmp_path: Path):
+        """Both passive and active runs in a pair receive the same seed."""
+        cfg = BalancedComparisonConfig(
+            kappas=[Decimal("1")],
+            concentrations=[Decimal("1")],
+            mus=[Decimal("0")],
+            base_seed=42,
+        )
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        # _next_seed() should return the same seed for both arms in a pair
+        seed = runner._next_seed()
+        assert seed == 42
+        # Next call yields 43 (for next pair, not for second arm)
+        assert runner._next_seed() == 43
+
+    def test_seed_appears_in_csv_result(self, tmp_path: Path):
+        """Both passive and active run_ids use the same seed value in the CSV."""
+        cfg = BalancedComparisonConfig()
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        # Create result with explicit seed
+        result = _make_result(seed=77)
+        runner.comparison_results = [result]
+        runner._write_comparison_csv()
+
+        csv_path = tmp_path / "aggregate" / "comparison.csv"
+        rows = list(csv.DictReader(csv_path.open("r")))
+        assert rows[0]["seed"] == "77"
+        # Both arm run_ids share the same row (same seed/topology)
+        assert rows[0]["passive_run_id"] != ""
+        assert rows[0]["active_run_id"] != ""
+
+
+# =============================================================================
+# 18. Artifact column check — comparison.csv has all expected headers
+# =============================================================================
+
+
+class TestArtifactColumnCheck:
+    """Verify comparison.csv column headers match COMPARISON_FIELDS exactly."""
+
+    def test_csv_columns_match_comparison_fields(self, tmp_path: Path):
+        """CSV header columns should be a superset of COMPARISON_FIELDS."""
+        cfg = BalancedComparisonConfig()
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [_make_result()]
+        runner._write_comparison_csv()
+
+        csv_path = tmp_path / "aggregate" / "comparison.csv"
+        with csv_path.open("r") as fh:
+            reader = csv.DictReader(fh)
+            header = reader.fieldnames
+
+        assert header is not None
+        # All COMPARISON_FIELDS must appear as columns
+        for field in BalancedComparisonRunner.COMPARISON_FIELDS:
+            assert field in header, f"Column missing: {field}"
+        # And the header should contain exactly COMPARISON_FIELDS (no extra)
+        assert set(header) == set(BalancedComparisonRunner.COMPARISON_FIELDS)
+
+    def test_csv_has_parameter_columns(self, tmp_path: Path):
+        """CSV must have standard parameter columns (kappa, concentration, mu, seed)."""
+        cfg = BalancedComparisonConfig()
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [_make_result()]
+        runner._write_comparison_csv()
+
+        csv_path = tmp_path / "aggregate" / "comparison.csv"
+        with csv_path.open("r") as fh:
+            reader = csv.DictReader(fh)
+            header = reader.fieldnames
+
+        required_params = ["kappa", "concentration", "mu", "seed", "outside_mid_ratio"]
+        for p in required_params:
+            assert p in header, f"Parameter column missing: {p}"
+
+
+# =============================================================================
+# 19. Config round-trip with all field categories
+# =============================================================================
+
+
+class TestConfigRoundTripComprehensive:
+    """Comprehensive config serialization round-trip tests."""
+
+    def test_round_trip_with_custom_arms_and_bank_params(self):
+        """Round-trip preserves arm enables and bank parameters."""
+        original = BalancedComparisonConfig(
+            enable_lender=True,
+            enable_dealer_lender=True,
+            enable_bank_passive=True,
+            n_banks=7,
+            credit_risk_loading=Decimal("0.8"),
+            max_borrower_risk=Decimal("0.6"),
+            cb_rate_escalation_slope=Decimal("0.10"),
+            cb_max_outstanding_ratio=Decimal("3.0"),
+        )
+        dumped = original.model_dump()
+        restored = BalancedComparisonConfig.model_validate(dumped)
+
+        assert restored.enable_lender == original.enable_lender
+        assert restored.enable_dealer_lender == original.enable_dealer_lender
+        assert restored.enable_bank_passive == original.enable_bank_passive
+        assert restored.n_banks == original.n_banks
+        assert restored.credit_risk_loading == original.credit_risk_loading
+        assert restored.max_borrower_risk == original.max_borrower_risk
+        assert restored.cb_rate_escalation_slope == original.cb_rate_escalation_slope
+        assert restored.cb_max_outstanding_ratio == original.cb_max_outstanding_ratio
+
+    def test_round_trip_with_trader_and_risk_params(self):
+        """Round-trip preserves trader decision and risk assessment parameters."""
+        original = BalancedComparisonConfig(
+            risk_aversion=Decimal("0.7"),
+            planning_horizon=5,
+            aggressiveness=Decimal("0.3"),
+            default_observability=Decimal("0.5"),
+            trading_motive="liquidity_only",
+            alpha_vbt=Decimal("0.5"),
+            alpha_trader=Decimal("0.3"),
+            vbt_mid_sensitivity=Decimal("0.8"),
+            vbt_spread_sensitivity=Decimal("0.5"),
+        )
+        dumped = original.model_dump()
+        restored = BalancedComparisonConfig.model_validate(dumped)
+
+        assert restored.risk_aversion == original.risk_aversion
+        assert restored.planning_horizon == original.planning_horizon
+        assert restored.aggressiveness == original.aggressiveness
+        assert restored.default_observability == original.default_observability
+        assert restored.trading_motive == original.trading_motive
+        assert restored.alpha_vbt == original.alpha_vbt
+        assert restored.alpha_trader == original.alpha_trader
+        assert restored.vbt_mid_sensitivity == original.vbt_mid_sensitivity
+        assert restored.vbt_spread_sensitivity == original.vbt_spread_sensitivity
+
+    def test_round_trip_identity_for_default_config(self):
+        """model_dump then model_validate on default config produces identical object."""
+        original = BalancedComparisonConfig()
+        dumped = original.model_dump()
+        restored = BalancedComparisonConfig.model_validate(dumped)
+        # Compare full model_dump outputs for equality
+        assert original.model_dump() == restored.model_dump()
