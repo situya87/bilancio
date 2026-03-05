@@ -77,6 +77,7 @@ class RingRunSummary:
     intermediary_loss_total: float = 0.0
     dealer_vbt_loss: float = 0.0
     nbfi_loan_loss: float = 0.0
+    nbfi_loans_created: int = 0
     bank_credit_loss: float = 0.0
     cb_backstop_loss: float = 0.0
     # Initial intermediary capital (for normalization)
@@ -1097,6 +1098,7 @@ class RingSweepRunner:
             total_loss_pct=total_loss_pct,
             S_total=S_total,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
+            nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
             cb_backstop_loss=int(bundle.summary.get("cb_backstop_loss", 0)),
             dealer_vbt_loss=max(0.0, -float((dealer_metrics or {}).get("dealer_total_pnl", 0))),
@@ -1494,6 +1496,7 @@ class RingSweepRunner:
                 total_loss_pct=result.metrics.get("total_loss_pct"),
                 S_total=float(result.metrics.get("S_total", 0)),
                 nbfi_loan_loss=int(result.metrics.get("nbfi_loan_loss", 0)),
+                nbfi_loans_created=int(result.metrics.get("nbfi_loans_created", 0)),
                 bank_credit_loss=int(result.metrics.get("bank_credit_loss", 0)),
                 cb_backstop_loss=int(result.metrics.get("cb_backstop_loss", 0)),
                 dealer_vbt_loss=float(result.metrics.get("dealer_vbt_loss", 0.0)),
@@ -1595,6 +1598,7 @@ class RingSweepRunner:
             ),
             S_total=float(bundle.summary.get("S_total", 0)),
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
+            nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
             cb_backstop_loss=int(bundle.summary.get("cb_backstop_loss", 0)),
             dealer_vbt_loss=max(0.0, -float((dealer_metrics or {}).get("dealer_total_pnl", 0))),
