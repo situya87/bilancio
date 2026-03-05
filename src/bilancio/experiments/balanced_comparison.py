@@ -1627,8 +1627,8 @@ class BalancedComparisonRunner:
             from bilancio.scenarios.sweep_diagnostics import run_preflight_checks
 
             self._preflight = run_preflight_checks(self.config)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Pre-flight checks failed: %s", e)
 
         # Check if executor supports batch execution
         if hasattr(self.executor, "execute_batch"):

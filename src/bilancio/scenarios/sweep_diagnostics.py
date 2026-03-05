@@ -71,6 +71,7 @@ class PreflightReport:
     """Aggregated pre-flight viability report."""
 
     checks: list[PreflightCheckResult] = field(default_factory=list)
+    n_agents: int = 100
     kappa_trade_reports: dict[str, ViabilityReport] = field(default_factory=dict)
     sweep_report: SweepViabilityReport | None = None
     simulation_reports: dict[str, SimulationViabilityReport] = field(default_factory=dict)
@@ -236,12 +237,15 @@ def run_preflight_checks(config: _AnyConfig) -> PreflightReport:
 
     kappas: list[Decimal] = list(config.kappas)
     n_agents: int = config.n_agents
+    report.n_agents = n_agents
     maturity_days: int = config.maturity_days
     face_value: Decimal = config.face_value
     outside_mid_ratios: list[Decimal] = list(
         getattr(config, "outside_mid_ratios", [Decimal("0.90")])
     )
-    omr = outside_mid_ratios[0] if outside_mid_ratios else Decimal("0.90")
+    # Use worst-case (lowest) OMR for pre-flight checks — if the most
+    # constrained slice is viable, all others are too.
+    omr = min(outside_mid_ratios) if outside_mid_ratios else Decimal("0.90")
     base_spread = Decimal("0.04")
 
     dealer_share = getattr(config, "dealer_share_per_bucket", Decimal("0.125"))
@@ -492,7 +496,7 @@ def run_preflight_checks(config: _AnyConfig) -> PreflightReport:
         if not ok:
             all_vbt_ok = False
 
-    v9_level = "pass" if all_vbt_ok else ("fail" if not all_vbt_ok else "warn")
+    v9_level = "pass" if all_vbt_ok else "fail"
     checks.append(PreflightCheckResult(
         check_id="V9",
         label="VBT mid stability",
@@ -624,13 +628,7 @@ def run_postsweep_validation(
     is_bank = hasattr(results[0], "delta_idle")
 
     # Gather n_agents from preflight for proportionality checks
-    n_agents = 100  # fallback
-    for c in preflight.checks:
-        if c.check_id == "V7" and "n=" in c.detail:
-            try:
-                n_agents = int(c.detail.split("n=")[1].split(",")[0])
-            except (ValueError, IndexError):
-                pass
+    n_agents = preflight.n_agents
 
     # Run all post-sweep validators
     for pcheck in preflight.checks:
@@ -875,10 +873,13 @@ def _validate_v5_lending(
 
         # Check total_loans if available (may be None due to extraction gap)
         total_loans = sum(r.total_loans or 0 for r in lender_results)
-        actual = len(lender_results) > 0
-        detail = f"lender arm completed in {len(lender_results)}/{len(results)} combos"
         if total_loans > 0:
-            detail += f", total_loans={total_loans}"
+            actual = True
+            detail = f"total_loans={total_loans} in {len(lender_results)}/{len(results)} combos"
+        else:
+            # total_loans may be unpopulated (extraction gap); fall back to arm completion
+            actual = len(lender_results) > 0
+            detail = f"lender arm completed in {len(lender_results)}/{len(results)} combos (total_loans=0)"
 
     return [PostflightCheckResult(
         check_id="V5",
