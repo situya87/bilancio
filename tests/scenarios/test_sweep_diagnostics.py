@@ -697,33 +697,20 @@ class TestNewValidators:
         v13 = next(c for c in post.checks if c.check_id == "V13")
         assert not v13.actual
 
-    def test_v13_bank_no_leakage(self) -> None:
-        """V13: bank lending helps (delta_lend <= delta_idle) → actual=True."""
-        config = _BankConfigStub()
-        preflight = run_preflight_checks(config)
-        results = [
-            _BankResultStub(
-                delta_idle=Decimal("0.3"),
-                delta_lend=Decimal("0.2"),  # lending helps
-            ),
-        ]
-        post = run_postsweep_validation(preflight, results)
-        v13 = next(c for c in post.checks if c.check_id == "V13")
-        assert v13.actual
-
-    def test_v13_bank_leakage(self) -> None:
-        """V13: bank lending worsens defaults → actual=False."""
+    def test_v13_bank_na(self) -> None:
+        """V13: bank sweep has both arms always enabled → n/a, match=True."""
         config = _BankConfigStub()
         preflight = run_preflight_checks(config)
         results = [
             _BankResultStub(
                 delta_idle=Decimal("0.2"),
-                delta_lend=Decimal("0.3"),  # lending makes things worse
+                delta_lend=Decimal("0.3"),
             ),
         ]
         post = run_postsweep_validation(preflight, results)
         v13 = next(c for c in post.checks if c.check_id == "V13")
-        assert not v13.actual
+        assert v13.match  # n/a is always a match
+        assert "n/a" in v13.detail
 
     def test_v14_stress_gradient_monotone(self) -> None:
         """V14: defaults decrease as κ increases → actual=True."""

@@ -930,15 +930,14 @@ def _validate_v5_lending(
                 detail="lender arm produced no results",
             )]
 
-        # Check total_loans if available (may be None due to extraction gap)
+        # Check total_loans — require tangible loan activity
         total_loans = sum(r.total_loans or 0 for r in lender_results)
         if total_loans > 0:
             actual = True
             detail = f"total_loans={total_loans} in {len(lender_results)}/{len(results)} combos"
         else:
-            # total_loans may be unpopulated (extraction gap); fall back to arm completion
-            actual = len(lender_results) > 0
-            detail = f"lender arm completed in {len(lender_results)}/{len(results)} combos (total_loans=0)"
+            actual = False
+            detail = f"total_loans=0 in {len(lender_results)} lender combos (extraction gap?)"
 
     return [PostflightCheckResult(
         check_id="V5",
@@ -1176,21 +1175,15 @@ def _validate_v13_disabled_arm_leakage(
 ) -> list[PostflightCheckResult]:
     """V13: Disabled-arm leakage — disabled mechanisms show zero activity."""
     if is_bank:
-        # Bank sweep: lending arm always present; check that lending
-        # doesn't increase defaults (delta_idle >= delta_lend expected)
-        violations = 0
-        for r in results:
-            d_idle = getattr(r, "delta_idle", None)
-            d_lend = getattr(r, "delta_lend", None)
-            if d_idle is not None and d_lend is not None:
-                if d_lend > d_idle:
-                    violations += 1
-        actual = violations == 0
-        detail = (
-            f"lend worse than idle in {violations}/{len(results)} combos"
-            if violations > 0
-            else "no leakage detected"
-        )
+        # Bank sweep: both arms always present — no disabled arm to leak
+        return [PostflightCheckResult(
+            check_id="V13",
+            label="No disabled-arm leak",
+            prediction=pcheck.prediction,
+            actual=True,
+            match=True,
+            detail="n/a (bank sweep, both arms always enabled)",
+        )]
     else:
         # Balanced: check total_loans == 0 when lender arm absent
         has_lender_arm = any(
