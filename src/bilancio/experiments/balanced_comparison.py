@@ -1713,6 +1713,7 @@ class BalancedComparisonRunner:
                 "total_loss_pct_lender": s.total_loss_pct,
                 "intermediary_loss_lender": s.intermediary_loss_total,
                 "intermediary_capital_lender": s.initial_intermediary_capital,
+                "total_loans": s.nbfi_loans_created,
             }
 
         dealer_lender_data: dict[str, Any] = {}
@@ -1731,6 +1732,7 @@ class BalancedComparisonRunner:
                 "total_loss_pct_dealer_lender": s.total_loss_pct,
                 "intermediary_loss_dealer_lender": s.intermediary_loss_total,
                 "intermediary_capital_dealer_lender": s.initial_intermediary_capital,
+                "total_loans": s.nbfi_loans_created,
             }
 
         bank_passive_data: dict[str, Any] = {}
