@@ -102,10 +102,7 @@ class VBTProfile:
     # Adaptive flags (Plan 050)
     adaptive_term_structure: bool = False     # [PRE] per-bucket M = rho * (1-h)^tau
     adaptive_base_spreads: bool = False       # [PRE] base spreads scale with kappa stress
-    adaptive_stress_horizon: bool = False     # [PRE] stress_horizon scales with maturity_days
     adaptive_convex_spreads: bool = False     # [RUN] O = base + sens * p^2/(1-p)
-    adaptive_per_bucket_tracking: bool = False  # [RUN] per-bucket default rates
-    adaptive_issuer_pricing: bool = False     # [RUN] inventory-weighted issuer p_default
     term_strength: Decimal = Decimal("0.5")   # dampening for term-structure hazard rate
 
 
@@ -190,7 +187,6 @@ class LenderProfile:
 
     # Adaptive flags (Plan 050)
     adaptive_risk_aversion: bool = False      # [PRE] risk_aversion calibrates to kappa
-    adaptive_profit_target: bool = False      # [PRE] profit_target anchors to CB corridor
     adaptive_loan_maturity: bool = False      # [PRE] max_loan_maturity scales with maturity_days
     adaptive_rates: bool = False              # [RUN] daily rate multiplier from portfolio losses
     adaptive_capital_conservation: bool = False  # [RUN] scale exposure limits by utilization

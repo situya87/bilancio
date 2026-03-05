@@ -854,20 +854,14 @@ class BalancedDealerConfig(BaseModel):
     adaptive_base_spreads: bool = Field(
         default=False, description="[PRE] Base spreads scale with kappa stress"
     )
-    adaptive_stress_horizon: bool = Field(
-        default=False, description="[PRE] Stress horizon scales with maturity_days"
-    )
     adaptive_convex_spreads: bool = Field(
         default=False, description="[RUN] Convex spread widening"
     )
-    adaptive_per_bucket_tracking: bool = Field(
-        default=False, description="[RUN] Per-bucket default rate tracking"
-    )
-    adaptive_issuer_pricing: bool = Field(
-        default=False, description="[RUN] Inventory-weighted issuer pricing"
-    )
     term_strength: Decimal = Field(
         default=Decimal("0.5"), description="Dampening for term-structure hazard rate"
+    )
+    stress_horizon: int = Field(
+        default=5, ge=1, le=30, description="VBT forward-stress lookahead in days"
     )
 
     @field_validator("trading_motive")
@@ -1017,9 +1011,6 @@ class LenderScenarioConfig(BaseModel):
     # Plan 050: Adaptive flags
     adaptive_risk_aversion: bool = Field(
         default=False, description="[PRE] Risk aversion calibrates to kappa"
-    )
-    adaptive_profit_target: bool = Field(
-        default=False, description="[PRE] Profit target anchors to CB corridor"
     )
     adaptive_loan_maturity: bool = Field(
         default=False, description="[PRE] Max loan maturity scales with maturity_days"

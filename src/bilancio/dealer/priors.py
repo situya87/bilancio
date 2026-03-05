@@ -34,6 +34,11 @@ def kappa_informed_prior(kappa: Decimal) -> Decimal:
 def scenario_informed_prior(kappa: Decimal, mu: Decimal, c: Decimal) -> Decimal:
     """Extended prior incorporating mu (timing) and c (concentration).
 
+    .. deprecated::
+        Not integrated into any simulation path. Only ``kappa_informed_prior``
+        is used in production. Kept for potential future use; do not add new
+        callers without first wiring it into the decision pipeline.
+
     Adds small corrections for:
     - Front-loaded timing (low mu → higher stress)
     - Concentrated debt (low c → higher stress)

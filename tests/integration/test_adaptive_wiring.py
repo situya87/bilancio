@@ -8,17 +8,15 @@ This is the test that catches the P1 bug where Pydantic silently dropped
 unknown adaptive_* fields.
 """
 
-import pytest
 from decimal import Decimal
-from unittest.mock import patch
 
 from bilancio.config.models import (
     BalancedDealerConfig,
-    RiskAssessmentConfig,
     LenderScenarioConfig,
+    RiskAssessmentConfig,
 )
 from bilancio.decision.adaptive import build_adaptive_overrides
-from bilancio.decision.profiles import TraderProfile, VBTProfile, LenderProfile, BankProfile
+from bilancio.decision.profiles import BankProfile, LenderProfile, TraderProfile, VBTProfile
 from bilancio.decision.risk_assessment import RiskAssessmentParams
 
 
@@ -176,7 +174,6 @@ class TestPydanticRoundTrip:
             kappa=cfg.kappa,
             risk_aversion=cfg.risk_aversion,
             adaptive_risk_aversion=cfg.adaptive_risk_aversion,
-            adaptive_profit_target=cfg.adaptive_profit_target,
             adaptive_loan_maturity=cfg.adaptive_loan_maturity,
             adaptive_rates=cfg.adaptive_rates,
             adaptive_capital_conservation=cfg.adaptive_capital_conservation,

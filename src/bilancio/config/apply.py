@@ -705,13 +705,11 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 spread_sensitivity=config.balanced_dealer.vbt_spread_sensitivity,
                 spread_scale=config.balanced_dealer.spread_scale,
                 flow_sensitivity=config.balanced_dealer.flow_sensitivity,
+                stress_horizon=config.balanced_dealer.stress_horizon,
                 # Plan 050 adaptive flags
                 adaptive_term_structure=config.balanced_dealer.adaptive_term_structure,
                 adaptive_base_spreads=config.balanced_dealer.adaptive_base_spreads,
-                adaptive_stress_horizon=config.balanced_dealer.adaptive_stress_horizon,
                 adaptive_convex_spreads=config.balanced_dealer.adaptive_convex_spreads,
-                adaptive_per_bucket_tracking=config.balanced_dealer.adaptive_per_bucket_tracking,
-                adaptive_issuer_pricing=config.balanced_dealer.adaptive_issuer_pricing,
                 term_strength=config.balanced_dealer.term_strength,
             )
 
@@ -780,7 +778,6 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 prevention_threshold=config.lender.prevention_threshold,
                 # Plan 050 adaptive flags
                 adaptive_risk_aversion=config.lender.adaptive_risk_aversion,
-                adaptive_profit_target=config.lender.adaptive_profit_target,
                 adaptive_loan_maturity=config.lender.adaptive_loan_maturity,
                 adaptive_rates=config.lender.adaptive_rates,
                 adaptive_capital_conservation=config.lender.adaptive_capital_conservation,
@@ -996,13 +993,11 @@ def _init_dealer_from_action_specs(
             spread_sensitivity=bd.vbt_spread_sensitivity,
             spread_scale=bd.spread_scale,
             flow_sensitivity=bd.flow_sensitivity,
+            stress_horizon=bd.stress_horizon,
             # Plan 050 adaptive flags
             adaptive_term_structure=bd.adaptive_term_structure,
             adaptive_base_spreads=bd.adaptive_base_spreads,
-            adaptive_stress_horizon=bd.adaptive_stress_horizon,
             adaptive_convex_spreads=bd.adaptive_convex_spreads,
-            adaptive_per_bucket_tracking=bd.adaptive_per_bucket_tracking,
-            adaptive_issuer_pricing=bd.adaptive_issuer_pricing,
             term_strength=bd.term_strength,
         )
 

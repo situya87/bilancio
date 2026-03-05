@@ -1,7 +1,7 @@
 """Per-flag unit tests for adaptive profiles (Plan 050)."""
-import pytest
 from decimal import Decimal
-from bilancio.decision.profiles import TraderProfile, VBTProfile, LenderProfile, BankProfile
+
+from bilancio.decision.profiles import BankProfile, LenderProfile, TraderProfile, VBTProfile
 
 
 class TestTraderAdaptiveFlags:
@@ -23,10 +23,7 @@ class TestVBTAdaptiveFlags:
         v = VBTProfile()
         assert v.adaptive_term_structure is False
         assert v.adaptive_base_spreads is False
-        assert v.adaptive_stress_horizon is False
         assert v.adaptive_convex_spreads is False
-        assert v.adaptive_per_bucket_tracking is False
-        assert v.adaptive_issuer_pricing is False
         assert v.term_strength == Decimal("0.5")
 
     def test_term_strength_configurable(self):
@@ -38,7 +35,6 @@ class TestLenderAdaptiveFlags:
     def test_defaults_false(self):
         lp = LenderProfile()
         assert lp.adaptive_risk_aversion is False
-        assert lp.adaptive_profit_target is False
         assert lp.adaptive_loan_maturity is False
         assert lp.adaptive_rates is False
         assert lp.adaptive_capital_conservation is False
