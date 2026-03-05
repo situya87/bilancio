@@ -72,6 +72,8 @@ class PreflightReport:
 
     checks: list[PreflightCheckResult] = field(default_factory=list)
     n_agents: int = 100
+    face_value: Decimal = Decimal("20")
+    Q_total: Decimal = Decimal("10000")
     kappa_trade_reports: dict[str, ViabilityReport] = field(default_factory=dict)
     sweep_report: SweepViabilityReport | None = None
     simulation_reports: dict[str, SimulationViabilityReport] = field(default_factory=dict)
@@ -240,6 +242,7 @@ def run_preflight_checks(config: _AnyConfig) -> PreflightReport:
     report.n_agents = n_agents
     maturity_days: int = config.maturity_days
     face_value: Decimal = config.face_value
+    report.face_value = face_value
     outside_mid_ratios: list[Decimal] = list(
         getattr(config, "outside_mid_ratios", [Decimal("0.90")])
     )
@@ -252,6 +255,7 @@ def run_preflight_checks(config: _AnyConfig) -> PreflightReport:
     vbt_share = getattr(config, "vbt_share_per_bucket", Decimal("0.25"))
     buy_premium = _get_buy_premium(config)
     Q_total = getattr(config, "Q_total", Decimal("10000"))
+    report.Q_total = Q_total
 
     rep_kappas = _representative_kappas(kappas)
 
@@ -593,6 +597,57 @@ def run_preflight_checks(config: _AnyConfig) -> PreflightReport:
             detail="n/a (no banking arms)",
         ))
 
+    # ── V12: Notional volume threshold (informational) ─────────────────
+    min_notional_threshold = Decimal("0.1") * Q_total
+    checks.append(PreflightCheckResult(
+        check_id="V12",
+        label="Notional volume",
+        prediction=True,  # always informational
+        level="pass",
+        detail=f"min_notional={float(min_notional_threshold):.0f} (10% of Q={float(Q_total):.0f})",
+        diagnostics={
+            "min_notional_threshold": float(min_notional_threshold),
+            "face_value": float(face_value),
+        },
+    ))
+
+    # ── V13: Disabled-arm leakage (always prediction=True) ────────────
+    checks.append(PreflightCheckResult(
+        check_id="V13",
+        label="No disabled-arm leak",
+        prediction=True,
+        level="pass",
+        detail="disabled mechanisms should show zero activity",
+    ))
+
+    # ── V14: Stress-gradient consistency ───────────────────────────────
+    distinct_kappas = len(set(kappas))
+    v14_viable = distinct_kappas >= 2
+    checks.append(PreflightCheckResult(
+        check_id="V14",
+        label="Stress gradient",
+        prediction=v14_viable,
+        level="pass" if v14_viable else "warn",
+        detail=f"{distinct_kappas} distinct κ values" + (" (need ≥2 for gradient)" if not v14_viable else ""),
+    ))
+
+    # ── V15: Activity intensity (informational) ────────────────────────
+    # Expected shortfall agents at median kappa
+    median_k = sorted(kappas)[len(kappas) // 2]
+    P_median = kappa_informed_prior(median_k)
+    expected_shortfall = float(n_agents) * float(P_median)
+    checks.append(PreflightCheckResult(
+        check_id="V15",
+        label="Activity intensity",
+        prediction=True,  # always informational
+        level="pass",
+        detail=f"expected_shortfall={expected_shortfall:.1f} agents @ κ={median_k}, min_intensity=0.5 trades/agent",
+        diagnostics={
+            "expected_shortfall_agents": expected_shortfall,
+            "min_intensity_threshold": 0.5,
+        },
+    ))
+
     report.checks = checks
     return report
 
@@ -642,6 +697,10 @@ def run_postsweep_validation(
             "V7": _validate_v7_effect,
             "V8": _validate_v8_bank_activity,
             "V11": _validate_v11_cb_backstop,
+            "V12": _validate_v12_notional_volume,
+            "V13": _validate_v13_disabled_arm_leakage,
+            "V14": _validate_v14_stress_gradient,
+            "V15": _validate_v15_activity_intensity,
         }
         validator = validators.get(pcheck.check_id)
         if validator:
@@ -734,14 +793,14 @@ def _validate_v2_trading(
         n_combos = len(results)
         # "tangible" = at least 1 trade per combo on average
         tangible = total_trades >= n_combos if n_combos > 0 else False
-        actual = total_trades > 0
+        actual = tangible
         detail = (
             f"total_trades={total_trades} across {n_combos} combos"
             f" ({total_trades / n_combos:.1f}/combo)"
             if n_combos > 0
             else f"total_trades={total_trades}"
         )
-        if not tangible and actual:
+        if total_trades > 0 and not tangible:
             detail += " (sparse)"
 
     return [PostflightCheckResult(
@@ -775,7 +834,7 @@ def _validate_v3_two_way(
         ]
 
     nonzero = sum(1 for e in effects if e != 0)
-    actual = nonzero > 0
+    actual = nonzero > len(effects) / 2
     detail = f"nonzero effects in {nonzero}/{len(effects)} combos"
 
     return [PostflightCheckResult(
@@ -814,7 +873,7 @@ def _validate_v4_dealer(
         1 for r in results
         if (getattr(r, "total_trades", None) or 0) > 0
     )
-    actual = has_return > 0
+    actual = has_trades > 0
     detail = (
         f"dealer_return in {has_return}/{len(results)} combos, "
         f"trades>0 in {has_trades}/{len(results)}"
@@ -871,15 +930,14 @@ def _validate_v5_lending(
                 detail="lender arm produced no results",
             )]
 
-        # Check total_loans if available (may be None due to extraction gap)
+        # Check total_loans — require tangible loan activity
         total_loans = sum(r.total_loans or 0 for r in lender_results)
         if total_loans > 0:
             actual = True
             detail = f"total_loans={total_loans} in {len(lender_results)}/{len(results)} combos"
         else:
-            # total_loans may be unpopulated (extraction gap); fall back to arm completion
-            actual = len(lender_results) > 0
-            detail = f"lender arm completed in {len(lender_results)}/{len(results)} combos (total_loans=0)"
+            actual = False
+            detail = f"total_loans=0 in {len(lender_results)} lender combos (extraction gap?)"
 
     return [PostflightCheckResult(
         check_id="V5",
@@ -1067,5 +1125,214 @@ def _validate_v11_cb_backstop(
         prediction=pcheck.prediction,
         actual=actual,
         match=True,  # CB usage is informational, not pass/fail
+        detail=detail,
+    )]
+
+
+def _validate_v12_notional_volume(
+    pcheck: PreflightCheckResult,
+    results: list[_AnyResult],
+    is_bank: bool,
+    n_agents: int,
+) -> list[PostflightCheckResult]:
+    """V12: Notional volume — traded face value reaches threshold."""
+    threshold = pcheck.diagnostics.get("min_notional_threshold", 0)
+    face_value = Decimal(str(pcheck.diagnostics.get("face_value", 20)))
+
+    if is_bank:
+        total_cb = sum(
+            getattr(r, "cb_loans_created_idle", 0)
+            + getattr(r, "cb_loans_created_lend", 0)
+            for r in results
+        )
+        notional = float(total_cb) * float(face_value)
+    else:
+        total_trades = sum(
+            r.total_trades or 0
+            for r in results
+            if hasattr(r, "total_trades")
+        )
+        notional = float(total_trades) * float(face_value)
+
+    actual = notional >= threshold
+    detail = f"notional={notional:.0f} vs threshold={threshold:.0f}"
+
+    return [PostflightCheckResult(
+        check_id="V12",
+        label="Notional volume",
+        prediction=pcheck.prediction,
+        actual=actual,
+        match=True,  # informational
+        detail=detail,
+    )]
+
+
+def _validate_v13_disabled_arm_leakage(
+    pcheck: PreflightCheckResult,
+    results: list[_AnyResult],
+    is_bank: bool,
+    n_agents: int,
+) -> list[PostflightCheckResult]:
+    """V13: Disabled-arm leakage — disabled mechanisms show zero activity."""
+    if is_bank:
+        # Bank sweep: both arms always present — no disabled arm to leak
+        return [PostflightCheckResult(
+            check_id="V13",
+            label="No disabled-arm leak",
+            prediction=pcheck.prediction,
+            actual=True,
+            match=True,
+            detail="n/a (bank sweep, both arms always enabled)",
+        )]
+    else:
+        # Balanced: check total_loans == 0 when lender arm absent
+        has_lender_arm = any(
+            getattr(r, "delta_lender", None) is not None
+            for r in results
+        )
+        if has_lender_arm:
+            actual = True
+            detail = "lender arm enabled, check n/a"
+        else:
+            leaked_loans = sum(
+                r.total_loans or 0
+                for r in results
+                if hasattr(r, "total_loans")
+            )
+            actual = leaked_loans == 0
+            detail = (
+                f"leaked_loans={leaked_loans}"
+                if leaked_loans > 0
+                else "no leakage detected"
+            )
+
+    return [PostflightCheckResult(
+        check_id="V13",
+        label="No disabled-arm leak",
+        prediction=pcheck.prediction,
+        actual=actual,
+        match=(pcheck.prediction == actual),
+        detail=detail,
+    )]
+
+
+def _validate_v14_stress_gradient(
+    pcheck: PreflightCheckResult,
+    results: list[_AnyResult],
+    is_bank: bool,
+    n_agents: int,
+) -> list[PostflightCheckResult]:
+    """V14: Stress gradient — defaults decrease as kappa increases."""
+    if not pcheck.prediction:
+        # Single kappa — gradient check is n/a
+        return [PostflightCheckResult(
+            check_id="V14",
+            label="Stress gradient",
+            prediction=False,
+            actual=True,
+            match=True,  # n/a is always a match
+            detail="single κ, gradient check n/a",
+        )]
+
+    # Group results by kappa, compute mean defaults per kappa
+    from collections import defaultdict
+    kappa_defaults: dict[Decimal, list[float]] = defaultdict(list)
+
+    for r in results:
+        k = getattr(r, "kappa", None)
+        if k is None:
+            continue
+        if is_bank:
+            d = getattr(r, "n_defaults_idle", None)
+            if d is not None:
+                kappa_defaults[k].append(float(d))
+            d2 = getattr(r, "n_defaults_lend", None)
+            if d2 is not None:
+                kappa_defaults[k].append(float(d2))
+        else:
+            d = getattr(r, "n_defaults_passive", None)
+            if d is not None:
+                kappa_defaults[k].append(float(d))
+            d2 = getattr(r, "n_defaults_active", None)
+            if d2 is not None:
+                kappa_defaults[k].append(float(d2))
+
+    if len(kappa_defaults) < 2:
+        return [PostflightCheckResult(
+            check_id="V14",
+            label="Stress gradient",
+            prediction=pcheck.prediction,
+            actual=True,
+            match=True,
+            detail="insufficient kappa groups for gradient check",
+        )]
+
+    # Compute mean defaults per kappa, sorted ascending by kappa
+    sorted_kappas = sorted(kappa_defaults.keys())
+    means = [
+        statistics.mean(kappa_defaults[k]) for k in sorted_kappas
+    ]
+
+    # Check weak monotonicity: defaults should decrease (or stay same) as κ increases
+    violations = 0
+    for i in range(1, len(means)):
+        if means[i] > means[i - 1]:
+            violations += 1
+
+    actual = violations == 0
+    detail = (
+        f"defaults by κ: {', '.join(f'{float(k)}→{m:.1f}' for k, m in zip(sorted_kappas, means, strict=True))}"
+        f" ({violations} violations)"
+    )
+
+    return [PostflightCheckResult(
+        check_id="V14",
+        label="Stress gradient",
+        prediction=pcheck.prediction,
+        actual=actual,
+        match=True,  # informational — stochastic can easily break monotonicity
+        detail=detail,
+    )]
+
+
+def _validate_v15_activity_intensity(
+    pcheck: PreflightCheckResult,
+    results: list[_AnyResult],
+    is_bank: bool,
+    n_agents: int,
+) -> list[PostflightCheckResult]:
+    """V15: Activity intensity — median trades/agent >= 0.5."""
+    min_threshold = pcheck.diagnostics.get("min_intensity_threshold", 0.5)
+
+    if is_bank:
+        intensities = []
+        for r in results:
+            k = getattr(r, "kappa", None)
+            cb_lend = getattr(r, "cb_loans_created_lend", 0)
+            if k is not None and n_agents > 0:
+                P_k = float(kappa_informed_prior(k))
+                expected_borrowers = max(n_agents * P_k, 1)
+                intensities.append(cb_lend / expected_borrowers)
+    else:
+        intensities = []
+        for r in results:
+            trades = r.total_trades or 0 if hasattr(r, "total_trades") else 0
+            if n_agents > 0:
+                intensities.append(trades / n_agents)
+
+    if intensities:
+        median_intensity = statistics.median(intensities)
+        actual = median_intensity >= min_threshold
+        detail = f"median_intensity={median_intensity:.2f} (threshold={min_threshold})"
+    else:
+        actual = False
+        detail = "no intensity data"
+
+    return [PostflightCheckResult(
+        check_id="V15",
+        label="Activity intensity",
+        prediction=pcheck.prediction,
+        actual=actual,
+        match=True,  # informational
         detail=detail,
     )]
