@@ -102,6 +102,8 @@ class _BalancedResultStub:
     delta_lender: Decimal | None = None
     total_loans: int | None = None
     delta_bank_passive: Decimal | None = None
+    n_defaults_passive: int | None = 5
+    n_defaults_active: int | None = 3
 
     @property
     def trading_effect(self) -> Decimal | None:
@@ -135,6 +137,8 @@ class _BankResultStub:
     cascade_fraction_lend: Decimal | None = Decimal("0.08")
     cb_loans_created_idle: int = 3
     cb_loans_created_lend: int = 5
+    n_defaults_idle: int | None = 8
+    n_defaults_lend: int | None = 5
 
     @property
     def bank_lending_effect(self) -> Decimal | None:
@@ -156,7 +160,7 @@ class TestPreflightBalanced:
         report = run_preflight_checks(config)
         assert isinstance(report, PreflightReport)
         check_ids = [c.check_id for c in report.checks]
-        for vid in ("V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11"):
+        for vid in ("V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11", "V12", "V13", "V14", "V15"):
             assert vid in check_ids, f"{vid} missing from checks"
 
     def test_all_pass_with_reasonable_params(self) -> None:
@@ -539,7 +543,7 @@ class TestEdgeCases:
         config = _BalancedConfigStub(kappas=[Decimal("1")])
         report = run_preflight_checks(config)
         # V1-V11 = 11 checks total
-        assert len(report.checks) == 11
+        assert len(report.checks) == 15
 
     def test_two_kappas(self) -> None:
         config = _BalancedConfigStub(kappas=[Decimal("0.5"), Decimal("2")])
@@ -582,3 +586,206 @@ class TestEdgeCases:
         # V9 and V10 have no post-sweep validator
         assert "V9" not in post_ids
         assert "V10" not in post_ids
+
+
+class TestNewValidators:
+    """Tests for V12-V15 validators and V2/V3/V4 bug fixes."""
+
+    def test_v2_tangible_enforced(self) -> None:
+        """V2: total_trades=1 across 10 combos is sparse → actual=False."""
+        config = _BalancedConfigStub()
+        preflight = run_preflight_checks(config)
+        # 10 combos, only 1 trade total — below 1 trade/combo threshold
+        results = [_BalancedResultStub(total_trades=0) for _ in range(9)]
+        results.append(_BalancedResultStub(total_trades=1))
+        post = run_postsweep_validation(preflight, results)
+        v2 = next(c for c in post.checks if c.check_id == "V2")
+        assert not v2.actual  # 1 trade across 10 combos is not tangible
+        assert "sparse" in v2.detail
+
+    def test_v3_majority_nonzero(self) -> None:
+        """V3: only 1/10 nonzero effects → actual=False."""
+        config = _BalancedConfigStub()
+        preflight = run_preflight_checks(config)
+        # 1 combo with trading effect, 9 with zero effect
+        results = [
+            _BalancedResultStub(
+                delta_passive=Decimal("0.2"),
+                delta_active=Decimal("0.1"),
+            ),
+        ]
+        results += [
+            _BalancedResultStub(
+                delta_passive=Decimal("0.2"),
+                delta_active=Decimal("0.2"),  # zero effect
+            )
+            for _ in range(9)
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v3 = next(c for c in post.checks if c.check_id == "V3")
+        assert not v3.actual  # only 1/10 nonzero is not majority
+
+    def test_v4_requires_trades(self) -> None:
+        """V4: dealer_total_return present but total_trades=0 → actual=False."""
+        config = _BalancedConfigStub()
+        preflight = run_preflight_checks(config)
+        results = [
+            _BalancedResultStub(
+                dealer_total_return=Decimal("0.05"),
+                total_trades=0,
+            ),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v4 = next(c for c in post.checks if c.check_id == "V4")
+        assert not v4.actual  # no trades means dealer wasn't really active
+
+    def test_v12_notional_volume_balanced(self) -> None:
+        """V12: notional above threshold → actual=True."""
+        config = _BalancedConfigStub()
+        preflight = run_preflight_checks(config)
+        # threshold = 0.1 * 10000 = 1000; face_value=20; need >= 50 trades
+        results = [
+            _BalancedResultStub(total_trades=60),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v12 = next(c for c in post.checks if c.check_id == "V12")
+        assert v12.actual  # 60 * 20 = 1200 >= 1000
+
+    def test_v12_notional_volume_below_threshold(self) -> None:
+        """V12: notional below threshold → actual=False."""
+        config = _BalancedConfigStub()
+        preflight = run_preflight_checks(config)
+        # threshold = 1000; face_value=20; 10 trades → notional=200
+        results = [
+            _BalancedResultStub(total_trades=10),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v12 = next(c for c in post.checks if c.check_id == "V12")
+        assert not v12.actual  # 10 * 20 = 200 < 1000
+
+    def test_v12_notional_volume_bank(self) -> None:
+        """V12: bank notional above threshold → actual=True."""
+        config = _BankConfigStub()
+        preflight = run_preflight_checks(config)
+        # threshold = 0.1 * 10000 = 1000; face=20; need >= 50 cb loans total
+        results = [
+            _BankResultStub(cb_loans_created_idle=30, cb_loans_created_lend=30),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v12 = next(c for c in post.checks if c.check_id == "V12")
+        assert v12.actual  # 60 * 20 = 1200 >= 1000
+
+    def test_v13_no_leakage_balanced(self) -> None:
+        """V13: no loans when lender arm absent → actual=True."""
+        config = _BalancedConfigStub(enable_lender=False)
+        preflight = run_preflight_checks(config)
+        results = [
+            _BalancedResultStub(total_loans=0, delta_lender=None),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v13 = next(c for c in post.checks if c.check_id == "V13")
+        assert v13.actual
+
+    def test_v13_leakage_detected_balanced(self) -> None:
+        """V13: loans present when lender arm absent → actual=False."""
+        config = _BalancedConfigStub(enable_lender=False)
+        preflight = run_preflight_checks(config)
+        results = [
+            _BalancedResultStub(total_loans=5, delta_lender=None),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v13 = next(c for c in post.checks if c.check_id == "V13")
+        assert not v13.actual
+
+    def test_v13_bank_no_leakage(self) -> None:
+        """V13: bank lending helps (delta_lend <= delta_idle) → actual=True."""
+        config = _BankConfigStub()
+        preflight = run_preflight_checks(config)
+        results = [
+            _BankResultStub(
+                delta_idle=Decimal("0.3"),
+                delta_lend=Decimal("0.2"),  # lending helps
+            ),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v13 = next(c for c in post.checks if c.check_id == "V13")
+        assert v13.actual
+
+    def test_v13_bank_leakage(self) -> None:
+        """V13: bank lending worsens defaults → actual=False."""
+        config = _BankConfigStub()
+        preflight = run_preflight_checks(config)
+        results = [
+            _BankResultStub(
+                delta_idle=Decimal("0.2"),
+                delta_lend=Decimal("0.3"),  # lending makes things worse
+            ),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v13 = next(c for c in post.checks if c.check_id == "V13")
+        assert not v13.actual
+
+    def test_v14_stress_gradient_monotone(self) -> None:
+        """V14: defaults decrease as κ increases → actual=True."""
+        config = _BalancedConfigStub(
+            kappas=[Decimal("0.5"), Decimal("1"), Decimal("2")],
+        )
+        preflight = run_preflight_checks(config)
+        results = [
+            _BalancedResultStub(kappa=Decimal("0.5"), n_defaults_passive=10, n_defaults_active=8),
+            _BalancedResultStub(kappa=Decimal("1"), n_defaults_passive=5, n_defaults_active=3),
+            _BalancedResultStub(kappa=Decimal("2"), n_defaults_passive=1, n_defaults_active=0),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v14 = next(c for c in post.checks if c.check_id == "V14")
+        assert v14.actual  # monotone decreasing
+
+    def test_v14_stress_gradient_violated(self) -> None:
+        """V14: defaults increase with κ → actual=False."""
+        config = _BalancedConfigStub(
+            kappas=[Decimal("0.5"), Decimal("1"), Decimal("2")],
+        )
+        preflight = run_preflight_checks(config)
+        results = [
+            _BalancedResultStub(kappa=Decimal("0.5"), n_defaults_passive=2, n_defaults_active=1),
+            _BalancedResultStub(kappa=Decimal("1"), n_defaults_passive=10, n_defaults_active=8),
+            _BalancedResultStub(kappa=Decimal("2"), n_defaults_passive=5, n_defaults_active=3),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v14 = next(c for c in post.checks if c.check_id == "V14")
+        assert not v14.actual  # non-monotone
+
+    def test_v14_single_kappa_na(self) -> None:
+        """V14: single κ → gradient check n/a, match=True."""
+        config = _BalancedConfigStub(kappas=[Decimal("1")])
+        preflight = run_preflight_checks(config)
+        results = [
+            _BalancedResultStub(kappa=Decimal("1")),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v14 = next(c for c in post.checks if c.check_id == "V14")
+        assert v14.match  # n/a is a match
+
+    def test_v15_activity_intensity_sufficient(self) -> None:
+        """V15: median intensity >= 0.5 → actual=True."""
+        config = _BalancedConfigStub(n_agents=50)
+        preflight = run_preflight_checks(config)
+        # 30 trades / 50 agents = 0.6 intensity
+        results = [
+            _BalancedResultStub(total_trades=30),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v15 = next(c for c in post.checks if c.check_id == "V15")
+        assert v15.actual  # 0.6 >= 0.5
+
+    def test_v15_activity_intensity_insufficient(self) -> None:
+        """V15: median intensity < 0.5 → actual=False."""
+        config = _BalancedConfigStub(n_agents=100)
+        preflight = run_preflight_checks(config)
+        # 10 trades / 100 agents = 0.1 intensity
+        results = [
+            _BalancedResultStub(total_trades=10),
+        ]
+        post = run_postsweep_validation(preflight, results)
+        v15 = next(c for c in post.checks if c.check_id == "V15")
+        assert not v15.actual  # 0.1 < 0.5
