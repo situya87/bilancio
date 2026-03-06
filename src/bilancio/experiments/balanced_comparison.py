@@ -764,6 +764,10 @@ class BalancedComparisonConfig(BaseModel):
 
     # Adaptive preset (Plan 050)
     adapt: str = Field(default="static", description="Adaptive profile preset: static|calibrated|responsive|full")
+    adaptive_overrides: dict[str, bool] = Field(
+        default_factory=dict,
+        description="Per-flag adaptive overrides (CLI --adaptive-*), applied after adapt preset",
+    )
 
 
 class BalancedComparisonRunner:
@@ -1168,6 +1172,7 @@ class BalancedComparisonRunner:
             dealer_concentration_limit=self.config.dealer_concentration_limit,
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
+            adapt_overrides=self.config.adaptive_overrides,
         )
 
     def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1228,6 +1233,7 @@ class BalancedComparisonRunner:
             dealer_concentration_limit=self.config.dealer_concentration_limit,
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
+            adapt_overrides=self.config.adaptive_overrides,
         )
 
     def _get_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1304,6 +1310,7 @@ class BalancedComparisonRunner:
             dealer_concentration_limit=self.config.dealer_concentration_limit,
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
+            adapt_overrides=self.config.adaptive_overrides,
         )
 
     def _get_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1385,6 +1392,7 @@ class BalancedComparisonRunner:
             dealer_concentration_limit=self.config.dealer_concentration_limit,
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
+            adapt_overrides=self.config.adaptive_overrides,
         )
 
     def _get_dealer_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1471,6 +1479,7 @@ class BalancedComparisonRunner:
             dealer_concentration_limit=self.config.dealer_concentration_limit,
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
+            adapt_overrides=self.config.adaptive_overrides,
         )
 
     def _get_bank_passive_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1529,6 +1538,7 @@ class BalancedComparisonRunner:
             dealer_concentration_limit=self.config.dealer_concentration_limit,
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
+            adapt_overrides=self.config.adaptive_overrides,
         )
 
     def _get_bank_dealer_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1592,6 +1602,7 @@ class BalancedComparisonRunner:
             dealer_concentration_limit=self.config.dealer_concentration_limit,
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
+            adapt_overrides=self.config.adaptive_overrides,
         )
 
     def _get_bank_dealer_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -1676,6 +1687,7 @@ class BalancedComparisonRunner:
             dealer_concentration_limit=self.config.dealer_concentration_limit,
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
+            adapt_overrides=self.config.adaptive_overrides,
         )
 
     def run_all(self) -> list[BalancedComparisonResult]:

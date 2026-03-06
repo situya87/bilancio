@@ -1236,6 +1236,11 @@ def sweep_comparison(
 @click.option("--lender-daily-el-budget-ratio", type=Decimal, default=Decimal("0"), help="Daily expected loss budget / capital (default: 0)")
 @click.option("--lender-run-el-budget-ratio", type=Decimal, default=Decimal("0"), help="Run expected loss budget / capital (default: 0)")
 @click.option("--lender-stop-loss-ratio", type=Decimal, default=Decimal("0"), help="Stop lending when realized losses / capital exceed (default: 0)")
+@click.option(
+    "--lender-collateralized-terms/--no-lender-collateralized-terms",
+    default=False,
+    help="Cap NBFI loan principal by receivable collateral value (default: disabled)",
+)
 @click.option("--lender-collateral-advance-rate", type=Decimal, default=Decimal("1.0"), help="Advance rate for collateralized NBFI terms (default: 1.0)")
 @click.option(
     "--trading-rounds",
@@ -1357,6 +1362,7 @@ def sweep_balanced(
     lender_daily_el_budget_ratio: Decimal,
     lender_run_el_budget_ratio: Decimal,
     lender_stop_loss_ratio: Decimal,
+    lender_collateralized_terms: bool,
     lender_collateral_advance_rate: Decimal,
     trading_rounds: int,
     issuer_specific_pricing: bool,
@@ -1525,6 +1531,21 @@ def sweep_balanced(
     perf_preset_val_bal = perf_kwargs_bal.pop("preset", "compatible") if perf_kwargs_bal else "compatible"
     performance = PerformanceConfig.create(perf_preset_val_bal, **perf_kwargs_bal) if perf_kwargs_bal else None
 
+    _adaptive_flags = {
+        "adaptive_planning_horizon": adaptive_planning_horizon,
+        "adaptive_risk_aversion": adaptive_risk_aversion,
+        "adaptive_reserves": adaptive_reserves,
+        "adaptive_lookback": adaptive_lookback,
+        "adaptive_issuer_specific": adaptive_issuer_specific,
+        "adaptive_ev_term_structure": adaptive_ev_term_structure,
+        "adaptive_term_structure": adaptive_term_structure,
+        "adaptive_base_spreads": adaptive_base_spreads,
+        "adaptive_convex_spreads": adaptive_convex_spreads,
+    }
+    _set_flags = {k: v for k, v in _adaptive_flags.items() if v is not None}
+    if _set_flags:
+        click.echo(f"Adaptive flag overrides: {_set_flags}")
+
     config = BalancedComparisonConfig(
         n_agents=n_agents,
         maturity_days=maturity_days,
@@ -1579,6 +1600,7 @@ def sweep_balanced(
         lender_daily_expected_loss_budget_ratio=lender_daily_el_budget_ratio,
         lender_run_expected_loss_budget_ratio=lender_run_el_budget_ratio,
         lender_stop_loss_realized_ratio=lender_stop_loss_ratio,
+        lender_collateralized_terms=lender_collateralized_terms,
         lender_collateral_advance_rate=lender_collateral_advance_rate,
         cb_lending_cutoff_day=cb_lending_cutoff_day,
         n_banks=n_banks,
@@ -1588,24 +1610,9 @@ def sweep_balanced(
         flow_sensitivity=flow_sensitivity,
         dealer_concentration_limit=dealer_concentration_limit,
         adapt=adapt,
+        adaptive_overrides=_set_flags,
         performance=performance.to_dict() if performance else {},
     )
-
-    # Log adaptive flag overrides (if any set, they need runner support to take effect)
-    _adaptive_flags = {
-        "adaptive_planning_horizon": adaptive_planning_horizon,
-        "adaptive_risk_aversion": adaptive_risk_aversion,
-        "adaptive_reserves": adaptive_reserves,
-        "adaptive_lookback": adaptive_lookback,
-        "adaptive_issuer_specific": adaptive_issuer_specific,
-        "adaptive_ev_term_structure": adaptive_ev_term_structure,
-        "adaptive_term_structure": adaptive_term_structure,
-        "adaptive_base_spreads": adaptive_base_spreads,
-        "adaptive_convex_spreads": adaptive_convex_spreads,
-    }
-    _set_flags = {k: v for k, v in _adaptive_flags.items() if v is not None}
-    if _set_flags:
-        click.echo(f"Adaptive flag overrides: {_set_flags}")
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)
 

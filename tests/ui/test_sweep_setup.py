@@ -680,15 +680,16 @@ class TestAdaptiveAndLendingDefaults:
             "marginal_relief_min_ratio", "stress_risk_premium_scale",
             "high_risk_default_threshold", "high_risk_maturity_cap",
             "daily_expected_loss_budget_ratio", "run_expected_loss_budget_ratio",
-            "stop_loss_realized_ratio", "collateral_advance_rate",
+            "stop_loss_realized_ratio", "collateralized_terms", "collateral_advance_rate",
         }
         assert set(_LENDING_RISK_DEFAULTS.keys()) == expected
 
     def test_lending_risk_defaults_types(self):
         assert isinstance(_LENDING_RISK_DEFAULTS["high_risk_maturity_cap"], int)
+        assert isinstance(_LENDING_RISK_DEFAULTS["collateralized_terms"], bool)
         # All others should be strings (for Decimal conversion)
         for k, v in _LENDING_RISK_DEFAULTS.items():
-            if k != "high_risk_maturity_cap":
+            if k not in ("high_risk_maturity_cap", "collateralized_terms"):
                 assert isinstance(v, str), f"{k} should be str, got {type(v)}"
 
     def test_build_cli_args_emits_adaptive_flags(self):
@@ -713,14 +714,16 @@ class TestAdaptiveAndLendingDefaults:
                 "enable_lender": True,
                 "marginal_relief_min_ratio": "0.05",
                 "stress_risk_premium_scale": "2.0",
+                "collateralized_terms": True,
                 "collateral_advance_rate": "0.80",
             },
         )
         args = build_cli_args(result)
-        assert "--marginal-relief-min-ratio" in args
+        assert "--lender-marginal-relief-min-ratio" in args
         assert "0.05" in args
-        assert "--stress-risk-premium-scale" in args
-        assert "--collateral-advance-rate" in args
+        assert "--lender-stress-risk-premium-scale" in args
+        assert "--lender-collateralized-terms" in args
+        assert "--lender-collateral-advance-rate" in args
 
     def test_build_cli_args_no_lending_risk_when_lender_disabled(self):
         result = SweepSetupResult(
@@ -732,4 +735,4 @@ class TestAdaptiveAndLendingDefaults:
             },
         )
         args = build_cli_args(result)
-        assert "--marginal-relief-min-ratio" not in args
+        assert "--lender-marginal-relief-min-ratio" not in args

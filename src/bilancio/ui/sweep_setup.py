@@ -175,7 +175,20 @@ _LENDING_RISK_DEFAULTS: dict[str, Any] = {
     "daily_expected_loss_budget_ratio": "0.02",
     "run_expected_loss_budget_ratio": "0.10",
     "stop_loss_realized_ratio": "0.15",
+    "collateralized_terms": False,
     "collateral_advance_rate": "0.80",
+}
+
+_LENDING_RISK_FLAG_MAP: dict[str, str] = {
+    "marginal_relief_min_ratio": "--lender-marginal-relief-min-ratio",
+    "stress_risk_premium_scale": "--lender-stress-risk-premium-scale",
+    "high_risk_default_threshold": "--lender-high-risk-default-threshold",
+    "high_risk_maturity_cap": "--lender-high-risk-maturity-cap",
+    "daily_expected_loss_budget_ratio": "--lender-daily-el-budget-ratio",
+    "run_expected_loss_budget_ratio": "--lender-run-el-budget-ratio",
+    "stop_loss_realized_ratio": "--lender-stop-loss-ratio",
+    "collateralized_terms": "--lender-collateralized-terms",
+    "collateral_advance_rate": "--lender-collateral-advance-rate",
 }
 
 # Which feature sections are relevant per sweep type
@@ -722,13 +735,12 @@ def build_cli_args(result: SweepSetupResult) -> list[str]:
             if params.get("lender_preventive_lending"):
                 args.append("--lender-preventive-lending")
             # Lending risk controls (Plan 049)
-            for key in ["marginal_relief_min_ratio", "stress_risk_premium_scale",
-                         "high_risk_default_threshold", "high_risk_maturity_cap",
-                         "daily_expected_loss_budget_ratio", "run_expected_loss_budget_ratio",
-                         "stop_loss_realized_ratio", "collateral_advance_rate"]:
+            for key, cli_key in _LENDING_RISK_FLAG_MAP.items():
                 if key in params:
-                    cli_key = f"--{key.replace('_', '-')}"
-                    args.extend([cli_key, str(params[key])])
+                    if key == "collateralized_terms":
+                        args.append(cli_key if params[key] else "--no-lender-collateralized-terms")
+                    else:
+                        args.extend([cli_key, str(params[key])])
 
     # Bank params (bank sweep only)
     if result.sweep_type == "bank":
