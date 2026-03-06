@@ -1,59 +1,52 @@
-"""Balance sheet visualization utilities for the bilancio system.
-
-This module has been split into submodules for better organization:
-- balances: Balance sheet and T-account display
-- events: Event table formatting
-- phases: Phase summary visualization
-- common: Shared utilities and constants
-"""
+"""Visualization utilities for bilancio analysis outputs."""
 
 from __future__ import annotations
 
-# Balance sheet functions
-from bilancio.analysis.visualization.balances import (
-    build_t_account_rows,
-    display_agent_balance_from_balance,
-    display_agent_balance_table,
-    display_agent_balance_table_renderable,
-    display_agent_t_account,
-    display_agent_t_account_renderable,
-    display_multiple_agent_balances,
-    display_multiple_agent_balances_renderable,
-)
+from importlib import import_module
 
-# Re-export public API from submodules to maintain backward compatibility
-# Common utilities and types
-from bilancio.analysis.visualization.common import (
-    RICH_AVAILABLE,
-    BalanceRow,
-    RenderableType,
-    TAccount,
-    parse_day_from_maturity,
-)
+_MODULE_EXPORTS = {
+    "bilancio.analysis.visualization.common": [
+        "RICH_AVAILABLE",
+        "BalanceRow",
+        "RenderableType",
+        "TAccount",
+        "parse_day_from_maturity",
+    ],
+    "bilancio.analysis.visualization.balances": [
+        "build_t_account_rows",
+        "display_agent_balance_from_balance",
+        "display_agent_balance_table",
+        "display_agent_balance_table_renderable",
+        "display_agent_t_account",
+        "display_agent_t_account_renderable",
+        "display_multiple_agent_balances",
+        "display_multiple_agent_balances_renderable",
+    ],
+    "bilancio.analysis.visualization.events": [
+        "display_events",
+        "display_events_for_day",
+        "display_events_for_day_renderable",
+        "display_events_renderable",
+        "display_events_table",
+        "display_events_table_renderable",
+    ],
+    "bilancio.analysis.visualization.phases": [
+        "display_events_tables_by_phase_renderables",
+    ],
+    "bilancio.analysis.visualization.run_comparison": [
+        "RunComparison",
+        "comparisons_to_dataframe",
+        "generate_comparison_html",
+        "load_job_comparison_data",
+        "quick_visualize",
+    ],
+}
 
-# Event display functions
-from bilancio.analysis.visualization.events import (
-    display_events,
-    display_events_for_day,
-    display_events_for_day_renderable,
-    display_events_renderable,
-    display_events_table,
-    display_events_table_renderable,
-)
-
-# Phase summary functions
-from bilancio.analysis.visualization.phases import (
-    display_events_tables_by_phase_renderables,
-)
-
-# Run comparison visualizations
-from bilancio.analysis.visualization.run_comparison import (
-    RunComparison,
-    comparisons_to_dataframe,
-    generate_comparison_html,
-    load_job_comparison_data,
-    quick_visualize,
-)
+_ATTRIBUTE_TO_MODULE = {
+    attribute: module_name
+    for module_name, attributes in _MODULE_EXPORTS.items()
+    for attribute in attributes
+}
 
 __all__ = [
     # Common
@@ -87,3 +80,18 @@ __all__ = [
     "generate_comparison_html",
     "quick_visualize",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Load optional visualization exports on first access."""
+    module_name = _ATTRIBUTE_TO_MODULE.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(module_name)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

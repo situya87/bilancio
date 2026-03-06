@@ -11,8 +11,6 @@ from click.core import ParameterSource
 from rich.console import Console
 from rich.panel import Panel
 
-from bilancio.experiments.ring import _decimal_list
-
 console = Console()
 
 CLI_HANDLED_ERRORS = (
@@ -34,7 +32,13 @@ def as_decimal_list(value: object) -> list[Decimal]:
     """Convert either a CSV string or sequence into Decimals."""
     if isinstance(value, list | tuple):
         return [Decimal(str(item)) for item in value]
-    return _decimal_list(str(value))
+    out: list[Decimal] = []
+    for part in str(value).split(","):
+        item = part.strip()
+        if not item:
+            continue
+        out.append(Decimal(item))
+    return out
 
 
 def parameter_uses_default(ctx: click.Context, param_name: str) -> bool:
