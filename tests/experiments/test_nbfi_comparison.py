@@ -222,6 +222,12 @@ class TestNBFIComparisonConfigDefaults:
         assert config.lender_max_total_exposure == Decimal("0.80")
         assert config.lender_maturity_days == 2
         assert config.lender_horizon == 3
+        assert config.lender_min_coverage == Decimal("0.5")
+        assert config.lender_ranking_mode == "profit"
+        assert config.lender_coverage_mode == "gate"
+        assert config.lender_marginal_relief_min_ratio == Decimal("0")
+        assert config.lender_collateralized_terms is False
+        assert config.lender_collateral_advance_rate == Decimal("1.0")
 
     def test_risk_assessment_defaults(self):
         """Risk assessment defaults are correct."""
@@ -248,6 +254,7 @@ class TestNBFIComparisonConfigDefaults:
         assert config.alpha_trader == Decimal("0")
         assert config.vbt_mid_sensitivity == Decimal("1.0")
         assert config.vbt_spread_sensitivity == Decimal("0.0")
+        assert config.flow_sensitivity == Decimal("0.0")
         assert config.vbt_share_per_bucket == Decimal("0.20")
         assert config.dealer_share_per_bucket == Decimal("0.05")
 
@@ -257,6 +264,7 @@ class TestNBFIComparisonConfigDefaults:
         assert config.spread_scale == Decimal("1.0")
         assert config.trading_rounds == 100
         assert config.detailed_logging is False
+        assert config.performance == {}
         assert config.face_value == Decimal("20")
         assert config.n_banks == 3
         assert config.reserve_multiplier == 10.0
@@ -300,6 +308,51 @@ class TestNBFIComparisonConfigCustom:
         assert config.lender_max_total_exposure == Decimal("0.90")
         assert config.lender_maturity_days == 5
         assert config.lender_horizon == 7
+
+    def test_custom_plan049_lender_controls(self):
+        """Config accepts richer loss-efficiency guardrails."""
+        config = NBFIComparisonConfig(
+            lender_min_coverage=Decimal("0.65"),
+            lender_maturity_matching=True,
+            lender_min_loan_maturity=1,
+            lender_max_loans_per_borrower_per_day=2,
+            lender_ranking_mode="blended",
+            lender_cascade_weight=Decimal("0.35"),
+            lender_coverage_mode="graduated",
+            lender_coverage_penalty_scale=Decimal("0.18"),
+            lender_preventive_lending=True,
+            lender_prevention_threshold=Decimal("0.45"),
+            lender_marginal_relief_min_ratio=Decimal("1.25"),
+            lender_stress_risk_premium_scale=Decimal("0.12"),
+            lender_high_risk_default_threshold=Decimal("0.60"),
+            lender_high_risk_maturity_cap=1,
+            lender_daily_expected_loss_budget_ratio=Decimal("0.03"),
+            lender_run_expected_loss_budget_ratio=Decimal("0.08"),
+            lender_stop_loss_realized_ratio=Decimal("0.10"),
+            lender_collateralized_terms=True,
+            lender_collateral_advance_rate=Decimal("0.80"),
+            flow_sensitivity=Decimal("0.15"),
+        )
+        assert config.lender_min_coverage == Decimal("0.65")
+        assert config.lender_maturity_matching is True
+        assert config.lender_min_loan_maturity == 1
+        assert config.lender_max_loans_per_borrower_per_day == 2
+        assert config.lender_ranking_mode == "blended"
+        assert config.lender_cascade_weight == Decimal("0.35")
+        assert config.lender_coverage_mode == "graduated"
+        assert config.lender_coverage_penalty_scale == Decimal("0.18")
+        assert config.lender_preventive_lending is True
+        assert config.lender_prevention_threshold == Decimal("0.45")
+        assert config.lender_marginal_relief_min_ratio == Decimal("1.25")
+        assert config.lender_stress_risk_premium_scale == Decimal("0.12")
+        assert config.lender_high_risk_default_threshold == Decimal("0.60")
+        assert config.lender_high_risk_maturity_cap == 1
+        assert config.lender_daily_expected_loss_budget_ratio == Decimal("0.03")
+        assert config.lender_run_expected_loss_budget_ratio == Decimal("0.08")
+        assert config.lender_stop_loss_realized_ratio == Decimal("0.10")
+        assert config.lender_collateralized_terms is True
+        assert config.lender_collateral_advance_rate == Decimal("0.80")
+        assert config.flow_sensitivity == Decimal("0.15")
 
     def test_custom_bank_params(self):
         """Config accepts custom bank parameters."""
@@ -558,9 +611,14 @@ class TestConfigSerialization:
             "lender_max_total_exposure",
             "lender_maturity_days",
             "lender_horizon",
+            "lender_min_coverage",
+            "lender_marginal_relief_min_ratio",
+            "lender_collateralized_terms",
+            "flow_sensitivity",
             "risk_assessment_enabled",
             "risk_aversion",
             "trading_rounds",
+            "performance",
             "n_banks",
             "reserve_multiplier",
         ]
@@ -687,6 +745,81 @@ class TestNBFIComparisonRunnerArms:
         regimes = {a[0]: a[3] for a in arms}
         assert regimes["idle"] == "nbfi_idle"
         assert regimes["lend"] == "nbfi_lend"
+
+
+class TestNBFIRunnerScenarioWiring:
+    """Tests for rich NBFI/VBT config propagation into generated scenarios."""
+
+    def test_lend_runner_prepares_full_lender_controls(self, tmp_path: Path):
+        """NBFI comparison wiring should preserve lender and VBT guardrail settings."""
+        config = NBFIComparisonConfig(
+            lender_base_rate=Decimal("0.08"),
+            lender_risk_premium_scale=Decimal("0.27"),
+            lender_max_single_exposure=Decimal("0.11"),
+            lender_max_total_exposure=Decimal("0.68"),
+            lender_maturity_days=4,
+            lender_horizon=6,
+            lender_min_coverage=Decimal("0.65"),
+            lender_maturity_matching=True,
+            lender_min_loan_maturity=1,
+            lender_max_loans_per_borrower_per_day=2,
+            lender_ranking_mode="blended",
+            lender_cascade_weight=Decimal("0.40"),
+            lender_coverage_mode="graduated",
+            lender_coverage_penalty_scale=Decimal("0.18"),
+            lender_preventive_lending=True,
+            lender_prevention_threshold=Decimal("0.45"),
+            lender_marginal_relief_min_ratio=Decimal("1.20"),
+            lender_stress_risk_premium_scale=Decimal("0.12"),
+            lender_high_risk_default_threshold=Decimal("0.60"),
+            lender_high_risk_maturity_cap=1,
+            lender_daily_expected_loss_budget_ratio=Decimal("0.03"),
+            lender_run_expected_loss_budget_ratio=Decimal("0.08"),
+            lender_stop_loss_realized_ratio=Decimal("0.10"),
+            lender_collateralized_terms=True,
+            lender_collateral_advance_rate=Decimal("0.80"),
+            flow_sensitivity=Decimal("0.15"),
+        )
+        runner = NBFIComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
+        lend_runner = runner._get_lend_runner(Decimal("0.90"))
+        prepared = lend_runner._prepare_run(
+            phase="nbfi_lend",
+            kappa=Decimal("1"),
+            concentration=Decimal("1"),
+            mu=Decimal("0"),
+            monotonicity=Decimal("0"),
+            seed=42,
+        )
+
+        lender = prepared.scenario_config["lender"]
+        balanced = prepared.scenario_config["balanced_dealer"]
+
+        assert lender["base_rate"] == "0.08"
+        assert lender["risk_premium_scale"] == "0.27"
+        assert lender["max_single_exposure"] == "0.11"
+        assert lender["max_total_exposure"] == "0.68"
+        assert lender["maturity_days"] == 4
+        assert lender["horizon"] == 6
+        assert lender["min_coverage_ratio"] == "0.65"
+        assert lender["maturity_matching"] is True
+        assert lender["min_loan_maturity"] == 1
+        assert lender["max_loans_per_borrower_per_day"] == 2
+        assert lender["ranking_mode"] == "blended"
+        assert lender["cascade_weight"] == "0.40"
+        assert lender["coverage_mode"] == "graduated"
+        assert lender["coverage_penalty_scale"] == "0.18"
+        assert lender["preventive_lending"] is True
+        assert lender["prevention_threshold"] == "0.45"
+        assert lender["marginal_relief_min_ratio"] == "1.20"
+        assert lender["stress_risk_premium_scale"] == "0.12"
+        assert lender["high_risk_default_threshold"] == "0.60"
+        assert lender["high_risk_maturity_cap"] == 1
+        assert lender["daily_expected_loss_budget_ratio"] == "0.03"
+        assert lender["run_expected_loss_budget_ratio"] == "0.08"
+        assert lender["stop_loss_realized_ratio"] == "0.10"
+        assert lender["collateralized_terms"] is True
+        assert lender["collateral_advance_rate"] == "0.80"
+        assert balanced["flow_sensitivity"] == "0.15"
 
 
 class TestFormatTime:
