@@ -966,6 +966,11 @@ def run_lending_phase(
     events: list[dict[str, Any]] = []
     profile = config.lender_profile
 
+    # Defensive reset for callers that reuse the same config object across
+    # independent simulations starting at day 0.
+    if current_day == 0 and config.run_expected_loss_spent > 0:
+        config.run_expected_loss_spent = Decimal("0")
+
     # Plan 050: Adaptive capital conservation — scale exposure limits by utilization
     effective_config = config
     if profile is not None and getattr(profile, "adaptive_capital_conservation", False):
@@ -1125,7 +1130,7 @@ def run_lending_phase(
             key=lambda x: x.get("downstream", 0) * (1.0 - float(x["p_default"])),
             reverse=True,
         )
-        _execute_preventive_opportunities(
+        remaining_capital, daily_expected_loss_spent = _execute_preventive_opportunities(
             system,
             current_day,
             lender_id,

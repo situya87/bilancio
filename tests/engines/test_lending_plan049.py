@@ -43,6 +43,27 @@ def _add_firm_pair(system: System, debtor_id: str, creditor_id: str, amount: int
     system.add_contract(payable)
 
 
+def _add_receivable(system: System, holder_id: str, obligor_id: str, amount: int, due_day: int = 1) -> None:
+    obligor = system.state.agents.get(obligor_id)
+    if obligor is None:
+        obligor = Firm(id=obligor_id, name=obligor_id, kind="firm")
+        system.add_agent(obligor)
+    holder = system.state.agents.get(holder_id)
+    if holder is None:
+        holder = Firm(id=holder_id, name=holder_id, kind="firm")
+        system.add_agent(holder)
+    payable = Payable(
+        id=system.new_contract_id("PAY"),
+        kind=InstrumentKind.PAYABLE,
+        amount=amount,
+        denom="X",
+        asset_holder_id=holder_id,
+        liability_issuer_id=obligor_id,
+        due_day=due_day,
+    )
+    system.add_contract(payable)
+
+
 def test_marginal_benefit_gate_rejects_loans() -> None:
     system = _base_system()
     _add_firm_pair(system, "F01", "F99", amount=1_000, due_day=1)
@@ -131,3 +152,49 @@ def test_high_risk_maturity_cap_applies_to_issued_loan(monkeypatch) -> None:
     loan = system.state.contracts.get(loan_id)
     assert loan is not None
     assert getattr(loan, "maturity_days", None) == 1
+
+
+def test_collateralized_terms_cap_loan_amount(monkeypatch) -> None:
+    system = _base_system()
+    _add_firm_pair(system, "F01", "F99", amount=1_000, due_day=1)
+    _add_receivable(system, holder_id="F01", obligor_id="F77", amount=200, due_day=1)
+    monkeypatch.setattr(
+        "bilancio.engines.lending._estimate_default_probs",
+        lambda _system, _day: {"F01": Decimal("0.1")},
+    )
+
+    config = LendingConfig(
+        horizon=3,
+        min_shortfall=1,
+        max_default_prob=Decimal("1"),
+        collateralized_terms=True,
+        collateral_advance_rate=Decimal("0.5"),
+    )
+    events = run_lending_phase(system, current_day=0, lending_config=config)
+    created = [e for e in events if e["kind"] == "NonBankLoanCreated"]
+    assert len(created) == 1
+    assert created[0]["amount"] == 100  # 200 receivable × 0.5 advance rate
+
+
+def test_stress_risk_premium_scale_increases_rate(monkeypatch) -> None:
+    system = _base_system()
+    _add_firm_pair(system, "F01", "F99", amount=1_000, due_day=1)
+    monkeypatch.setattr(
+        "bilancio.engines.lending._estimate_default_probs",
+        lambda _system, _day: {"F01": Decimal("0.5")},
+    )
+
+    config = LendingConfig(
+        base_rate=Decimal("0.05"),
+        risk_premium_scale=Decimal("0"),
+        horizon=3,
+        min_shortfall=1,
+        max_default_prob=Decimal("1"),
+        stress_risk_premium_scale=Decimal("0.2"),
+    )
+    events = run_lending_phase(system, current_day=0, lending_config=config)
+    created = [e for e in events if e["kind"] == "NonBankLoanCreated"]
+    assert len(created) == 1
+    # base 0.05 + convex premium 0.2 * (0.5^2 / (1-0.5)) = 0.10
+    # => expected total rate 0.15
+    assert Decimal(str(created[0]["rate"])) == Decimal("0.15")
