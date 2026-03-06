@@ -36,18 +36,6 @@ _GRAY_SPREAD = "rgba(221,221,221,0.4)"  # inside spread fill
 _GRAY_MID = "#555"             # bracket lines, secondary text
 _PURPLE = "#7C3AED"            # current position accent
 
-# Legacy aliases for bank diagram (unchanged)
-_VBT_COLOR = "rgba(39, 174, 96, 0.7)"
-_VBT_MID_COLOR = "rgba(39, 174, 96, 0.4)"
-_BID_COLOR = "rgba(231, 76, 60, 0.85)"
-_ASK_COLOR = "rgba(41, 128, 185, 0.85)"
-_MIDLINE_COLOR = "rgba(44, 62, 80, 0.9)"
-_FILL_COLOR = "rgba(189, 195, 199, 0.25)"
-_POSITION_COLOR = "rgba(142, 68, 173, 0.9)"
-_CB_CEIL_COLOR = "rgba(44, 62, 80, 0.9)"
-_CB_FLOOR_COLOR = "rgba(44, 62, 80, 0.9)"
-_TILT_COLOR = "rgba(142, 68, 173, 0.7)"
-
 # ---- Bucket maturity mapping (representative days-to-maturity) ----
 BUCKET_TAU = {"short": 2, "mid": 6, "long": 12}
 
@@ -1871,6 +1859,8 @@ def interbank_flow_sankey(events: list[dict[str, Any]]) -> go.Figure | None:
         borrower = str(evt.get("borrower", ""))
         if not lender or not borrower:
             continue
+        if lender == borrower:
+            continue
         pair_volume[(lender, borrower)] += _to_float(evt.get("amount")) or 0.0
         trade_days.add(int(evt.get("day", 0)))
 
@@ -1927,7 +1917,10 @@ def interbank_flow_sankey(events: list[dict[str, Any]]) -> go.Figure | None:
 def _book_step_points(
     orders: list[dict[str, Any]],
 ) -> tuple[list[float], list[float], list[float], list[float], list[str]]:
-    """Convert quantity/rate orders into step-curve and marker points."""
+    """Convert quantity/rate orders into step-curve and marker points.
+
+    Note: caller is responsible for sort order (asks ascending, bids descending).
+    """
     x_points: list[float] = []
     y_points: list[float] = []
     marker_x: list[float] = []

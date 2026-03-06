@@ -123,3 +123,67 @@ def test_candidate_factories_expose_baseline_and_guardrail_options():
     names = [candidate.name for candidate in nbfi_candidates()]
     assert "discipline_buffer" in names
     assert "guardrails_plus_prudent_flow" in names
+
+
+def test_score_frontier_pairs_empty_list():
+    score = score_frontier_pairs([], treatment_arm="active")
+    assert score.n_pairs == 0
+    assert score.n_complete == 0
+    assert score.n_help == 0
+    assert score.share_help is None
+    assert score.mean_loss_per_help is None
+
+
+def test_score_frontier_pairs_no_matching_arm():
+    pairs = [_pair(treatment_arm="active", default_relief=0.1, inst_loss_shift=0.0, net_system_relief=0.1)]
+    score = score_frontier_pairs(pairs, treatment_arm="nonexistent")
+    assert score.n_pairs == 0
+
+
+def test_score_frontier_pairs_all_negative_relief():
+    pairs = [
+        _pair(default_relief=-0.05, inst_loss_shift=0.0, net_system_relief=0.0),
+        _pair(default_relief=-0.02, inst_loss_shift=-0.01, net_system_relief=0.01),
+    ]
+    score = score_frontier_pairs(pairs, treatment_arm="active")
+    assert score.n_help == 0
+    assert score.mean_loss_per_help is None
+
+
+def test_choose_best_candidate_single_candidate():
+    candidate = TuningCandidate(name="only", rationale="only option", overrides={})
+    score = FrontierScore(
+        treatment_arm="active", n_pairs=5, n_complete=5, n_help=2,
+        n_help_no_extra_inst_loss=1, n_help_nonnegative_net_system=1,
+        n_safe_help=1, share_help=0.4, share_help_no_extra_inst_loss=0.2,
+        share_help_nonnegative_net_system=0.2, share_safe_help=0.2,
+        mean_default_relief=0.05, mean_safe_default_relief=0.03,
+        mean_inst_loss_shift=0.0, mean_net_system_relief=0.01,
+        mean_loss_per_help=0.1,
+    )
+    best_candidate, best_score = choose_best_candidate([(candidate, score)])
+    assert best_candidate.name == "only"
+    assert best_score is score
+
+
+def test_choose_best_candidate_tied_scores_prefers_first():
+    c1 = TuningCandidate(name="first", rationale="first", overrides={})
+    c2 = TuningCandidate(name="second", rationale="second", overrides={})
+    score = FrontierScore(
+        treatment_arm="active", n_pairs=5, n_complete=5, n_help=2,
+        n_help_no_extra_inst_loss=1, n_help_nonnegative_net_system=1,
+        n_safe_help=1, share_help=0.4, share_help_no_extra_inst_loss=0.2,
+        share_help_nonnegative_net_system=0.2, share_safe_help=0.2,
+        mean_default_relief=0.05, mean_safe_default_relief=0.03,
+        mean_inst_loss_shift=0.0, mean_net_system_relief=0.01,
+        mean_loss_per_help=0.1,
+    )
+    best_candidate, _ = choose_best_candidate([(c1, score), (c2, score)])
+    assert best_candidate.name == "first"
+
+
+def test_bank_candidates_factory():
+    from bilancio.analysis.intermediary_support_tuning import bank_candidates
+    candidates = bank_candidates()
+    assert candidates[0].name == "baseline"
+    assert len(candidates) >= 2
