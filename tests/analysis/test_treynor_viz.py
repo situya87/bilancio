@@ -591,6 +591,14 @@ class TestBankPricingAnimation:
         assert fig.layout.height == 760
         assert fig.layout.plot_bgcolor == "white"
 
+    def test_nonexistent_bank_returns_none(self, bank_snapshots_df):
+        assert bank_pricing_animation(bank_snapshots_df, bank_id="BK99") is None
+
+    def test_slider_and_buttons(self, bank_snapshots_df):
+        fig = bank_pricing_animation(bank_snapshots_df, bank_id="BK01")
+        assert fig.layout.sliders is not None
+        assert fig.layout.updatemenus is not None
+
 
 # ============================================================================
 # interbank visualizations
@@ -611,6 +619,9 @@ class TestInterbankMarketOutcomes:
         assert "Clearing rate" in names
         assert "Matched trades" in names
 
+    def test_returns_none_on_empty_events(self):
+        assert interbank_market_outcomes([]) is None
+
 
 class TestInterbankFlowSankey:
     """Tests for interbank_flow_sankey()."""
@@ -619,6 +630,9 @@ class TestInterbankFlowSankey:
         fig = interbank_flow_sankey(interbank_events)
         assert isinstance(fig, go.Figure)
         assert fig.data[0].type == "sankey"
+
+    def test_returns_none_on_empty_events(self):
+        assert interbank_flow_sankey([]) is None
 
 
 class TestInterbankAuctionMechanics:
@@ -638,13 +652,11 @@ class TestInterbankAuctionMechanics:
         assert "Reserve position x_i" in names
         assert "Limit rate" in names
 
-    def test_nonexistent_bank_returns_none(self, bank_snapshots_df):
-        assert bank_pricing_animation(bank_snapshots_df, bank_id="BK99") is None
+    def test_returns_none_on_empty_events(self):
+        assert interbank_auction_mechanics([]) is None
 
-    def test_slider_and_buttons(self, bank_snapshots_df):
-        fig = bank_pricing_animation(bank_snapshots_df, bank_id="BK01")
-        assert fig.layout.sliders is not None
-        assert fig.layout.updatemenus is not None
+    def test_returns_none_for_nonexistent_day(self, interbank_events):
+        assert interbank_auction_mechanics(interbank_events, day=999) is None
 
 
 # ============================================================================

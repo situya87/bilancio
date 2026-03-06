@@ -21,9 +21,6 @@ CLI_HANDLED_ERRORS = (
     ConnectionError,
     TimeoutError,
     ValueError,
-    TypeError,
-    KeyError,
-    AttributeError,
     RuntimeError,
 )
 

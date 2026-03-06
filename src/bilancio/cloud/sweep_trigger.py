@@ -107,9 +107,10 @@ run_corrected_risk_sweep = app.function(
     memory=4096,
 )(_run_corrected_risk_sweep_impl)
 
-setattr(run_corrected_risk_sweep, "local", _run_corrected_risk_sweep_impl)
-if not hasattr(run_corrected_risk_sweep, "remote"):
-    setattr(run_corrected_risk_sweep, "remote", _run_corrected_risk_sweep_impl)
+# Ensure .local() is available for direct invocation without Modal auth.
+# .remote() is left as-is from the Modal decorator so failures are visible.
+if not hasattr(run_corrected_risk_sweep, "local"):
+    setattr(run_corrected_risk_sweep, "local", _run_corrected_risk_sweep_impl)
 
 
 @app.local_entrypoint()

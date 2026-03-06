@@ -313,7 +313,7 @@ class RingSweepRunner:
         lender_max_single_exposure: Decimal = Decimal("0.15"),
         lender_max_total_exposure: Decimal = Decimal("0.80"),
         lender_maturity_days: int = 2,
-        lender_horizon: int = 3,
+        lender_horizon: int = 5,
         lender_min_coverage: Decimal = Decimal("0.5"),
         lender_maturity_matching: bool = False,
         lender_min_loan_maturity: int = 2,

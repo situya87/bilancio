@@ -5,6 +5,8 @@ Generated: `2026-03-06T08:18:22.101909+00:00`
 This report tunes support behavior sequentially for dealer-only, bank-only, and NBFI-only comparisons.
 The ranking objective is lexicographic: maximize safe help, maximize help with non-negative net system relief, minimize loss per unit of help, then maximize safe default relief.
 
+> **Note**: This report was generated with small-scale parameters (`n_agents=36`, `discovery_reps=1`) for quick iteration. Results are directional only and should be confirmed with production-scale parameters before drawing firm conclusions.
+
 ## Run Envelope
 
 - `n_agents`: `36`

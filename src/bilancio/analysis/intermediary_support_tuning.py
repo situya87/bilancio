@@ -36,7 +36,7 @@ def _metric_or_neg_inf(value: float | None) -> float:
 
 
 def _loss_metric(value: float | None) -> float:
-    return -inf if value is None else -value
+    return 0.0 if value is None else -value
 
 
 @dataclass(frozen=True)
@@ -88,7 +88,7 @@ def score_frontier_pairs(
     """Score a treatment arm using safe-help and loss-efficiency criteria."""
     arm_pairs = [pair for pair in pairs if pair.treatment_arm == treatment_arm]
     complete = [pair for pair in arm_pairs if pair.default_relief is not None]
-    help_pairs = [pair for pair in complete if pair.default_relief is not None and pair.default_relief > 0]
+    help_pairs = [pair for pair in complete if pair.default_relief > 0]
     no_extra_pairs = [pair for pair in help_pairs if pair.inst_loss_shift <= 0]
     nonnegative_net_pairs = [pair for pair in help_pairs if pair.net_system_relief >= 0]
     safe_pairs = [pair for pair in help_pairs if pair.inst_loss_shift <= 0 and pair.net_system_relief >= 0]
@@ -96,7 +96,6 @@ def score_frontier_pairs(
     loss_per_help = [
         max(pair.inst_loss_shift, 0.0) / pair.default_relief
         for pair in help_pairs
-        if pair.default_relief is not None and pair.default_relief > 0
     ]
 
     return FrontierScore(
