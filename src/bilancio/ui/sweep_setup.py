@@ -149,6 +149,48 @@ _PERFORMANCE_DEFAULTS: dict[str, Any] = {
     "dealer_backend": "python",
 }
 
+_ADAPTIVE_FLAGS_DEFAULTS: dict[str, Any] = {
+    # Trader [PRE]
+    "adaptive_planning_horizon": False,
+    # Trader [RUN]
+    "adaptive_risk_aversion": False,
+    "adaptive_reserves": False,
+    # Risk [PRE]
+    "adaptive_lookback": False,
+    "adaptive_issuer_specific": False,
+    # Risk [RUN]
+    "adaptive_ev_term_structure": False,
+    # VBT [PRE]
+    "adaptive_term_structure": False,
+    "adaptive_base_spreads": False,
+    # VBT [RUN]
+    "adaptive_convex_spreads": False,
+}
+
+_LENDING_RISK_DEFAULTS: dict[str, Any] = {
+    "marginal_relief_min_ratio": "0.05",
+    "stress_risk_premium_scale": "2.0",
+    "high_risk_default_threshold": "0.4",
+    "high_risk_maturity_cap": 1,
+    "daily_expected_loss_budget_ratio": "0.02",
+    "run_expected_loss_budget_ratio": "0.10",
+    "stop_loss_realized_ratio": "0.15",
+    "collateralized_terms": False,
+    "collateral_advance_rate": "0.80",
+}
+
+_LENDING_RISK_FLAG_MAP: dict[str, str] = {
+    "marginal_relief_min_ratio": "--lender-marginal-relief-min-ratio",
+    "stress_risk_premium_scale": "--lender-stress-risk-premium-scale",
+    "high_risk_default_threshold": "--lender-high-risk-default-threshold",
+    "high_risk_maturity_cap": "--lender-high-risk-maturity-cap",
+    "daily_expected_loss_budget_ratio": "--lender-daily-el-budget-ratio",
+    "run_expected_loss_budget_ratio": "--lender-run-el-budget-ratio",
+    "stop_loss_realized_ratio": "--lender-stop-loss-ratio",
+    "collateralized_terms": "--lender-collateralized-terms",
+    "collateral_advance_rate": "--lender-collateral-advance-rate",
+}
+
 # Which feature sections are relevant per sweep type
 FEATURE_SECTIONS: dict[str, list[str]] = {
     "balanced": ["dealer", "nbfi_lender", "banking", "risk_assessment", "adaptive", "trader", "performance"],
@@ -398,9 +440,15 @@ def _step_features(
         if "risk_assessment" in sections and result.get("risk_assessment", True):
             result.update(_ask_section("Risk Assessment", _RISK_DEFAULTS, preset_params))
 
+        # Adaptive flags drill-down (when non-static preset selected)
+        if "adaptive" in sections and result.get("adapt", "static") != "static":
+            result.update(_ask_section("Adaptive Flags", _ADAPTIVE_FLAGS_DEFAULTS, preset_params))
+
         # NBFI Lender (if enabled)
         if "nbfi_lender" in sections and result.get("enable_lender", False):
             result.update(_ask_section("NBFI Lender", _LENDER_DEFAULTS, preset_params))
+            # Lending Risk Controls (Plan 049)
+            result.update(_ask_section("Lending Risk Controls", _LENDING_RISK_DEFAULTS, preset_params))
 
         # Banking (if enabled)
         if "banking" in sections and result.get("enable_banking", False):
@@ -633,6 +681,18 @@ def build_cli_args(result: SweepSetupResult) -> list[str]:
             args.append("--enable-dealer-lender")
         if "adapt" in params:
             args.extend(["--adapt", params["adapt"]])
+        # Adaptive flag overrides
+        for key in ["adaptive_planning_horizon", "adaptive_risk_aversion",
+                     "adaptive_reserves", "adaptive_lookback",
+                     "adaptive_issuer_specific", "adaptive_ev_term_structure",
+                     "adaptive_term_structure", "adaptive_base_spreads",
+                     "adaptive_convex_spreads"]:
+            if key in params:
+                cli_key = f"--{key.replace('_', '-')}"
+                if params[key]:
+                    args.append(cli_key)
+                else:
+                    args.append(f"--no-{key.replace('_', '-')}")
 
     # Trader params (balanced only — bank/nbfi commands don't accept these)
     if result.sweep_type == "balanced":
@@ -674,6 +734,13 @@ def build_cli_args(result: SweepSetupResult) -> list[str]:
                 args.append("--lender-maturity-matching")
             if params.get("lender_preventive_lending"):
                 args.append("--lender-preventive-lending")
+            # Lending risk controls (Plan 049)
+            for key, cli_key in _LENDING_RISK_FLAG_MAP.items():
+                if key in params:
+                    if key == "collateralized_terms":
+                        args.append(cli_key if params[key] else "--no-lender-collateralized-terms")
+                    else:
+                        args.extend([cli_key, str(params[key])])
 
     # Bank params (bank sweep only)
     if result.sweep_type == "bank":
@@ -700,79 +767,164 @@ def build_cli_args(result: SweepSetupResult) -> list[str]:
 
 # ── Post-sweep analysis questionnaire ────────────────────────────────────────
 
-ANALYSIS_MENU: dict[str, dict[str, Any]] = {
-    "drilldowns": {
-        "label": "Drilldowns",
-        "desc": "Per-run defaults, credit, funding, pricing, network",
-        "group": "core",
-        "sweep_types": ["dealer", "bank", "nbfi"],
-    },
-    "deltas": {
-        "label": "Treatment deltas",
-        "desc": "Baseline vs treatment delta, loss attribution",
-        "group": "core",
-        "sweep_types": ["dealer", "bank", "nbfi"],
-    },
-    "dynamics": {
-        "label": "Dynamics",
-        "desc": "Time-series (delta_t, phi_t), agent outcomes",
-        "group": "core",
-        "sweep_types": ["dealer", "bank", "nbfi"],
-    },
-    "narrative": {
-        "label": "Narrative",
-        "desc": "Auto-generated research summary",
-        "group": "core",
+DATA_ANALYSIS_MENU: dict[str, dict[str, Any]] = {
+    "frontier": {
+        "label": "Intermediary frontier",
+        "desc": "Pareto pairs, loss-floor table, relief bands",
+        "group": "data",
         "sweep_types": ["dealer", "bank", "nbfi"],
     },
     "strategy_outcomes": {
         "label": "Strategy outcomes",
         "desc": "Trading strategy breakdown per repayment",
-        "group": "extended",
+        "group": "data",
         "sweep_types": ["dealer"],
     },
     "dealer_usage": {
         "label": "Dealer usage",
         "desc": "Inventory utilization, VBT routing, trade counts",
-        "group": "extended",
+        "group": "data",
         "sweep_types": ["dealer"],
     },
     "mechanism_activity": {
         "label": "Mechanism activity",
         "desc": "Mechanism-level activity summary",
-        "group": "extended",
+        "group": "data",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
+    "contagion": {
+        "label": "Contagion analysis",
+        "desc": "Primary vs secondary defaults, cascade chains",
+        "group": "data",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
+    "credit_creation": {
+        "label": "Credit creation",
+        "desc": "Credit created/destroyed by type, net impulse",
+        "group": "data",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
+    "network": {
+        "label": "Network centrality",
+        "desc": "Degree, betweenness, systemic importance",
+        "group": "data",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
+    "pricing": {
+        "label": "Pricing dynamics",
+        "desc": "Trade prices, bid-ask spreads, fire-sale indicators",
+        "group": "data",
+        "sweep_types": ["dealer"],
+    },
+    "beliefs": {
+        "label": "Belief calibration",
+        "desc": "Belief trajectory, calibration buckets",
+        "group": "data",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
+    "funding": {
+        "label": "Funding chains",
+        "desc": "Cash flow sources, liquidity providers",
+        "group": "data",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
+}
+
+VIZ_MENU: dict[str, dict[str, Any]] = {
+    "drilldowns": {
+        "label": "Drilldowns",
+        "desc": "Per-run defaults, credit, funding, pricing, network",
+        "group": "viz",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
+    "deltas": {
+        "label": "Treatment deltas",
+        "desc": "Baseline vs treatment delta, loss attribution",
+        "group": "viz",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
+    "dynamics": {
+        "label": "Dynamics",
+        "desc": "Time-series (delta_t, phi_t), agent outcomes",
+        "group": "viz",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
+    "narrative": {
+        "label": "Narrative",
+        "desc": "Auto-generated research summary",
+        "group": "viz",
         "sweep_types": ["dealer", "bank", "nbfi"],
     },
     "treynor": {
         "label": "Treynor pricing",
-        "desc": "Animated dealer/bank/yield-curve diagrams (per-run)",
-        "group": "deep_dive",
+        "desc": "Animated dealer/bank/yield-curve diagrams",
+        "group": "viz",
         "sweep_types": ["dealer", "bank"],
     },
+    "comparison": {
+        "label": "Comparison report",
+        "desc": "Cross-job comparison (requires Supabase)",
+        "group": "viz",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
 }
+
+# Legacy alias for backward compatibility
+ANALYSIS_MENU: dict[str, dict[str, Any]] = {**DATA_ANALYSIS_MENU, **VIZ_MENU}
 
 
 @dataclass
 class PostSweepAnalysisResult:
     """Result of the post-sweep analysis questionnaire."""
 
-    analyses: list[str]  # Core: drilldowns, deltas, dynamics, narrative
-    extended: list[str]  # strategy_outcomes, dealer_usage, mechanism_activity
+    data_analyses: list[str]         # From DATA_ANALYSIS_MENU
+    visualizations: list[str]        # From VIZ_MENU
     treynor_kappas: list[str] | None  # Kappa-level runs for Treynor (None=skip)
-    kappas: list[float] | None  # Focus kappas for core analyses (None=auto)
+    kappas: list[float] | None       # Focus kappas for core analyses (None=auto)
+
+    # Legacy aliases
+    @property
+    def analyses(self) -> list[str]:
+        """Legacy alias: return visualization analyses (drilldowns, deltas, dynamics, narrative)."""
+        return [v for v in self.visualizations if v != "treynor" and v != "comparison"]
+
+    @property
+    def extended(self) -> list[str]:
+        """Legacy alias: return data analyses."""
+        return self.data_analyses
+
+    @property
+    def all_selected(self) -> list[str]:
+        return self.data_analyses + self.visualizations
 
     @property
     def all_analyses(self) -> list[str]:
-        """All selected analyses (core + extended)."""
-        return self.analyses + self.extended
+        """Legacy alias for all_selected."""
+        return self.all_selected
 
     @property
     def has_treynor(self) -> bool:
         return self.treynor_kappas is not None and len(self.treynor_kappas) > 0
 
 
+def _available_data_analyses(sweep_type: str) -> dict[str, dict[str, Any]]:
+    """Filter DATA_ANALYSIS_MENU by sweep type."""
+    return {
+        k: v for k, v in DATA_ANALYSIS_MENU.items()
+        if sweep_type in v["sweep_types"]
+    }
+
+
+def _available_visualizations(sweep_type: str) -> dict[str, dict[str, Any]]:
+    """Filter VIZ_MENU by sweep type."""
+    return {
+        k: v for k, v in VIZ_MENU.items()
+        if sweep_type in v["sweep_types"]
+    }
+
+
 def _available_analyses(sweep_type: str) -> dict[str, dict[str, Any]]:
-    """Filter ANALYSIS_MENU by sweep type."""
+    """Filter combined ANALYSIS_MENU by sweep type (legacy)."""
     return {
         k: v for k, v in ANALYSIS_MENU.items()
         if sweep_type in v["sweep_types"]
@@ -797,7 +949,8 @@ def run_post_sweep_questionnaire(
     Returns:
         PostSweepAnalysisResult with selected analyses.
     """
-    available = _available_analyses(sweep_type)
+    avail_data = _available_data_analyses(sweep_type)
+    avail_viz = _available_visualizations(sweep_type)
 
     # Header
     if n_pairs is not None and n_completed is not None:
@@ -805,23 +958,30 @@ def run_post_sweep_questionnaire(
 
     console.print("[bold cyan]Post-Sweep Analysis[/bold cyan]\n")
 
-    # Build numbered menu grouped by category
-    groups = {"core": "Core Dashboards (HTML)", "extended": "Extended Analyses (CSV)", "deep_dive": "Per-Run Deep Dives (HTML)"}
+    # Build numbered menu with two sections
     idx = 1
-    idx_map: dict[str, str] = {}  # "1" -> "drilldowns"
+    idx_map: dict[str, str] = {}  # "1" -> "frontier"
+    section_map: dict[str, str] = {}  # "frontier" -> "data", "drilldowns" -> "viz"
 
-    for group_key, group_label in groups.items():
-        group_items = [(k, v) for k, v in available.items() if v["group"] == group_key]
-        if not group_items:
-            continue
-        console.print(f"  [bold]{group_label}:[/bold]")
-        for name, meta in group_items:
-            console.print(f"  [{idx}] {meta['label']:20s} — {meta['desc']}")
+    if avail_data:
+        console.print("  [bold]Data Analysis (CSV/JSON):[/bold]")
+        for name, meta in avail_data.items():
+            console.print(f"  [{idx:>2}] {meta['label']:20s} — {meta['desc']}")
             idx_map[str(idx)] = name
+            section_map[name] = "data"
             idx += 1
         console.print()
 
-    console.print("  Select analyses (comma-separated, a=all, n=skip) [a]: ", end="")
+    if avail_viz:
+        console.print("  [bold]Visualization (HTML):[/bold]")
+        for name, meta in avail_viz.items():
+            console.print(f"  [{idx:>2}] {meta['label']:20s} — {meta['desc']}")
+            idx_map[str(idx)] = name
+            section_map[name] = "viz"
+            idx += 1
+        console.print()
+
+    console.print("  Select (comma-separated, a=all, d=data only, v=viz only, n=skip) [a]: ", end="")
 
     try:
         choice = Prompt.ask("", default="a")
@@ -831,32 +991,42 @@ def run_post_sweep_questionnaire(
     choice = choice.strip().lower()
 
     if choice == "n" or not choice:
-        return PostSweepAnalysisResult(analyses=[], extended=[], treynor_kappas=None, kappas=None)
+        return PostSweepAnalysisResult(data_analyses=[], visualizations=[], treynor_kappas=None, kappas=None)
 
     if choice == "a":
-        selected = list(available.keys())
+        selected_data = list(avail_data.keys())
+        selected_viz = list(avail_viz.keys())
+    elif choice == "d":
+        selected_data = list(avail_data.keys())
+        selected_viz = []
+    elif choice == "v":
+        selected_data = []
+        selected_viz = list(avail_viz.keys())
     else:
-        selected = []
+        selected_data = []
+        selected_viz = []
         for ch in choice.replace(",", " ").split():
             ch = ch.strip()
             if ch in idx_map:
-                selected.append(idx_map[ch])
-            elif ch in available:
-                # Allow passing analysis names directly
-                selected.append(ch)
+                name = idx_map[ch]
+            elif ch in section_map:
+                name = ch
+            else:
+                continue
+            if name in avail_data:
+                selected_data.append(name)
+            elif name in avail_viz:
+                selected_viz.append(name)
 
-    if not selected:
+    if not selected_data and not selected_viz:
         console.print("  No valid selection — skipping.")
-        return PostSweepAnalysisResult(analyses=[], extended=[], treynor_kappas=None, kappas=None)
+        return PostSweepAnalysisResult(data_analyses=[], visualizations=[], treynor_kappas=None, kappas=None)
 
-    # Separate into core, extended, treynor
-    core = [s for s in selected if s in available and available[s]["group"] == "core"]
-    extended = [s for s in selected if s in available and available[s]["group"] == "extended"]
-    has_treynor = "treynor" in selected and "treynor" in available
+    has_treynor = "treynor" in selected_viz
 
     # Focus kappas
     kappas: list[float] | None = None
-    if core or extended:
+    if selected_data or selected_viz:
         try:
             kappa_input = Prompt.ask("\n  Focus kappas (blank=auto-detect)", default="")
         except (EOFError, KeyboardInterrupt):
@@ -884,8 +1054,8 @@ def run_post_sweep_questionnaire(
             treynor_kappas = ["auto"]  # Sentinel: auto-detect representative kappas
 
     return PostSweepAnalysisResult(
-        analyses=core,
-        extended=extended,
+        data_analyses=selected_data,
+        visualizations=selected_viz,
         treynor_kappas=treynor_kappas,
         kappas=kappas,
     )

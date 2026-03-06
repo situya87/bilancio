@@ -2876,6 +2876,58 @@ class TestRingPrepareRunLocalPath:
 
         assert "test_label" in prepared.run_id
 
+    def test_prepare_run_applies_adaptive_flag_overrides(self, tmp_path: Path):
+        """Explicit adaptive overrides should be applied after preset defaults."""
+        from bilancio.experiments.ring import RingSweepRunner
+        import yaml
+
+        runner = RingSweepRunner(
+            out_dir=tmp_path,
+            name_prefix="Test",
+            n_agents=6,
+            maturity_days=8,
+            Q_total=Decimal("200"),
+            liquidity_mode="uniform",
+            liquidity_agent=None,
+            base_seed=1,
+            dealer_enabled=True,
+            balanced_mode=True,
+            adapt_preset="full",
+            adapt_overrides={
+                "adaptive_planning_horizon": False,
+                "adaptive_risk_aversion": False,
+                "adaptive_lookback": False,
+                "adaptive_issuer_specific": False,
+                "adaptive_ev_term_structure": False,
+                "adaptive_convex_spreads": False,
+            },
+        )
+
+        prepared = runner._prepare_run(
+            phase="grid",
+            kappa=Decimal("1"),
+            concentration=Decimal("1"),
+            mu=Decimal("0"),
+            monotonicity=Decimal("0"),
+            seed=42,
+        )
+
+        scenario = yaml.safe_load(prepared.scenario_path.read_text(encoding="utf-8"))
+        balanced = scenario["balanced_dealer"]
+        risk = scenario["dealer"]["risk_assessment"]
+
+        # Overrides force these off even though adapt_preset="full" turns them on.
+        assert balanced["adaptive_planning_horizon"] is False
+        assert balanced["adaptive_risk_aversion"] is False
+        assert balanced["adaptive_ev_term_structure"] is False
+        assert balanced["adaptive_convex_spreads"] is False
+        assert risk["adaptive_lookback"] is False
+        assert risk["adaptive_issuer_specific"] is False
+        assert risk["adaptive_ev_term_structure"] is False
+
+        # Non-overridden full-preset flags should remain enabled.
+        assert balanced["adaptive_reserves"] is True
+
 
 # =============================================================================
 # 39. Bank _run_pair with mocked execute_run

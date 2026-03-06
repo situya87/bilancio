@@ -51,6 +51,7 @@ class TestSweepHelp:
         assert "--trading-motive" in result.output
         assert "--rollover" in result.output
         assert "--enable-bank-passive" in result.output
+        assert "--lender-collateralized-terms" in result.output
         assert "--post-analysis" in result.output
 
     def test_sweep_bank_help(self):
@@ -1005,6 +1006,23 @@ class TestSweepBalancedAdditionalParams:
                 "--lender-preventive-lending",
                 "--lender-prevention-threshold",
                 "0.4",
+                "--lender-marginal-relief-min-ratio",
+                "0.10",
+                "--lender-stress-risk-premium-scale",
+                "1.5",
+                "--lender-high-risk-default-threshold",
+                "0.6",
+                "--lender-high-risk-maturity-cap",
+                "1",
+                "--lender-daily-el-budget-ratio",
+                "0.02",
+                "--lender-run-el-budget-ratio",
+                "0.08",
+                "--lender-stop-loss-ratio",
+                "0.12",
+                "--lender-collateralized-terms",
+                "--lender-collateral-advance-rate",
+                "0.75",
             ],
         )
 
@@ -1016,6 +1034,80 @@ class TestSweepBalancedAdditionalParams:
         assert config_arg.lender_ranking_mode == "cascade"
         assert config_arg.lender_coverage_mode == "graduated"
         assert config_arg.lender_preventive_lending is True
+        assert str(config_arg.lender_marginal_relief_min_ratio) == "0.10"
+        assert str(config_arg.lender_stress_risk_premium_scale) == "1.5"
+        assert str(config_arg.lender_high_risk_default_threshold) == "0.6"
+        assert config_arg.lender_high_risk_maturity_cap == 1
+        assert str(config_arg.lender_daily_expected_loss_budget_ratio) == "0.02"
+        assert str(config_arg.lender_run_expected_loss_budget_ratio) == "0.08"
+        assert str(config_arg.lender_stop_loss_realized_ratio) == "0.12"
+        assert config_arg.lender_collateralized_terms is True
+        assert str(config_arg.lender_collateral_advance_rate) == "0.75"
+
+    @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
+    @patch(
+        "bilancio.experiments.balanced_comparison.BalancedComparisonRunner.run_all",
+        return_value=[],
+    )
+    @patch(
+        "bilancio.experiments.balanced_comparison.BalancedComparisonRunner.__init__",
+        return_value=None,
+    )
+    @patch("bilancio.ui.cli.sweep.create_job_manager")
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-balanced-adaptive-flags")
+    def test_sweep_balanced_adaptive_flag_overrides(
+        self,
+        mock_gen_id,
+        mock_create_jm,
+        mock_runner_init,
+        mock_run_all,
+        mock_post,
+        tmp_path,
+    ):
+        """Per-flag adaptive overrides should be stored in config and forwarded."""
+        mock_manager = MagicMock()
+        mock_create_jm.return_value = mock_manager
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "sweep",
+                "balanced",
+                "--out-dir",
+                str(tmp_path / "balanced_out"),
+                "--kappas",
+                "0.5",
+                "--concentrations",
+                "1",
+                "--mus",
+                "0",
+                "--adaptive-planning-horizon",
+                "--no-adaptive-risk-aversion",
+                "--adaptive-reserves",
+                "--adaptive-lookback",
+                "--no-adaptive-issuer-specific",
+                "--adaptive-ev-term-structure",
+                "--adaptive-term-structure",
+                "--no-adaptive-base-spreads",
+                "--adaptive-convex-spreads",
+            ],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        init_call = mock_runner_init.call_args
+        config_arg = init_call[1].get("config") or init_call[0][0]
+        assert config_arg.adaptive_overrides == {
+            "adaptive_planning_horizon": True,
+            "adaptive_risk_aversion": False,
+            "adaptive_reserves": True,
+            "adaptive_lookback": True,
+            "adaptive_issuer_specific": False,
+            "adaptive_ev_term_structure": True,
+            "adaptive_term_structure": True,
+            "adaptive_base_spreads": False,
+            "adaptive_convex_spreads": True,
+        }
 
     @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
     @patch(
@@ -1576,6 +1668,18 @@ class TestBuildCliArgsCLIAcceptance:
                 "lender_min_coverage": "0.5",
                 "lender_ranking_mode": "profit",
                 "lender_coverage_mode": "gate",
+                "marginal_relief_min_ratio": "0.08",
+                "stress_risk_premium_scale": "1.2",
+                "high_risk_default_threshold": "0.55",
+                "high_risk_maturity_cap": 2,
+                "daily_expected_loss_budget_ratio": "0.03",
+                "run_expected_loss_budget_ratio": "0.12",
+                "stop_loss_realized_ratio": "0.20",
+                "collateralized_terms": True,
+                "collateral_advance_rate": "0.70",
+                "adapt": "calibrated",
+                "adaptive_planning_horizon": True,
+                "adaptive_risk_aversion": False,
                 "rollover": True,
             },
             out_dir=tmp_path / "balanced_out",
@@ -1587,6 +1691,17 @@ class TestBuildCliArgsCLIAcceptance:
         runner = CliRunner()
         res = runner.invoke(cli, ["sweep", "balanced"] + cli_args)
         assert res.exit_code == 0, f"balanced rejected args: {res.output}"
+        init_call = mock_init.call_args
+        config_arg = init_call[1].get("config") or init_call[0][0]
+        assert str(config_arg.lender_marginal_relief_min_ratio) == "0.08"
+        assert str(config_arg.lender_stress_risk_premium_scale) == "1.2"
+        assert config_arg.lender_collateralized_terms is True
+        assert str(config_arg.lender_collateral_advance_rate) == "0.70"
+        assert config_arg.adapt == "calibrated"
+        assert config_arg.adaptive_overrides == {
+            "adaptive_planning_horizon": True,
+            "adaptive_risk_aversion": False,
+        }
 
     @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
     @patch(

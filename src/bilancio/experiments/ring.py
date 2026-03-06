@@ -345,6 +345,7 @@ class RingSweepRunner:
         reserve_ratio: Decimal | None = None,
         performance: PerformanceConfig | None = None,
         adapt_preset: str = "static",
+        adapt_overrides: dict[str, bool] | None = None,
     ) -> None:
         self.base_dir = out_dir
         self.registry_dir = self.base_dir / "registry"
@@ -419,6 +420,7 @@ class RingSweepRunner:
         self.reserve_ratio = reserve_ratio
         self.performance = performance
         self.adapt_preset = adapt_preset
+        self.adapt_overrides = dict(adapt_overrides or {})
 
         # Use provided registry store or create default file-based store
         self.registry_store: RegistryStore = registry_store or FileRegistryStore(self.base_dir)
@@ -442,6 +444,44 @@ class RingSweepRunner:
             registry_path = self.registry_dir / "experiments.csv"
             if not registry_path.exists():
                 self._init_empty_registry(registry_path)
+
+    def _apply_adaptive_flag_overrides(self, scenario: dict[str, Any]) -> None:
+        """Apply explicit CLI adaptive flag overrides after preset merge."""
+        if not self.adapt_overrides:
+            return
+
+        trader_vbt_flags = {
+            "adaptive_planning_horizon",
+            "adaptive_risk_aversion",
+            "adaptive_reserves",
+            "adaptive_term_structure",
+            "adaptive_base_spreads",
+            "adaptive_convex_spreads",
+        }
+        risk_flags = {
+            "adaptive_lookback",
+            "adaptive_issuer_specific",
+            "adaptive_ev_term_structure",
+        }
+
+        balanced_section = scenario.get("balanced_dealer")
+        if isinstance(balanced_section, dict):
+            for key in trader_vbt_flags:
+                if key in self.adapt_overrides:
+                    balanced_section[key] = self.adapt_overrides[key]
+            # Shared key name across trader/risk paths: apply to balanced_dealer too when set.
+            if "adaptive_ev_term_structure" in self.adapt_overrides:
+                balanced_section["adaptive_ev_term_structure"] = self.adapt_overrides[
+                    "adaptive_ev_term_structure"
+                ]
+
+        dealer_section = scenario.get("dealer")
+        if isinstance(dealer_section, dict):
+            risk_section = dealer_section.get("risk_assessment")
+            if isinstance(risk_section, dict):
+                for key in risk_flags:
+                    if key in self.adapt_overrides:
+                        risk_section[key] = self.adapt_overrides[key]
 
     def _init_empty_registry(self, registry_path: Path) -> None:
         """Create an empty registry file with headers."""
@@ -1378,6 +1418,9 @@ class RingSweepRunner:
                 balanced_config[key] = str(value) if isinstance(value, Decimal) else value
             for key, value in overrides.get("cb", {}).items():
                 balanced_config[key] = str(value) if isinstance(value, Decimal) else value
+
+        # Apply explicit CLI adaptive flag overrides after preset defaults.
+        self._apply_adaptive_flag_overrides(scenario)
 
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
