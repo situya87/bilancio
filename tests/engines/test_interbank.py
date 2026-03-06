@@ -460,6 +460,30 @@ class TestRunInterbankAuction:
         trade_events = [e for e in events if e["kind"] == "InterbankAuctionTrade"]
         assert len(trade_events) >= 1
 
+    def test_summary_includes_market_state(self):
+        """Auction summary should include positions and the pre-clear order book."""
+        system = _make_banking_system()
+        system.transfer_reserves("bank_2", "bank_1", 3000)
+
+        banking = _make_initialized_banking(system, target_1=2000, target_2=5000)
+        banking.banks["bank_1"].pricing_params.reserve_remuneration_rate = Decimal("0.02")
+        banking.banks["bank_1"].pricing_params.cb_borrowing_rate = Decimal("0.08")
+        banking.banks["bank_2"].pricing_params.reserve_remuneration_rate = Decimal("0.02")
+        banking.banks["bank_2"].pricing_params.cb_borrowing_rate = Decimal("0.08")
+
+        events = run_interbank_auction(system, current_day=0, banking=banking, net_obligations={})
+
+        summary = next(e for e in events if e["kind"] == "InterbankAuction")
+        market_state = summary["market_state"]
+        positions = {row["bank_id"]: row for row in market_state["positions"]}
+
+        assert positions["bank_1"]["position"] > 0
+        assert positions["bank_1"]["side"] == "lend"
+        assert positions["bank_2"]["position"] < 0
+        assert positions["bank_2"]["side"] == "borrow"
+        assert market_state["lender_asks"][0]["bank_id"] == "bank_1"
+        assert market_state["borrower_bids"][0]["bank_id"] == "bank_2"
+
     def test_unfilled_events(self):
         """InterbankUnfilled event for unfilled borrowers."""
         system = _make_banking_system()

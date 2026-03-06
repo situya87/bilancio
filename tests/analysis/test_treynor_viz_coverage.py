@@ -6,7 +6,7 @@ _fig_to_div, _dashboard_shell, and edge cases not covered by existing tests.
 
 from __future__ import annotations
 
-from pathlib import Path
+import json
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -15,12 +15,11 @@ import pytest
 from bilancio.analysis.treynor_viz import (
     _add_bank_sections,
     _add_dealer_sections,
-    _add_yield_curve_sections,
+    _add_interbank_sections,
     _dashboard_shell,
     _fig_to_div,
     build_treynor_dashboard,
 )
-
 
 # ============================================================================
 # Fixtures
@@ -48,6 +47,44 @@ def bank_csv_content():
         "0,BK01,0.01,0.05,500,20,0.008,100,0.3,0.1,0.5,0.2,0.2\n"
         "1,BK01,0.01,0.05,500,20,0.008,120,0.35,0.12,0.5,0.2,0.2\n"
     )
+
+
+@pytest.fixture
+def interbank_events_content():
+    """Minimal events.jsonl content with interbank auction state."""
+    events = [
+        {
+            "kind": "InterbankAuction",
+            "day": 0,
+            "clearing_rate": "0.05",
+            "total_volume": 100,
+            "n_trades": 1,
+            "n_unfilled": 0,
+            "market_state": {
+                "positions": [
+                    {"bank_id": "BK01", "position": 100, "limit_rate": "0.03", "side": "lend"},
+                    {"bank_id": "BK02", "position": -100, "limit_rate": "0.07", "side": "borrow"},
+                ],
+                "lender_asks": [
+                    {"bank_id": "BK01", "quantity": 100, "limit_rate": "0.03"},
+                ],
+                "borrower_bids": [
+                    {"bank_id": "BK02", "quantity": 100, "limit_rate": "0.07"},
+                ],
+            },
+        },
+        {
+            "kind": "InterbankAuctionTrade",
+            "day": 0,
+            "lender": "BK01",
+            "borrower": "BK02",
+            "amount": 100,
+            "rate": "0.05",
+            "maturity_day": 1,
+            "contract_id": "IBL_1",
+        },
+    ]
+    return "\n".join(json.dumps(event) for event in events) + "\n"
 
 
 # ============================================================================
@@ -131,6 +168,12 @@ class TestBuildTreynorDashboard:
         assert "Bank Pricing" in html
         assert "Yield Curve" in html
 
+    def test_with_interbank_events(self, tmp_path, interbank_events_content):
+        (tmp_path / "events.jsonl").write_text(interbank_events_content)
+        html = build_treynor_dashboard(tmp_path)
+        assert "Interbank Market" in html
+        assert "Interbank Lending Flows" in html
+
     def test_from_out_subdir(self, tmp_path, dealer_csv_content):
         out_dir = tmp_path / "out"
         out_dir.mkdir()
@@ -187,3 +230,24 @@ class TestAddBankSections:
         assert nav_items[1][0] == "bank-anim"
         assert "Bank Pricing Diagrams" in sections[0]
         assert "Bank Pricing Animation" in sections[1]
+
+
+# ============================================================================
+# _add_interbank_sections
+# ============================================================================
+
+class TestAddInterbankSections:
+    """Tests for _add_interbank_sections."""
+
+    def test_adds_interbank_section(self, interbank_events_content, tmp_path):
+        events_path = tmp_path / "events.jsonl"
+        events_path.write_text(interbank_events_content)
+        events = [json.loads(line) for line in events_path.read_text().splitlines()]
+
+        sections: list[str] = []
+        nav_items: list[tuple[str, str]] = []
+        _add_interbank_sections(events, sections, nav_items)
+
+        assert len(sections) == 1
+        assert nav_items == [("interbank-market", "Interbank Market")]
+        assert "Interbank Market" in sections[0]
