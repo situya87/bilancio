@@ -34,7 +34,10 @@ CLI_HANDLED_ERRORS = (
     RuntimeError,
 )
 
-VALID_POST_ANALYSES = ("drilldowns", "deltas", "dynamics", "narrative")
+VALID_POST_ANALYSES = (
+    "drilldowns", "deltas", "dynamics", "narrative",
+    "strategy_outcomes", "dealer_usage", "mechanism_activity", "treynor",
+)
 
 
 def _offer_post_sweep_analysis(
@@ -53,6 +56,11 @@ def _offer_post_sweep_analysis(
         cloud: If True and no local artifacts exist, skip silently.
     """
     from bilancio.analysis.post_sweep import run_post_sweep_analysis
+    from bilancio.ui.sweep_setup import (
+        PostSweepAnalysisResult,
+        _available_analyses,
+        run_post_sweep_questionnaire,
+    )
 
     # Check that comparison.csv exists (local artifacts required)
     csv_path = out_dir / "aggregate" / "comparison.csv"
@@ -66,63 +74,127 @@ def _offer_post_sweep_analysis(
     if post_analysis == "none":
         return
 
+    available = _available_analyses(sweep_type)
+
     if post_analysis == "all":
-        analyses = list(VALID_POST_ANALYSES)
-    elif post_analysis is not None:
-        analyses = [a.strip() for a in post_analysis.split(",") if a.strip()]
-        for a in analyses:
-            if a not in VALID_POST_ANALYSES:
-                click.echo(f"  Warning: unknown analysis '{a}' (valid: {', '.join(VALID_POST_ANALYSES)})")
-                analyses = [x for x in analyses if x in VALID_POST_ANALYSES]
-    else:
-        # Interactive menu
-        click.echo("\nPost-sweep analysis available:")
-        click.echo("  [1] Drill-downs       — Per-run defaults, credit, funding, pricing, network")
-        click.echo("  [2] Treatment deltas   — Baseline vs treatment comparison")
-        click.echo("  [3] Dynamics           — Time-series, agent heterogeneity")
-        click.echo("  [4] Narrative report   — Auto-generated research summary")
-        click.echo("  [a] All of the above")
-        click.echo("  [n] Skip")
-
-        try:
-            choice = click.prompt("Select", default="n", show_default=True)
-        except (click.Abort, EOFError):
-            return
-
-        choice = choice.strip().lower()
-        if choice == "n" or not choice:
-            return
-        if choice == "a":
-            analyses = list(VALID_POST_ANALYSES)
-        else:
-            mapping = {"1": "drilldowns", "2": "deltas", "3": "dynamics", "4": "narrative"}
-            analyses = []
-            for ch in choice.replace(",", ""):
-                if ch in mapping:
-                    analyses.append(mapping[ch])
-            if not analyses:
-                click.echo("  No valid selection — skipping.")
-                return
-
-    click.echo(f"\nRunning post-sweep analysis: {', '.join(analyses)}...")
-
-    try:
-        results = run_post_sweep_analysis(
-            experiment_root=out_dir,
-            sweep_type=sweep_type,
-            analyses=analyses,
+        core = [k for k, v in available.items() if v["group"] == "core"]
+        extended = [k for k, v in available.items() if v["group"] == "extended"]
+        has_treynor = "treynor" in available
+        result = PostSweepAnalysisResult(
+            analyses=core,
+            extended=extended,
+            treynor_kappas=["auto"] if has_treynor else None,
+            kappas=None,
         )
-        if results:
-            click.echo("\nAnalysis outputs:")
-            for name, path in results.items():
-                click.echo(f"  {name}: {path}")
-            # Suggest opening first HTML
-            first_path = next(iter(results.values()))
-            click.echo(f'\n  Open with: open "{first_path}"')
-        else:
-            click.echo("  No analysis outputs generated.")
-    except (ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
-        click.echo(f"  Post-sweep analysis failed: {e}")
+    elif post_analysis is not None:
+        # Parse comma-separated list
+        requested = [a.strip() for a in post_analysis.split(",") if a.strip()]
+        invalid = [a for a in requested if a not in VALID_POST_ANALYSES]
+        if invalid:
+            click.echo(f"  Warning: unknown analysis {invalid} (valid: {', '.join(VALID_POST_ANALYSES)})")
+        requested = [a for a in requested if a in VALID_POST_ANALYSES and a in available]
+        core = [a for a in requested if available.get(a, {}).get("group") == "core"]
+        extended = [a for a in requested if available.get(a, {}).get("group") == "extended"]
+        has_treynor = "treynor" in requested and "treynor" in available
+        result = PostSweepAnalysisResult(
+            analyses=core,
+            extended=extended,
+            treynor_kappas=["auto"] if has_treynor else None,
+            kappas=None,
+        )
+    else:
+        # Interactive questionnaire
+        result = run_post_sweep_questionnaire(sweep_type)
+
+    if not result.analyses and not result.extended and not result.has_treynor:
+        return
+
+    # ── Run core analyses (drilldowns, deltas, dynamics, narrative) ────
+    if result.analyses:
+        click.echo(f"\nRunning core analyses: {', '.join(result.analyses)}...")
+        try:
+            core_results = run_post_sweep_analysis(
+                experiment_root=out_dir,
+                sweep_type=sweep_type,
+                analyses=result.analyses,
+                kappas=result.kappas,
+            )
+            if core_results:
+                for name, path in core_results.items():
+                    click.echo(f"  {name}: {path}")
+        except (ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
+            click.echo(f"  Core analysis failed: {e}")
+
+    # ── Run extended analyses (strategy_outcomes, dealer_usage, mechanism_activity) ──
+    for ext_name in result.extended:
+        click.echo(f"\nRunning {ext_name}...")
+        try:
+            if ext_name == "strategy_outcomes":
+                from bilancio.analysis.strategy_outcomes import run_strategy_analysis
+                paths = run_strategy_analysis(out_dir)
+                for p in paths:
+                    click.echo(f"  {ext_name}: {p}")
+            elif ext_name == "dealer_usage":
+                from bilancio.analysis.dealer_usage_summary import run_dealer_usage_analysis
+                path = run_dealer_usage_analysis(out_dir)
+                click.echo(f"  {ext_name}: {path}")
+            elif ext_name == "mechanism_activity":
+                from bilancio.analysis.mechanism_activity import run_mechanism_activity_analysis
+                paths = run_mechanism_activity_analysis(out_dir, sweep_type)
+                for name, path in paths.items():
+                    click.echo(f"  {name}: {path}")
+        except (ValueError, KeyError, TypeError, OSError, RuntimeError, ImportError) as e:
+            click.echo(f"  {ext_name} failed: {e}")
+
+    # ── Run Treynor per-run dashboards ────────────────────────────────
+    if result.has_treynor:
+        click.echo("\nGenerating Treynor pricing dashboards...")
+        try:
+            from bilancio.analysis.post_sweep import _auto_detect_kappas, _find_run_in_csv, _read_csv, _run_dir_path
+            from bilancio.analysis.treynor_viz import build_treynor_dashboard
+
+            rows = _read_csv(csv_path)
+
+            # Determine which kappas to generate Treynor for
+            if result.treynor_kappas == ["auto"]:
+                kappa_values = _auto_detect_kappas(csv_path)
+            else:
+                kappa_values = [float(k) for k in (result.treynor_kappas or [])]
+
+            if not kappa_values:
+                click.echo("  No kappas found for Treynor generation.")
+            else:
+                runs_dir = out_dir / "runs"
+                # Determine run_id column for treatment arm
+                run_id_col = {"dealer": "run_id_active", "bank": "run_id_lend", "nbfi": "run_id_lend"}.get(sweep_type, "run_id_active")
+                arm_label = {"dealer": "active", "bank": "lend", "nbfi": "lend"}.get(sweep_type, "active")
+
+                analysis_dir = out_dir / "aggregate" / "analysis"
+                analysis_dir.mkdir(parents=True, exist_ok=True)
+
+                for kappa in kappa_values:
+                    run_id = _find_run_in_csv(rows, kappa, run_id_col)
+                    if not run_id:
+                        click.echo(f"  Treynor (kappa={kappa}): no matching run found")
+                        continue
+                    run_dir = _run_dir_path(runs_dir, run_id)
+                    if not run_dir:
+                        click.echo(f"  Treynor (kappa={kappa}): run dir not found for {run_id}")
+                        continue
+
+                    html = build_treynor_dashboard(run_dir)
+                    out_path = analysis_dir / f"treynor_k{kappa}_{arm_label}.html"
+                    out_path.write_text(html)
+                    click.echo(f"  treynor (kappa={kappa}): {out_path}")
+        except (ValueError, KeyError, TypeError, OSError, RuntimeError, ImportError) as e:
+            click.echo(f"  Treynor generation failed: {e}")
+
+    # Suggest opening first HTML output
+    analysis_dir = out_dir / "aggregate" / "analysis"
+    if analysis_dir.is_dir():
+        htmls = list(analysis_dir.glob("*.html"))
+        if htmls:
+            click.echo(f'\n  Open with: open "{htmls[0]}"')
 
 
 @click.group()
@@ -983,7 +1055,7 @@ def sweep_comparison(
     "--post-analysis",
     type=str,
     default=None,
-    help="Post-sweep analysis: 'all', 'none', or comma-separated list (drilldowns,deltas,dynamics,narrative). Default: interactive prompt.",
+    help="Post-sweep analysis: 'all', 'none', or comma-separated list. Valid: drilldowns, deltas, dynamics, narrative, strategy_outcomes, dealer_usage, mechanism_activity, treynor. Default: interactive prompt.",
 )
 @click.option("--perf-preset", type=click.Choice(["compatible", "fast", "aggressive"]), default=None, help="Performance preset")
 @click.option("--fast-atomic", is_flag=True, default=False, help="Disable deepcopy in safe phases")
@@ -997,6 +1069,10 @@ def sweep_comparison(
 @click.option(
     "--adapt", type=click.Choice(["static", "calibrated", "responsive", "full"]),
     default="static", help="Adaptive profile preset (Plan 050)",
+)
+@click.option(
+    "--preset", type=click.Path(exists=True, path_type=Path), default=None,
+    help="Load preset YAML to override defaults (from 'bilancio sweep setup')",
 )
 def sweep_balanced(
     out_dir: Path,
@@ -1067,6 +1143,7 @@ def sweep_balanced(
     matching_order: str | None,
     dealer_backend: str | None,
     adapt: str,
+    preset: Path | None,
 ) -> None:
     """
     Run balanced C vs D comparison experiments.
@@ -1089,6 +1166,31 @@ def sweep_balanced(
         BalancedComparisonConfig,
         BalancedComparisonRunner,
     )
+
+    # Handle preset: re-invoke this command with preset values as CLI args
+    if preset is not None:
+        from bilancio.ui.sweep_setup import build_cli_args, load_preset
+
+        preset_data = load_preset(preset)
+        from bilancio.ui.sweep_setup import SweepSetupResult
+
+        setup_result = SweepSetupResult(
+            sweep_type="balanced",
+            cloud=cloud,
+            params=preset_data.get("params", {}),
+            out_dir=out_dir,
+            launch=True,
+        )
+        cli_args = build_cli_args(setup_result)
+        if "--out-dir" not in cli_args:
+            cli_args = ["--out-dir", str(out_dir)] + cli_args
+        click.echo(f"Loaded preset from: {preset}")
+        ctx = click.get_current_context()
+        cmd = sweep.get_command(ctx, "balanced")
+        sub_ctx = cmd.make_context("balanced", cli_args, parent=ctx)
+        with sub_ctx:
+            cmd.invoke(sub_ctx)
+        return
 
     out_dir = Path(out_dir)
 
@@ -1440,7 +1542,11 @@ def sweep_dealer_usage(experiment: Path, verbose: bool) -> None:
     "--post-analysis",
     type=str,
     default=None,
-    help="Post-sweep analysis: 'all', 'none', or comma-separated list (drilldowns,deltas,dynamics,narrative). Default: interactive prompt.",
+    help="Post-sweep analysis: 'all', 'none', or comma-separated list. Valid: drilldowns, deltas, dynamics, narrative, strategy_outcomes, dealer_usage, mechanism_activity, treynor. Default: interactive prompt.",
+)
+@click.option(
+    "--preset", type=click.Path(exists=True, path_type=Path), default=None,
+    help="Load preset YAML to override defaults (from 'bilancio sweep setup')",
 )
 def sweep_nbfi(
     out_dir: Path,
@@ -1461,6 +1567,7 @@ def sweep_nbfi(
     nbfi_share: Decimal,
     default_handling: str,
     post_analysis: str | None,
+    preset: Path | None,
 ) -> None:
     """Run NBFI lending experiment (Plan 043).
 
@@ -1472,6 +1579,27 @@ def sweep_nbfi(
       - nbfi_lend/: Treatment runs (NBFI lending)
       - aggregate/comparison.csv: Idle vs Lend metrics
     """
+    # Handle preset: re-invoke with preset values as CLI args
+    if preset is not None:
+        from bilancio.ui.sweep_setup import SweepSetupResult, build_cli_args, load_preset
+
+        preset_data = load_preset(preset)
+        setup_result = SweepSetupResult(
+            sweep_type="nbfi", cloud=cloud,
+            params=preset_data.get("params", {}),
+            out_dir=out_dir, launch=True,
+        )
+        cli_args = build_cli_args(setup_result)
+        if "--out-dir" not in cli_args:
+            cli_args = ["--out-dir", str(out_dir)] + cli_args
+        click.echo(f"Loaded preset from: {preset}")
+        ctx = click.get_current_context()
+        cmd = sweep.get_command(ctx, "nbfi")
+        sub_ctx = cmd.make_context("nbfi", cli_args, parent=ctx)
+        with sub_ctx:
+            cmd.invoke(sub_ctx)
+        return
+
     from bilancio.experiments.nbfi_comparison import (
         NBFIComparisonConfig,
         NBFIComparisonRunner,
@@ -1570,7 +1698,11 @@ def sweep_nbfi(
     "--post-analysis",
     type=str,
     default=None,
-    help="Post-sweep analysis: 'all', 'none', or comma-separated list (drilldowns,deltas,dynamics,narrative). Default: interactive prompt.",
+    help="Post-sweep analysis: 'all', 'none', or comma-separated list. Valid: drilldowns, deltas, dynamics, narrative, strategy_outcomes, dealer_usage, mechanism_activity, treynor. Default: interactive prompt.",
+)
+@click.option(
+    "--preset", type=click.Path(exists=True, path_type=Path), default=None,
+    help="Load preset YAML to override defaults (from 'bilancio sweep setup')",
 )
 def sweep_bank(
     out_dir: Path,
@@ -1598,6 +1730,7 @@ def sweep_bank(
     default_handling: str,
     fast_atomic: bool,
     post_analysis: str | None,
+    preset: Path | None,
 ) -> None:
     """Run bank lending experiment (Plan 043).
 
@@ -1609,6 +1742,27 @@ def sweep_bank(
       - bank_lend/: Treatment runs (banks lending)
       - aggregate/comparison.csv: Idle vs Lend metrics
     """
+    # Handle preset: re-invoke with preset values as CLI args
+    if preset is not None:
+        from bilancio.ui.sweep_setup import SweepSetupResult, build_cli_args, load_preset
+
+        preset_data = load_preset(preset)
+        setup_result = SweepSetupResult(
+            sweep_type="bank", cloud=cloud,
+            params=preset_data.get("params", {}),
+            out_dir=out_dir, launch=True,
+        )
+        cli_args = build_cli_args(setup_result)
+        if "--out-dir" not in cli_args:
+            cli_args = ["--out-dir", str(out_dir)] + cli_args
+        click.echo(f"Loaded preset from: {preset}")
+        ctx = click.get_current_context()
+        cmd = sweep.get_command(ctx, "bank")
+        sub_ctx = cmd.make_context("bank", cli_args, parent=ctx)
+        with sub_ctx:
+            cmd.invoke(sub_ctx)
+        return
+
     from bilancio.experiments.bank_comparison import (
         BankComparisonConfig,
         BankComparisonRunner,
@@ -1725,7 +1879,7 @@ def sweep_bank(
     "--post-analysis",
     type=str,
     default=None,
-    help="Analyses to run: 'all', or comma-separated list (drilldowns,deltas,dynamics,narrative). Default: interactive prompt.",
+    help="Analyses to run: 'all', or comma-separated list. Valid: drilldowns, deltas, dynamics, narrative, strategy_outcomes, dealer_usage, mechanism_activity, treynor. Default: interactive prompt.",
 )
 def sweep_analyze(
     experiment: Path,
@@ -1745,3 +1899,60 @@ def sweep_analyze(
         bilancio sweep analyze --experiment out/bank_test --sweep-type bank --post-analysis all
     """
     _offer_post_sweep_analysis(experiment, sweep_type, post_analysis or "all")
+
+
+# ── sweep setup (interactive questionnaire) ─────────────────────────────────
+
+
+@sweep.command("setup")
+@click.option(
+    "--preset",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Load a preset YAML to pre-fill defaults",
+)
+def sweep_setup(preset: Path | None) -> None:
+    """Interactive sweep configuration questionnaire.
+
+    Walks through sweep setup step-by-step, with feature toggles,
+    saves a reusable preset, and optionally launches the sweep.
+
+    Examples:
+
+        bilancio sweep setup
+
+        bilancio sweep setup --preset presets/my_sweep.yaml
+    """
+    from bilancio.ui.sweep_setup import build_cli_args, run_sweep_setup
+
+    result = run_sweep_setup(preset=preset)
+
+    if not result.launch:
+        click.echo("\nSetup complete (not launched).")
+        return
+
+    # Build CLI args and invoke the appropriate sweep subcommand
+    cli_args = build_cli_args(result)
+
+    # Auto-generate out_dir if not set
+    if result.out_dir is None:
+        job_id = generate_job_id()
+        out_dir = Path(f"out/{result.sweep_type}_{job_id}")
+        cli_args = ["--out-dir", str(out_dir)] + cli_args
+    else:
+        out_dir = result.out_dir
+
+    click.echo(f"\nLaunching: bilancio sweep {result.sweep_type} {' '.join(cli_args)}")
+
+    # Use click context to invoke the right subcommand
+    ctx = click.get_current_context()
+    cmd_name = result.sweep_type
+    cmd = sweep.get_command(ctx, cmd_name)
+    if cmd is None:
+        click.echo(f"Error: Unknown sweep type '{cmd_name}'")
+        return
+
+    # Parse and invoke
+    sub_ctx = cmd.make_context(cmd_name, cli_args, parent=ctx)
+    with sub_ctx:
+        cmd.invoke(sub_ctx)
