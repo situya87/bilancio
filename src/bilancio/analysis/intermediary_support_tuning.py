@@ -36,7 +36,7 @@ def _metric_or_neg_inf(value: float | None) -> float:
 
 
 def _loss_metric(value: float | None) -> float:
-    return 0.0 if value is None else -value
+    return -inf if value is None else -value
 
 
 @dataclass(frozen=True)

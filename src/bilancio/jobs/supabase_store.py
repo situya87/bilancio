@@ -19,6 +19,7 @@ SUPABASE_OPERATION_ERRORS = (
     ConnectionError,
     TimeoutError,
     ValueError,
+    KeyError,
     RuntimeError,
 )
 
