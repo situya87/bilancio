@@ -15,26 +15,11 @@ app = modal.App("bilancio-sweep-trigger")
 image = modal.Image.debian_slim(python_version="3.11").pip_install("bilancio==0.1.0").env({"PYTHONUNBUFFERED": "1"})
 
 
-def _run_corrected_risk_sweep_impl() -> dict[str, Any]:
-    """Run the corrected κ sweep with risk-aware traders.
+def _make_sweep_config() -> Any:
+    """Build the corrected κ sweep configuration."""
+    from bilancio.experiments.balanced_comparison import BalancedComparisonConfig
 
-    This function can be triggered from the Modal dashboard.
-    Returns the job ID for tracking results.
-    """
-    from bilancio.experiments.balanced_comparison import (
-        BalancedComparisonConfig,
-        BalancedComparisonRunner,
-    )
-    from bilancio.jobs import generate_job_id
-    from bilancio.runners.cloud_executor import CloudExecutor
-
-    # Generate job ID
-    job_id = generate_job_id()
-    print(f"Job ID: {job_id}")
-    print("=" * 80)
-
-    # Configure sweep
-    config = BalancedComparisonConfig(
+    return BalancedComparisonConfig(
         n_agents=100,
         maturity_days=10,
         Q_total=Decimal("10000"),
@@ -56,13 +41,35 @@ def _run_corrected_risk_sweep_impl() -> dict[str, Any]:
         },
     )
 
-    # Set up cloud executor
-    executor = CloudExecutor(experiment_id=job_id)
 
-    # Create runner (cloud-only mode, no local dirs needed)
+def _run_corrected_risk_sweep_impl(*, use_cloud: bool) -> dict[str, Any]:
+    """Run the corrected κ sweep with risk-aware traders.
+
+    This function can be triggered from the Modal dashboard.
+    Returns the job ID for tracking results.
+    """
+    from bilancio.experiments.balanced_comparison import BalancedComparisonRunner
+    from bilancio.jobs import generate_job_id
+
+    # Generate job ID
+    job_id = generate_job_id()
+    print(f"Job ID: {job_id}")
+    print("=" * 80)
+
+    # Configure sweep
+    config = _make_sweep_config()
+    executor = None
+    execution_mode = "local"
+    if use_cloud:
+        from bilancio.runners.cloud_executor import CloudExecutor
+
+        executor = CloudExecutor(experiment_id=job_id)
+        execution_mode = "cloud"
+
+    # Local fallback uses BalancedComparisonRunner's default LocalExecutor.
     runner = BalancedComparisonRunner(
         config=config,
-        out_dir=Path(f"/tmp/{job_id}"),  # Unused in cloud-only mode
+        out_dir=Path(f"/tmp/{job_id}"),
         executor=executor,
         job_id=job_id,
         enable_supabase=True,
@@ -78,7 +85,10 @@ def _run_corrected_risk_sweep_impl() -> dict[str, Any]:
     print("\nRisk Assessment: ENABLED")
     print("  - Base risk premium: 0.02")
     print("  - Urgency sensitivity: 0.10")
-    print("\nExecuting on Modal cloud...")
+    if use_cloud:
+        print("\nExecuting on Modal cloud...")
+    else:
+        print("\nExecuting locally (Modal unavailable)...")
     print("=" * 80)
 
     # Run sweep
@@ -87,11 +97,15 @@ def _run_corrected_risk_sweep_impl() -> dict[str, Any]:
     print("\nSweep Complete!")
     print(f"Job ID: {job_id}")
     print(f"Total pairs: {len(results)}")
-    print("Results available in Supabase")
+    if use_cloud:
+        print("Results available in Supabase")
+    else:
+        print(f"Results written locally under /tmp/{job_id}")
 
     return {
         "job_id": job_id,
         "total_pairs": len(results),
+        "execution_mode": execution_mode,
         "config": {
             "kappas": [str(k) for k in config.kappas],
             "concentrations": [str(c) for c in config.concentrations],
@@ -111,8 +125,8 @@ run_corrected_risk_sweep = app.function(
 def main() -> None:
     """Deploy and run the sweep, falling back to local execution."""
     try:
-        result = run_corrected_risk_sweep.remote()
+        result = run_corrected_risk_sweep.remote(use_cloud=True)
     except Exception:
         # Modal auth/network unavailable — run locally instead.
-        result = _run_corrected_risk_sweep_impl()
+        result = _run_corrected_risk_sweep_impl(use_cloud=False)
     print(f"\nResult: {result}")

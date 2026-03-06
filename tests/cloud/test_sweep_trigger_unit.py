@@ -9,6 +9,19 @@ from unittest.mock import MagicMock
 # Modal must be mocked before importing sweep_trigger, since it runs
 # module-level code (modal.App, modal.Image).
 _mock_modal = MagicMock()
+
+
+def _capture_decorator(*args, **kwargs):
+    """Return a decorator that leaves the wrapped function intact."""
+
+    def _inner(fn):
+        return fn
+
+    return _inner
+
+
+_mock_modal.App.return_value.function = _capture_decorator
+_mock_modal.App.return_value.local_entrypoint = _capture_decorator
 sys.modules.setdefault("modal", _mock_modal)
 
 
@@ -151,6 +164,7 @@ class TestSweepTriggerModuleLevel:
         result = {
             "job_id": job_id,
             "total_pairs": num_results,
+            "execution_mode": "cloud",
             "config": {
                 "kappas": [str(k) for k in config.kappas],
                 "concentrations": [str(c) for c in config.concentrations],
@@ -198,14 +212,48 @@ class TestMainFallback:
         """When .remote() raises (no Modal auth), main() runs the impl locally."""
         from bilancio.cloud import sweep_trigger
 
-        sentinel = {"job_id": "local-test", "total_pairs": 0, "config": {}}
+        sentinel = {"job_id": "local-test", "total_pairs": 0, "config": {}, "execution_mode": "local"}
 
         # Make .remote() raise as it would without Modal auth.
         real_fn = sweep_trigger.run_corrected_risk_sweep
-        monkeypatch.setattr(real_fn, "remote", MagicMock(side_effect=ConnectionError("no auth")))
+        monkeypatch.setattr(real_fn, "remote", MagicMock(side_effect=ConnectionError("no auth")), raising=False)
 
         # Make the local impl return a sentinel instead of running a full sweep.
-        monkeypatch.setattr(sweep_trigger, "_run_corrected_risk_sweep_impl", lambda: sentinel)
+        fallback = MagicMock(return_value=sentinel)
+        monkeypatch.setattr(sweep_trigger, "_run_corrected_risk_sweep_impl", fallback)
 
         # main() should catch the ConnectionError and call the local impl.
         sweep_trigger.main()  # should not raise
+        real_fn.remote.assert_called_once_with(use_cloud=True)
+        fallback.assert_called_once_with(use_cloud=False)
+
+    def test_local_impl_uses_runner_default_executor(self, monkeypatch):
+        """Local fallback should not construct a CloudExecutor."""
+        from bilancio.cloud import sweep_trigger
+        import bilancio.experiments.balanced_comparison as balanced_comparison
+        import bilancio.jobs as jobs
+
+        captured = {}
+
+        class FakeRunner:
+            def __init__(self, *, config, out_dir, executor, job_id, enable_supabase):
+                captured["config"] = config
+                captured["out_dir"] = out_dir
+                captured["executor"] = executor
+                captured["job_id"] = job_id
+                captured["enable_supabase"] = enable_supabase
+
+            def run_all(self):
+                return [object(), object(), object()]
+
+        monkeypatch.setattr(jobs, "generate_job_id", lambda: "local-job-id")
+        monkeypatch.setattr(balanced_comparison, "BalancedComparisonRunner", FakeRunner)
+
+        result = sweep_trigger._run_corrected_risk_sweep_impl(use_cloud=False)
+
+        assert captured["executor"] is None
+        assert captured["job_id"] == "local-job-id"
+        assert captured["enable_supabase"] is True
+        assert result["job_id"] == "local-job-id"
+        assert result["total_pairs"] == 3
+        assert result["execution_mode"] == "local"
