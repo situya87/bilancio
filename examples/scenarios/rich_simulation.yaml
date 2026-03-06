@@ -5,38 +5,38 @@ agents:
   - id: CB
     kind: central_bank
     name: "Central Bank"
-  
+
   # Two banks
   - id: BANK1
     kind: bank
     name: "First National Bank"
-  
+
   - id: BANK2
     kind: bank
     name: "Second Trust Bank"
-  
+
   # Households - customers of different banks
   - id: H1
     kind: household
     name: "Alice (Bank1 customer)"
-  
+
   - id: H2
     kind: household
     name: "Bob (Bank1 customer)"
-  
+
   - id: H3
     kind: household
     name: "Carol (Bank2 customer)"
-  
+
   - id: H4
     kind: household
     name: "David (Bank2 customer)"
-  
+
   # Firms
   - id: FIRM1
     kind: firm
     name: "TechCorp (Bank1 customer)"
-  
+
   - id: FIRM2
     kind: firm
     name: "RetailCo (Bank2 customer)"
@@ -46,82 +46,82 @@ initial_actions:
   - mint_reserves:
       to: BANK1
       amount: 50000
-  
+
   - mint_reserves:
       to: BANK2
       amount: 50000
-  
+
   # Mint cash to households
   - mint_cash:
       to: H1
       amount: 10000
-  
+
   - mint_cash:
       to: H2
       amount: 10000
-  
+
   - mint_cash:
       to: H3
       amount: 10000
-  
+
   - mint_cash:
       to: H4
       amount: 10000
-  
+
   # Mint cash to firms for initial capital
   - mint_cash:
       to: FIRM1
       amount: 20000
-  
+
   - mint_cash:
       to: FIRM2
       amount: 20000
-  
+
   # Households deposit cash at their banks
   - deposit_cash:
       customer: H1
       bank: BANK1
       amount: 8000
-  
+
   - deposit_cash:
       customer: H2
       bank: BANK1
       amount: 8000
-  
+
   - deposit_cash:
       customer: H3
       bank: BANK2
       amount: 8000
-  
+
   - deposit_cash:
       customer: H4
       bank: BANK2
       amount: 8000
-  
+
   # Firms deposit cash at their banks
   - deposit_cash:
       customer: FIRM1
       bank: BANK1
       amount: 15000
-  
+
   - deposit_cash:
       customer: FIRM2
       bank: BANK2
       amount: 15000
-  
+
   # Create initial inventory for firms
   - create_stock:
       owner: FIRM1
       sku: "TECH_STOCK"
       quantity: 1000
       unit_price: 10
-  
+
   - create_stock:
       owner: FIRM2
       sku: "RETAIL_STOCK"
       quantity: 500
       unit_price: 20
-  
+
   # Create delivery obligations for stock purchases
   - create_delivery_obligation:
       from: FIRM1
@@ -130,7 +130,7 @@ initial_actions:
       quantity: 100
       unit_price: 10
       due_day: 1
-  
+
   - create_delivery_obligation:
       from: FIRM1
       to: H3
@@ -138,7 +138,7 @@ initial_actions:
       quantity: 150
       unit_price: 10
       due_day: 1
-  
+
   - create_delivery_obligation:
       from: FIRM2
       to: H2
@@ -146,7 +146,7 @@ initial_actions:
       quantity: 50
       unit_price: 20
       due_day: 1
-  
+
   - create_delivery_obligation:
       from: FIRM2
       to: H4
@@ -154,104 +154,104 @@ initial_actions:
       quantity: 75
       unit_price: 20
       due_day: 1
-  
+
   # Create payables - mix of intra-bank and inter-bank
-  
+
   # Intra-bank payables (within BANK1)
   - create_payable:
       from: H1
       to: H2
       amount: 500
       due_day: 1
-  
+
   - create_payable:
       from: H2
       to: FIRM1
       amount: 300
       due_day: 1
-  
+
   # Intra-bank payables (within BANK2)
   - create_payable:
       from: H3
       to: H4
       amount: 400
       due_day: 1
-  
+
   - create_payable:
       from: H4
       to: FIRM2
       amount: 600
       due_day: 1
-  
+
   # Inter-bank payables (between banks)
   - create_payable:
       from: H1
       to: H3
       amount: 1000
       due_day: 1
-  
+
   - create_payable:
       from: H2
       to: H4
       amount: 800
       due_day: 1
-  
+
   - create_payable:
       from: FIRM1
       to: FIRM2
       amount: 2000
       due_day: 1
-  
+
   - create_payable:
       from: H3
       to: H1
       amount: 700
       due_day: 2
-  
+
   - create_payable:
       from: H4
       to: H2
       amount: 900
       due_day: 2
-  
+
   - create_payable:
       from: FIRM2
       to: FIRM1
       amount: 1500
       due_day: 2
-  
+
   # Stock dividend payables
   - create_payable:
       from: FIRM1
       to: H1
       amount: 100
       due_day: 3
-  
+
   - create_payable:
       from: FIRM1
       to: H3
       amount: 150
       due_day: 3
-  
+
   - create_payable:
       from: FIRM2
       to: H2
       amount: 100
       due_day: 3
-  
+
   - create_payable:
       from: FIRM2
       to: H4
       amount: 150
       due_day: 3
-  
+
   # Later stock trades
   - create_payable:
       from: H1
       to: H2
       amount: 200
       due_day: 4
-  
+
   - create_payable:
       from: H3
       to: H4

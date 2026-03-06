@@ -7,17 +7,13 @@ parsing, and output formatting.
 
 from __future__ import annotations
 
-import json
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 import yaml
 from click.testing import CliRunner
 
 from bilancio.ui.cli import cli
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -84,6 +80,7 @@ def _write_scenario(tmp_path: Path, scenario: dict) -> Path:
 # ---------------------------------------------------------------------------
 # run command -- option and error handling
 # ---------------------------------------------------------------------------
+
 
 class TestRunCommand:
     """Tests for CLI run command branches."""
@@ -229,6 +226,7 @@ class TestRunCommand:
 # validate command
 # ---------------------------------------------------------------------------
 
+
 class TestValidateCommand:
     """Tests for the validate CLI command."""
 
@@ -255,9 +253,7 @@ class TestValidateCommand:
         scenario = _minimal_scenario()
         path = _write_scenario(tmp_path, scenario)
 
-        with patch(
-            "bilancio.config.load_yaml", side_effect=ValueError("Missing required field")
-        ):
+        with patch("bilancio.config.load_yaml", side_effect=ValueError("Missing required field")):
             runner = CliRunner()
             result = runner.invoke(cli, ["validate", str(path)])
             assert result.exit_code == 1
@@ -267,9 +263,7 @@ class TestValidateCommand:
         scenario = _minimal_scenario()
         path = _write_scenario(tmp_path, scenario)
 
-        with patch(
-            "bilancio.config.load_yaml", side_effect=RuntimeError("System error")
-        ):
+        with patch("bilancio.config.load_yaml", side_effect=RuntimeError("System error")):
             runner = CliRunner()
             result = runner.invoke(cli, ["validate", str(path)])
             assert result.exit_code == 1
@@ -279,6 +273,7 @@ class TestValidateCommand:
 # new command
 # ---------------------------------------------------------------------------
 
+
 class TestNewCommand:
     """Tests for the 'new' command."""
 
@@ -287,7 +282,7 @@ class TestNewCommand:
         output_path = tmp_path / "new_scenario.yaml"
         runner = CliRunner()
         result = runner.invoke(cli, ["new", "-o", str(output_path), "--from", "simple"])
-        # Should succeed
+        assert result.exit_code == 0
         assert output_path.exists()
         with open(output_path) as f:
             data = yaml.safe_load(f)
@@ -317,6 +312,7 @@ class TestNewCommand:
 # ---------------------------------------------------------------------------
 # analyze command
 # ---------------------------------------------------------------------------
+
 
 class TestAnalyzeCommand:
     """Tests for the 'analyze' command.

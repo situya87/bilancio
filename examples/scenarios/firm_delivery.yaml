@@ -30,28 +30,28 @@ agents:
 initial_actions:
   # Initialize bank
   - mint_reserves: {to: B1, amount: 50000}
-  
+
   # Give agents initial cash
   - mint_cash: {to: H1, amount: 5000}
   - mint_cash: {to: H2, amount: 4000}
   - mint_cash: {to: F1, amount: 10000}
   - mint_cash: {to: F2, amount: 8000}
-  
+
   # Set up bank deposits
   - deposit_cash: {customer: H1, bank: B1, amount: 4000}
   - deposit_cash: {customer: H2, bank: B1, amount: 3000}
   - deposit_cash: {customer: F1, bank: B1, amount: 8000}
   - deposit_cash: {customer: F2, bank: B1, amount: 6000}
-  
+
   # Create inventory for firms
   - create_stock: {owner: F1, sku: WIDGET, quantity: 100, unit_price: "25"}
   - create_stock: {owner: F2, sku: GADGET, quantity: 50, unit_price: "100"}
-  
+
   # Create delivery obligations
   - create_delivery_obligation: {from: F1, to: H1, sku: WIDGET, quantity: 10, unit_price: "25", due_day: 1}
   - create_delivery_obligation: {from: F1, to: F2, sku: WIDGET, quantity: 20, unit_price: "25", due_day: 2}
   - create_delivery_obligation: {from: F2, to: H2, sku: GADGET, quantity: 5, unit_price: "100", due_day: 3}
-  
+
   # Create corresponding payment obligations
   - create_payable: {from: H1, to: F1, amount: 250, due_day: 1}
   - create_payable: {from: F2, to: F1, amount: 500, due_day: 2}

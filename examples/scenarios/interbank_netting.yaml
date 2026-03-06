@@ -6,27 +6,27 @@ agents:
   - id: CB
     kind: central_bank
     name: Central Bank
-    
+
   - id: B1
     kind: bank
     name: First Bank
-    
+
   - id: B2
     kind: bank
     name: Second Bank
-    
+
   - id: H1
     kind: household
     name: Alice (customer of B1)
-    
+
   - id: H2
     kind: household
     name: Bob (customer of B2)
-    
+
   - id: H3
     kind: household
     name: Carol (customer of B1)
-    
+
   - id: H4
     kind: household
     name: Dave (customer of B2)
@@ -35,47 +35,47 @@ initial_actions:
   # Initialize banks with reserves
   - mint_reserves: {to: B1, amount: 10000}
   - mint_reserves: {to: B2, amount: 10000}
-  
+
   # Give households initial cash
   - mint_cash: {to: H1, amount: 5000}
   - mint_cash: {to: H2, amount: 5000}
   - mint_cash: {to: H3, amount: 5000}
   - mint_cash: {to: H4, amount: 5000}
-  
+
   # Customers deposit cash in their respective banks
   - deposit_cash: {customer: H1, bank: B1, amount: 4500}
   - deposit_cash: {customer: H2, bank: B2, amount: 4500}
   - deposit_cash: {customer: H3, bank: B1, amount: 4500}
   - deposit_cash: {customer: H4, bank: B2, amount: 4500}
-  
+
   # Create payments that will generate interbank obligations
   # These payments are between customers of different banks
-  
+
   # Day 1: Payments that should net out in Phase C
   # Alice (B1) pays Bob (B2) $1000
   - create_payable: {from: H1, to: H2, amount: 1000, due_day: 1}
-  
+
   # Dave (B2) pays Carol (B1) $800
   - create_payable: {from: H4, to: H3, amount: 800, due_day: 1}
-  
+
   # Carol (B1) pays Bob (B2) $500
   - create_payable: {from: H3, to: H2, amount: 500, due_day: 1}
-  
+
   # Net result on day 1:
   # B1 → B2: $1000 + $500 = $1500
   # B2 → B1: $800
   # Net: B1 owes B2 $700
-  
+
   # Day 2: More interbank payments
   # Bob (B2) pays Alice (B1) $1200
   - create_payable: {from: H2, to: H1, amount: 1200, due_day: 2}
-  
+
   # Dave (B2) pays Alice (B1) $300
   - create_payable: {from: H4, to: H1, amount: 300, due_day: 2}
-  
+
   # Carol (B1) pays Dave (B2) $900
   - create_payable: {from: H3, to: H4, amount: 900, due_day: 2}
-  
+
   # Net result on day 2:
   # B2 → B1: $1200 + $300 = $1500
   # B1 → B2: $900

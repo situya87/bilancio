@@ -6,19 +6,19 @@ agents:
   - id: CB
     kind: central_bank
     name: Central Bank
-    
+
   - id: B1
     kind: bank
     name: Commercial Bank
-    
+
   - id: F1
     kind: firm
     name: Widget Corp
-    
+
   - id: F2
     kind: firm
     name: Gadget Inc
-    
+
   - id: H1
     kind: household
     name: Alice
@@ -26,37 +26,37 @@ agents:
 initial_actions:
   # Initialize bank with reserves
   - mint_reserves: {to: B1, amount: 50000}
-  
+
   # Give agents initial cash
   - mint_cash: {to: F1, amount: 10000}
   - mint_cash: {to: F2, amount: 10000}
   - mint_cash: {to: H1, amount: 5000}
-  
+
   # Deposit cash in bank
   - deposit_cash: {customer: F1, bank: B1, amount: 8000}
   - deposit_cash: {customer: F2, bank: B1, amount: 8000}
   - deposit_cash: {customer: H1, bank: B1, amount: 4000}
-  
+
   # Create initial inventory
   - create_stock: {owner: F1, sku: WIDGET, quantity: 100, unit_price: 50}
   - create_stock: {owner: F2, sku: GADGET, quantity: 100, unit_price: 40}
-  
+
   # Create mutual obligations between F1 and F2 due on the same day
   # These should net against each other in Phase C
-  
+
   # F1 owes F2 $2000 due day 1
   - create_payable: {from: F1, to: F2, amount: 2000, due_day: 1}
-  
+
   # F2 owes F1 $1500 due day 1
   - create_payable: {from: F2, to: F1, amount: 1500, due_day: 1}
-  
+
   # Another set of mutual obligations for day 2
   # F1 owes F2 delivery of 10 WIDGET due day 2
   - create_delivery_obligation: {from: F1, to: F2, sku: WIDGET, quantity: 10, due_day: 2, unit_price: 50}
-  
+
   # F2 owes F1 delivery of 15 GADGET due day 2
   - create_delivery_obligation: {from: F2, to: F1, sku: GADGET, quantity: 15, due_day: 2, unit_price: 40}
-  
+
   # Create some obligations that won't net (different counterparties)
   - create_payable: {from: H1, to: F1, amount: 500, due_day: 1}
   - create_payable: {from: F2, to: H1, amount: 300, due_day: 2}

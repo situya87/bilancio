@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+        files: ^(\.github/workflows/.*\.ya?ml|\.pre-commit-config\.yaml|examples/scenarios/.*\.yaml)$
+      - id: end-of-file-fixer
+        files: ^(\.github/workflows/.*\.ya?ml|\.pre-commit-config\.yaml|CONTRIBUTING\.md|docs/benchmark/EXTENDED_BENCHMARKS\.md|docs/plans/052_integration_discipline_hardening_plan\.md|examples/scenarios/.*\.yaml|pyproject\.toml|scripts/check_quality\.sh|src/bilancio/cloud/sweep_trigger\.py|src/bilancio/jobs/supabase_store\.py|src/bilancio/ui/sweep_setup\.py|src/bilancio/ui/cli/.*\.py|tests/regression/test_performance_parity \(1\)\.py|tests/test_smoke\.py|tests/ui/test_cli\.py|tests/ui/test_cli_integration\.py|tests/ui/test_cli_run_coverage\.py|tests/ui/test_cli_sweep\.py|tests/ui/test_sweep_setup\.py)$
+      - id: trailing-whitespace
+        files: ^(\.github/workflows/.*\.ya?ml|\.pre-commit-config\.yaml|CONTRIBUTING\.md|docs/benchmark/EXTENDED_BENCHMARKS\.md|docs/plans/052_integration_discipline_hardening_plan\.md|examples/scenarios/.*\.yaml|pyproject\.toml|scripts/check_quality\.sh|src/bilancio/cloud/sweep_trigger\.py|src/bilancio/jobs/supabase_store\.py|src/bilancio/ui/sweep_setup\.py|src/bilancio/ui/cli/.*\.py|tests/regression/test_performance_parity \(1\)\.py|tests/test_smoke\.py|tests/ui/test_cli\.py|tests/ui/test_cli_integration\.py|tests/ui/test_cli_run_coverage\.py|tests/ui/test_cli_sweep\.py|tests/ui/test_sweep_setup\.py)$
+      - id: check-merge-conflict
+        files: ^(\.github/workflows/.*\.ya?ml|\.pre-commit-config\.yaml|CONTRIBUTING\.md|docs/benchmark/EXTENDED_BENCHMARKS\.md|docs/plans/052_integration_discipline_hardening_plan\.md|examples/scenarios/.*\.yaml|pyproject\.toml|scripts/check_quality\.sh|src/bilancio/cloud/sweep_trigger\.py|src/bilancio/jobs/supabase_store\.py|src/bilancio/ui/sweep_setup\.py|src/bilancio/ui/cli/.*\.py|tests/regression/test_performance_parity \(1\)\.py|tests/test_smoke\.py|tests/ui/test_cli\.py|tests/ui/test_cli_integration\.py|tests/ui/test_cli_run_coverage\.py|tests/ui/test_cli_sweep\.py|tests/ui/test_sweep_setup\.py)$
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.8
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^(src/bilancio/ui/cli/.*\.py|src/bilancio/ui/sweep_setup\.py|tests/test_smoke\.py|tests/ui/test_cli\.py|tests/ui/test_cli_integration\.py|tests/ui/test_cli_run_coverage\.py|tests/ui/test_cli_sweep\.py|tests/ui/test_sweep_setup\.py)$
+      - id: ruff-format
+        files: ^(src/bilancio/ui/cli/.*\.py|src/bilancio/ui/sweep_setup\.py|tests/test_smoke\.py|tests/ui/test_cli\.py|tests/ui/test_cli_integration\.py|tests/ui/test_cli_run_coverage\.py|tests/ui/test_cli_sweep\.py|tests/ui/test_sweep_setup\.py)$

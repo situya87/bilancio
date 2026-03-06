@@ -26,17 +26,17 @@ initial_actions:
   # Initialize banks with reserves
   - mint_reserves: {to: B1, amount: 20000}
   - mint_reserves: {to: B2, amount: 15000}
-  
+
   # Give households initial cash
   - mint_cash: {to: H1, amount: 5000}
   - mint_cash: {to: H2, amount: 4000}
   - mint_cash: {to: H3, amount: 3000}
-  
+
   # Households deposit at their respective banks
   - deposit_cash: {customer: H1, bank: B1, amount: 4500}
   - deposit_cash: {customer: H2, bank: B2, amount: 3500}
   - deposit_cash: {customer: H3, bank: B1, amount: 2500}
-  
+
   # Create payment obligations across banks
   - create_payable: {from: H1, to: H2, amount: 1000, due_day: 1}  # B1 -> B2
   - create_payable: {from: H2, to: H3, amount: 800, due_day: 1}   # B2 -> B1

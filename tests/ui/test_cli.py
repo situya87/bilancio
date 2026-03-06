@@ -64,9 +64,7 @@ class TestCLI:
 
         try:
             runner = CliRunner()
-            result = runner.invoke(
-                cli, ["run", str(temp_path), "--mode", "until-stable", "--max-days", "5"]
-            )
+            result = runner.invoke(cli, ["run", str(temp_path), "--mode", "until-stable", "--max-days", "5"])
 
             # Check that it ran without crashing
             assert result.exit_code == 0

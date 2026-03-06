@@ -1,6 +1,9 @@
 # Extended Benchmark Suite
 
-This document defines the additional benchmark families added on top of the existing quality benchmarks.
+This document defines the heavier benchmark families that sit above everyday PR CI.
+
+Use them for scheduled health checks, major engine/cloud changes, and release readiness. They are
+valuable, but they are intentionally not the default merge gate for ordinary pull requests.
 
 Each benchmark emits:
 - JSON report (`temp/...json`)
@@ -140,11 +143,12 @@ Suite outputs:
 ## GitHub Action
 
 Manual workflow is available at `.github/workflows/extended-benchmarks.yml`:
-- Trigger via **Actions -> Extended Benchmarks -> Run workflow**.
-- Runs each benchmark in a matrix and uploads JSON/Markdown reports as artifacts.
+- Trigger via **Actions -> Extended Benchmarks -> Run workflow** for release / major-feature gates.
+- A scheduled nightly run also keeps baseline health visible without blocking every PR.
+- The workflow can also be called from other workflows when a release process needs a strict gate.
 
 ## Suggested CI rollout
 
-1. Start as non-blocking for 1 week to collect baseline reports.
-2. Promote to blocking with explicit required checks in branch protection.
-3. Keep critical gates strict; tune only score thresholds if needed.
+1. Keep PR CI focused on linting, typing, and the normal non-benchmark test suite.
+2. Run this suite nightly (or other scheduled cadence) as a non-blocking health audit.
+3. Run it again before releases or major engine/cloud changes as an explicit gate.

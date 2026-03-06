@@ -6,7 +6,7 @@ saves reusable presets, and optionally launches the sweep.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -332,7 +332,8 @@ def _step_scale(sweep_type: str, preset_params: dict[str, Any] | None = None) ->
     result["base_seed"] = int(_ask("  base_seed", defaults["base_seed"]))
     result["n_replicates"] = int(_ask("  n_replicates", defaults["n_replicates"]))
     result["default_handling"] = _ask(
-        "  default_handling", defaults["default_handling"],
+        "  default_handling",
+        defaults["default_handling"],
         choices=["fail-fast", "expel-agent"],
     )
     result["rollover"] = _ask_confirm("  rollover?", default=defaults["rollover"])
@@ -463,6 +464,7 @@ def _step_features(
 
 def _compute_run_count(sweep_type: str, params: dict[str, Any]) -> tuple[int, int]:
     """Compute (n_combos, n_runs) from grid params and sweep type."""
+
     def _count(csv_str: str) -> int:
         return len([x for x in csv_str.split(",") if x.strip()])
 
@@ -557,10 +559,7 @@ def _step_preflight(sweep_type: str, cloud: bool, params: dict[str, Any]) -> boo
 
     # Grid explosion guard
     if n_runs > 1000:
-        console.print(
-            f"[bold yellow]Warning: {n_runs} runs is very large. "
-            f"Consider reducing the grid or using LHS sampling.[/bold yellow]"
-        )
+        console.print(f"[bold yellow]Warning: {n_runs} runs is very large. Consider reducing the grid or using LHS sampling.[/bold yellow]")
 
     return _ask_confirm("\n  Proceed?", default=True)
 
@@ -682,11 +681,17 @@ def build_cli_args(result: SweepSetupResult) -> list[str]:
         if "adapt" in params:
             args.extend(["--adapt", params["adapt"]])
         # Adaptive flag overrides
-        for key in ["adaptive_planning_horizon", "adaptive_risk_aversion",
-                     "adaptive_reserves", "adaptive_lookback",
-                     "adaptive_issuer_specific", "adaptive_ev_term_structure",
-                     "adaptive_term_structure", "adaptive_base_spreads",
-                     "adaptive_convex_spreads"]:
+        for key in [
+            "adaptive_planning_horizon",
+            "adaptive_risk_aversion",
+            "adaptive_reserves",
+            "adaptive_lookback",
+            "adaptive_issuer_specific",
+            "adaptive_ev_term_structure",
+            "adaptive_term_structure",
+            "adaptive_base_spreads",
+            "adaptive_convex_spreads",
+        ]:
             if key in params:
                 cli_key = f"--{key.replace('_', '-')}"
                 if params[key]:
@@ -696,15 +701,13 @@ def build_cli_args(result: SweepSetupResult) -> list[str]:
 
     # Trader params (balanced only — bank/nbfi commands don't accept these)
     if result.sweep_type == "balanced":
-        for key in ["risk_aversion", "planning_horizon", "aggressiveness",
-                     "default_observability", "trading_motive"]:
+        for key in ["risk_aversion", "planning_horizon", "aggressiveness", "default_observability", "trading_motive"]:
             if key in params:
                 cli_key = f"--{key.replace('_', '-')}"
                 args.extend([cli_key, str(params[key])])
 
         # Dealer & VBT params
-        for key in ["vbt_mid_sensitivity", "vbt_spread_sensitivity",
-                     "trading_rounds", "flow_sensitivity", "dealer_concentration_limit"]:
+        for key in ["vbt_mid_sensitivity", "vbt_spread_sensitivity", "trading_rounds", "flow_sensitivity", "dealer_concentration_limit"]:
             if key in params:
                 cli_key = f"--{key.replace('_', '-')}"
                 args.extend([cli_key, str(params[key])])
@@ -725,8 +728,7 @@ def build_cli_args(result: SweepSetupResult) -> list[str]:
         if params.get("enable_lender"):
             if "lender_share" in params:
                 args.extend(["--lender-share", str(params["lender_share"])])
-            for key in ["lender_min_coverage", "lender_ranking_mode",
-                         "lender_coverage_mode"]:
+            for key in ["lender_min_coverage", "lender_ranking_mode", "lender_coverage_mode"]:
                 if key in params:
                     cli_key = f"--{key.replace('_', '-')}"
                     args.extend([cli_key, str(params[key])])
@@ -744,9 +746,15 @@ def build_cli_args(result: SweepSetupResult) -> list[str]:
 
     # Bank params (bank sweep only)
     if result.sweep_type == "bank":
-        for key in ["n_banks", "reserve_ratio", "credit_risk_loading",
-                     "max_borrower_risk", "min_coverage_ratio",
-                     "cb_rate_escalation_slope", "cb_max_outstanding_ratio"]:
+        for key in [
+            "n_banks",
+            "reserve_ratio",
+            "credit_risk_loading",
+            "max_borrower_risk",
+            "min_coverage_ratio",
+            "cb_rate_escalation_slope",
+            "cb_max_outstanding_ratio",
+        ]:
             if key in params:
                 cli_key = f"--{key.replace('_', '-')}"
                 args.extend([cli_key, str(params[key])])
@@ -877,10 +885,10 @@ ANALYSIS_MENU: dict[str, dict[str, Any]] = {**DATA_ANALYSIS_MENU, **VIZ_MENU}
 class PostSweepAnalysisResult:
     """Result of the post-sweep analysis questionnaire."""
 
-    data_analyses: list[str]         # From DATA_ANALYSIS_MENU
-    visualizations: list[str]        # From VIZ_MENU
+    data_analyses: list[str]  # From DATA_ANALYSIS_MENU
+    visualizations: list[str]  # From VIZ_MENU
     treynor_kappas: list[str] | None  # Kappa-level runs for Treynor (None=skip)
-    kappas: list[float] | None       # Focus kappas for core analyses (None=auto)
+    kappas: list[float] | None  # Focus kappas for core analyses (None=auto)
 
     # Legacy aliases
     @property
@@ -909,26 +917,17 @@ class PostSweepAnalysisResult:
 
 def _available_data_analyses(sweep_type: str) -> dict[str, dict[str, Any]]:
     """Filter DATA_ANALYSIS_MENU by sweep type."""
-    return {
-        k: v for k, v in DATA_ANALYSIS_MENU.items()
-        if sweep_type in v["sweep_types"]
-    }
+    return {k: v for k, v in DATA_ANALYSIS_MENU.items() if sweep_type in v["sweep_types"]}
 
 
 def _available_visualizations(sweep_type: str) -> dict[str, dict[str, Any]]:
     """Filter VIZ_MENU by sweep type."""
-    return {
-        k: v for k, v in VIZ_MENU.items()
-        if sweep_type in v["sweep_types"]
-    }
+    return {k: v for k, v in VIZ_MENU.items() if sweep_type in v["sweep_types"]}
 
 
 def _available_analyses(sweep_type: str) -> dict[str, dict[str, Any]]:
     """Filter combined ANALYSIS_MENU by sweep type (legacy)."""
-    return {
-        k: v for k, v in ANALYSIS_MENU.items()
-        if sweep_type in v["sweep_types"]
-    }
+    return {k: v for k, v in ANALYSIS_MENU.items() if sweep_type in v["sweep_types"]}
 
 
 def run_post_sweep_questionnaire(

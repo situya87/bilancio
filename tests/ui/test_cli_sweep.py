@@ -6,10 +6,8 @@ Mocks actual runner classes to avoid executing real simulations.
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from bilancio.ui.cli import cli
@@ -1640,7 +1638,13 @@ class TestBuildCliArgsCLIAcceptance:
     @patch("bilancio.ui.cli.sweep.create_job_manager")
     @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-e2e-balanced")
     def test_balanced_with_full_advanced_params(
-        self, mock_gen, mock_jm, mock_init, mock_run, mock_post, tmp_path,
+        self,
+        mock_gen,
+        mock_jm,
+        mock_init,
+        mock_run,
+        mock_post,
+        tmp_path,
     ):
         """build_cli_args for balanced with all advanced params produces valid CLI."""
         from bilancio.ui.sweep_setup import SweepSetupResult, build_cli_args
@@ -1714,7 +1718,12 @@ class TestBuildCliArgsCLIAcceptance:
     )
     @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-e2e-bank")
     def test_bank_with_advanced_params_no_crash(
-        self, mock_gen, mock_init, mock_run, mock_post, tmp_path,
+        self,
+        mock_gen,
+        mock_init,
+        mock_run,
+        mock_post,
+        tmp_path,
     ):
         """build_cli_args for bank with trader/risk params must NOT emit unsupported flags."""
         from bilancio.ui.sweep_setup import SweepSetupResult, build_cli_args
@@ -1761,7 +1770,12 @@ class TestBuildCliArgsCLIAcceptance:
     )
     @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-e2e-nbfi")
     def test_nbfi_with_advanced_params_no_crash(
-        self, mock_gen, mock_init, mock_run, mock_post, tmp_path,
+        self,
+        mock_gen,
+        mock_init,
+        mock_run,
+        mock_post,
+        tmp_path,
     ):
         """build_cli_args for nbfi with trader/risk params must NOT emit unsupported flags."""
         from bilancio.ui.sweep_setup import SweepSetupResult, build_cli_args
@@ -1805,7 +1819,13 @@ class TestBuildCliArgsCLIAcceptance:
     @patch("bilancio.ui.cli.sweep.create_job_manager")
     @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-e2e-banking")
     def test_balanced_with_enable_banking(
-        self, mock_gen, mock_jm, mock_init, mock_run, mock_post, tmp_path,
+        self,
+        mock_gen,
+        mock_jm,
+        mock_init,
+        mock_run,
+        mock_post,
+        tmp_path,
     ):
         """build_cli_args for balanced with enable_banking emits valid bank arm flags."""
         from bilancio.ui.sweep_setup import SweepSetupResult, build_cli_args
