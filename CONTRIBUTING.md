@@ -25,16 +25,30 @@ Thank you for your interest in contributing to Bilancio! This document provides 
 
 4. **Install the package in development mode:**
    ```bash
-   uv pip install -e ".[dev]"
+   uv pip install -e ".[dev,analysis,cloud]"
    ```
+
+### Installation Profiles
+
+Use the smallest install that matches the work you are doing:
+
+- `core`: `uv pip install -e .`
+- `dev`: `uv pip install -e ".[dev]"`
+- `analysis/viz`: `uv pip install -e ".[analysis]"`
+- `cloud`: `uv pip install -e ".[cloud]"`
+- `notebooks`: `uv pip install -e ".[analysis,notebooks]"`
+
+Core scenario workflows (`bilancio validate` / `bilancio run`) are expected to work with the
+`core` profile alone. Optional analysis and cloud commands should give clear guidance when an
+extra is missing.
 
 ## Development Workflow
 
 ### Running Tests
 
 ```bash
-# Run all tests
-uv run pytest tests/ -v
+# Run the normal non-benchmark suite
+uv run pytest tests/ --ignore=tests/benchmark -m "not slow" -v
 
 # Run with coverage
 uv run pytest tests/ --cov=bilancio --cov-report=term-missing
@@ -43,12 +57,64 @@ uv run pytest tests/ --cov=bilancio --cov-report=term-missing
 uv run pytest tests/unit/test_balances.py -v
 ```
 
+### Quality Checks
+
+PR CI enforces:
+
+- Ruff on the current clean CLI/sweep surface
+- mypy on the same CLI/sweep surface
+- the full normal non-benchmark test suite
+
+Run the same commands locally before pushing:
+
+```bash
+scripts/check_quality.sh
+```
+
+Equivalent manual commands:
+
+```bash
+PYTHONPATH=src python -m ruff check \
+  src/bilancio/ui/cli \
+  src/bilancio/ui/sweep_setup.py \
+  tests/test_smoke.py \
+  tests/ui/test_cli.py \
+  tests/ui/test_cli_integration.py \
+  tests/ui/test_cli_run_coverage.py \
+  tests/ui/test_cli_sweep.py \
+  tests/ui/test_sweep_setup.py
+PYTHONPATH=src python -m ruff format --check \
+  src/bilancio/ui/cli \
+  src/bilancio/ui/sweep_setup.py \
+  tests/test_smoke.py \
+  tests/ui/test_cli.py \
+  tests/ui/test_cli_integration.py \
+  tests/ui/test_cli_run_coverage.py \
+  tests/ui/test_cli_sweep.py \
+  tests/ui/test_sweep_setup.py
+PYTHONPATH=src python -m mypy src/bilancio/ui/cli src/bilancio/ui/sweep_setup.py
+PYTHONPATH=src python -m pytest tests/ --ignore=tests/benchmark --no-cov -m "not slow"
+```
+
+Ruff and mypy are enforced on the clean CLI/sweep surface first, while the rest of the repo is
+cleaned incrementally. Expand that scope only when the next target stays green by default.
+
+### Pre-commit
+
+Install and run the shared hooks:
+
+```bash
+uv run pre-commit install
+uv run pre-commit run --all-files
+```
+
 ### Code Style
 
 - Follow PEP 8 style guidelines
 - Use type hints for function signatures
 - Write docstrings for public functions and classes
 - Keep functions focused and single-purpose
+- Use `ruff format` as the canonical formatter
 
 ### Project Structure
 

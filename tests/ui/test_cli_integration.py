@@ -150,9 +150,7 @@ class TestRunCommand:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["run", str(scenario_path), "--max-days", "2", "--show", "summary"]
-        )
+        result = runner.invoke(cli, ["run", str(scenario_path), "--max-days", "2", "--show", "summary"])
 
         assert result.exit_code == 0
 
@@ -163,9 +161,7 @@ class TestRunCommand:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["run", str(scenario_path), "--max-days", "2", "--agents", "CB,B1"]
-        )
+        result = runner.invoke(cli, ["run", str(scenario_path), "--max-days", "2", "--agents", "CB,B1"])
 
         assert result.exit_code == 0
 
@@ -176,9 +172,7 @@ class TestRunCommand:
             pytest.skip(f"Scenario file not found: {scenario_path}")
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["run", str(scenario_path), "--max-days", "2", "--check-invariants", "none"]
-        )
+        result = runner.invoke(cli, ["run", str(scenario_path), "--max-days", "2", "--check-invariants", "none"])
 
         assert result.exit_code == 0
 
@@ -224,9 +218,7 @@ class TestRunWithExport:
         events_file = tmp_path / "events.jsonl"
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["run", str(scenario_path), "--max-days", "2", "--export-events", str(events_file)]
-        )
+        result = runner.invoke(cli, ["run", str(scenario_path), "--max-days", "2", "--export-events", str(events_file)])
 
         assert result.exit_code == 0
         assert events_file.exists()
@@ -241,9 +233,7 @@ class TestRunWithExport:
         html_file = tmp_path / "output.html"
 
         runner = CliRunner()
-        result = runner.invoke(
-            cli, ["run", str(scenario_path), "--max-days", "2", "--html", str(html_file)]
-        )
+        result = runner.invoke(cli, ["run", str(scenario_path), "--max-days", "2", "--html", str(html_file)])
 
         assert result.exit_code == 0
         assert html_file.exists()

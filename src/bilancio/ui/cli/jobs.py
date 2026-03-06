@@ -7,19 +7,7 @@ from pathlib import Path
 
 import click
 
-CLI_HANDLED_ERRORS = (
-    click.ClickException,
-    FileNotFoundError,
-    ImportError,
-    OSError,
-    ConnectionError,
-    TimeoutError,
-    ValueError,
-    TypeError,
-    KeyError,
-    AttributeError,
-    RuntimeError,
-)
+from ._common import CLI_HANDLED_ERRORS, optional_dependency_error
 
 
 def format_datetime(dt: datetime | None) -> str:
@@ -81,12 +69,11 @@ def list_jobs(cloud: bool, local: Path | None, status: str | None, limit: int) -
             store = SupabaseJobStore()
             if store.client is None:
                 raise click.ClickException(
-                    "Supabase not configured. Set BILANCIO_SUPABASE_URL and "
-                    "BILANCIO_SUPABASE_ANON_KEY environment variables."
+                    "Supabase not configured. Set BILANCIO_SUPABASE_URL and BILANCIO_SUPABASE_ANON_KEY environment variables."
                 )
             jobs_list = store.list_jobs(status=status, limit=limit)
         except ImportError as e:
-            raise click.ClickException(f"Failed to import Supabase: {e}") from e
+            raise optional_dependency_error("Cloud job queries", "cloud", e) from e
 
     elif local:
         # Query from local filesystem
@@ -113,10 +100,7 @@ def list_jobs(cloud: bool, local: Path | None, status: str | None, limit: int) -
                 store = SupabaseJobStore()
                 jobs_list = store.list_jobs(status=status, limit=limit)
             else:
-                click.echo(
-                    "No source specified. Use --cloud or --local <path>.\n"
-                    "Tip: Set BILANCIO_SUPABASE_* env vars to use --cloud."
-                )
+                click.echo("No source specified. Use --cloud or --local <path>.\nTip: Set BILANCIO_SUPABASE_* env vars to use --cloud.")
                 return
         except CLI_HANDLED_ERRORS as e:
             raise click.ClickException(f"Failed to query jobs: {e}") from e
@@ -145,10 +129,7 @@ def list_jobs(cloud: bool, local: Path | None, status: str | None, limit: int) -
         duration = format_duration(job.created_at, job.completed_at)
         # Prefer run count from Supabase, fall back to job.run_ids
         runs = run_counts.get(job.job_id, len(job.run_ids) if job.run_ids else 0)
-        click.echo(
-            f"{job.job_id:<36} {job.status.value:<10} "
-            f"{format_datetime(job.created_at):<16} {duration:<10} {runs:<6}"
-        )
+        click.echo(f"{job.job_id:<36} {job.status.value:<10} {format_datetime(job.created_at):<16} {duration:<10} {runs:<6}")
 
     click.echo("-" * 80)
     click.echo(f"Total: {len(jobs_list)} jobs")
@@ -180,7 +161,7 @@ def get_job(job_id: str, cloud: bool, local: Path | None) -> None:
                 raise click.ClickException("Supabase not configured.")
             job = store.get_job(job_id)
         except ImportError as e:
-            raise click.ClickException(f"Failed to import Supabase: {e}") from e
+            raise optional_dependency_error("Cloud job queries", "cloud", e) from e
 
     elif local:
         from bilancio.jobs import JobManager
@@ -285,9 +266,7 @@ def list_runs(job_id: str, cloud: bool, status: str | None) -> None:
             delta = entry.metrics.get("delta_total", "-")
             if isinstance(delta, float):
                 delta = f"{delta:.4f}"
-            click.echo(
-                f"{entry.run_id:<40} {entry.status.value:<10} {kappa:<8} {conc:<8} {delta:<10}"
-            )
+            click.echo(f"{entry.run_id:<40} {entry.status.value:<10} {kappa:<8} {conc:<8} {delta:<10}")
 
         click.echo("-" * 80)
         click.echo(f"Total: {len(entries)} runs")

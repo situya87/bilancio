@@ -5,17 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import yaml
 
 from bilancio.ui.sweep_setup import (
+    _ADAPTIVE_FLAGS_DEFAULTS,
+    _LENDING_RISK_DEFAULTS,
     ANALYSIS_MENU,
     DATA_ANALYSIS_MENU,
     FEATURE_SECTIONS,
     VIZ_MENU,
     PostSweepAnalysisResult,
     SweepSetupResult,
-    _ADAPTIVE_FLAGS_DEFAULTS,
-    _LENDING_RISK_DEFAULTS,
     _available_analyses,
     _available_data_analyses,
     _available_visualizations,
@@ -461,14 +460,27 @@ class TestAnalysisMenu:
 
     def test_data_menu_has_expected_entries(self):
         expected = {
-            "frontier", "strategy_outcomes", "dealer_usage", "mechanism_activity",
-            "contagion", "credit_creation", "network", "pricing", "beliefs", "funding",
+            "frontier",
+            "strategy_outcomes",
+            "dealer_usage",
+            "mechanism_activity",
+            "contagion",
+            "credit_creation",
+            "network",
+            "pricing",
+            "beliefs",
+            "funding",
         }
         assert set(DATA_ANALYSIS_MENU.keys()) == expected
 
     def test_viz_menu_has_expected_entries(self):
         expected = {
-            "drilldowns", "deltas", "dynamics", "narrative", "treynor", "comparison",
+            "drilldowns",
+            "deltas",
+            "dynamics",
+            "narrative",
+            "treynor",
+            "comparison",
         }
         assert set(VIZ_MENU.keys()) == expected
 
@@ -600,25 +612,37 @@ class TestPostSweepAnalysisResult:
 
     def test_has_treynor_when_kappas_set(self):
         result = PostSweepAnalysisResult(
-            data_analyses=[], visualizations=[], treynor_kappas=["0.5", "1.0"], kappas=None,
+            data_analyses=[],
+            visualizations=[],
+            treynor_kappas=["0.5", "1.0"],
+            kappas=None,
         )
         assert result.has_treynor is True
 
     def test_has_treynor_with_auto(self):
         result = PostSweepAnalysisResult(
-            data_analyses=[], visualizations=[], treynor_kappas=["auto"], kappas=None,
+            data_analyses=[],
+            visualizations=[],
+            treynor_kappas=["auto"],
+            kappas=None,
         )
         assert result.has_treynor is True
 
     def test_no_treynor_when_none(self):
         result = PostSweepAnalysisResult(
-            data_analyses=["frontier"], visualizations=[], treynor_kappas=None, kappas=None,
+            data_analyses=["frontier"],
+            visualizations=[],
+            treynor_kappas=None,
+            kappas=None,
         )
         assert result.has_treynor is False
 
     def test_no_treynor_when_empty(self):
         result = PostSweepAnalysisResult(
-            data_analyses=[], visualizations=[], treynor_kappas=[], kappas=None,
+            data_analyses=[],
+            visualizations=[],
+            treynor_kappas=[],
+            kappas=None,
         )
         assert result.has_treynor is False
 
@@ -633,7 +657,10 @@ class TestPostSweepAnalysisResult:
 
     def test_empty_result(self):
         result = PostSweepAnalysisResult(
-            data_analyses=[], visualizations=[], treynor_kappas=None, kappas=None,
+            data_analyses=[],
+            visualizations=[],
+            treynor_kappas=None,
+            kappas=None,
         )
         assert result.all_selected == []
         assert result.has_treynor is False
@@ -665,9 +692,15 @@ class TestAdaptiveAndLendingDefaults:
 
     def test_adaptive_flags_defaults_has_expected_keys(self):
         expected = {
-            "adaptive_planning_horizon", "adaptive_risk_aversion", "adaptive_reserves",
-            "adaptive_lookback", "adaptive_issuer_specific", "adaptive_ev_term_structure",
-            "adaptive_term_structure", "adaptive_base_spreads", "adaptive_convex_spreads",
+            "adaptive_planning_horizon",
+            "adaptive_risk_aversion",
+            "adaptive_reserves",
+            "adaptive_lookback",
+            "adaptive_issuer_specific",
+            "adaptive_ev_term_structure",
+            "adaptive_term_structure",
+            "adaptive_base_spreads",
+            "adaptive_convex_spreads",
         }
         assert set(_ADAPTIVE_FLAGS_DEFAULTS.keys()) == expected
 
@@ -677,10 +710,15 @@ class TestAdaptiveAndLendingDefaults:
 
     def test_lending_risk_defaults_has_expected_keys(self):
         expected = {
-            "marginal_relief_min_ratio", "stress_risk_premium_scale",
-            "high_risk_default_threshold", "high_risk_maturity_cap",
-            "daily_expected_loss_budget_ratio", "run_expected_loss_budget_ratio",
-            "stop_loss_realized_ratio", "collateralized_terms", "collateral_advance_rate",
+            "marginal_relief_min_ratio",
+            "stress_risk_premium_scale",
+            "high_risk_default_threshold",
+            "high_risk_maturity_cap",
+            "daily_expected_loss_budget_ratio",
+            "run_expected_loss_budget_ratio",
+            "stop_loss_realized_ratio",
+            "collateralized_terms",
+            "collateral_advance_rate",
         }
         assert set(_LENDING_RISK_DEFAULTS.keys()) == expected
 

@@ -6,8 +6,6 @@ import sys
 from pathlib import Path
 
 import click
-from rich.console import Console
-from rich.panel import Panel
 
 from bilancio.analysis.loaders import read_balances_csv, read_events_jsonl
 from bilancio.analysis.report import (
@@ -22,20 +20,7 @@ from bilancio.analysis.report import (
 from bilancio.ui.run import run_scenario
 from bilancio.ui.wizard import create_scenario_wizard
 
-console = Console()
-CLI_HANDLED_ERRORS = (
-    click.ClickException,
-    FileNotFoundError,
-    ImportError,
-    OSError,
-    ConnectionError,
-    TimeoutError,
-    ValueError,
-    TypeError,
-    KeyError,
-    AttributeError,
-    RuntimeError,
-)
+from ._common import CLI_HANDLED_ERRORS, console, exit_with_panel
 
 
 @click.command()
@@ -84,9 +69,7 @@ CLI_HANDLED_ERRORS = (
     default=None,
     help="Path to export colored output as HTML",
 )
-@click.option(
-    "--t-account/--no-t-account", default=False, help="Use detailed T-account layout for balances"
-)
+@click.option("--t-account/--no-t-account", default=False, help="Use detailed T-account layout for balances")
 @click.option(
     "--default-handling",
     type=click.Choice(["fail-fast", "expel-agent"]),
@@ -141,22 +124,15 @@ def run(
         )
 
     except FileNotFoundError as e:
-        console.print(Panel(f"[red]File not found:[/red] {e}", title="Error", border_style="red"))
-        sys.exit(1)
+        exit_with_panel(f"[red]File not found:[/red] {e}")
 
     except ValueError as e:
-        console.print(
-            Panel(f"[red]Configuration error:[/red]\n{e}", title="Error", border_style="red")
-        )
-        sys.exit(1)
+        exit_with_panel(f"[red]Configuration error:[/red]\n{e}")
 
     except CLI_HANDLED_ERRORS as e:
-        console.print(
-            Panel(f"[red]Unexpected error:[/red]\n{e}", title="Error", border_style="red")
-        )
         if "--debug" in sys.argv:
             raise
-        sys.exit(1)
+        exit_with_panel(f"[red]Unexpected error:[/red]\n{e}")
 
 
 @click.command()
@@ -207,35 +183,23 @@ def validate(scenario_file: Path) -> None:
                 console.print(f"  • Events: {config.run.export.events_jsonl}")
 
     except FileNotFoundError as e:
-        console.print(Panel(f"[red]File not found:[/red] {e}", title="Error", border_style="red"))
-        sys.exit(1)
+        exit_with_panel(f"[red]File not found:[/red] {e}")
 
     except ValueError as e:
-        console.print(
-            Panel(
-                f"[red]Configuration error:[/red]\n{e}",
-                title="Validation Failed",
-                border_style="red",
-            )
+        exit_with_panel(
+            f"[red]Configuration error:[/red]\n{e}",
+            title="Validation Failed",
         )
-        sys.exit(1)
 
     except CLI_HANDLED_ERRORS as e:
-        console.print(
-            Panel(
-                f"[red]Validation error:[/red]\n{e}", title="Validation Failed", border_style="red"
-            )
-        )
         if "--debug" in sys.argv:
             raise
-        sys.exit(1)
+        exit_with_panel(f"[red]Validation error:[/red]\n{e}", title="Validation Failed")
 
 
 @click.command()
 @click.option("--from", "from_template", type=str, default=None, help="Base template to use")
-@click.option(
-    "-o", "--output", type=click.Path(path_type=Path), required=True, help="Output YAML file path"
-)
+@click.option("-o", "--output", type=click.Path(path_type=Path), required=True, help="Output YAML file path")
 def new(from_template: str | None, output: Path) -> None:
     """Create a new scenario configuration.
 
@@ -247,10 +211,7 @@ def new(from_template: str | None, output: Path) -> None:
         console.print(f"[green]OK[/green] Created scenario file: {output}")
 
     except CLI_HANDLED_ERRORS as e:
-        console.print(
-            Panel(f"[red]Failed to create scenario:[/red]\n{e}", title="Error", border_style="red")
-        )
-        sys.exit(1)
+        exit_with_panel(f"[red]Failed to create scenario:[/red]\n{e}")
 
 
 @click.command()
@@ -365,7 +326,5 @@ def analyze(
     if html_out:
         title = f"Bilancio Analytics — {events_path.stem.replace('_events', '')}"
         subtitle = f"Events: {events_path.name}{' | Balances: ' + balances_path.name if balances_path else ''}"
-        write_metrics_html(
-            html_out, metrics_rows, ds_rows, intraday_rows, title=title, subtitle=subtitle
-        )
+        write_metrics_html(html_out, metrics_rows, ds_rows, intraday_rows, title=title, subtitle=subtitle)
         console.print(f"[green]OK[/green] Wrote HTML analytics: {html_out}")

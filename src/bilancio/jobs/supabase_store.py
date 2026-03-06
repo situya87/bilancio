@@ -195,9 +195,7 @@ class SupabaseJobStore:
             return []
 
         try:
-            query = (
-                self.client.table("jobs").select("*").order("created_at", desc=True).limit(limit)
-            )
+            query = self.client.table("jobs").select("*").order("created_at", desc=True).limit(limit)
 
             if status:
                 query = query.eq("status", status)
@@ -307,7 +305,7 @@ class SupabaseJobStore:
             mus=mus,
             cloud=row.get("cloud", False),
             outside_mid_ratios=outside_mid_ratios,
-            maturity_days=row.get("maturity_days", 5),
+            maturity_days=row.get("maturity_days") or 5,
             seeds=seeds,
         )
 
@@ -346,13 +344,7 @@ class SupabaseJobStore:
             return []
 
         try:
-            response = (
-                self.client.table("job_events")
-                .select("*")
-                .eq("job_id", job_id)
-                .order("timestamp", desc=False)
-                .execute()
-            )
+            response = self.client.table("job_events").select("*").eq("job_id", job_id).order("timestamp", desc=False).execute()
 
             if not response.data:
                 return []

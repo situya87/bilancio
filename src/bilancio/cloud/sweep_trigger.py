@@ -12,20 +12,10 @@ import modal
 app = modal.App("bilancio-sweep-trigger")
 
 # Use same image as main simulation app
-image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .pip_install("bilancio==0.1.0")
-    .env({"PYTHONUNBUFFERED": "1"})
-)
+image = modal.Image.debian_slim(python_version="3.11").pip_install("bilancio==0.1.0").env({"PYTHONUNBUFFERED": "1"})
 
 
-@app.function(
-    image=image,
-    timeout=3600,  # 1 hour
-    cpu=2,
-    memory=4096,
-)
-def run_corrected_risk_sweep() -> dict[str, Any]:
+def _run_corrected_risk_sweep_impl() -> dict[str, Any]:
     """Run the corrected κ sweep with risk-aware traders.
 
     This function can be triggered from the Modal dashboard.
@@ -108,6 +98,18 @@ def run_corrected_risk_sweep() -> dict[str, Any]:
             "mus": [str(m) for m in config.mus],
         },
     }
+
+
+run_corrected_risk_sweep = app.function(
+    image=image,
+    timeout=3600,  # 1 hour
+    cpu=2,
+    memory=4096,
+)(_run_corrected_risk_sweep_impl)
+
+setattr(run_corrected_risk_sweep, "local", _run_corrected_risk_sweep_impl)
+if not hasattr(run_corrected_risk_sweep, "remote"):
+    setattr(run_corrected_risk_sweep, "remote", _run_corrected_risk_sweep_impl)
 
 
 @app.local_entrypoint()

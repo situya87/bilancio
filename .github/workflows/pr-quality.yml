@@ -1,0 +1,149 @@
+name: PR Quality
+
+"on":
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RUFF_TARGETS: >-
+    src/bilancio/ui/cli
+    src/bilancio/ui/sweep_setup.py
+    tests/test_smoke.py
+    tests/ui/test_cli.py
+    tests/ui/test_cli_integration.py
+    tests/ui/test_cli_run_coverage.py
+    tests/ui/test_cli_sweep.py
+    tests/ui/test_sweep_setup.py
+  MYPY_TARGETS: >-
+    src/bilancio/ui/cli
+    src/bilancio/ui/sweep_setup.py
+
+jobs:
+  lint:
+    name: Ruff (Enforced Scope)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install quality tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run Ruff checks
+        run: |
+          PYTHONPATH=src python -m ruff check $RUFF_TARGETS
+          PYTHONPATH=src python -m ruff format --check $RUFF_TARGETS
+
+  typecheck:
+    name: Mypy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install typecheck tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run mypy on enforced scope
+        run: |
+          PYTHONPATH=src python -m mypy $MYPY_TARGETS
+
+  test-suite:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install runtime + test extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,analysis,cloud]
+
+      - name: Run non-benchmark test suite
+        run: |
+          PYTHONPATH=src python -m pytest tests/ --ignore=tests/benchmark --no-cov -m "not slow"
+
+  core-profile:
+    name: Core Profile Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install core profile
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run core smoke checks
+        run: |
+          PYTHONPATH=src python -m pytest \
+            tests/test_smoke.py \
+            tests/ui/test_cli.py \
+            tests/ui/test_cli_integration.py \
+            --no-cov -q
+
+  analysis-profile:
+    name: Analysis Profile Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install analysis profile
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[analysis]
+
+      - name: Run analysis smoke checks
+        run: |
+          PYTHONPATH=src python -m pytest \
+            tests/analysis/test_analysis_loaders.py \
+            tests/analysis/test_treynor_viz.py \
+            --no-cov -q

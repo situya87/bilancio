@@ -1,10 +1,11 @@
-name: Quality Benchmarks
+name: Benchmark Health
 
 "on":
-  pull_request:
   push:
     branches:
       - main
+  schedule:
+    - cron: "0 5 * * *"
   workflow_dispatch:
 
 permissions:

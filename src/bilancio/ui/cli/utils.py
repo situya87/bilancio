@@ -1,21 +1,8 @@
-"""Shared utilities for CLI commands."""
+"""Compatibility exports for shared CLI utilities."""
 
 from __future__ import annotations
 
-from decimal import Decimal
+from ._common import as_decimal_list as _as_decimal_list
+from ._common import console
 
-from rich.console import Console
-
-from bilancio.experiments.ring import _decimal_list
-
-console = Console()
-
-
-def _as_decimal_list(value: object) -> list[Decimal]:
-    """Convert value to list of Decimals.
-
-    Handles both list/tuple input and comma-separated string input.
-    """
-    if isinstance(value, list | tuple):
-        return [Decimal(str(item)) for item in value]
-    return _decimal_list(str(value))
+__all__ = ["_as_decimal_list", "console"]
