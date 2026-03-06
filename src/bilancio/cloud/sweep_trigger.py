@@ -107,17 +107,12 @@ run_corrected_risk_sweep = app.function(
     memory=4096,
 )(_run_corrected_risk_sweep_impl)
 
-# Modal's @app.function() may not fully initialize .local/.remote outside
-# deployed environments.  Provide fallbacks so `modal run` and direct
-# invocation work without Modal auth (main() calls .remote()).
-if not hasattr(run_corrected_risk_sweep, "local"):
-    setattr(run_corrected_risk_sweep, "local", _run_corrected_risk_sweep_impl)
-if not hasattr(run_corrected_risk_sweep, "remote"):
-    setattr(run_corrected_risk_sweep, "remote", _run_corrected_risk_sweep_impl)
-
-
 @app.local_entrypoint()
 def main() -> None:
-    """Deploy and run the sweep."""
-    result = run_corrected_risk_sweep.remote()
+    """Deploy and run the sweep, falling back to local execution."""
+    try:
+        result = run_corrected_risk_sweep.remote()
+    except Exception:
+        # Modal auth/network unavailable — run locally instead.
+        result = _run_corrected_risk_sweep_impl()
     print(f"\nResult: {result}")

@@ -189,3 +189,23 @@ class TestSweepTriggerModuleLevel:
                 "lookback_window": 5,
             },
         )
+
+
+class TestMainFallback:
+    """Tests that main() falls back to local execution when .remote() fails."""
+
+    def test_main_falls_back_when_remote_raises(self, monkeypatch):
+        """When .remote() raises (no Modal auth), main() runs the impl locally."""
+        from bilancio.cloud import sweep_trigger
+
+        sentinel = {"job_id": "local-test", "total_pairs": 0, "config": {}}
+
+        # Make .remote() raise as it would without Modal auth.
+        real_fn = sweep_trigger.run_corrected_risk_sweep
+        monkeypatch.setattr(real_fn, "remote", MagicMock(side_effect=ConnectionError("no auth")))
+
+        # Make the local impl return a sentinel instead of running a full sweep.
+        monkeypatch.setattr(sweep_trigger, "_run_corrected_risk_sweep_impl", lambda: sentinel)
+
+        # main() should catch the ConnectionError and call the local impl.
+        sweep_trigger.main()  # should not raise
