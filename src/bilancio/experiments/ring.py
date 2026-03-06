@@ -308,6 +308,12 @@ class RingSweepRunner:
         trading_motive: str = "liquidity_then_earning",
         lender_mode: bool = False,
         lender_share: Decimal = Decimal("0.10"),
+        lender_base_rate: Decimal = Decimal("0.05"),
+        lender_risk_premium_scale: Decimal = Decimal("0.20"),
+        lender_max_single_exposure: Decimal = Decimal("0.15"),
+        lender_max_total_exposure: Decimal = Decimal("0.80"),
+        lender_maturity_days: int = 2,
+        lender_horizon: int = 3,
         lender_min_coverage: Decimal = Decimal("0.5"),
         lender_maturity_matching: bool = False,
         lender_min_loan_maturity: int = 2,
@@ -383,6 +389,12 @@ class RingSweepRunner:
         self.trading_motive = trading_motive
         self.lender_mode = lender_mode
         self.lender_share = lender_share
+        self.lender_base_rate = lender_base_rate
+        self.lender_risk_premium_scale = lender_risk_premium_scale
+        self.lender_max_single_exposure = lender_max_single_exposure
+        self.lender_max_total_exposure = lender_max_total_exposure
+        self.lender_maturity_days = lender_maturity_days
+        self.lender_horizon = lender_horizon
         self.lender_min_coverage = lender_min_coverage
         self.lender_maturity_matching = lender_maturity_matching
         self.lender_min_loan_maturity = lender_min_loan_maturity
@@ -932,12 +944,12 @@ class RingSweepRunner:
             if self.lender_mode:
                 scenario["lender"] = {
                     "enabled": True,
-                    "base_rate": "0.05",
-                    "risk_premium_scale": "0.20",
-                    "max_single_exposure": "0.15",
-                    "max_total_exposure": "0.80",
-                    "maturity_days": 2,
-                    "horizon": 5,
+                    "base_rate": str(self.lender_base_rate),
+                    "risk_premium_scale": str(self.lender_risk_premium_scale),
+                    "max_single_exposure": str(self.lender_max_single_exposure),
+                    "max_total_exposure": str(self.lender_max_total_exposure),
+                    "maturity_days": self.lender_maturity_days,
+                    "horizon": self.lender_horizon,
                     "kappa": str(kappa),  # LenderProfile: kappa-aware pricing
                     "risk_aversion": "0.3",
                     "planning_horizon": 5,
@@ -1360,12 +1372,12 @@ class RingSweepRunner:
             if self.lender_mode:
                 scenario["lender"] = {
                     "enabled": True,
-                    "base_rate": "0.05",
-                    "risk_premium_scale": "0.20",
-                    "max_single_exposure": "0.15",
-                    "max_total_exposure": "0.80",
-                    "maturity_days": 2,
-                    "horizon": 5,
+                    "base_rate": str(self.lender_base_rate),
+                    "risk_premium_scale": str(self.lender_risk_premium_scale),
+                    "max_single_exposure": str(self.lender_max_single_exposure),
+                    "max_total_exposure": str(self.lender_max_total_exposure),
+                    "maturity_days": self.lender_maturity_days,
+                    "horizon": self.lender_horizon,
                     "kappa": str(kappa),  # LenderProfile: kappa-aware pricing
                     "risk_aversion": "0.3",
                     "planning_horizon": 5,

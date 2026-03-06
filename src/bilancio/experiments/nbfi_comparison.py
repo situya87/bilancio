@@ -25,6 +25,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from bilancio.core.performance import PerformanceConfig
 from bilancio.experiments.ring import PreparedRun, RingRunSummary, RingSweepRunner
 from bilancio.runners import LocalExecutor, SimulationExecutor
 
@@ -156,6 +157,63 @@ class NBFIComparisonConfig(BaseModel):
     lender_max_total_exposure: Decimal = Field(default=Decimal("0.80"), description="Max fraction deployed")
     lender_maturity_days: int = Field(default=2, description="Loan term in days")
     lender_horizon: int = Field(default=3, description="Look-ahead for obligations")
+    lender_min_coverage: Decimal = Field(
+        default=Decimal("0.5"), description="NBFI min coverage ratio for borrower assessment"
+    )
+    lender_maturity_matching: bool = Field(
+        default=False, description="Match NBFI loan maturity to borrower's next receivable"
+    )
+    lender_min_loan_maturity: int = Field(
+        default=2, description="Floor for NBFI loan maturity when matching"
+    )
+    lender_max_loans_per_borrower_per_day: int = Field(
+        default=0, description="Max NBFI loans per borrower per day (0=unlimited)"
+    )
+    lender_ranking_mode: str = Field(
+        default="profit", description="NBFI ranking mode: profit, cascade, or blended"
+    )
+    lender_cascade_weight: Decimal = Field(
+        default=Decimal("0.5"), description="Weight for cascade score in blended ranking"
+    )
+    lender_coverage_mode: str = Field(
+        default="gate", description="NBFI coverage gate mode: gate or graduated"
+    )
+    lender_coverage_penalty_scale: Decimal = Field(
+        default=Decimal("0.10"), description="Rate premium per unit below coverage threshold"
+    )
+    lender_preventive_lending: bool = Field(
+        default=False, description="Enable NBFI proactive lending to at-risk agents"
+    )
+    lender_prevention_threshold: Decimal = Field(
+        default=Decimal("0.3"), description="Min issuer default probability to trigger preventive lending"
+    )
+    lender_marginal_relief_min_ratio: Decimal = Field(
+        default=Decimal("0"), description="Min expected default relief / expected intermediary loss"
+    )
+    lender_stress_risk_premium_scale: Decimal = Field(
+        default=Decimal("0"), description="Additional convex risk premium scale in stress"
+    )
+    lender_high_risk_default_threshold: Decimal = Field(
+        default=Decimal("0.70"), description="High-risk default-probability threshold for maturity cap"
+    )
+    lender_high_risk_maturity_cap: int = Field(
+        default=2, description="Max maturity for high-risk borrowers"
+    )
+    lender_daily_expected_loss_budget_ratio: Decimal = Field(
+        default=Decimal("0"), description="Per-day expected loss budget as fraction of lender capital"
+    )
+    lender_run_expected_loss_budget_ratio: Decimal = Field(
+        default=Decimal("0"), description="Run-level expected loss budget as fraction of lender capital"
+    )
+    lender_stop_loss_realized_ratio: Decimal = Field(
+        default=Decimal("0"), description="Pause lending when realized losses / capital exceed this ratio"
+    )
+    lender_collateralized_terms: bool = Field(
+        default=False, description="Cap NBFI loan principal by receivable collateral value"
+    )
+    lender_collateral_advance_rate: Decimal = Field(
+        default=Decimal("1.0"), description="Advance rate for collateralized NBFI terms"
+    )
 
     # Risk assessment configuration
     risk_assessment_enabled: bool = Field(default=True, description="Enable risk-based decisions")
@@ -180,6 +238,12 @@ class NBFIComparisonConfig(BaseModel):
     alpha_trader: Decimal = Field(default=Decimal("0"), description="Trader informedness")
     vbt_mid_sensitivity: Decimal = Field(default=Decimal("1.0"), description="VBT mid sensitivity")
     vbt_spread_sensitivity: Decimal = Field(default=Decimal("0.0"), description="VBT spread sensitivity")
+    flow_sensitivity: Decimal = Field(
+        default=Decimal("0.0"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="VBT flow-aware ask widening (0=disabled, 1=max)",
+    )
 
     # Bank parameters (both arms use bank deposits as MoP)
     n_banks: int = Field(default=3, description="Number of banks")
@@ -191,6 +255,12 @@ class NBFIComparisonConfig(BaseModel):
 
     # Detailed logging
     detailed_logging: bool = Field(default=False, description="Enable detailed CSV logging")
+
+    # Performance optimization flags
+    performance: dict[str, Any] = Field(
+        default_factory=dict,
+        description="PerformanceConfig flags dict (e.g. {'fast_atomic': True})",
+    )
 
 
 class NBFIComparisonRunner:
@@ -388,6 +458,8 @@ class NBFIComparisonRunner:
             reserve_multiplier=self.config.reserve_multiplier,
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
+            flow_sensitivity=self.config.flow_sensitivity,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
     def _get_lend_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
@@ -428,11 +500,38 @@ class NBFIComparisonRunner:
             trading_motive=self.config.trading_motive,
             lender_mode=True,  # NBFI actively lending
             lender_share=self.config.lender_share,
+            lender_base_rate=self.config.lender_base_rate,
+            lender_risk_premium_scale=self.config.lender_risk_premium_scale,
+            lender_max_single_exposure=self.config.lender_max_single_exposure,
+            lender_max_total_exposure=self.config.lender_max_total_exposure,
+            lender_maturity_days=self.config.lender_maturity_days,
+            lender_horizon=self.config.lender_horizon,
+            lender_min_coverage=self.config.lender_min_coverage,
+            lender_maturity_matching=self.config.lender_maturity_matching,
+            lender_min_loan_maturity=self.config.lender_min_loan_maturity,
+            lender_max_loans_per_borrower_per_day=self.config.lender_max_loans_per_borrower_per_day,
+            lender_ranking_mode=self.config.lender_ranking_mode,
+            lender_cascade_weight=self.config.lender_cascade_weight,
+            lender_coverage_mode=self.config.lender_coverage_mode,
+            lender_coverage_penalty_scale=self.config.lender_coverage_penalty_scale,
+            lender_preventive_lending=self.config.lender_preventive_lending,
+            lender_prevention_threshold=self.config.lender_prevention_threshold,
+            lender_marginal_relief_min_ratio=self.config.lender_marginal_relief_min_ratio,
+            lender_stress_risk_premium_scale=self.config.lender_stress_risk_premium_scale,
+            lender_high_risk_default_threshold=self.config.lender_high_risk_default_threshold,
+            lender_high_risk_maturity_cap=self.config.lender_high_risk_maturity_cap,
+            lender_daily_expected_loss_budget_ratio=self.config.lender_daily_expected_loss_budget_ratio,
+            lender_run_expected_loss_budget_ratio=self.config.lender_run_expected_loss_budget_ratio,
+            lender_stop_loss_realized_ratio=self.config.lender_stop_loss_realized_ratio,
+            lender_collateralized_terms=self.config.lender_collateralized_terms,
+            lender_collateral_advance_rate=self.config.lender_collateral_advance_rate,
             balanced_mode_override="nbfi_lend",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
             spread_scale=self.config.spread_scale,
             trading_rounds=self.config.trading_rounds,
+            flow_sensitivity=self.config.flow_sensitivity,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
     def _get_enabled_arm_defs(
