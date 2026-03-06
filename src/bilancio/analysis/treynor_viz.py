@@ -1,10 +1,13 @@
-"""Interactive Treynor pricing visualizations for dealer and bank kernels.
+"""Interactive Treynor pricing and interbank visualizations.
 
 Provides:
 - dealer_pricing_plane(): Static dealer Treynor diagram for one bucket/day
 - bank_pricing_plane(): Static bank Treynor diagram for one bank/day
 - dealer_pricing_animation(): Animated dealer diagram across days
 - bank_pricing_animation(): Animated bank diagram across days
+- interbank_market_outcomes(): Daily interbank clearing outcomes
+- interbank_flow_sankey(): Lender-borrower flow map
+- interbank_auction_mechanics(): Order-book and reserve-state view
 - yield_curve_static(): Single yield curve snapshot for one day
 - yield_curve_animation(): Animated yield curve across all days
 - yield_curve_timeseries(): Term structure evolution over time
@@ -14,11 +17,13 @@ Provides:
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 logger = logging.getLogger(__name__)
 
@@ -391,148 +396,373 @@ def bank_pricing_plane(
     The bank pricing plane is symmetric around x=0 (unlike the dealer which
     starts at x=0). Positive x = excess reserves, negative x = reserve deficit.
     """
-    X_star = symmetric_capacity
-    S = ticket_size
-    Omega = i_B - i_R
-    M_rate = (i_R + i_B) / 2
+    state = _compute_bank_plot_state(
+        i_R=i_R,
+        i_B=i_B,
+        symmetric_capacity=symmetric_capacity,
+        ticket_size=ticket_size,
+        inventory=inventory,
+        cash_tightness=cash_tightness,
+        risk_index=risk_index,
+        alpha=alpha,
+        gamma=gamma,
+        inside_width=inside_width,
+    )
+    traces, shapes, annotations = _build_bank_frame_full(
+        {
+            "day": day,
+            "bank_id": bank_id,
+            "reserve_remuneration_rate": i_R,
+            "cb_borrowing_rate": i_B,
+            "symmetric_capacity": symmetric_capacity,
+            "ticket_size": ticket_size,
+            "inside_width": inside_width,
+            "inventory": inventory,
+            "cash_tightness": cash_tightness,
+            "risk_index": risk_index,
+            "alpha": alpha,
+            "gamma": gamma,
+            "lambda_": lambda_,
+        },
+        bank_id=bank_id,
+    )
+    fig = go.Figure(data=traces)
 
-    # x-axis: symmetric range
-    x_bound = X_star + S
+    x_star = state["X_star"]
+    x_bound = state["x_bound"]
+    m_rate = state["M_rate"]
+
+    x_tick_vals = [-x_star, 0, x_star] if x_star > 0 else [-x_bound, 0, x_bound]
+    x_tick_text = (
+        [f"-X*={x_star:.0f}", "0", f"+X*={x_star:.0f}"]
+        if x_star > 0
+        else [f"{-x_bound:.0f}", "0", f"{x_bound:.0f}"]
+    )
+
+    if title is None:
+        title = f"Bank Treynor Pricing — {bank_id}, Day {day}"
+
+    fig.update_layout(
+        title={
+            "text": title,
+            "font": {"size": 16, "color": _BLACK, "family": "Georgia, serif"},
+        },
+        xaxis={
+            "title": {"text": ""},
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickvals": x_tick_vals,
+            "ticktext": x_tick_text,
+            "tickfont": {"size": 11, "color": "#444"},
+            "range": [-x_bound * 1.12, x_bound * 1.14],
+        },
+        yaxis={
+            "title": "Interest Rate (2-day effective)",
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickvals": [i_R, m_rate, i_B],
+            "ticktext": [f"i_R={i_R:.3f}", f"M={m_rate:.3f}", f"i_B={i_B:.3f}"],
+            "tickfont": {"size": 10, "color": _BLACK},
+            "range": [state["y_lo"], state["y_hi"]],
+        },
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=620,
+        shapes=shapes,
+        annotations=annotations,
+        legend={
+            "x": 0.0, "y": -0.22,
+            "orientation": "h",
+            "bgcolor": "rgba(250,250,250,0.9)",
+            "bordercolor": "#CCC",
+            "borderwidth": 0.5,
+            "font": {"size": 10, "color": "#333"},
+        },
+        margin={"l": 95, "r": 110, "t": 65, "b": 240},
+        font={"family": "Georgia, serif", "color": _BLACK},
+    )
+
+    return fig
+
+
+def _compute_bank_plot_state(
+    *,
+    i_R: float,
+    i_B: float,
+    symmetric_capacity: int,
+    ticket_size: int,
+    inventory: int,
+    cash_tightness: float,
+    risk_index: float,
+    alpha: float,
+    gamma: float,
+    inside_width: float,
+    x_bound_override: float | None = None,
+) -> dict[str, Any]:
+    """Compute reusable bank pricing geometry."""
+    x_star = float(symmetric_capacity)
+    ticket = float(ticket_size)
+    omega = i_B - i_R
+    m_rate = (i_R + i_B) / 2
+
+    x_bound = x_bound_override if x_bound_override is not None else x_star + ticket
     if x_bound <= 0:
-        x_bound = S if S > 0 else 100
+        x_bound = ticket if ticket > 0 else 100.0
+
     xs = np.linspace(-x_bound, x_bound, 400)
+    denom = 2 * (x_star + ticket)
+    slope = omega / denom if denom > 0 else 0.0
 
-    # Symmetric midline: m(x) = M_rate - slope * x
-    denom = 2 * (X_star + S)
-    slope = Omega / denom if denom > 0 else 0.0
-    midline_sym = M_rate - slope * xs
-
-    # Tilted midline: m_bank(x) = m(x) + alpha*L* + gamma*rho
+    midline_sym = m_rate - slope * xs
     tilt = alpha * cash_tightness + gamma * risk_index
     midline_tilted = midline_sym + tilt
 
-    # Inside quotes
-    half_I = inside_width / 2
-    r_ask = midline_tilted + half_I  # loan rate
-    r_bid_raw = midline_tilted - half_I  # raw deposit rate
-
-    # Deposit rate: clipped to [0, i_B]
+    half_i = inside_width / 2
+    r_ask = midline_tilted + half_i
+    r_bid_raw = midline_tilted - half_i
     r_deposit = np.clip(r_bid_raw, 0, i_B)
 
-    # Current position values
-    x_cur = inventory
-    if denom > 0:
-        mid_cur_sym = M_rate - slope * x_cur
-    else:
-        mid_cur_sym = M_rate
+    x_cur = float(inventory)
+    mid_cur_sym = m_rate - slope * x_cur if denom > 0 else m_rate
     mid_cur_tilted = mid_cur_sym + tilt
-    r_L_cur = mid_cur_tilted + half_I
-    r_D_cur = max(0.0, min(mid_cur_tilted - half_I, i_B))
+    r_l_cur = mid_cur_tilted + half_i
+    r_d_cur = float(max(0.0, min(mid_cur_tilted - half_i, i_B)))
+    mid_zero = m_rate + tilt
 
-    fig = go.Figure()
+    y_floor = min(i_R, float(np.min(r_deposit)), float(np.min(midline_tilted)))
+    y_ceiling = max(i_B, float(np.max(r_ask)), float(np.max(midline_tilted)))
+    y_pad = max(abs(omega) * 0.35, max(inside_width, 0.01) * 1.5, 0.01)
 
-    # CB corridor shading
-    fig.add_hrect(y0=i_R, y1=i_B, fillcolor="rgba(189, 195, 199, 0.15)",
-                  line_width=0, layer="below")
+    return {
+        "X_star": x_star,
+        "ticket": ticket,
+        "Omega": omega,
+        "M_rate": m_rate,
+        "x_bound": x_bound,
+        "xs": xs,
+        "slope": slope,
+        "tilt": tilt,
+        "half_I": half_i,
+        "midline_sym": midline_sym,
+        "midline_tilted": midline_tilted,
+        "r_ask": r_ask,
+        "r_deposit": r_deposit,
+        "x_cur": x_cur,
+        "mid_cur_sym": mid_cur_sym,
+        "mid_cur_tilted": mid_cur_tilted,
+        "r_L_cur": r_l_cur,
+        "r_D_cur": r_d_cur,
+        "mid_zero": mid_zero,
+        "y_end_mid": float(midline_tilted[-1]),
+        "y_lo": y_floor - y_pad,
+        "y_hi": y_ceiling + y_pad,
+    }
 
-    # CB bounds
-    fig.add_hline(y=i_B, line={"color": _CB_CEIL_COLOR, "width": 2},
-                  annotation_text=f"i_B={i_B:.4f}", annotation_position="top left")
-    fig.add_hline(y=i_R, line={"color": _CB_FLOOR_COLOR, "width": 2},
-                  annotation_text=f"i_R={i_R:.4f}", annotation_position="bottom left")
-    fig.add_hline(y=M_rate, line={"dash": "dot", "color": "gray", "width": 1},
-                  annotation_text=f"M={M_rate:.4f}", annotation_position="top right")
 
-    # Inside spread fill (between loan and deposit rates)
-    fig.add_trace(go.Scatter(
-        x=np.concatenate([xs, xs[::-1]]),
-        y=np.concatenate([r_ask, r_deposit[::-1]]),
-        fill="toself", fillcolor=_FILL_COLOR,
-        line={"width": 0}, showlegend=False, hoverinfo="skip",
-    ))
+def _build_bank_frame_full(
+    row: Any,
+    *,
+    bank_id: str | None = None,
+    x_bound_global: float | None = None,
+    y_lo: float | None = None,
+    y_hi: float | None = None,
+) -> tuple[list[go.BaseTraceType], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build traces, shapes, and annotations for one bank animation frame."""
+    bank_label = bank_id or str(row.get("bank_id", ""))
+    day = int(row["day"])
+    lambda_ = float(row["lambda_"])
 
-    # Symmetric midline (untilted)
-    if tilt > 1e-8:
-        fig.add_trace(go.Scatter(
-            x=xs, y=midline_sym, mode="lines",
-            line={"color": "gray", "width": 1, "dash": "dot"},
+    state = _compute_bank_plot_state(
+        i_R=float(row["reserve_remuneration_rate"]),
+        i_B=float(row["cb_borrowing_rate"]),
+        symmetric_capacity=int(row["symmetric_capacity"]),
+        ticket_size=int(row["ticket_size"]),
+        inventory=int(row["inventory"]),
+        cash_tightness=float(row["cash_tightness"]),
+        risk_index=float(row["risk_index"]),
+        alpha=float(row["alpha"]),
+        gamma=float(row["gamma"]),
+        inside_width=float(row["inside_width"]),
+        x_bound_override=x_bound_global,
+    )
+
+    y_bot = y_lo if y_lo is not None else state["y_lo"]
+    y_top = y_hi if y_hi is not None else state["y_hi"]
+    x_bound = state["x_bound"]
+    x_star = state["X_star"]
+    tick_w = x_bound * 0.024
+    bx = x_bound * 1.08
+    i_top = state["mid_zero"] + state["half_I"]
+    i_bot = max(0.0, min(float(row["cb_borrowing_rate"]), state["mid_zero"] - state["half_I"]))
+
+    traces: list[go.BaseTraceType] = [
+        go.Scatter(
+            x=np.concatenate([state["xs"], state["xs"][::-1]]).tolist(),
+            y=np.concatenate([state["r_ask"], state["r_deposit"][::-1]]).tolist(),
+            fill="toself",
+            fillcolor=_GRAY_SPREAD,
+            line={"width": 0},
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+        go.Scatter(
+            x=state["xs"].tolist(),
+            y=state["midline_sym"].tolist(),
+            mode="lines",
+            line={"color": "#AAA", "width": 1.0, "dash": "6px,4px"},
             name="Symmetric midline m(x)",
-        ))
+            opacity=1.0 if state["tilt"] > 1e-8 else 0.0,
+            showlegend=state["tilt"] > 1e-8,
+        ),
+        go.Scatter(
+            x=state["xs"].tolist(),
+            y=state["midline_tilted"].tolist(),
+            mode="lines",
+            line={"color": _BLACK, "width": 2.5},
+            name="Bank midline m_bank(x)" if state["tilt"] > 1e-8 else "Midline m(x)",
+        ),
+        go.Scatter(
+            x=state["xs"].tolist(),
+            y=state["r_ask"].tolist(),
+            mode="lines",
+            line={"color": _BLACK, "width": 1.5, "dash": "8px,4px"},
+            name="Loan rate r_L",
+        ),
+        go.Scatter(
+            x=state["xs"].tolist(),
+            y=state["r_deposit"].tolist(),
+            mode="lines",
+            line={"color": _BLACK, "width": 1.5, "dash": "8px,4px"},
+            name="Deposit rate r_D",
+        ),
+        go.Scatter(
+            x=[state["x_cur"], state["x_cur"]],
+            y=[y_bot, y_top],
+            mode="lines",
+            line={"color": _PURPLE, "width": 1.5},
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+        go.Scatter(
+            x=[state["x_cur"], state["x_cur"]],
+            y=[state["r_L_cur"], state["r_D_cur"]],
+            mode="markers+text",
+            marker={"size": 8, "color": _PURPLE},
+            text=[
+                f"  r_L({state['x_cur']:.0f})={state['r_L_cur']:.4f}",
+                f"  r_D({state['x_cur']:.0f})={state['r_D_cur']:.4f}",
+            ],
+            textposition=["top right", "bottom right"],
+            textfont={"size": 9, "color": _PURPLE},
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+    ]
 
-    # Tilted midline
-    fig.add_trace(go.Scatter(
-        x=xs, y=midline_tilted, mode="lines",
-        line={"color": _TILT_COLOR if tilt > 1e-8 else _MIDLINE_COLOR, "width": 2.5},
-        name="Bank midline m_bank(x)" if tilt > 1e-8 else "Midline m(x)",
-    ))
+    shapes = [
+        {"type": "rect", "x0": 0, "x1": 1, "xref": "paper", "y0": float(row["reserve_remuneration_rate"]),
+             "y1": float(row["cb_borrowing_rate"]), "fillcolor": _GRAY_LIGHT,
+             "line": {"width": 0}, "layer": "below"},
+        {"type": "line", "x0": 0, "x1": 1, "xref": "paper",
+             "y0": float(row["cb_borrowing_rate"]), "y1": float(row["cb_borrowing_rate"]),
+             "line": {"color": "#BBB", "width": 1.5}, "layer": "below"},
+        {"type": "line", "x0": 0, "x1": 1, "xref": "paper",
+             "y0": float(row["reserve_remuneration_rate"]), "y1": float(row["reserve_remuneration_rate"]),
+             "line": {"color": "#BBB", "width": 1.5}, "layer": "below"},
+        {"type": "line", "x0": 0, "x1": 1, "xref": "paper",
+             "y0": state["M_rate"], "y1": state["M_rate"],
+             "line": {"color": "#CCC", "width": 1, "dash": "6px,4px"}, "layer": "below"},
+        {"type": "line", "x0": -x_star, "x1": -x_star, "y0": 0, "y1": 1, "yref": "paper",
+             "line": {"color": "#BBB", "width": 1.2}, "layer": "below"},
+        {"type": "line", "x0": 0, "x1": 0, "y0": 0, "y1": 1, "yref": "paper",
+             "line": {"color": "#DDD", "width": 0.8, "dash": "4px,4px"}, "layer": "below"},
+        {"type": "line", "x0": x_star, "x1": x_star, "y0": 0, "y1": 1, "yref": "paper",
+             "line": {"color": "#BBB", "width": 1.2}, "layer": "below"},
+        {"type": "line", "x0": bx, "x1": bx, "y0": float(row["cb_borrowing_rate"]),
+             "y1": float(row["reserve_remuneration_rate"]),
+             "line": {"color": _GRAY_MID, "width": 1}},
+        {"type": "line", "x0": bx - tick_w, "x1": bx + tick_w,
+             "y0": float(row["cb_borrowing_rate"]), "y1": float(row["cb_borrowing_rate"]),
+             "line": {"color": _GRAY_MID, "width": 1}},
+        {"type": "line", "x0": bx - tick_w, "x1": bx + tick_w,
+             "y0": float(row["reserve_remuneration_rate"]), "y1": float(row["reserve_remuneration_rate"]),
+             "line": {"color": _GRAY_MID, "width": 1}},
+        {"type": "line", "x0": 0, "x1": 0, "y0": i_top, "y1": i_bot,
+             "line": {"color": _BLACK, "width": 1.2}},
+        {"type": "line", "x0": -tick_w, "x1": tick_w, "y0": i_top, "y1": i_top,
+             "line": {"color": _BLACK, "width": 1.2}},
+        {"type": "line", "x0": -tick_w, "x1": tick_w, "y0": i_bot, "y1": i_bot,
+             "line": {"color": _BLACK, "width": 1.2}},
+    ]
 
-    # Loan rate (ask)
-    fig.add_trace(go.Scatter(
-        x=xs, y=r_ask, mode="lines",
-        line={"color": _ASK_COLOR, "width": 1.5, "dash": "dash"},
-        name="Loan rate r_L",
-    ))
+    annotations = [
+        {"x": bx, "y": (float(row["cb_borrowing_rate"]) + float(row["reserve_remuneration_rate"])) / 2,
+             "text": f"<b>Ω</b> = {state['Omega']:.4f}", "showarrow": False, "xshift": 45,
+             "font": {"size": 11, "color": _BLACK}},
+        {"x": x_bound, "y": float(row["cb_borrowing_rate"]), "text": "(CB lending ceiling)",
+             "showarrow": False, "xshift": 45, "yshift": 8, "xanchor": "left",
+             "font": {"size": 9, "color": _GRAY_MID}},
+        {"x": x_bound, "y": float(row["reserve_remuneration_rate"]), "text": "(reserve floor)",
+             "showarrow": False, "xshift": 45, "yshift": -8, "xanchor": "left",
+             "font": {"size": 9, "color": _GRAY_MID}},
+        {"x": 0, "y": (i_top + i_bot) / 2, "text": f"<b>I</b> = {float(row['inside_width']):.5f}",
+             "showarrow": False, "xshift": 45, "yshift": 15,
+             "font": {"size": 11, "color": _BLACK}},
+        {"x": x_bound, "y": state["y_end_mid"], "text": "<b>m_bank(x)</b>",
+             "showarrow": False, "xshift": 5, "xanchor": "left",
+             "font": {"size": 11, "color": _BLACK}},
+        {"x": x_bound, "y": state["y_end_mid"], "text": "<b>r_L(x)</b>",
+             "showarrow": False, "xshift": 5, "yshift": 14, "xanchor": "left",
+             "font": {"size": 10, "color": _BLACK}},
+        {"x": x_bound, "y": state["y_end_mid"], "text": "<b>r_D(x)</b>",
+             "showarrow": False, "xshift": 5, "yshift": -14, "xanchor": "left",
+             "font": {"size": 10, "color": _BLACK}},
+        {"text": (
+                 f"Bank: <b>{bank_label}</b>  |  Day: <b>{day}</b>  |  "
+                 f"x = {state['x_cur']:.0f}  |  X* = {x_star:.0f}  |  S = {state['ticket']:.0f}  |  "
+                 f"M = {state['M_rate']:.4f}  |  Ω = {state['Omega']:.4f}  |  I = {float(row['inside_width']):.5f}  |  "
+                 f"λ = {lambda_:.4f}  |  L* = {float(row['cash_tightness']):.4f}  |  ρ = {float(row['risk_index']):.4f}"
+                 + (f"  |  tilt = {state['tilt']:.4f}" if state["tilt"] > 1e-8 else "")),
+             "xref": "paper", "yref": "paper", "x": 0.0, "y": 1.01,
+             "showarrow": False, "xanchor": "left", "yanchor": "bottom",
+             "font": {"size": 9, "color": _GRAY_MID, "family": "Calibri, sans-serif"},
+             "align": "left"},
+        {"text": "Deficit: higher loan rates \u2190",
+             "x": -x_star * 0.55 if x_star > 0 else -x_bound * 0.55, "y": y_bot,
+             "showarrow": False, "yshift": -28,
+             "font": {"size": 9, "color": "#888"}},
+        {"text": "\u2192 Surplus: stronger deposit bids",
+             "x": x_star * 0.55 if x_star > 0 else x_bound * 0.55, "y": y_bot,
+             "showarrow": False, "yshift": -28,
+             "font": {"size": 9, "color": "#888"}},
+        {"text": "Reserve position x = R(t+2) \u2212 R_target",
+             "xref": "paper", "yref": "paper", "x": 0.39, "y": -0.10,
+             "showarrow": False,
+             "font": {"size": 10, "color": _BLACK, "family": "Georgia, serif"}},
+        {"text": (
+                 "m(x) = M \u2212 [\u03a9 / 2(X*+S)] \u00b7 x          "
+                 "m_bank(x) = m(x) + \u03b1L* + \u03b3\u03c1<br>"
+                 "r_L(x) = m_bank(x) + I/2          "
+                 "r_D(x) = clip(m_bank(x) \u2212 I/2, 0, i_B)"),
+             "xref": "paper", "yref": "paper", "x": 0.0, "y": -0.40,
+             "showarrow": False, "xanchor": "left",
+             "font": {"size": 10, "color": _BLACK, "family": "Calibri, sans-serif"},
+             "align": "left"},
+    ]
 
-    # Deposit rate (bid, clipped)
-    fig.add_trace(go.Scatter(
-        x=xs, y=r_deposit, mode="lines",
-        line={"color": _BID_COLOR, "width": 1.5, "dash": "dash"},
-        name="Deposit rate r_D",
-    ))
-
-    # Capacity markers
-    if X_star > 0:
-        fig.add_vline(x=X_star, line={"dash": "dot", "color": "gray", "width": 1},
-                      annotation_text=f"+X*={X_star}", annotation_position="top right")
-        fig.add_vline(x=-X_star, line={"dash": "dot", "color": "gray", "width": 1},
-                      annotation_text=f"-X*={-X_star}", annotation_position="top left")
-
-    # Current position marker
-    fig.add_trace(go.Scatter(
-        x=[x_cur], y=[mid_cur_tilted], mode="markers+text",
-        marker={"size": 12, "color": _POSITION_COLOR, "symbol": "diamond"},
-        text=[f"x={x_cur}"], textposition="top center",
-        name=f"Current (day {day})",
-    ))
-    fig.add_vline(x=x_cur, line={"dash": "dash", "color": _POSITION_COLOR, "width": 1})
-
-    # Title
-    if title is None:
-        title = f"Bank Treynor Pricing — {bank_id}, Day {day}"
-    fig.update_layout(
-        title=title,
-        xaxis_title="Reserve position x = R(t+2) - R_target",
-        yaxis_title="Interest Rate (2-day effective)",
-        template="plotly_white",
-        height=500,
-        legend={"x": 0.01, "y": 0.99, "bgcolor": "rgba(255,255,255,0.8)"},
-        margin={"l": 60, "r": 30, "t": 60, "b": 50},
-    )
-
-    # Spread annotations
-    fig.add_annotation(
-        x=x_cur, y=(r_L_cur + r_D_cur) / 2,
-        text=f"I={inside_width:.4f}",
-        showarrow=False, xshift=40,
-        font={"size": 10, "color": "#7f8c8d"},
-    )
-    fig.add_annotation(
-        x=-x_bound * 0.9, y=(i_B + i_R) / 2,
-        text=f"Omega={Omega:.4f}",
-        showarrow=False,
-        font={"size": 10, "color": "#7f8c8d"},
-    )
-
-    if tilt > 1e-8:
-        fig.add_annotation(
-            x=x_cur, y=mid_cur_tilted,
-            ax=x_cur, ay=mid_cur_sym,
-            text=f"tilt={tilt:.4f}",
-            showarrow=True, arrowhead=2, arrowcolor=_TILT_COLOR,
-            xshift=50, font={"size": 9, "color": _TILT_COLOR},
+    if state["tilt"] > 1e-8:
+        annotations.append(
+            {"x": state["x_cur"], "y": state["mid_cur_tilted"], "ax": state["x_cur"], "ay": state["mid_cur_sym"],
+                 "text": f"tilt={state['tilt']:.4f}", "showarrow": True, "arrowhead": 2,
+                 "arrowcolor": _PURPLE, "xshift": 50,
+                 "font": {"size": 9, "color": _PURPLE}},
         )
 
-    return fig
+    return traces, shapes, annotations
 
 
 # =====================================================================
@@ -917,14 +1147,54 @@ def bank_pricing_animation(
 
     days = sorted(df["day"].unique())
 
+    all_x_bounds: list[float] = []
+    all_y_los: list[float] = []
+    all_y_his: list[float] = []
+    for _, row in df.iterrows():
+        state = _compute_bank_plot_state(
+            i_R=float(row["reserve_remuneration_rate"]),
+            i_B=float(row["cb_borrowing_rate"]),
+            symmetric_capacity=int(row["symmetric_capacity"]),
+            ticket_size=int(row["ticket_size"]),
+            inventory=int(row["inventory"]),
+            cash_tightness=float(row["cash_tightness"]),
+            risk_index=float(row["risk_index"]),
+            alpha=float(row["alpha"]),
+            gamma=float(row["gamma"]),
+            inside_width=float(row["inside_width"]),
+        )
+        all_x_bounds.append(state["x_bound"])
+        all_y_los.append(state["y_lo"])
+        all_y_his.append(state["y_hi"])
+
+    g_x_bound = max(all_x_bounds)
+    g_y_lo = min(all_y_los)
+    g_y_hi = max(all_y_his)
+
     frames = []
     for d in days:
         row = df[df["day"] == d].iloc[0]
-        frame_traces = _build_bank_frame_traces(row)
-        frames.append(go.Frame(data=frame_traces, name=str(d)))
+        frame_traces, frame_shapes, frame_annotations = _build_bank_frame_full(
+            row,
+            bank_id=bank_id,
+            x_bound_global=g_x_bound,
+            y_lo=g_y_lo,
+            y_hi=g_y_hi,
+        )
+        frames.append(go.Frame(
+            data=frame_traces,
+            layout=go.Layout(shapes=frame_shapes, annotations=frame_annotations),
+            name=str(d),
+        ))
 
     first_row = df[df["day"] == days[0]].iloc[0]
-    initial_traces = _build_bank_frame_traces(first_row)
+    initial_traces, initial_shapes, initial_annotations = _build_bank_frame_full(
+        first_row,
+        bank_id=bank_id,
+        x_bound_global=g_x_bound,
+        y_lo=g_y_lo,
+        y_hi=g_y_hi,
+    )
 
     fig = go.Figure(data=initial_traces, frames=frames)
 
@@ -952,84 +1222,48 @@ def bank_pricing_animation(
     }]
 
     fig.update_layout(
-        title=f"Bank Treynor Pricing Animation — {bank_id}",
-        xaxis_title="Reserve position x = R(t+2) - R_target",
-        yaxis_title="Interest Rate (2-day effective)",
-        template="plotly_white",
-        height=550,
+        title={
+            "text": f"Bank Treynor Pricing Animation — {bank_id}",
+            "font": {"size": 16, "color": _BLACK, "family": "Georgia, serif"},
+        },
+        xaxis={
+            "title": {"text": ""},
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickfont": {"size": 11, "color": "#444"},
+            "range": [-g_x_bound * 1.12, g_x_bound * 1.14],
+        },
+        yaxis={
+            "title": "Interest Rate (2-day effective)",
+            "showgrid": False,
+            "zeroline": False,
+            "linecolor": _BLACK,
+            "linewidth": 1.5,
+            "tickfont": {"size": 10, "color": _BLACK},
+            "range": [g_y_lo, g_y_hi],
+        },
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=760,
         sliders=sliders,
         updatemenus=updatemenus,
-        legend={"x": 0.01, "y": 0.99, "bgcolor": "rgba(255,255,255,0.8)"},
+        shapes=initial_shapes,
+        annotations=initial_annotations,
+        legend={
+            "x": 0.0, "y": -0.30,
+            "orientation": "h",
+            "bgcolor": "rgba(250,250,250,0.9)",
+            "bordercolor": "#CCC",
+            "borderwidth": 0.5,
+            "font": {"size": 10, "color": "#333"},
+        },
+        margin={"l": 95, "r": 110, "t": 65, "b": 255},
+        font={"family": "Georgia, serif", "color": _BLACK},
     )
 
     return fig
-
-
-def _build_bank_frame_traces(row: Any) -> list[go.BaseTraceType]:
-    """Build Plotly traces for one bank animation frame."""
-    i_R = float(row["reserve_remuneration_rate"])
-    i_B = float(row["cb_borrowing_rate"])
-    X_star = int(row["symmetric_capacity"])
-    S = int(row["ticket_size"])
-    I_w = float(row["inside_width"])
-    x_cur = int(row["inventory"])
-    L_star = float(row["cash_tightness"])
-    rho = float(row["risk_index"])
-    alpha = float(row["alpha"])
-    gamma = float(row["gamma"])
-    day = int(row["day"])
-
-    Omega = i_B - i_R
-    M_rate = (i_R + i_B) / 2
-
-    x_bound = X_star + S
-    if x_bound <= 0:
-        x_bound = S if S > 0 else 100
-    xs = np.linspace(-x_bound, x_bound, 400)
-
-    denom = 2 * (X_star + S)
-    slope = Omega / denom if denom > 0 else 0.0
-    midline_tilted = M_rate - slope * xs + alpha * L_star + gamma * rho
-    half_I = I_w / 2
-    r_ask = midline_tilted + half_I
-    r_deposit = np.clip(midline_tilted - half_I, 0, i_B)
-
-    tilt = alpha * L_star + gamma * rho
-    mid_cur = M_rate - slope * x_cur + tilt
-
-    traces = [
-        # Fill
-        go.Scatter(
-            x=np.concatenate([xs, xs[::-1]]).tolist(),
-            y=np.concatenate([r_ask, r_deposit[::-1]]).tolist(),
-            fill="toself", fillcolor=_FILL_COLOR,
-            line={"width": 0}, showlegend=False, hoverinfo="skip",
-        ),
-        # Tilted midline
-        go.Scatter(
-            x=xs.tolist(), y=midline_tilted.tolist(), mode="lines",
-            line={"color": _TILT_COLOR if tilt > 1e-8 else _MIDLINE_COLOR, "width": 2.5},
-            name="Bank midline",
-        ),
-        # Loan rate
-        go.Scatter(
-            x=xs.tolist(), y=r_ask.tolist(), mode="lines",
-            line={"color": _ASK_COLOR, "width": 1.5, "dash": "dash"}, name="Loan rate r_L",
-        ),
-        # Deposit rate
-        go.Scatter(
-            x=xs.tolist(), y=r_deposit.tolist(), mode="lines",
-            line={"color": _BID_COLOR, "width": 1.5, "dash": "dash"}, name="Deposit rate r_D",
-        ),
-        # Position
-        go.Scatter(
-            x=[x_cur], y=[mid_cur], mode="markers+text",
-            marker={"size": 12, "color": _POSITION_COLOR, "symbol": "diamond"},
-            text=[f"x={x_cur}, d={day}"], textposition="top center",
-            name="Current",
-        ),
-    ]
-    return traces
 
 
 # =====================================================================
@@ -1444,7 +1678,583 @@ def _add_yield_curve_sections(
 
 
 # =====================================================================
-# 6. Dashboard builder
+# 6. Interbank market
+# =====================================================================
+
+def _load_run_events(run_dir: Path | str) -> list[dict[str, Any]]:
+    """Load events.jsonl from a run directory or run_dir/out."""
+    from bilancio.analysis.loaders import read_events_jsonl
+
+    run_path = Path(run_dir)
+    for candidate in (run_path / "events.jsonl", run_path / "out" / "events.jsonl"):
+        if candidate.exists():
+            return list(read_events_jsonl(candidate))
+    return []
+
+
+def _to_float(value: Any) -> float | None:
+    """Best-effort float conversion for plotting."""
+    if value is None:
+        return None
+    try:
+        return float(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def interbank_market_outcomes(events: list[dict[str, Any]]) -> go.Figure | None:
+    """Daily interbank auction outcomes: volume, residual unmet demand, and rate."""
+    summaries = sorted(
+        [evt for evt in events if evt.get("kind") == "InterbankAuction"],
+        key=lambda evt: int(evt.get("day", 0)),
+    )
+    if not summaries:
+        return None
+
+    unfilled_by_day: dict[int, float] = defaultdict(float)
+    for evt in events:
+        if evt.get("kind") != "InterbankUnfilled":
+            continue
+        day = int(evt.get("day", 0))
+        amount = _to_float(evt.get("amount")) or 0.0
+        unfilled_by_day[day] += amount
+
+    days = [int(evt.get("day", 0)) for evt in summaries]
+    volumes = [float(evt.get("total_volume", 0) or 0) for evt in summaries]
+    unfilled = [unfilled_by_day.get(day, 0.0) for day in days]
+    rates = [_to_float(evt.get("clearing_rate")) for evt in summaries]
+    trades = [int(evt.get("n_trades", 0) or 0) for evt in summaries]
+
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.10,
+        row_heights=[0.58, 0.42],
+        specs=[[{}], [{"secondary_y": True}]],
+    )
+    fig.add_trace(
+        go.Bar(
+            x=days,
+            y=volumes,
+            name="Cleared volume",
+            marker={"color": "#111111"},
+        ),
+        row=1,
+        col=1,
+    )
+    fig.add_trace(
+        go.Bar(
+            x=days,
+            y=unfilled,
+            name="Unfilled demand",
+            marker={"color": "#C7C7C7"},
+        ),
+        row=1,
+        col=1,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=days,
+            y=rates,
+            mode="lines+markers",
+            line={"color": _PURPLE, "width": 2.5},
+            marker={"size": 8, "color": _PURPLE},
+            name="Clearing rate",
+        ),
+        row=2,
+        col=1,
+        secondary_y=False,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=days,
+            y=trades,
+            mode="lines+markers",
+            line={"color": _BLACK, "width": 1.6, "dash": "6px,4px"},
+            marker={"size": 7, "color": _BLACK},
+            name="Matched trades",
+        ),
+        row=2,
+        col=1,
+        secondary_y=True,
+    )
+
+    fig.update_layout(
+        title={
+            "text": "Interbank Market Outcomes",
+            "font": {"size": 16, "color": _BLACK, "family": "Georgia, serif"},
+        },
+        barmode="group",
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=680,
+        legend={
+            "x": 0.0, "y": -0.18,
+            "orientation": "h",
+            "bgcolor": "rgba(250,250,250,0.9)",
+            "bordercolor": "#CCC",
+            "borderwidth": 0.5,
+            "font": {"size": 10, "color": "#333"},
+        },
+        margin={"l": 85, "r": 85, "t": 70, "b": 130},
+        font={"family": "Georgia, serif", "color": _BLACK},
+    )
+    fig.update_xaxes(
+        title_text="Day",
+        showgrid=False,
+        zeroline=False,
+        linecolor=_BLACK,
+        linewidth=1.5,
+        tickfont={"size": 11, "color": "#444"},
+        row=2,
+        col=1,
+    )
+    fig.update_yaxes(
+        title_text="Reserve volume",
+        showgrid=True,
+        gridcolor=_GRAY_LIGHT,
+        zeroline=False,
+        linecolor=_BLACK,
+        linewidth=1.5,
+        tickfont={"size": 10, "color": _BLACK},
+        row=1,
+        col=1,
+    )
+    fig.update_yaxes(
+        title_text="Clearing rate",
+        tickformat=".2%",
+        showgrid=False,
+        zeroline=False,
+        linecolor=_BLACK,
+        linewidth=1.5,
+        tickfont={"size": 10, "color": _BLACK},
+        row=2,
+        col=1,
+        secondary_y=False,
+    )
+    fig.update_yaxes(
+        title_text="Matched trades",
+        showgrid=False,
+        zeroline=False,
+        linecolor=_BLACK,
+        linewidth=1.5,
+        tickfont={"size": 10, "color": _BLACK},
+        row=2,
+        col=1,
+        secondary_y=True,
+    )
+    fig.add_annotation(
+        text="Black bars are cleared reserve transfers. Gray bars are residual borrowing demand left for the backstop.",
+        xref="paper",
+        yref="paper",
+        x=0.0,
+        y=1.02,
+        showarrow=False,
+        xanchor="left",
+        font={"size": 9, "color": _GRAY_MID, "family": "Calibri, sans-serif"},
+    )
+
+    return fig
+
+
+def interbank_flow_sankey(events: list[dict[str, Any]]) -> go.Figure | None:
+    """Aggregate lender-borrower reserve flows into a Sankey map."""
+    trades = [evt for evt in events if evt.get("kind") == "InterbankAuctionTrade"]
+    if not trades:
+        return None
+
+    pair_volume: dict[tuple[str, str], float] = defaultdict(float)
+    trade_days: set[int] = set()
+    for evt in trades:
+        lender = str(evt.get("lender", ""))
+        borrower = str(evt.get("borrower", ""))
+        if not lender or not borrower:
+            continue
+        pair_volume[(lender, borrower)] += _to_float(evt.get("amount")) or 0.0
+        trade_days.add(int(evt.get("day", 0)))
+
+    if not pair_volume:
+        return None
+
+    labels = sorted({bank for pair in pair_volume for bank in pair})
+    index = {label: i for i, label in enumerate(labels)}
+    sources = [index[lender] for lender, _ in pair_volume]
+    targets = [index[borrower] for _, borrower in pair_volume]
+    values = list(pair_volume.values())
+
+    fig = go.Figure(data=[go.Sankey(
+        arrangement="snap",
+        node={
+            "label": labels,
+            "pad": 18,
+            "thickness": 18,
+            "color": ["#E5E7EB"] * len(labels),
+            "line": {"color": "#111111", "width": 0.6},
+        },
+        link={
+            "source": sources,
+            "target": targets,
+            "value": values,
+            "color": ["rgba(124,58,237,0.28)"] * len(values),
+        },
+    )])
+    fig.update_layout(
+        title={
+            "text": "Interbank Lending Flows",
+            "font": {"size": 16, "color": _BLACK, "family": "Georgia, serif"},
+        },
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=520,
+        margin={"l": 20, "r": 20, "t": 65, "b": 70},
+        font={"family": "Georgia, serif", "color": _BLACK},
+    )
+    fig.add_annotation(
+        text=f"Aggregated across {len(trade_days)} auction day(s). Link width is total reserve lending volume.",
+        xref="paper",
+        yref="paper",
+        x=0.0,
+        y=1.03,
+        showarrow=False,
+        xanchor="left",
+        font={"size": 9, "color": _GRAY_MID, "family": "Calibri, sans-serif"},
+    )
+
+    return fig
+
+
+def _book_step_points(
+    orders: list[dict[str, Any]],
+) -> tuple[list[float], list[float], list[float], list[float], list[str]]:
+    """Convert quantity/rate orders into step-curve and marker points."""
+    x_points: list[float] = []
+    y_points: list[float] = []
+    marker_x: list[float] = []
+    marker_y: list[float] = []
+    labels: list[str] = []
+    cumulative = 0.0
+
+    for order in orders:
+        quantity = _to_float(order.get("quantity")) or 0.0
+        rate = _to_float(order.get("limit_rate"))
+        if quantity <= 0 or rate is None:
+            continue
+        x_points.extend([cumulative, cumulative + quantity])
+        y_points.extend([rate, rate])
+        marker_x.append(cumulative + quantity / 2)
+        marker_y.append(rate)
+        labels.append(f"{order.get('bank_id', '')} ({quantity:.0f})")
+        cumulative += quantity
+
+    return x_points, y_points, marker_x, marker_y, labels
+
+
+def _latest_interbank_summary(
+    events: list[dict[str, Any]],
+    day: int | None = None,
+) -> dict[str, Any] | None:
+    """Select the latest auction summary, optionally constrained to a day."""
+    summaries = sorted(
+        [evt for evt in events if evt.get("kind") == "InterbankAuction"],
+        key=lambda evt: int(evt.get("day", 0)),
+    )
+    if not summaries:
+        return None
+    if day is not None:
+        for summary in reversed(summaries):
+            if int(summary.get("day", -1)) == day:
+                return summary
+        return None
+    for summary in reversed(summaries):
+        market_state = summary.get("market_state") or {}
+        if market_state.get("positions"):
+            return summary
+    return summaries[-1]
+
+
+def interbank_auction_mechanics(
+    events: list[dict[str, Any]],
+    day: int | None = None,
+) -> go.Figure | None:
+    """Show the latest interbank order book plus reserve positions and limit rates."""
+    summary = _latest_interbank_summary(events, day=day)
+    if summary is None:
+        return None
+
+    market_state = summary.get("market_state") or {}
+    positions = list(market_state.get("positions") or [])
+    lender_asks = list(market_state.get("lender_asks") or [])
+    borrower_bids = list(market_state.get("borrower_bids") or [])
+    if not positions:
+        return None
+
+    day_value = int(summary.get("day", 0))
+    clearing_rate = _to_float(summary.get("clearing_rate"))
+    total_volume = float(summary.get("total_volume", 0) or 0)
+
+    supply_x, supply_y, supply_mx, supply_my, supply_labels = _book_step_points(lender_asks)
+    demand_x, demand_y, demand_mx, demand_my, demand_labels = _book_step_points(borrower_bids)
+
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        vertical_spacing=0.14,
+        row_heights=[0.56, 0.44],
+        specs=[[{}], [{"secondary_y": True}]],
+    )
+
+    if supply_x:
+        fig.add_trace(
+            go.Scatter(
+                x=supply_x,
+                y=supply_y,
+                mode="lines",
+                line={"color": _BLACK, "width": 2.4},
+                name="Supply asks",
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=supply_mx,
+                y=supply_my,
+                mode="markers+text",
+                marker={"size": 8, "color": _BLACK},
+                text=supply_labels,
+                textposition="top center",
+                textfont={"size": 9, "color": _BLACK},
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            row=1,
+            col=1,
+        )
+
+    if demand_x:
+        fig.add_trace(
+            go.Scatter(
+                x=demand_x,
+                y=demand_y,
+                mode="lines",
+                line={"color": "#777777", "width": 2.2, "dash": "8px,4px"},
+                name="Demand bids",
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=demand_mx,
+                y=demand_my,
+                mode="markers+text",
+                marker={"size": 8, "color": "#777777"},
+                text=demand_labels,
+                textposition="bottom center",
+                textfont={"size": 9, "color": "#666666"},
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            row=1,
+            col=1,
+        )
+
+    if clearing_rate is not None:
+        fig.add_hline(
+            y=clearing_rate,
+            row=1,
+            col=1,
+            line={"color": _PURPLE, "width": 1.8, "dash": "6px,4px"},
+            annotation_text=f"r* = {clearing_rate:.4f}",
+            annotation_position="top right",
+        )
+    if total_volume > 0:
+        fig.add_vline(
+            x=total_volume,
+            row=1,
+            col=1,
+            line={"color": _PURPLE, "width": 1.5},
+            annotation_text=f"Matched = {total_volume:.0f}",
+            annotation_position="top left",
+        )
+
+    ordered_positions = sorted(
+        positions,
+        key=lambda item: (-(_to_float(item.get("position")) or 0.0), str(item.get("bank_id", ""))),
+    )
+    bank_ids = [str(item.get("bank_id", "")) for item in ordered_positions]
+    reserve_positions = [_to_float(item.get("position")) or 0.0 for item in ordered_positions]
+    limit_rates = [_to_float(item.get("limit_rate")) for item in ordered_positions]
+    position_colors = [
+        "#111111" if value > 0 else "#C7C7C7" if value < 0 else "#888888"
+        for value in reserve_positions
+    ]
+
+    fig.add_trace(
+        go.Bar(
+            x=bank_ids,
+            y=reserve_positions,
+            name="Reserve position x_i",
+            marker={"color": position_colors, "line": {"color": "#111111", "width": 0.6}},
+        ),
+        row=2,
+        col=1,
+        secondary_y=False,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=bank_ids,
+            y=limit_rates,
+            mode="lines+markers",
+            line={"color": _PURPLE, "width": 2.2},
+            marker={"size": 8, "color": _PURPLE},
+            name="Limit rate",
+        ),
+        row=2,
+        col=1,
+        secondary_y=True,
+    )
+    fig.add_hline(
+        y=0,
+        row=2,
+        col=1,
+        line={"color": "#A3A3A3", "width": 1, "dash": "4px,4px"},
+    )
+
+    fig.update_layout(
+        title={
+            "text": f"Interbank Auction Mechanics — Day {day_value}",
+            "font": {"size": 16, "color": _BLACK, "family": "Georgia, serif"},
+        },
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=760,
+        legend={
+            "x": 0.0, "y": -0.17,
+            "orientation": "h",
+            "bgcolor": "rgba(250,250,250,0.9)",
+            "bordercolor": "#CCC",
+            "borderwidth": 0.5,
+            "font": {"size": 10, "color": "#333"},
+        },
+        margin={"l": 90, "r": 90, "t": 70, "b": 125},
+        font={"family": "Georgia, serif", "color": _BLACK},
+    )
+    fig.update_xaxes(
+        title_text="Cumulative reserve volume",
+        showgrid=False,
+        zeroline=False,
+        linecolor=_BLACK,
+        linewidth=1.5,
+        tickfont={"size": 11, "color": "#444"},
+        row=1,
+        col=1,
+    )
+    fig.update_yaxes(
+        title_text="Limit rate",
+        tickformat=".2%",
+        showgrid=True,
+        gridcolor=_GRAY_LIGHT,
+        zeroline=False,
+        linecolor=_BLACK,
+        linewidth=1.5,
+        tickfont={"size": 10, "color": _BLACK},
+        row=1,
+        col=1,
+    )
+    fig.update_xaxes(
+        title_text="Bank",
+        showgrid=False,
+        zeroline=False,
+        linecolor=_BLACK,
+        linewidth=1.5,
+        tickfont={"size": 11, "color": "#444"},
+        row=2,
+        col=1,
+    )
+    fig.update_yaxes(
+        title_text="Reserve position x_i",
+        showgrid=True,
+        gridcolor=_GRAY_LIGHT,
+        zeroline=False,
+        linecolor=_BLACK,
+        linewidth=1.5,
+        tickfont={"size": 10, "color": _BLACK},
+        row=2,
+        col=1,
+        secondary_y=False,
+    )
+    fig.update_yaxes(
+        title_text="Limit rate",
+        tickformat=".2%",
+        showgrid=False,
+        zeroline=False,
+        linecolor=_BLACK,
+        linewidth=1.5,
+        tickfont={"size": 10, "color": _BLACK},
+        row=2,
+        col=1,
+        secondary_y=True,
+    )
+    fig.add_annotation(
+        text=(
+            "Top panel: supply and demand curves built from the auction book. "
+            "Bottom panel: each bank's reserve position and implied limit rate."
+        ),
+        xref="paper",
+        yref="paper",
+        x=0.0,
+        y=1.02,
+        showarrow=False,
+        xanchor="left",
+        font={"size": 9, "color": _GRAY_MID, "family": "Calibri, sans-serif"},
+    )
+
+    if not supply_x or not demand_x:
+        fig.add_annotation(
+            text="One side of the market was empty, so no full crossing curve is available for this day.",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.69,
+            showarrow=False,
+            font={"size": 10, "color": _GRAY_MID},
+        )
+
+    return fig
+
+
+def _add_interbank_sections(
+    events: list[dict[str, Any]],
+    sections: list[str],
+    nav_items: list[tuple[str, str]],
+) -> None:
+    """Add interbank market charts when auction events are present."""
+    fig_outcomes = interbank_market_outcomes(events)
+    fig_flows = interbank_flow_sankey(events)
+    fig_mechanics = interbank_auction_mechanics(events)
+
+    if fig_outcomes is None and fig_flows is None and fig_mechanics is None:
+        return
+
+    nav_items.append(("interbank-market", "Interbank Market"))
+    section_html = '<div id="interbank-market"><h1>Interbank Market</h1>'
+    section_html += "<p>Daily clearing outcomes, lender-borrower flow structure, and the latest auction book.</p>"
+
+    if fig_outcomes is not None:
+        section_html += f'<div class="chart-container">{_fig_to_div(fig_outcomes, "interbank-outcomes")}</div>'
+    if fig_flows is not None:
+        section_html += f'<div class="chart-container">{_fig_to_div(fig_flows, "interbank-flows")}</div>'
+    if fig_mechanics is not None:
+        section_html += f'<div class="chart-container">{_fig_to_div(fig_mechanics, "interbank-mechanics")}</div>'
+
+    section_html += "</div>"
+    sections.append(section_html)
+
+
+# =====================================================================
+# 7. Dashboard builder
 # =====================================================================
 
 def _fig_to_div(fig: go.Figure, div_id: str = "") -> str:
@@ -1455,7 +2265,7 @@ def _fig_to_div(fig: go.Figure, div_id: str = "") -> str:
 def build_treynor_dashboard(run_dir: Path) -> str:
     """Build a complete Treynor pricing dashboard from a run directory.
 
-    Reads dealer_state.csv and/or bank_state.csv and produces a
+    Reads dealer_state.csv, bank_state.csv, and/or events.jsonl and produces a
     self-contained HTML page with static diagrams and animations.
 
     Parameters
@@ -1473,6 +2283,7 @@ def build_treynor_dashboard(run_dir: Path) -> str:
 
     dealer_df = load_dealer_snapshots(run_dir)
     bank_df = load_bank_snapshots(run_dir)
+    events = _load_run_events(run_dir)
 
     sections: list[str] = []
     nav_items: list[tuple[str, str]] = []
@@ -1483,12 +2294,14 @@ def build_treynor_dashboard(run_dir: Path) -> str:
 
     if bank_df is not None and not bank_df.empty:
         _add_bank_sections(bank_df, sections, nav_items)
+    if events:
+        _add_interbank_sections(events, sections, nav_items)
 
     if not sections:
         sections.append(
             '<div class="chart-container">'
             "<h2>No Data</h2>"
-            "<p>No dealer_state.csv or bank_state.csv found in this run directory.</p>"
+            "<p>No dealer_state.csv, bank_state.csv, or events.jsonl found in this run directory.</p>"
             "</div>"
         )
 

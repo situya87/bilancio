@@ -326,6 +326,35 @@ def run_interbank_auction(
     # 3. Order book
     lender_asks, borrower_bids = build_order_book(positions, limit_rates)
 
+    market_state = {
+        "positions": [
+            {
+                "bank_id": bank_id,
+                "position": position,
+                "limit_rate": str(limit_rates[bank_id]),
+                "side": "lend" if position > 0 else "borrow" if position < 0 else "flat",
+            }
+            for bank_id, position in sorted(positions.items())
+            if bank_id in limit_rates
+        ],
+        "lender_asks": [
+            {
+                "bank_id": order.bank_id,
+                "quantity": order.quantity,
+                "limit_rate": str(order.limit_rate),
+            }
+            for order in lender_asks
+        ],
+        "borrower_bids": [
+            {
+                "bank_id": order.bank_id,
+                "quantity": order.quantity,
+                "limit_rate": str(order.limit_rate),
+            }
+            for order in borrower_bids
+        ],
+    }
+
     # 4. Clear auction
     result = clear_auction(lender_asks, borrower_bids)
 
@@ -397,6 +426,7 @@ def run_interbank_auction(
         "total_volume": executed_volume,
         "n_trades": executed_trades,
         "n_unfilled": len(result.unfilled_borrowers),
+        "market_state": market_state,
     })
 
     # 7. Emit unfilled borrower events

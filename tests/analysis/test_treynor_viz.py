@@ -24,6 +24,9 @@ from bilancio.analysis.treynor_viz import (
     bank_pricing_plane,
     dealer_pricing_animation,
     dealer_pricing_plane,
+    interbank_auction_mechanics,
+    interbank_flow_sankey,
+    interbank_market_outcomes,
     yield_curve_animation,
     yield_curve_static,
     yield_curve_timeseries,
@@ -112,6 +115,71 @@ def bank_snapshots_df():
             "lambda_": 0.2,
         })
     return pd.DataFrame(rows)
+
+
+@pytest.fixture
+def interbank_events():
+    """Minimal interbank auction event stream with market-state snapshots."""
+    return [
+        {
+            "kind": "InterbankAuction",
+            "day": 0,
+            "clearing_rate": "0.05",
+            "total_volume": 120,
+            "n_trades": 1,
+            "n_unfilled": 0,
+            "market_state": {
+                "positions": [
+                    {"bank_id": "BK01", "position": 120, "limit_rate": "0.03", "side": "lend"},
+                    {"bank_id": "BK02", "position": -120, "limit_rate": "0.07", "side": "borrow"},
+                ],
+                "lender_asks": [
+                    {"bank_id": "BK01", "quantity": 120, "limit_rate": "0.03"},
+                ],
+                "borrower_bids": [
+                    {"bank_id": "BK02", "quantity": 120, "limit_rate": "0.07"},
+                ],
+            },
+        },
+        {
+            "kind": "InterbankAuctionTrade",
+            "day": 0,
+            "lender": "BK01",
+            "borrower": "BK02",
+            "amount": 120,
+            "rate": "0.05",
+            "maturity_day": 1,
+            "contract_id": "IBL_1",
+        },
+        {
+            "kind": "InterbankAuction",
+            "day": 1,
+            "clearing_rate": None,
+            "total_volume": 0,
+            "n_trades": 0,
+            "n_unfilled": 1,
+            "market_state": {
+                "positions": [
+                    {"bank_id": "BK01", "position": 40, "limit_rate": "0.04", "side": "lend"},
+                    {"bank_id": "BK02", "position": -80, "limit_rate": "0.06", "side": "borrow"},
+                    {"bank_id": "BK03", "position": -20, "limit_rate": "0.055", "side": "borrow"},
+                ],
+                "lender_asks": [
+                    {"bank_id": "BK01", "quantity": 40, "limit_rate": "0.04"},
+                ],
+                "borrower_bids": [
+                    {"bank_id": "BK02", "quantity": 80, "limit_rate": "0.035"},
+                    {"bank_id": "BK03", "quantity": 20, "limit_rate": "0.03"},
+                ],
+            },
+        },
+        {
+            "kind": "InterbankUnfilled",
+            "day": 1,
+            "borrower": "BK02",
+            "amount": 80,
+        },
+    ]
 
 
 @pytest.fixture
@@ -517,6 +585,58 @@ class TestBankPricingAnimation:
         fig = bank_pricing_animation(bank_snapshots_df, bank_id=None)
         assert isinstance(fig, go.Figure)
         assert "BK01" in fig.layout.title.text
+
+    def test_animation_layout_style(self, bank_snapshots_df):
+        fig = bank_pricing_animation(bank_snapshots_df, bank_id="BK01")
+        assert fig.layout.height == 760
+        assert fig.layout.plot_bgcolor == "white"
+
+
+# ============================================================================
+# interbank visualizations
+# ============================================================================
+
+class TestInterbankMarketOutcomes:
+    """Tests for interbank_market_outcomes()."""
+
+    def test_returns_figure(self, interbank_events):
+        fig = interbank_market_outcomes(interbank_events)
+        assert isinstance(fig, go.Figure)
+
+    def test_expected_traces_present(self, interbank_events):
+        fig = interbank_market_outcomes(interbank_events)
+        names = [trace.name for trace in fig.data]
+        assert "Cleared volume" in names
+        assert "Unfilled demand" in names
+        assert "Clearing rate" in names
+        assert "Matched trades" in names
+
+
+class TestInterbankFlowSankey:
+    """Tests for interbank_flow_sankey()."""
+
+    def test_returns_sankey_figure(self, interbank_events):
+        fig = interbank_flow_sankey(interbank_events)
+        assert isinstance(fig, go.Figure)
+        assert fig.data[0].type == "sankey"
+
+
+class TestInterbankAuctionMechanics:
+    """Tests for interbank_auction_mechanics()."""
+
+    def test_returns_figure(self, interbank_events):
+        fig = interbank_auction_mechanics(interbank_events)
+        assert isinstance(fig, go.Figure)
+
+    def test_uses_latest_market_state(self, interbank_events):
+        fig = interbank_auction_mechanics(interbank_events)
+        assert "Day 1" in fig.layout.title.text
+
+    def test_contains_reserve_positions_and_limit_rates(self, interbank_events):
+        fig = interbank_auction_mechanics(interbank_events)
+        names = [trace.name for trace in fig.data if trace.name]
+        assert "Reserve position x_i" in names
+        assert "Limit rate" in names
 
     def test_nonexistent_bank_returns_none(self, bank_snapshots_df):
         assert bank_pricing_animation(bank_snapshots_df, bank_id="BK99") is None
