@@ -55,6 +55,17 @@ class LendingConfig:
     coverage_penalty_scale: Decimal = Decimal("0.10")
     preventive_lending: bool = False
     prevention_threshold: Decimal = Decimal("0.3")
+    # Plan 049: Intermediary loss-efficiency controls
+    marginal_relief_min_ratio: Decimal = Decimal("0")
+    stress_risk_premium_scale: Decimal = Decimal("0")
+    high_risk_default_threshold: Decimal = Decimal("0.70")
+    high_risk_maturity_cap: int = 2
+    daily_expected_loss_budget_ratio: Decimal = Decimal("0")
+    run_expected_loss_budget_ratio: Decimal = Decimal("0")
+    stop_loss_realized_ratio: Decimal = Decimal("0")
+    collateralized_terms: bool = False
+    collateral_advance_rate: Decimal = Decimal("1.0")
+    run_expected_loss_spent: Decimal = Decimal("0")
     # Decision protocol overrides (None = auto-construct from scalar params)
     portfolio_strategy: PortfolioStrategy | None = None
     counterparty_screener: CounterpartyScreener | None = None
@@ -91,6 +102,24 @@ class LendingConfig:
             raise ValueError("coverage_penalty_scale must be non-negative")
         if not (Decimal("0") < self.prevention_threshold < Decimal("1")):
             raise ValueError("prevention_threshold must be in (0, 1)")
+        if self.marginal_relief_min_ratio < Decimal("0"):
+            raise ValueError("marginal_relief_min_ratio must be non-negative")
+        if self.stress_risk_premium_scale < Decimal("0"):
+            raise ValueError("stress_risk_premium_scale must be non-negative")
+        if not (Decimal("0") < self.high_risk_default_threshold < Decimal("1")):
+            raise ValueError("high_risk_default_threshold must be in (0, 1)")
+        if self.high_risk_maturity_cap < 1:
+            raise ValueError("high_risk_maturity_cap must be >= 1")
+        if not (Decimal("0") <= self.daily_expected_loss_budget_ratio <= Decimal("1")):
+            raise ValueError("daily_expected_loss_budget_ratio must be in [0, 1]")
+        if not (Decimal("0") <= self.run_expected_loss_budget_ratio <= Decimal("1")):
+            raise ValueError("run_expected_loss_budget_ratio must be in [0, 1]")
+        if not (Decimal("0") <= self.stop_loss_realized_ratio <= Decimal("1")):
+            raise ValueError("stop_loss_realized_ratio must be in [0, 1]")
+        if not (Decimal("0") < self.collateral_advance_rate <= Decimal("1")):
+            raise ValueError("collateral_advance_rate must be in (0, 1]")
+        if self.run_expected_loss_spent < Decimal("0"):
+            raise ValueError("run_expected_loss_spent must be non-negative")
 
 
 def _resolve_protocols(
@@ -323,6 +352,13 @@ def _compute_loan_rate(
             rate = r_floor + omega * (p_default / p_0)
         else:
             rate = r_floor + omega
+
+    # Plan 049: state-contingent convex premium for stressed counterparties.
+    if config.stress_risk_premium_scale > 0:
+        denom = max(Decimal("0.01"), Decimal("1") - p_default)
+        convex_component = (p_default * p_default) / denom
+        rate = rate + config.stress_risk_premium_scale * convex_component
+
     return rate
 
 
@@ -439,6 +475,38 @@ def _collect_lending_opportunities(
             continue
 
         loan_amount = min(shortfall, max_to_this_borrower)
+        if config.collateralized_terms:
+            collateral_value = _quality_adjusted_receivables(
+                system, agent_id, current_day, config.horizon
+            )
+            collateral_cap = int(Decimal(str(collateral_value)) * config.collateral_advance_rate)
+            loan_amount = min(loan_amount, collateral_cap)
+            if loan_amount <= 0:
+                continue
+
+        expected_loss = Decimal(str(loan_amount)) * p_default
+        expected_relief = Decimal(str(shortfall)) * (Decimal("1") - p_default)
+        if config.marginal_relief_min_ratio > 0:
+            ratio = (
+                expected_relief / expected_loss
+                if expected_loss > 0
+                else Decimal("999")
+            )
+            if ratio < config.marginal_relief_min_ratio:
+                events.append(
+                    {
+                        "kind": "NonBankLoanRejectedMarginalBenefit",
+                        "day": current_day,
+                        "lender_id": lender_id,
+                        "borrower_id": agent_id,
+                        "expected_relief": str(expected_relief),
+                        "expected_loss": str(expected_loss),
+                        "ratio": str(ratio),
+                        "threshold": str(config.marginal_relief_min_ratio),
+                    }
+                )
+                continue
+
         opportunities.append(
             {
                 "borrower_id": agent_id,
@@ -446,6 +514,8 @@ def _collect_lending_opportunities(
                 "rate": rate,
                 "p_default": p_default,
                 "expected_profit": float(rate) * (1.0 - float(p_default)),
+                "expected_loss": float(expected_loss),
+                "expected_relief": float(expected_relief),
                 "shortfall": shortfall,
                 "downstream": _downstream_obligation_total(system, agent_id, current_day),
                 "coverage_ratio": Decimal(str(max(agent_cash, 0))) / Decimal(str(max(upcoming_due, 1))),
@@ -487,6 +557,11 @@ def _resolve_standard_loan_terms(
         banking_sub_mat = getattr(system.state, "banking_subsystem", None)
         if banking_sub_mat is not None:
             effective_maturity = banking_sub_mat.loan_maturity
+
+    # Plan 049: shorten maturities for high-risk borrowers.
+    if opportunity["p_default"] >= config.high_risk_default_threshold:
+        effective_maturity = min(effective_maturity, config.high_risk_maturity_cap)
+
     return rate, effective_maturity
 
 
@@ -498,17 +573,64 @@ def _execute_ranked_opportunities(
     selector: InstrumentSelector,
     profile: LenderProfile | None,
     opportunities: list[dict[str, Any]],
+    initial_capital: int,
     available: int,
     events: list[dict[str, Any]],
-) -> int:
-    """Execute ranked standard opportunities and return remaining capital."""
+) -> tuple[int, Decimal]:
+    """Execute ranked opportunities and return (remaining capital, daily expected-loss spend)."""
     remaining_capital = available
+    daily_expected_loss_spent = Decimal("0")
+    daily_expected_loss_cap = (
+        Decimal(str(initial_capital)) * config.daily_expected_loss_budget_ratio
+        if config.daily_expected_loss_budget_ratio > 0
+        else None
+    )
+    run_expected_loss_cap = (
+        Decimal(str(initial_capital)) * config.run_expected_loss_budget_ratio
+        if config.run_expected_loss_budget_ratio > 0
+        else None
+    )
+
     for opp in opportunities:
         if remaining_capital <= 0:
             break
 
         loan_amount = min(opp["amount"], remaining_capital)
         if loan_amount <= 0:
+            continue
+
+        expected_loss = Decimal(str(opp.get("expected_loss", 0.0)))
+        if opp["amount"] > 0:
+            expected_loss = expected_loss * Decimal(str(loan_amount)) / Decimal(str(opp["amount"]))
+
+        # Plan 049: per-day and per-run expected-loss budgets.
+        if daily_expected_loss_cap is not None and daily_expected_loss_spent + expected_loss > daily_expected_loss_cap:
+            events.append(
+                {
+                    "kind": "NonBankLoanRejectedBudget",
+                    "day": current_day,
+                    "lender_id": lender_id,
+                    "borrower_id": opp["borrower_id"],
+                    "scope": "daily",
+                    "expected_loss": str(expected_loss),
+                    "budget_cap": str(daily_expected_loss_cap),
+                    "budget_used": str(daily_expected_loss_spent),
+                }
+            )
+            continue
+        if run_expected_loss_cap is not None and config.run_expected_loss_spent + expected_loss > run_expected_loss_cap:
+            events.append(
+                {
+                    "kind": "NonBankLoanRejectedBudget",
+                    "day": current_day,
+                    "lender_id": lender_id,
+                    "borrower_id": opp["borrower_id"],
+                    "scope": "run",
+                    "expected_loss": str(expected_loss),
+                    "budget_cap": str(run_expected_loss_cap),
+                    "budget_used": str(config.run_expected_loss_spent),
+                }
+            )
             continue
 
         if config.max_loans_per_borrower_per_day > 0:
@@ -557,6 +679,8 @@ def _execute_ranked_opportunities(
                     "p_default": str(opp["p_default"]),
                 }
             )
+            daily_expected_loss_spent += expected_loss
+            config.run_expected_loss_spent += expected_loss
             logger.debug(
                 "Loan created: %s -> %s, amount=%d, rate=%s",
                 lender_id,
@@ -567,7 +691,7 @@ def _execute_ranked_opportunities(
         except (ValidationError, ValueError, KeyError) as e:
             logger.warning("Failed to create loan to %s: %s", opp["borrower_id"], e)
             continue
-    return remaining_capital
+    return remaining_capital, daily_expected_loss_spent
 
 
 def _collect_preventive_opportunities(
@@ -645,7 +769,26 @@ def _collect_preventive_opportunities(
                 continue
 
         loan_amount = min(at_risk, max_to_this)
+        if config.collateralized_terms:
+            collateral_value = _quality_adjusted_receivables(
+                system, agent_id, current_day, config.horizon
+            )
+            collateral_cap = int(Decimal(str(collateral_value)) * config.collateral_advance_rate)
+            loan_amount = min(loan_amount, collateral_cap)
+            if loan_amount <= 0:
+                continue
+
         rate = profile.profit_target + profile.risk_premium_scale * p_default
+        expected_loss = Decimal(str(loan_amount)) * p_default
+        expected_relief = Decimal(str(at_risk)) * (Decimal("1") - p_default)
+        if config.marginal_relief_min_ratio > 0:
+            ratio = (
+                expected_relief / expected_loss
+                if expected_loss > 0
+                else Decimal("999")
+            )
+            if ratio < config.marginal_relief_min_ratio:
+                continue
         preventive_opps.append(
             {
                 "borrower_id": agent_id,
@@ -653,6 +796,8 @@ def _collect_preventive_opportunities(
                 "rate": rate,
                 "p_default": p_default,
                 "expected_profit": float(rate) * (1.0 - float(p_default)),
+                "expected_loss": float(expected_loss),
+                "expected_relief": float(expected_relief),
                 "shortfall": 0,
                 "downstream": _downstream_obligation_total(system, agent_id, current_day),
                 "coverage_ratio": Decimal(str(max(agent_cash, 0))) / Decimal(str(max(upcoming_due, 1))),
@@ -668,6 +813,7 @@ def _resolve_preventive_loan_maturity(
     config: LendingConfig,
     profile: LenderProfile,
     borrower_id: str,
+    p_default: Decimal,
 ) -> int:
     """Resolve maturity for preventive loans."""
     effective_maturity = profile.max_loan_maturity
@@ -681,6 +827,8 @@ def _resolve_preventive_loan_maturity(
                 config.min_loan_maturity,
                 min(matched, profile.max_loan_maturity),
             )
+    if p_default >= config.high_risk_default_threshold:
+        effective_maturity = min(effective_maturity, config.high_risk_maturity_cap)
     return effective_maturity
 
 
@@ -691,15 +839,63 @@ def _execute_preventive_opportunities(
     config: LendingConfig,
     profile: LenderProfile,
     preventive_opps: list[dict[str, Any]],
+    initial_capital: int,
     remaining_capital: int,
+    daily_expected_loss_spent: Decimal,
     events: list[dict[str, Any]],
-) -> int:
-    """Execute preventive opportunities and return remaining capital."""
+) -> tuple[int, Decimal]:
+    """Execute preventive opportunities and return (remaining capital, daily expected-loss spend)."""
+    daily_expected_loss_cap = (
+        Decimal(str(initial_capital)) * config.daily_expected_loss_budget_ratio
+        if config.daily_expected_loss_budget_ratio > 0
+        else None
+    )
+    run_expected_loss_cap = (
+        Decimal(str(initial_capital)) * config.run_expected_loss_budget_ratio
+        if config.run_expected_loss_budget_ratio > 0
+        else None
+    )
+
     for opp in preventive_opps:
         if remaining_capital <= 0:
             break
         loan_amount = min(opp["amount"], remaining_capital)
         if loan_amount <= 0:
+            continue
+
+        expected_loss = Decimal(str(opp.get("expected_loss", 0.0)))
+        if opp["amount"] > 0:
+            expected_loss = expected_loss * Decimal(str(loan_amount)) / Decimal(str(opp["amount"]))
+
+        if daily_expected_loss_cap is not None and daily_expected_loss_spent + expected_loss > daily_expected_loss_cap:
+            events.append(
+                {
+                    "kind": "NonBankLoanRejectedBudget",
+                    "day": current_day,
+                    "lender_id": lender_id,
+                    "borrower_id": opp["borrower_id"],
+                    "scope": "daily",
+                    "expected_loss": str(expected_loss),
+                    "budget_cap": str(daily_expected_loss_cap),
+                    "budget_used": str(daily_expected_loss_spent),
+                    "preventive": True,
+                }
+            )
+            continue
+        if run_expected_loss_cap is not None and config.run_expected_loss_spent + expected_loss > run_expected_loss_cap:
+            events.append(
+                {
+                    "kind": "NonBankLoanRejectedBudget",
+                    "day": current_day,
+                    "lender_id": lender_id,
+                    "borrower_id": opp["borrower_id"],
+                    "scope": "run",
+                    "expected_loss": str(expected_loss),
+                    "budget_cap": str(run_expected_loss_cap),
+                    "budget_used": str(config.run_expected_loss_spent),
+                    "preventive": True,
+                }
+            )
             continue
 
         try:
@@ -709,6 +905,7 @@ def _execute_preventive_opportunities(
                 config,
                 profile,
                 opp["borrower_id"],
+                opp["p_default"],
             )
             loan_id = system.nonbank_lend(
                 lender_id=lender_id,
@@ -732,10 +929,12 @@ def _execute_preventive_opportunities(
                     "at_risk_receivables": opp["amount"],
                 }
             )
+            daily_expected_loss_spent += expected_loss
+            config.run_expected_loss_spent += expected_loss
         except (ValidationError, ValueError, KeyError) as e:
             logger.warning("Preventive loan failed for %s: %s", opp["borrower_id"], e)
             continue
-    return remaining_capital
+    return remaining_capital, daily_expected_loss_spent
 
 
 def run_lending_phase(
@@ -794,6 +993,8 @@ def run_lending_phase(
                         max_single_exposure=config.max_single_exposure * conservation,
                         max_total_exposure=config.max_total_exposure * conservation,
                     )
+                    # Preserve cumulative run budget state across adaptive copies.
+                    effective_config.run_expected_loss_spent = config.run_expected_loss_spent
 
     # Plan 050: Adaptive prevention threshold — lower when defaults accelerate
     effective_prevention_threshold: Decimal | None = None
@@ -828,6 +1029,23 @@ def run_lending_phase(
     if capacity is None:
         return events
     initial_capital, available = capacity
+
+    # Plan 049: realized-loss stop-loss gate.
+    if config.stop_loss_realized_ratio > 0:
+        realized_loss = _realized_nbfi_loss_to_date(system)
+        realized_ratio = Decimal(str(realized_loss)) / Decimal(str(max(initial_capital, 1)))
+        if realized_ratio >= config.stop_loss_realized_ratio:
+            events.append(
+                {
+                    "kind": "NonBankLendingPausedStopLoss",
+                    "day": current_day,
+                    "lender_id": lender_id,
+                    "realized_loss": str(realized_loss),
+                    "realized_ratio": str(realized_ratio),
+                    "threshold": str(config.stop_loss_realized_ratio),
+                }
+            )
+            return events
 
     default_probs = None if info is not None else _estimate_default_probs(system, current_day)
 
@@ -868,7 +1086,7 @@ def run_lending_phase(
                 opp["rate"] = opp["rate"] * rate_multiplier
 
     _rank_opportunities(opportunities, effective_config)
-    remaining_capital = _execute_ranked_opportunities(
+    remaining_capital, daily_expected_loss_spent = _execute_ranked_opportunities(
         system,
         current_day,
         effective_config,
@@ -876,6 +1094,7 @@ def run_lending_phase(
         selector,
         effective_config.lender_profile,
         opportunities,
+        initial_capital,
         available,
         events,
     )
@@ -890,6 +1109,7 @@ def run_lending_phase(
                 effective_config,
                 prevention_threshold=effective_prevention_threshold,
             )
+            prevention_config.run_expected_loss_spent = effective_config.run_expected_loss_spent
         preventive_opps = _collect_preventive_opportunities(
             system,
             current_day,
@@ -912,9 +1132,17 @@ def run_lending_phase(
             prevention_config,
             profile,
             preventive_opps,
+            initial_capital,
             remaining_capital,
+            daily_expected_loss_spent,
             events,
         )
+        if prevention_config is not effective_config:
+            effective_config.run_expected_loss_spent = prevention_config.run_expected_loss_spent
+
+    # Preserve run-level budget state when adaptive copies were used.
+    if effective_config is not config:
+        config.run_expected_loss_spent = effective_config.run_expected_loss_spent
 
     return events
 
@@ -989,6 +1217,18 @@ def _count_existing_loans(system: System, lender_id: str, borrower_id: str) -> i
         ):
             count += 1
     return count
+
+
+def _realized_nbfi_loss_to_date(system: System) -> int:
+    """Return cumulative realized non-bank loan loss from logged events."""
+    total = 0
+    for event in system.state.events:
+        if event.get("kind") != "NonBankLoanDefaulted":
+            continue
+        amount_owed = int(event.get("amount_owed", 0))
+        cash_available = int(event.get("cash_available", 0))
+        total += max(0, amount_owed - cash_available)
+    return total
 
 
 def _get_agent_cash(system: System, agent_id: str) -> int:

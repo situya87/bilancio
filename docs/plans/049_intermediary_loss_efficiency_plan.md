@@ -105,10 +105,17 @@ Acceptance:
 
 ### W1. Frontier Instrumentation and Reporting
 
-- [ ] Add an analysis utility that computes the three primary metrics and Pareto labels per run.
-- [ ] Add regime-level summaries (bank, dealer, NBFI, combined) and stress-slice summaries by `kappa`, concentration, and seed.
-- [ ] Export machine-readable outputs for reproducible comparisons.
-- [ ] Recompute baseline/treatment comparisons only after W0 is complete and verified.
+- [x] Add an analysis utility that computes the three primary metrics and Pareto labels per run.
+- [x] Add regime-level summaries (bank, dealer, NBFI, combined) and stress-slice summaries by `kappa`, concentration, and seed.
+- [x] Export machine-readable outputs for reproducible comparisons.
+- [x] Recompute baseline/treatment comparisons only after W0 is complete and verified.
+
+Implementation status (March 6, 2026):
+
+- New analysis module: `src/bilancio/analysis/intermediary_frontier.py`
+- One-command artifact builder: `scripts/build_intermediary_frontier.py`
+- Outputs: `frontier_pairs.csv`, arm/slice summary CSVs, loss-floor CSVs, and `artifact.json`
+- Regression coverage: `tests/analysis/test_intermediary_frontier.py`
 
 Acceptance:
 
@@ -117,10 +124,22 @@ Acceptance:
 
 ### W2. Behavioral Levers (Bank/NBFI/Dealer)
 
-- [ ] Implement a marginal-benefit trigger: intervene only when expected default relief per expected intermediary loss exceeds threshold.
-- [ ] Tighten state-contingent risk pricing and terms: steeper risk premium, stricter limits at high estimated default probability, and stress-aware maturity control.
-- [ ] Add capital-preservation guardrails: per-day/per-run risk budget and stop-loss style caps.
-- [ ] Add claim-protection options where model-consistent (e.g., haircut/collateralized terms) without violating accounting.
+- [x] Implement a marginal-benefit trigger: intervene only when expected default relief per expected intermediary loss exceeds threshold.
+- [x] Tighten state-contingent risk pricing and terms: steeper risk premium, stricter limits at high estimated default probability, and stress-aware maturity control.
+- [x] Add capital-preservation guardrails: per-day/per-run risk budget and stop-loss style caps.
+- [x] Add claim-protection options where model-consistent (e.g., haircut/collateralized terms) without violating accounting.
+
+Implementation status (March 6, 2026):
+
+- NBFI lending engine now supports:
+  - `marginal_relief_min_ratio`
+  - `stress_risk_premium_scale`
+  - `high_risk_default_threshold` + `high_risk_maturity_cap`
+  - `daily_expected_loss_budget_ratio` + `run_expected_loss_budget_ratio`
+  - `stop_loss_realized_ratio`
+  - `collateralized_terms` + `collateral_advance_rate`
+- Wiring added through scenario/config/profile/ring comparison paths.
+- Regression coverage: `tests/engines/test_lending_plan049.py`
 
 Acceptance:
 
@@ -129,9 +148,17 @@ Acceptance:
 
 ### W3. Structural-Loss Floor Identification
 
-- [ ] Estimate empirical loss floor: minimum intermediary loss shift needed to achieve target default relief bands.
-- [ ] Separate unavoidable-loss regions (structural) from avoidable-loss regions (policy design).
-- [ ] Document where intervention is not efficient and should rationally be withheld.
+- [x] Estimate empirical loss floor: minimum intermediary loss shift needed to achieve target default relief bands.
+- [x] Separate unavoidable-loss regions (structural) from avoidable-loss regions (policy design).
+- [x] Document where intervention is not efficient and should rationally be withheld.
+
+Implementation status (March 6, 2026):
+
+- Loss-floor tables are now produced automatically by relief bands, with:
+  - `min_inst_loss_shift`
+  - `empirical_loss_floor`
+  - `avoidable_region` / `structural_region`
+- Generated at arm level and arm×kappa slices in the same machine-readable artifact.
 
 Acceptance:
 

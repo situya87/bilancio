@@ -34,6 +34,18 @@ from bilancio.analysis.funding_chains import (
     funding_mix,
     liquidity_providers,
 )
+from bilancio.analysis.intermediary_frontier import (
+    FrontierArtifact,
+    FrontierPair,
+    RunOutcome,
+    build_frontier_artifact,
+    build_frontier_pairs,
+    compute_loss_floor_table,
+    discover_run_dirs,
+    load_run_outcomes,
+    summarize_frontier_pairs,
+    write_frontier_artifact,
+)
 from bilancio.analysis.mechanism_activity import run_mechanism_activity_analysis
 from bilancio.analysis.metrics_computer import (
     MetricsBundle,
@@ -86,6 +98,17 @@ __all__ = [
     # dealer usage
     "build_dealer_usage_by_run",
     "run_dealer_usage_analysis",
+    # intermediary frontier
+    "FrontierArtifact",
+    "FrontierPair",
+    "RunOutcome",
+    "build_frontier_artifact",
+    "build_frontier_pairs",
+    "compute_loss_floor_table",
+    "discover_run_dirs",
+    "load_run_outcomes",
+    "summarize_frontier_pairs",
+    "write_frontier_artifact",
     # mechanism activity
     "run_mechanism_activity_analysis",
     # funding chains

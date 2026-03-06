@@ -318,6 +318,15 @@ class RingSweepRunner:
         lender_coverage_penalty_scale: Decimal = Decimal("0.10"),
         lender_preventive_lending: bool = False,
         lender_prevention_threshold: Decimal = Decimal("0.3"),
+        lender_marginal_relief_min_ratio: Decimal = Decimal("0"),
+        lender_stress_risk_premium_scale: Decimal = Decimal("0"),
+        lender_high_risk_default_threshold: Decimal = Decimal("0.70"),
+        lender_high_risk_maturity_cap: int = 2,
+        lender_daily_expected_loss_budget_ratio: Decimal = Decimal("0"),
+        lender_run_expected_loss_budget_ratio: Decimal = Decimal("0"),
+        lender_stop_loss_realized_ratio: Decimal = Decimal("0"),
+        lender_collateralized_terms: bool = False,
+        lender_collateral_advance_rate: Decimal = Decimal("1.0"),
         balanced_mode_override: str | None = None,
         n_banks: int = 0,
         reserve_multiplier: float = 10.0,
@@ -383,6 +392,15 @@ class RingSweepRunner:
         self.lender_coverage_penalty_scale = lender_coverage_penalty_scale
         self.lender_preventive_lending = lender_preventive_lending
         self.lender_prevention_threshold = lender_prevention_threshold
+        self.lender_marginal_relief_min_ratio = lender_marginal_relief_min_ratio
+        self.lender_stress_risk_premium_scale = lender_stress_risk_premium_scale
+        self.lender_high_risk_default_threshold = lender_high_risk_default_threshold
+        self.lender_high_risk_maturity_cap = lender_high_risk_maturity_cap
+        self.lender_daily_expected_loss_budget_ratio = lender_daily_expected_loss_budget_ratio
+        self.lender_run_expected_loss_budget_ratio = lender_run_expected_loss_budget_ratio
+        self.lender_stop_loss_realized_ratio = lender_stop_loss_realized_ratio
+        self.lender_collateralized_terms = lender_collateralized_terms
+        self.lender_collateral_advance_rate = lender_collateral_advance_rate
         self.balanced_mode_override = balanced_mode_override
         self.n_banks = n_banks
         self.reserve_multiplier = reserve_multiplier
@@ -894,6 +912,15 @@ class RingSweepRunner:
                     "coverage_penalty_scale": str(self.lender_coverage_penalty_scale),
                     "preventive_lending": self.lender_preventive_lending,
                     "prevention_threshold": str(self.lender_prevention_threshold),
+                    "marginal_relief_min_ratio": str(self.lender_marginal_relief_min_ratio),
+                    "stress_risk_premium_scale": str(self.lender_stress_risk_premium_scale),
+                    "high_risk_default_threshold": str(self.lender_high_risk_default_threshold),
+                    "high_risk_maturity_cap": self.lender_high_risk_maturity_cap,
+                    "daily_expected_loss_budget_ratio": str(self.lender_daily_expected_loss_budget_ratio),
+                    "run_expected_loss_budget_ratio": str(self.lender_run_expected_loss_budget_ratio),
+                    "stop_loss_realized_ratio": str(self.lender_stop_loss_realized_ratio),
+                    "collateralized_terms": self.lender_collateralized_terms,
+                    "collateral_advance_rate": str(self.lender_collateral_advance_rate),
                 }
 
         if self.default_handling:
@@ -1313,6 +1340,15 @@ class RingSweepRunner:
                     "coverage_penalty_scale": str(self.lender_coverage_penalty_scale),
                     "preventive_lending": self.lender_preventive_lending,
                     "prevention_threshold": str(self.lender_prevention_threshold),
+                    "marginal_relief_min_ratio": str(self.lender_marginal_relief_min_ratio),
+                    "stress_risk_premium_scale": str(self.lender_stress_risk_premium_scale),
+                    "high_risk_default_threshold": str(self.lender_high_risk_default_threshold),
+                    "high_risk_maturity_cap": self.lender_high_risk_maturity_cap,
+                    "daily_expected_loss_budget_ratio": str(self.lender_daily_expected_loss_budget_ratio),
+                    "run_expected_loss_budget_ratio": str(self.lender_run_expected_loss_budget_ratio),
+                    "stop_loss_realized_ratio": str(self.lender_stop_loss_realized_ratio),
+                    "collateralized_terms": self.lender_collateralized_terms,
+                    "collateral_advance_rate": str(self.lender_collateral_advance_rate),
                 }
 
         # Plan 050: Adaptive profile overrides
