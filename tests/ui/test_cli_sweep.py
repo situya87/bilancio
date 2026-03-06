@@ -1721,3 +1721,311 @@ class TestBuildCliArgsCLIAcceptance:
         runner = CliRunner()
         res = runner.invoke(cli, ["sweep", "balanced"] + cli_args)
         assert res.exit_code == 0, f"balanced+banking rejected args: {res.output}"
+
+
+# ── sweep setup + preset end-to-end wiring ───────────────────────────────────
+
+
+class TestSweepSetupCommandE2E:
+    """Direct CLI tests for `sweep setup` launch wiring."""
+
+    @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
+    @patch(
+        "bilancio.experiments.balanced_comparison.BalancedComparisonRunner.run_all",
+        return_value=[],
+    )
+    @patch(
+        "bilancio.experiments.balanced_comparison.BalancedComparisonRunner.__init__",
+        return_value=None,
+    )
+    @patch("bilancio.ui.cli.sweep.create_job_manager")
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-setup-balanced")
+    @patch("bilancio.ui.sweep_setup.run_sweep_setup")
+    def test_sweep_setup_launch_balanced(
+        self,
+        mock_setup,
+        mock_gen,
+        mock_jm,
+        mock_init,
+        mock_run,
+        mock_post,
+        tmp_path,
+    ):
+        """`sweep setup` should launch balanced sweep when setup returns balanced + launch=True."""
+        from bilancio.ui.sweep_setup import SweepSetupResult
+
+        mock_setup.return_value = SweepSetupResult(
+            sweep_type="balanced",
+            cloud=False,
+            params={
+                "n_agents": 40,
+                "kappas": "0.5",
+                "concentrations": "1",
+                "mus": "0",
+                "outside_mid_ratios": "0.90",
+            },
+            out_dir=tmp_path / "balanced_setup_out",
+            launch=True,
+        )
+        mock_jm.return_value = MagicMock()
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sweep", "setup"])
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        mock_setup.assert_called_once()
+        mock_init.assert_called_once()
+        mock_run.assert_called_once()
+
+    @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
+    @patch(
+        "bilancio.experiments.bank_comparison.BankComparisonRunner.run_all",
+        return_value=[],
+    )
+    @patch(
+        "bilancio.experiments.bank_comparison.BankComparisonRunner.__init__",
+        return_value=None,
+    )
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-setup-bank")
+    @patch("bilancio.ui.sweep_setup.run_sweep_setup")
+    def test_sweep_setup_launch_bank(
+        self,
+        mock_setup,
+        mock_gen,
+        mock_init,
+        mock_run,
+        mock_post,
+        tmp_path,
+    ):
+        """`sweep setup` should launch bank sweep when setup returns bank + launch=True."""
+        from bilancio.ui.sweep_setup import SweepSetupResult
+
+        mock_setup.return_value = SweepSetupResult(
+            sweep_type="bank",
+            cloud=False,
+            params={
+                "n_agents": 30,
+                "kappas": "0.5",
+                "concentrations": "1",
+                "mus": "0",
+                "outside_mid_ratios": "0.90",
+                "n_banks": 4,
+            },
+            out_dir=tmp_path / "bank_setup_out",
+            launch=True,
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sweep", "setup"])
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        mock_setup.assert_called_once()
+        mock_init.assert_called_once()
+        mock_run.assert_called_once()
+
+    @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
+    @patch(
+        "bilancio.experiments.nbfi_comparison.NBFIComparisonRunner.run_all",
+        return_value=[],
+    )
+    @patch(
+        "bilancio.experiments.nbfi_comparison.NBFIComparisonRunner.__init__",
+        return_value=None,
+    )
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-setup-nbfi")
+    @patch("bilancio.ui.sweep_setup.run_sweep_setup")
+    def test_sweep_setup_launch_nbfi(
+        self,
+        mock_setup,
+        mock_gen,
+        mock_init,
+        mock_run,
+        mock_post,
+        tmp_path,
+    ):
+        """`sweep setup` should launch nbfi sweep when setup returns nbfi + launch=True."""
+        from bilancio.ui.sweep_setup import SweepSetupResult
+
+        mock_setup.return_value = SweepSetupResult(
+            sweep_type="nbfi",
+            cloud=False,
+            params={
+                "n_agents": 30,
+                "kappas": "0.5",
+                "concentrations": "1",
+                "mus": "0",
+                "outside_mid_ratios": "0.90",
+                "lender_share": "0.15",
+            },
+            out_dir=tmp_path / "nbfi_setup_out",
+            launch=True,
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sweep", "setup"])
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        mock_setup.assert_called_once()
+        mock_init.assert_called_once()
+        mock_run.assert_called_once()
+
+
+class TestPresetReinvokePaths:
+    """Direct CLI tests for `--preset` re-invocation paths."""
+
+    @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
+    @patch(
+        "bilancio.experiments.balanced_comparison.BalancedComparisonRunner.run_all",
+        return_value=[],
+    )
+    @patch(
+        "bilancio.experiments.balanced_comparison.BalancedComparisonRunner.__init__",
+        return_value=None,
+    )
+    @patch("bilancio.ui.cli.sweep.create_job_manager")
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-preset-balanced")
+    def test_balanced_preset_reinvoke_uses_preset_params(
+        self,
+        mock_gen,
+        mock_jm,
+        mock_init,
+        mock_run,
+        mock_post,
+        tmp_path,
+    ):
+        """`sweep balanced --preset` should parse preset and launch with preset values."""
+        preset = tmp_path / "balanced_preset.yaml"
+        preset.write_text(
+            "\n".join(
+                [
+                    "sweep_type: balanced",
+                    "cloud: false",
+                    "params:",
+                    "  n_agents: 77",
+                    "  kappas: '0.5'",
+                    "  concentrations: '1'",
+                    "  mus: '0'",
+                    "  outside_mid_ratios: '0.90'",
+                    "  risk_assessment: false",
+                    "  enable_lender: true",
+                    "  lender_share: '0.20'",
+                ]
+            )
+        )
+        mock_jm.return_value = MagicMock()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["sweep", "balanced", "--out-dir", str(tmp_path / "balanced_out"), "--preset", str(preset)],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        init_call = mock_init.call_args
+        config_arg = init_call[1].get("config") or init_call[0][0]
+        assert config_arg.n_agents == 77
+        assert config_arg.risk_assessment_enabled is False
+        assert config_arg.enable_lender is True
+        assert str(config_arg.lender_share) == "0.20"
+
+    @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
+    @patch(
+        "bilancio.experiments.bank_comparison.BankComparisonRunner.run_all",
+        return_value=[],
+    )
+    @patch(
+        "bilancio.experiments.bank_comparison.BankComparisonRunner.__init__",
+        return_value=None,
+    )
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-preset-bank")
+    def test_bank_preset_reinvoke_uses_preset_params(
+        self,
+        mock_gen,
+        mock_init,
+        mock_run,
+        mock_post,
+        tmp_path,
+    ):
+        """`sweep bank --preset` should parse preset and launch with preset values."""
+        preset = tmp_path / "bank_preset.yaml"
+        preset.write_text(
+            "\n".join(
+                [
+                    "sweep_type: bank",
+                    "cloud: false",
+                    "params:",
+                    "  n_agents: 66",
+                    "  kappas: '0.5'",
+                    "  concentrations: '1'",
+                    "  mus: '0'",
+                    "  outside_mid_ratios: '0.90'",
+                    "  n_banks: 7",
+                    "  reserve_ratio: '0.55'",
+                    "  credit_risk_loading: '0.70'",
+                    "  risk_aversion: '0.9'",
+                ]
+            )
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["sweep", "bank", "--out-dir", str(tmp_path / "bank_out"), "--preset", str(preset)],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        init_call = mock_init.call_args
+        config_arg = init_call[1].get("config") or init_call[0][0]
+        assert config_arg.n_agents == 66
+        assert config_arg.n_banks == 7
+        assert str(config_arg.reserve_ratio) == "0.55"
+        assert str(config_arg.credit_risk_loading) == "0.70"
+
+    @patch("bilancio.ui.cli.sweep._offer_post_sweep_analysis")
+    @patch(
+        "bilancio.experiments.nbfi_comparison.NBFIComparisonRunner.run_all",
+        return_value=[],
+    )
+    @patch(
+        "bilancio.experiments.nbfi_comparison.NBFIComparisonRunner.__init__",
+        return_value=None,
+    )
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-preset-nbfi")
+    def test_nbfi_preset_reinvoke_uses_preset_params(
+        self,
+        mock_gen,
+        mock_init,
+        mock_run,
+        mock_post,
+        tmp_path,
+    ):
+        """`sweep nbfi --preset` should parse preset and launch with preset values."""
+        preset = tmp_path / "nbfi_preset.yaml"
+        preset.write_text(
+            "\n".join(
+                [
+                    "sweep_type: nbfi",
+                    "cloud: false",
+                    "params:",
+                    "  n_agents: 44",
+                    "  kappas: '0.5'",
+                    "  concentrations: '1'",
+                    "  mus: '0'",
+                    "  outside_mid_ratios: '0.90'",
+                    "  lender_share: '0.25'",
+                    "  risk_premium: '0.12'",
+                ]
+            )
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["sweep", "nbfi", "--out-dir", str(tmp_path / "nbfi_out"), "--preset", str(preset)],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        init_call = mock_init.call_args
+        config_arg = init_call[1].get("config") or init_call[0][0]
+        assert config_arg.n_agents == 44
+        assert str(config_arg.lender_share) == "0.25"
