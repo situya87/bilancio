@@ -469,6 +469,10 @@ class RunConfig(BaseModel):
         False,
         description="Enable logging of Estimate objects (rating, dealer risk) to system estimate_log",
     )
+    termination_policy: Literal["legacy"] = Field(
+        "legacy",
+        description="Termination policy for stop decisions (Plan 051). Only 'legacy' for now.",
+    )
     show: ShowConfig = Field(default_factory=ShowConfig)  # type: ignore[arg-type]
     export: ExportConfig = Field(default_factory=ExportConfig)  # type: ignore[arg-type]
 

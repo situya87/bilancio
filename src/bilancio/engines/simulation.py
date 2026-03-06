@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -14,6 +15,22 @@ from bilancio.domain.instruments.base import InstrumentKind
 from bilancio.domain.instruments.cb_loan import CBLoan
 from bilancio.engines.clearing import settle_intraday_nets
 from bilancio.engines.settlement import _remove_contract, rollover_settled_payables, settle_due
+from bilancio.engines.simulation_result import SimulationResult  # noqa: F401 — re-export
+
+# Plan 051: canonical definitions live in termination.py; re-export for
+# backward compatibility so that ``from bilancio.engines.simulation import
+# IMPACT_EVENTS`` etc. keep working everywhere.
+from bilancio.engines.termination import (  # noqa: F401 — re-exports
+    DEFAULT_EVENTS,
+    IMPACT_EVENTS,
+    LegacyTerminationPolicy,
+    StopReason,
+    TerminationPolicy,
+    _defaults_today,
+    _has_open_obligations,
+    _impacted_today,
+    compute_stability_snapshot,
+)
 
 if TYPE_CHECKING:
     from bilancio.core.performance import PerformanceConfig
@@ -21,47 +38,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-IMPACT_EVENTS = {
-    "PayableSettled",
-    "DeliveryObligationSettled",
-    "InterbankCleared",
-    "InterbankOvernightCreated",
-    "InterbankAuctionTrade",
-}
-
-DEFAULT_EVENTS = {
-    "ObligationDefaulted",
-    "ObligationWrittenOff",
-    "AgentDefaulted",
-    "BankDefaultCBFreeze",
-}
-
 
 @dataclass
 class DayReport:
     day: int
     impacted: int
     notes: str = ""
-
-
-def _impacted_today(system: System, day: int) -> int:
-    return sum(
-        1 for e in system.state.events if e.get("day") == day and e.get("kind") in IMPACT_EVENTS
-    )
-
-
-def _defaults_today(system: System, day: int) -> int:
-    """Count default events that occurred on a given day."""
-    return sum(
-        1 for e in system.state.events if e.get("day") == day and e.get("kind") in DEFAULT_EVENTS
-    )
-
-
-def _has_open_obligations(system: System) -> bool:
-    for c in system.state.contracts.values():
-        if c.kind in (InstrumentKind.PAYABLE, InstrumentKind.DELIVERY_OBLIGATION):
-            return True
-    return False
 
 
 def _has_outstanding_bank_loans(banking_sub: Any) -> bool:
@@ -853,11 +835,16 @@ def run_until_stable(
     enable_final_cb_settlement: bool | None = None,
     cb_lending_cutoff_day: int | None = None,
     performance: PerformanceConfig | None = None,
-) -> list[DayReport]:
+    termination_policy: TerminationPolicy | None = None,
+    day_hook: Callable[[System, int, DayReport], None] | None = None,
+) -> SimulationResult:
     """
-    Advance day by day until the system is stable:
-    - No impactful events happen for `quiet_days` consecutive days, AND
-    - No outstanding payables or delivery obligations remain.
+    Advance day by day until the system is stable.
+
+    Stability is determined by the *termination_policy*. The default
+    ``LegacyTerminationPolicy`` reproduces the pre-Plan-051 behavior:
+    - Non-rollover: no impactful events for `quiet_days` + no open obligations.
+    - Rollover: no defaults for `quiet_days`.
 
     Args:
         system: System instance to run
@@ -870,16 +857,31 @@ def run_until_stable(
         enable_bank_lending: If True, run bank lending phases each day
         enable_final_cb_settlement: If True, force banks to repay all CB loans
             after the main loop. None = auto (enabled when banking is active).
+        cb_lending_cutoff_day: Day at which CB lending is frozen.
+        performance: Performance configuration.
+        termination_policy: Policy to evaluate stop conditions each day.
+            Defaults to ``LegacyTerminationPolicy``.
+        day_hook: Optional callback ``(system, day, report)`` called after
+            each day is run. Used by the UI layer to capture balances and
+            display progress without duplicating the loop.
+
+    Returns:
+        SimulationResult with reports, stop_reason, snapshots, etc.
 
     Note: Rollover is controlled by system.state.rollover_enabled (Plan 024)
     """
+    if termination_policy is None:
+        termination_policy = LegacyTerminationPolicy()
+
     # Capture initial reserves for CB stress metrics
     system.state.cb_reserves_initial = system.state.cb_reserves_outstanding
 
-    reports = []
+    reports: list[DayReport] = []
+    snapshots = []
     consecutive_quiet = 0
     consecutive_no_defaults = 0
     rollover_enabled = getattr(system.state, "rollover_enabled", False)
+    stop_reason: StopReason | None = None
 
     for _ in range(max_days):
         day_before = system.state.day
@@ -903,7 +905,8 @@ def run_until_stable(
         )
         impacted = _impacted_today(system, day_before)
         defaults = _defaults_today(system, day_before)
-        reports.append(DayReport(day=day_before, impacted=impacted))
+        report = DayReport(day=day_before, impacted=impacted)
+        reports.append(report)
 
         if impacted == 0:
             consecutive_quiet += 1
@@ -915,43 +918,60 @@ def run_until_stable(
         else:
             consecutive_no_defaults = 0
 
-        # Rollover mode: stability = no defaults for quiet_days consecutive days
-        # (settlements are expected and fine in rollover scenarios)
-        # Non-rollover: stability = no impact events + no open obligations
-        if rollover_enabled:
-            stability_condition = consecutive_no_defaults >= quiet_days
-        else:
-            stability_condition = consecutive_quiet >= quiet_days and not _has_open_obligations(
-                system
-            )
+        snapshot = compute_stability_snapshot(
+            system, day_before, consecutive_quiet, consecutive_no_defaults
+        )
+        snapshots.append(snapshot)
 
-        if stability_condition:
+        # Notify UI layer (if wired)
+        if day_hook is not None:
+            day_hook(system, day_before, report)
+
+        # Evaluate termination policy
+        stop_reason = termination_policy.evaluate(snapshot, quiet_days, rollover_enabled)
+        if stop_reason is not None:
             if enable_banking and not system.state.cb_lending_frozen:
                 system.state.cb_lending_frozen = True
                 system.log("CBLendingFreezeStability", day=system.state.day)
                 logger.info("CB lending frozen at stability (day %d)", system.state.day)
             break
 
+    # If the loop exhausted max_days without breaking, record MAX_DAYS_REACHED
+    if stop_reason is None:
+        stop_reason = StopReason.MAX_DAYS_REACHED
+
+    # Capture stop_day before wind-down / final CB settlement advance it
+    stop_day = system.state.day
+
     # Bank loan wind-down: run remaining bank loan repayments after main loop
+    winddown_days = 0
     if enable_bank_lending:
         banking_sub = getattr(system.state, "banking_subsystem", None)
         if banking_sub is not None:
-            _run_bank_loan_winddown(system, banking_sub)
+            winddown_days = _run_bank_loan_winddown(system, banking_sub)
 
     # Final CB settlement: force banks to repay all outstanding CB loans
+    final_cb_result: dict[str, Any] | None = None
     should_final = (enable_final_cb_settlement is not False) and enable_banking
     if should_final:
         has_cb = any(a.kind == AgentKind.CENTRAL_BANK for a in system.state.agents.values())
         if has_cb:
-            final_result = run_final_cb_settlement(system)
-            if final_result["loans_attempted"] > 0:
+            final_cb_result = run_final_cb_settlement(system)
+            if final_cb_result["loans_attempted"] > 0:
                 logger.info(
                     "final CB settlement: %d/%d repaid, %d written off, %d bank defaults",
-                    final_result["loans_repaid"],
-                    final_result["loans_attempted"],
-                    final_result["loans_written_off"],
-                    final_result["bank_defaults"],
+                    final_cb_result["loans_repaid"],
+                    final_cb_result["loans_attempted"],
+                    final_cb_result["loans_written_off"],
+                    final_cb_result["bank_defaults"],
                 )
 
     logger.info("simulation complete: %d days", system.state.day)
-    return reports
+    return SimulationResult(
+        reports=reports,
+        stop_reason=stop_reason,
+        stop_day=stop_day,
+        stability_snapshots=snapshots,
+        winddown_days=winddown_days,
+        final_cb_settlement=final_cb_result,
+    )
