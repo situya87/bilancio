@@ -16,7 +16,6 @@ from rich.prompt import Confirm
 
 from bilancio.config import apply_to_system, load_yaml
 from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
-from bilancio.domain.agent import AgentKind
 from bilancio.engines.simulation import run_day
 from bilancio.engines.system import System
 from bilancio.export.writers import write_balances_csv, write_events_jsonl
@@ -731,6 +730,10 @@ def run_until_stable_mode(
 ) -> list[dict[str, Any]]:
     """Run simulation until stable state is reached.
 
+    Plan 051: delegates loop to ``run_until_stable()`` via a ``day_hook``
+    closure that captures balances, displays progress, and collects
+    ``days_data`` for HTML export — eliminating the duplicated stop logic.
+
     Args:
         system: Configured system
         max_days: Maximum days to simulate
@@ -749,242 +752,175 @@ def run_until_stable_mode(
     Returns:
         List of day data dictionaries
     """
+    from bilancio.analysis.balances import agent_balance
+    from bilancio.engines.simulation import DayReport, run_until_stable
+    from bilancio.engines.termination import StopReason
+
     # Plan 030: Skip verbose output in quiet mode (show="none")
     quiet_mode = show == "none"
     if not quiet_mode:
         console.print(f"\n[dim]Running simulation until stable (max {max_days} days)...[/dim]\n")
 
-    try:
-        # Run simulation day by day to capture correct balance snapshots
-        from bilancio.analysis.balances import agent_balance
-        from bilancio.engines.simulation import (
-            _defaults_today,
-            _has_open_obligations,
-            _impacted_today,
-            run_day,
-        )
+    days_data: list[dict[str, Any]] = []
 
-        # Capture initial reserves for CB stress metrics
-        system.state.cb_reserves_initial = system.state.cb_reserves_outstanding
+    # ── day_hook closure ───────────────────────────────────────────────
+    # Called by run_until_stable() after each day is executed.
+    # All UI display and data capture happens here.
+    def _day_hook(sys: System, day_before: int, report: DayReport) -> None:
+        # Progress callback
+        if progress_callback:
+            progress_callback(day_before + 1, max_days)
 
-        reports = []
-        consecutive_quiet = 0
-        consecutive_no_defaults = 0
-        days_data = []
-
-        for _ in range(max_days):
-            # Run the next day
-            day_before = system.state.day
-            # Activate CB lending freeze when cutoff day is reached
-            if (
-                cb_lending_cutoff_day is not None
-                and day_before >= cb_lending_cutoff_day
-                and not system.state.cb_lending_frozen
-            ):
-                system.state.cb_lending_frozen = True
-                system.log("CBLendingFreezeActivated", day=day_before, cutoff_day=cb_lending_cutoff_day)
-            run_day(
-                system,
-                enable_dealer=enable_dealer,
-                enable_lender=enable_lender,
-                enable_rating=enable_rating,
-                enable_banking=enable_banking,
-                enable_bank_lending=enable_bank_lending,
-                performance=performance,
-            )
-            impacted = _impacted_today(system, day_before)
-            defaults = _defaults_today(system, day_before)
-
-            # Call progress callback if provided
-            if progress_callback:
-                progress_callback(day_before + 1, max_days)
-
-            # Create report
-            from bilancio.engines.simulation import DayReport
-
-            report = DayReport(day=day_before, impacted=impacted)
-            reports.append(report)
-
-            # Skip day 0 display - it's already shown as "Day 0 (After Setup)"
-            # But still capture Day 0 simulation events for HTML export
-            if day_before == 0:
-                # Only capture Day 0 simulation events for HTML
-                day0_events = [
-                    e
-                    for e in system.state.events
-                    if e.get("day") == 0 and e.get("phase") == "simulation"
-                ]
-                if day0_events:
-                    days_data.append(
-                        {
-                            "day": 0,
-                            "events": day0_events,
-                            "quiet": False,
-                            "stable": False,
-                            "balances": {},
-                            "rows": {},
-                            "agent_ids": [],
-                        }
-                    )
-            if day_before >= 1:
-                # Display this day's results immediately (with correct balance state)
-                # Plan 030: Skip day headers in quiet mode
-                if not quiet_mode:
-                    console.print(f"[bold cyan] Day {day_before}[/bold cyan]")
-
-                # Check invariants if requested
-                if check_invariants == "daily":
-                    try:
-                        system.assert_invariants()
-                    except SIMULATION_RECOVERABLE_ERRORS as e:
-                        if not quiet_mode:
-                            console.print(f"[yellow][!] Invariant check failed: {e}[/yellow]")
-
-                # Show events and balances for this specific day
-                # Note: events are stored with 0-based day numbers
-                # Plan 030: show_day_summary_renderable returns [] for show="none"
-                # Always compute display_agent_ids (needed for HTML export even in quiet mode)
-                display_agent_ids = (
-                    _filter_active_agent_ids(system, agent_ids) if agent_ids is not None else None
-                )
-                if not quiet_mode:
-                    renderables = show_day_summary_renderable(
-                        system, display_agent_ids, show, day=day_before, t_account=t_account
-                    )
-                    for renderable in renderables:
-                        console.print(renderable)
-
-                # Collect day data for HTML export
-                # We want simulation events from the day that was just displayed
-                # show_day_summary was called with day=day_before
-                day_events = [
-                    e
-                    for e in system.state.events
-                    if e.get("day") == day_before and e.get("phase") == "simulation"
-                ]
-                # Plan 024: stability check accounts for rollover mode
-                if system.state.rollover_enabled:
-                    is_stable = consecutive_no_defaults >= quiet_days
-                else:
-                    is_stable = consecutive_quiet >= quiet_days and not _has_open_obligations(
-                        system
-                    )
-
-                # Capture current balance state for this day
-                day_balances: dict[str, Any] = {}
-                day_rows: dict[str, dict[str, list[Any]]] = {}
-                active_agents_for_day: list[str] | None = None
-                if agent_ids is not None:
-                    active_agents_for_day = display_agent_ids or []
-                if active_agents_for_day:
-                    from bilancio.analysis.visualization import build_t_account_rows
-
-                    for agent_id in active_agents_for_day:
-                        day_balances[agent_id] = agent_balance(system, agent_id)
-                        acct = build_t_account_rows(system, agent_id)
-
-                        def to_row(r: Any) -> dict[str, Any]:
-                            return {
-                                "name": getattr(r, "name", ""),
-                                "quantity": getattr(r, "quantity", None),
-                                "value_minor": getattr(r, "value_minor", None),
-                                "counterparty_name": getattr(r, "counterparty_name", None),
-                                "maturity": getattr(r, "maturity", None),
-                                "id_or_alias": getattr(r, "id_or_alias", None),
-                            }
-
-                        day_rows[agent_id] = {
-                            "assets": [to_row(r) for r in acct.assets],
-                            "liabs": [to_row(r) for r in acct.liabilities],
-                        }
-
-                # Capture network snapshot for this day
-                from bilancio.analysis.network import build_network_data
-
-                network_snapshot = build_network_data(system, day_before)
-
+        # Day 0: capture simulation events for HTML but skip display
+        if day_before == 0:
+            day0_events = [
+                e
+                for e in sys.state.events
+                if e.get("day") == 0 and e.get("phase") == "simulation"
+            ]
+            if day0_events:
                 days_data.append(
                     {
-                        "day": day_before,  # Use actual event day, not 1-based counter
-                        "events": day_events,
-                        "quiet": report.impacted == 0,
-                        "stable": is_stable,
-                        "balances": day_balances,
-                        "rows": day_rows,
-                        "agent_ids": active_agents_for_day
-                        if active_agents_for_day is not None
-                        else [],
-                        "network_snapshot": network_snapshot,
+                        "day": 0,
+                        "events": day0_events,
+                        "quiet": False,
+                        "stable": False,
+                        "balances": {},
+                        "rows": {},
+                        "agent_ids": [],
                     }
                 )
+            return
 
-                # Show activity summary (Plan 030: skip in quiet mode)
+        # Day >= 1: display + capture
+        if not quiet_mode:
+            console.print(f"[bold cyan] Day {day_before}[/bold cyan]")
+
+        if check_invariants == "daily":
+            try:
+                sys.assert_invariants()
+            except SIMULATION_RECOVERABLE_ERRORS as e:
                 if not quiet_mode:
-                    if report.impacted > 0:
-                        console.print(f"[dim]Activity: {report.impacted} impactful events[/dim]")
-                    else:
-                        console.print("[dim]-> Quiet day (no activity)[/dim]")
+                    console.print(f"[yellow][!] Invariant check failed: {e}[/yellow]")
 
-                    if report.notes:
-                        console.print(f"[dim]Note: {report.notes}[/dim]")
+        display_agent_ids = (
+            _filter_active_agent_ids(sys, agent_ids) if agent_ids is not None else None
+        )
+        if not quiet_mode:
+            renderables = show_day_summary_renderable(
+                sys, display_agent_ids, show, day=day_before, t_account=t_account
+            )
+            for renderable in renderables:
+                console.print(renderable)
 
-                    console.print()
+        # Collect day events for HTML export
+        day_events = [
+            e
+            for e in sys.state.events
+            if e.get("day") == day_before and e.get("phase") == "simulation"
+        ]
 
-            # Check for stable state
-            if impacted == 0:
-                consecutive_quiet += 1
+        # Capture current balance state
+        day_balances: dict[str, Any] = {}
+        day_rows: dict[str, dict[str, list[Any]]] = {}
+        active_agents_for_day: list[str] | None = None
+        if agent_ids is not None:
+            active_agents_for_day = display_agent_ids or []
+        if active_agents_for_day:
+            from bilancio.analysis.visualization import build_t_account_rows
+
+            for agent_id in active_agents_for_day:
+                day_balances[agent_id] = agent_balance(sys, agent_id)
+                acct = build_t_account_rows(sys, agent_id)
+
+                def to_row(r: Any) -> dict[str, Any]:
+                    return {
+                        "name": getattr(r, "name", ""),
+                        "quantity": getattr(r, "quantity", None),
+                        "value_minor": getattr(r, "value_minor", None),
+                        "counterparty_name": getattr(r, "counterparty_name", None),
+                        "maturity": getattr(r, "maturity", None),
+                        "id_or_alias": getattr(r, "id_or_alias", None),
+                    }
+
+                day_rows[agent_id] = {
+                    "assets": [to_row(r) for r in acct.assets],
+                    "liabs": [to_row(r) for r in acct.liabilities],
+                }
+
+        # Network snapshot
+        from bilancio.analysis.network import build_network_data
+
+        network_snapshot = build_network_data(sys, day_before)
+
+        days_data.append(
+            {
+                "day": day_before,
+                "events": day_events,
+                "quiet": report.impacted == 0,
+                "stable": False,  # Patched after run_until_stable returns
+                "balances": day_balances,
+                "rows": day_rows,
+                "agent_ids": active_agents_for_day
+                if active_agents_for_day is not None
+                else [],
+                "network_snapshot": network_snapshot,
+            }
+        )
+
+        # Activity summary (Plan 030: skip in quiet mode)
+        if not quiet_mode:
+            if report.impacted > 0:
+                console.print(f"[dim]Activity: {report.impacted} impactful events[/dim]")
             else:
-                consecutive_quiet = 0
+                console.print("[dim]-> Quiet day (no activity)[/dim]")
 
-            if defaults == 0:
-                consecutive_no_defaults += 1
-            else:
-                consecutive_no_defaults = 0
+            if report.notes:
+                console.print(f"[dim]Note: {report.notes}[/dim]")
 
-            # Rollover mode: stability = no defaults for quiet_days consecutive days
-            # (settlements are expected and fine in rollover scenarios)
-            # Non-rollover: stability = no impact events + no open obligations
-            if system.state.rollover_enabled:
-                stability_condition = consecutive_no_defaults >= quiet_days
-            else:
-                stability_condition = consecutive_quiet >= quiet_days and not _has_open_obligations(
-                    system
-                )
+            console.print()
 
-            if stability_condition:
-                if enable_banking and not system.state.cb_lending_frozen:
-                    system.state.cb_lending_frozen = True
-                    system.log("CBLendingFreezeStability", day=system.state.day)
-                console.print("[green]OK[/green] System reached stable state")
-                break
+    # ── Run simulation ─────────────────────────────────────────────────
+    try:
+        result = run_until_stable(
+            system,
+            max_days=max_days,
+            quiet_days=quiet_days,
+            enable_dealer=enable_dealer,
+            enable_lender=enable_lender,
+            enable_rating=enable_rating,
+            enable_banking=enable_banking,
+            enable_bank_lending=enable_bank_lending,
+            enable_final_cb_settlement=enable_banking,
+            cb_lending_cutoff_day=cb_lending_cutoff_day,
+            performance=performance,
+            day_hook=_day_hook,
+        )
 
-        # If we didn't break early, check if we hit max days
-        else:
+        # Mark the last day entry as stable if stability was reached
+        if result.stop_reason == StopReason.STABILITY_REACHED and days_data:
+            days_data[-1]["stable"] = True
+
+        # Display stop message
+        if result.stop_reason == StopReason.STABILITY_REACHED:
+            console.print("[green]OK[/green] System reached stable state")
+        elif result.stop_reason == StopReason.MAX_DAYS_REACHED:
             console.print("[yellow][!][/yellow] Maximum days reached without stable state")
 
-        # Bank loan wind-down: run remaining bank loan repayments after main loop
-        if enable_bank_lending:
-            banking_sub = getattr(system.state, "banking_subsystem", None)
-            if banking_sub is not None:
-                from bilancio.engines.simulation import _run_bank_loan_winddown
+        # Show wind-down info
+        if result.winddown_days > 0 and not quiet_mode:
+            console.print(
+                f"[dim]Bank loan wind-down: {result.winddown_days} extra days to mature remaining loans[/dim]"
+            )
 
-                winddown_days = _run_bank_loan_winddown(system, banking_sub)
-                if winddown_days > 0 and not quiet_mode:
-                    console.print(
-                        f"[dim]Bank loan wind-down: {winddown_days} extra days to mature remaining loans[/dim]"
-                    )
-
-        # Final CB settlement: force banks to repay outstanding CB loans
-        if enable_banking:
-            has_cb = any(a.kind == AgentKind.CENTRAL_BANK for a in system.state.agents.values())
-            if has_cb:
-                from bilancio.engines.simulation import run_final_cb_settlement
-                final_result = run_final_cb_settlement(system)
-                if final_result["loans_attempted"] > 0 and not quiet_mode:
-                    console.print(
-                        f"[dim]Final CB settlement: {final_result['loans_repaid']}/{final_result['loans_attempted']} repaid, "
-                        f"{final_result['loans_written_off']} written off, {final_result['bank_defaults']} bank defaults[/dim]"
-                    )
+        # Show final CB settlement info
+        if result.final_cb_settlement and not quiet_mode:
+            fc = result.final_cb_settlement
+            if fc["loans_attempted"] > 0:
+                console.print(
+                    f"[dim]Final CB settlement: {fc['loans_repaid']}/{fc['loans_attempted']} repaid, "
+                    f"{fc['loans_written_off']} written off, {fc['bank_defaults']} bank defaults[/dim]"
+                )
 
     except (DefaultError, SimulationHalt) as e:
         show_error_panel(
