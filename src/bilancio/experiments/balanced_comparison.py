@@ -678,6 +678,33 @@ class BalancedComparisonConfig(BaseModel):
     lender_prevention_threshold: Decimal = Field(
         default=Decimal("0.3"), description="Min issuer default probability to trigger preventive lending"
     )
+    lender_marginal_relief_min_ratio: Decimal = Field(
+        default=Decimal("0"), description="Min expected default relief / expected intermediary loss"
+    )
+    lender_stress_risk_premium_scale: Decimal = Field(
+        default=Decimal("0"), description="Additional convex risk premium scale in stress"
+    )
+    lender_high_risk_default_threshold: Decimal = Field(
+        default=Decimal("0.70"), description="High-risk default-probability threshold for maturity cap"
+    )
+    lender_high_risk_maturity_cap: int = Field(
+        default=2, description="Max maturity for high-risk borrowers"
+    )
+    lender_daily_expected_loss_budget_ratio: Decimal = Field(
+        default=Decimal("0"), description="Per-day expected loss budget as fraction of lender capital"
+    )
+    lender_run_expected_loss_budget_ratio: Decimal = Field(
+        default=Decimal("0"), description="Run-level expected loss budget as fraction of lender capital"
+    )
+    lender_stop_loss_realized_ratio: Decimal = Field(
+        default=Decimal("0"), description="Pause lending when realized losses / capital exceed this ratio"
+    )
+    lender_collateralized_terms: bool = Field(
+        default=False, description="Cap NBFI loan principal by receivable collateral value"
+    )
+    lender_collateral_advance_rate: Decimal = Field(
+        default=Decimal("1.0"), description="Advance rate for collateralized NBFI terms"
+    )
 
     # Bank credit risk pricing (Plan 036)
     credit_risk_loading: Decimal = Field(
@@ -1253,6 +1280,15 @@ class BalancedComparisonRunner:
             lender_coverage_penalty_scale=self.config.lender_coverage_penalty_scale,
             lender_preventive_lending=self.config.lender_preventive_lending,
             lender_prevention_threshold=self.config.lender_prevention_threshold,
+            lender_marginal_relief_min_ratio=self.config.lender_marginal_relief_min_ratio,
+            lender_stress_risk_premium_scale=self.config.lender_stress_risk_premium_scale,
+            lender_high_risk_default_threshold=self.config.lender_high_risk_default_threshold,
+            lender_high_risk_maturity_cap=self.config.lender_high_risk_maturity_cap,
+            lender_daily_expected_loss_budget_ratio=self.config.lender_daily_expected_loss_budget_ratio,
+            lender_run_expected_loss_budget_ratio=self.config.lender_run_expected_loss_budget_ratio,
+            lender_stop_loss_realized_ratio=self.config.lender_stop_loss_realized_ratio,
+            lender_collateralized_terms=self.config.lender_collateralized_terms,
+            lender_collateral_advance_rate=self.config.lender_collateral_advance_rate,
             balanced_mode_override="lender",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
@@ -1325,6 +1361,15 @@ class BalancedComparisonRunner:
             lender_coverage_penalty_scale=self.config.lender_coverage_penalty_scale,
             lender_preventive_lending=self.config.lender_preventive_lending,
             lender_prevention_threshold=self.config.lender_prevention_threshold,
+            lender_marginal_relief_min_ratio=self.config.lender_marginal_relief_min_ratio,
+            lender_stress_risk_premium_scale=self.config.lender_stress_risk_premium_scale,
+            lender_high_risk_default_threshold=self.config.lender_high_risk_default_threshold,
+            lender_high_risk_maturity_cap=self.config.lender_high_risk_maturity_cap,
+            lender_daily_expected_loss_budget_ratio=self.config.lender_daily_expected_loss_budget_ratio,
+            lender_run_expected_loss_budget_ratio=self.config.lender_run_expected_loss_budget_ratio,
+            lender_stop_loss_realized_ratio=self.config.lender_stop_loss_realized_ratio,
+            lender_collateralized_terms=self.config.lender_collateralized_terms,
+            lender_collateral_advance_rate=self.config.lender_collateral_advance_rate,
             balanced_mode_override="nbfi",
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
@@ -1402,6 +1447,15 @@ class BalancedComparisonRunner:
             lender_coverage_penalty_scale=self.config.lender_coverage_penalty_scale,
             lender_preventive_lending=self.config.lender_preventive_lending,
             lender_prevention_threshold=self.config.lender_prevention_threshold,
+            lender_marginal_relief_min_ratio=self.config.lender_marginal_relief_min_ratio,
+            lender_stress_risk_premium_scale=self.config.lender_stress_risk_premium_scale,
+            lender_high_risk_default_threshold=self.config.lender_high_risk_default_threshold,
+            lender_high_risk_maturity_cap=self.config.lender_high_risk_maturity_cap,
+            lender_daily_expected_loss_budget_ratio=self.config.lender_daily_expected_loss_budget_ratio,
+            lender_run_expected_loss_budget_ratio=self.config.lender_run_expected_loss_budget_ratio,
+            lender_stop_loss_realized_ratio=self.config.lender_stop_loss_realized_ratio,
+            lender_collateralized_terms=self.config.lender_collateralized_terms,
+            lender_collateral_advance_rate=self.config.lender_collateral_advance_rate,
             balanced_mode_override="nbfi_dealer",  # 50/50 cash split
             n_banks=self.config.n_banks,
             reserve_multiplier=self.config.reserve_multiplier,
@@ -1596,6 +1650,15 @@ class BalancedComparisonRunner:
             lender_coverage_penalty_scale=self.config.lender_coverage_penalty_scale,
             lender_preventive_lending=self.config.lender_preventive_lending,
             lender_prevention_threshold=self.config.lender_prevention_threshold,
+            lender_marginal_relief_min_ratio=self.config.lender_marginal_relief_min_ratio,
+            lender_stress_risk_premium_scale=self.config.lender_stress_risk_premium_scale,
+            lender_high_risk_default_threshold=self.config.lender_high_risk_default_threshold,
+            lender_high_risk_maturity_cap=self.config.lender_high_risk_maturity_cap,
+            lender_daily_expected_loss_budget_ratio=self.config.lender_daily_expected_loss_budget_ratio,
+            lender_run_expected_loss_budget_ratio=self.config.lender_run_expected_loss_budget_ratio,
+            lender_stop_loss_realized_ratio=self.config.lender_stop_loss_realized_ratio,
+            lender_collateralized_terms=self.config.lender_collateralized_terms,
+            lender_collateral_advance_rate=self.config.lender_collateral_advance_rate,
             balanced_mode_override="bank_dealer_nbfi",
             n_banks=self.config.n_banks_for_banking,
             reserve_multiplier=self.config.bank_reserve_multiplier,

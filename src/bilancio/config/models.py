@@ -1029,6 +1029,44 @@ class LenderScenarioConfig(BaseModel):
         default=False, description="[RUN] Dynamic prevention threshold"
     )
 
+    # Plan 049: Intermediary loss-efficiency controls
+    marginal_relief_min_ratio: Decimal = Field(
+        default=Decimal("0"), ge=Decimal("0"),
+        description="Min expected default relief / expected intermediary loss to issue loan"
+    )
+    stress_risk_premium_scale: Decimal = Field(
+        default=Decimal("0"), ge=Decimal("0"),
+        description="Additional convex risk premium scale under high default probability"
+    )
+    high_risk_default_threshold: Decimal = Field(
+        default=Decimal("0.70"), gt=Decimal("0"), lt=Decimal("1"),
+        description="Default-probability threshold for high-risk maturity control"
+    )
+    high_risk_maturity_cap: int = Field(
+        default=2, ge=1,
+        description="Max loan maturity when borrower exceeds high-risk threshold"
+    )
+    daily_expected_loss_budget_ratio: Decimal = Field(
+        default=Decimal("0"), ge=Decimal("0"), le=Decimal("1"),
+        description="Per-day expected loss budget as fraction of lender capital (0=disabled)"
+    )
+    run_expected_loss_budget_ratio: Decimal = Field(
+        default=Decimal("0"), ge=Decimal("0"), le=Decimal("1"),
+        description="Run-level expected loss budget as fraction of lender capital (0=disabled)"
+    )
+    stop_loss_realized_ratio: Decimal = Field(
+        default=Decimal("0"), ge=Decimal("0"), le=Decimal("1"),
+        description="Pause lending when realized lender losses / capital exceed ratio (0=disabled)"
+    )
+    collateralized_terms: bool = Field(
+        default=False,
+        description="Cap loan principal by quality receivable collateral value"
+    )
+    collateral_advance_rate: Decimal = Field(
+        default=Decimal("1.0"), gt=Decimal("0"), le=Decimal("1"),
+        description="Advance rate for collateralized terms (loan <= advance_rate × collateral)"
+    )
+
 
 class RatingAgencyScenarioConfig(BaseModel):
     """Rating agency configuration within a scenario."""

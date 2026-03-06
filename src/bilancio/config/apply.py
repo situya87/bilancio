@@ -782,6 +782,15 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 adaptive_rates=config.lender.adaptive_rates,
                 adaptive_capital_conservation=config.lender.adaptive_capital_conservation,
                 adaptive_prevention=config.lender.adaptive_prevention,
+                marginal_relief_min_ratio=config.lender.marginal_relief_min_ratio,
+                stress_risk_premium_scale=config.lender.stress_risk_premium_scale,
+                high_risk_default_threshold=config.lender.high_risk_default_threshold,
+                high_risk_maturity_cap=config.lender.high_risk_maturity_cap,
+                daily_expected_loss_budget_ratio=config.lender.daily_expected_loss_budget_ratio,
+                run_expected_loss_budget_ratio=config.lender.run_expected_loss_budget_ratio,
+                stop_loss_realized_ratio=config.lender.stop_loss_realized_ratio,
+                collateralized_terms=config.lender.collateralized_terms,
+                collateral_advance_rate=config.lender.collateral_advance_rate,
             )
 
         # Create NBFI RiskAssessor when profile has risk_assessment_params
@@ -840,6 +849,15 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
             coverage_penalty_scale=config.lender.coverage_penalty_scale,
             preventive_lending=config.lender.preventive_lending,
             prevention_threshold=config.lender.prevention_threshold,
+            marginal_relief_min_ratio=config.lender.marginal_relief_min_ratio,
+            stress_risk_premium_scale=config.lender.stress_risk_premium_scale,
+            high_risk_default_threshold=config.lender.high_risk_default_threshold,
+            high_risk_maturity_cap=config.lender.high_risk_maturity_cap,
+            daily_expected_loss_budget_ratio=config.lender.daily_expected_loss_budget_ratio,
+            run_expected_loss_budget_ratio=config.lender.run_expected_loss_budget_ratio,
+            stop_loss_realized_ratio=config.lender.stop_loss_realized_ratio,
+            collateralized_terms=config.lender.collateralized_terms,
+            collateral_advance_rate=config.lender.collateral_advance_rate,
         )
 
     # Set up rating agency config if present in scenario
@@ -1173,6 +1191,15 @@ def _init_lending_from_action_specs(
     coverage_penalty_scale = _resolve_lender_value("coverage_penalty_scale", Decimal("0.10"))
     preventive_lending = _resolve_lender_value("preventive_lending", False)
     prevention_threshold = _resolve_lender_value("prevention_threshold", Decimal("0.3"))
+    marginal_relief_min_ratio = _resolve_lender_value("marginal_relief_min_ratio", Decimal("0"))
+    stress_risk_premium_scale = _resolve_lender_value("stress_risk_premium_scale", Decimal("0"))
+    high_risk_default_threshold = _resolve_lender_value("high_risk_default_threshold", Decimal("0.70"))
+    high_risk_maturity_cap = _resolve_lender_value("high_risk_maturity_cap", 2)
+    daily_expected_loss_budget_ratio = _resolve_lender_value("daily_expected_loss_budget_ratio", Decimal("0"))
+    run_expected_loss_budget_ratio = _resolve_lender_value("run_expected_loss_budget_ratio", Decimal("0"))
+    stop_loss_realized_ratio = _resolve_lender_value("stop_loss_realized_ratio", Decimal("0"))
+    collateralized_terms = _resolve_lender_value("collateralized_terms", False)
+    collateral_advance_rate = _resolve_lender_value("collateral_advance_rate", Decimal("1.0"))
 
     system.state.lender_config = LendingConfig(
         base_rate=base_rate,
@@ -1196,6 +1223,15 @@ def _init_lending_from_action_specs(
         coverage_penalty_scale=coverage_penalty_scale,
         preventive_lending=preventive_lending,
         prevention_threshold=prevention_threshold,
+        marginal_relief_min_ratio=marginal_relief_min_ratio,
+        stress_risk_premium_scale=stress_risk_premium_scale,
+        high_risk_default_threshold=high_risk_default_threshold,
+        high_risk_maturity_cap=high_risk_maturity_cap,
+        daily_expected_loss_budget_ratio=daily_expected_loss_budget_ratio,
+        run_expected_loss_budget_ratio=run_expected_loss_budget_ratio,
+        stop_loss_realized_ratio=stop_loss_realized_ratio,
+        collateralized_terms=collateralized_terms,
+        collateral_advance_rate=collateral_advance_rate,
     )
 
 

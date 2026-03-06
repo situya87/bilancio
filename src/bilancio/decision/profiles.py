@@ -192,6 +192,17 @@ class LenderProfile:
     adaptive_capital_conservation: bool = False  # [RUN] scale exposure limits by utilization
     adaptive_prevention: bool = False         # [RUN] dynamic prevention threshold
 
+    # Plan 049: Intermediary loss-efficiency controls
+    marginal_relief_min_ratio: Decimal = Decimal("0")  # [RUN] min expected_relief / expected_loss
+    stress_risk_premium_scale: Decimal = Decimal("0")  # [RUN] extra convex premium under high p_default
+    high_risk_default_threshold: Decimal = Decimal("0.70")  # [RUN] shorten maturities above threshold
+    high_risk_maturity_cap: int = 2  # [RUN] maturity cap when p_default is high
+    daily_expected_loss_budget_ratio: Decimal = Decimal("0")  # [RUN] per-day expected loss budget / capital
+    run_expected_loss_budget_ratio: Decimal = Decimal("0")  # [RUN] cumulative expected loss budget / capital
+    stop_loss_realized_ratio: Decimal = Decimal("0")  # [RUN] pause lending if realized loss / capital exceeds ratio
+    collateralized_terms: bool = False  # [RUN] cap loan principal using receivable collateral value
+    collateral_advance_rate: Decimal = Decimal("1.0")  # [RUN] loan <= advance_rate * collateral_value
+
     def __post_init__(self) -> None:
         if self.kappa <= Decimal("0"):
             raise ValueError("kappa must be positive")
@@ -219,6 +230,22 @@ class LenderProfile:
             raise ValueError("coverage_penalty_scale must be non-negative")
         if not (Decimal("0") < self.prevention_threshold < Decimal("1")):
             raise ValueError("prevention_threshold must be in (0, 1)")
+        if self.marginal_relief_min_ratio < Decimal("0"):
+            raise ValueError("marginal_relief_min_ratio must be non-negative")
+        if self.stress_risk_premium_scale < Decimal("0"):
+            raise ValueError("stress_risk_premium_scale must be non-negative")
+        if not (Decimal("0") < self.high_risk_default_threshold < Decimal("1")):
+            raise ValueError("high_risk_default_threshold must be in (0, 1)")
+        if self.high_risk_maturity_cap < 1:
+            raise ValueError("high_risk_maturity_cap must be >= 1")
+        if not (Decimal("0") <= self.daily_expected_loss_budget_ratio <= Decimal("1")):
+            raise ValueError("daily_expected_loss_budget_ratio must be in [0, 1]")
+        if not (Decimal("0") <= self.run_expected_loss_budget_ratio <= Decimal("1")):
+            raise ValueError("run_expected_loss_budget_ratio must be in [0, 1]")
+        if not (Decimal("0") <= self.stop_loss_realized_ratio <= Decimal("1")):
+            raise ValueError("stop_loss_realized_ratio must be in [0, 1]")
+        if not (Decimal("0") < self.collateral_advance_rate <= Decimal("1")):
+            raise ValueError("collateral_advance_rate must be in (0, 1]")
 
     @property
     def base_default_estimate(self) -> Decimal:
