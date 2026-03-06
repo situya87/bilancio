@@ -634,26 +634,46 @@ def build_cli_args(result: SweepSetupResult) -> list[str]:
         if "adapt" in params:
             args.extend(["--adapt", params["adapt"]])
 
-    # Trader params
-    for key in ["risk_aversion", "planning_horizon", "aggressiveness",
-                 "default_observability", "trading_motive"]:
-        if key in params:
-            cli_key = f"--{key.replace('_', '-')}"
-            args.extend([cli_key, str(params[key])])
-
-    # Dealer params (balanced only)
+    # Trader params (balanced only — bank/nbfi commands don't accept these)
     if result.sweep_type == "balanced":
+        for key in ["risk_aversion", "planning_horizon", "aggressiveness",
+                     "default_observability", "trading_motive"]:
+            if key in params:
+                cli_key = f"--{key.replace('_', '-')}"
+                args.extend([cli_key, str(params[key])])
+
+        # Dealer & VBT params
         for key in ["vbt_mid_sensitivity", "vbt_spread_sensitivity",
                      "trading_rounds", "flow_sensitivity", "dealer_concentration_limit"]:
             if key in params:
                 cli_key = f"--{key.replace('_', '-')}"
                 args.extend([cli_key, str(params[key])])
 
-    # Risk params
-    for key in ["risk_premium", "risk_urgency"]:
-        if key in params:
-            cli_key = f"--{key.replace('_', '-')}"
-            args.extend([cli_key, str(params[key])])
+        # Risk params
+        for key in ["risk_premium", "risk_urgency"]:
+            if key in params:
+                cli_key = f"--{key.replace('_', '-')}"
+                args.extend([cli_key, str(params[key])])
+
+        # Banking arm flags
+        if params.get("enable_banking"):
+            args.append("--enable-bank-passive")
+            args.append("--enable-bank-dealer")
+            args.append("--enable-bank-dealer-nbfi")
+
+        # Lender tuning flags
+        if params.get("enable_lender"):
+            if "lender_share" in params:
+                args.extend(["--lender-share", str(params["lender_share"])])
+            for key in ["lender_min_coverage", "lender_ranking_mode",
+                         "lender_coverage_mode"]:
+                if key in params:
+                    cli_key = f"--{key.replace('_', '-')}"
+                    args.extend([cli_key, str(params[key])])
+            if params.get("lender_maturity_matching"):
+                args.append("--lender-maturity-matching")
+            if params.get("lender_preventive_lending"):
+                args.append("--lender-preventive-lending")
 
     # Bank params (bank sweep only)
     if result.sweep_type == "bank":

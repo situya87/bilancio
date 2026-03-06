@@ -335,6 +335,101 @@ class TestBuildCliArgs:
         args = build_cli_args(result)
         assert "--out-dir" not in args
 
+    def test_bank_does_not_emit_trader_flags(self):
+        """P1 regression: bank sweep must not emit trader/risk flags."""
+        result = SweepSetupResult(
+            sweep_type="bank",
+            cloud=False,
+            params={
+                "n_agents": 50,
+                "risk_aversion": "0.5",
+                "planning_horizon": 10,
+                "aggressiveness": "1.0",
+                "default_observability": "1.0",
+                "trading_motive": "liquidity_then_earning",
+                "risk_premium": "0.02",
+                "risk_urgency": "0.30",
+                "n_banks": 5,
+            },
+        )
+        args = build_cli_args(result)
+        assert "--risk-aversion" not in args
+        assert "--planning-horizon" not in args
+        assert "--aggressiveness" not in args
+        assert "--default-observability" not in args
+        assert "--trading-motive" not in args
+        assert "--risk-premium" not in args
+        assert "--risk-urgency" not in args
+        # Bank-specific flags should still be emitted
+        assert "--n-banks" in args
+
+    def test_nbfi_does_not_emit_trader_flags(self):
+        """P1 regression: nbfi sweep must not emit trader/risk flags."""
+        result = SweepSetupResult(
+            sweep_type="nbfi",
+            cloud=False,
+            params={
+                "risk_aversion": "0.5",
+                "risk_premium": "0.02",
+                "lender_share": "0.10",
+            },
+        )
+        args = build_cli_args(result)
+        assert "--risk-aversion" not in args
+        assert "--risk-premium" not in args
+        assert "--nbfi-share" in args
+
+    def test_balanced_emits_banking_flags(self):
+        """P2 regression: enable_banking should emit --enable-bank-* flags."""
+        result = SweepSetupResult(
+            sweep_type="balanced",
+            cloud=False,
+            params={"enable_banking": True},
+        )
+        args = build_cli_args(result)
+        assert "--enable-bank-passive" in args
+        assert "--enable-bank-dealer" in args
+        assert "--enable-bank-dealer-nbfi" in args
+
+    def test_balanced_emits_lender_tuning_flags(self):
+        """P2 regression: lender params should be emitted when enable_lender is True."""
+        result = SweepSetupResult(
+            sweep_type="balanced",
+            cloud=False,
+            params={
+                "enable_lender": True,
+                "lender_share": "0.10",
+                "lender_min_coverage": "0.5",
+                "lender_ranking_mode": "profit",
+                "lender_coverage_mode": "gate",
+                "lender_maturity_matching": True,
+                "lender_preventive_lending": True,
+            },
+        )
+        args = build_cli_args(result)
+        assert "--enable-lender" in args
+        assert "--lender-share" in args
+        assert "--lender-min-coverage" in args
+        assert "--lender-ranking-mode" in args
+        assert "--lender-coverage-mode" in args
+        assert "--lender-maturity-matching" in args
+        assert "--lender-preventive-lending" in args
+
+    def test_balanced_no_lender_flags_when_disabled(self):
+        """Lender tuning flags should NOT be emitted when enable_lender is False."""
+        result = SweepSetupResult(
+            sweep_type="balanced",
+            cloud=False,
+            params={
+                "enable_lender": False,
+                "lender_share": "0.10",
+                "lender_min_coverage": "0.5",
+            },
+        )
+        args = build_cli_args(result)
+        assert "--lender-share" not in args
+        assert "--lender-min-coverage" not in args
+
 
 class TestAnalysisMenu:
     """Test ANALYSIS_MENU structure and filtering."""
