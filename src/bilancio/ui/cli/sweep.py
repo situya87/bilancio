@@ -35,9 +35,186 @@ CLI_HANDLED_ERRORS = (
 )
 
 VALID_POST_ANALYSES = (
-    "drilldowns", "deltas", "dynamics", "narrative",
-    "strategy_outcomes", "dealer_usage", "mechanism_activity", "treynor",
+    # Data analyses (CSV/JSON)
+    "frontier", "strategy_outcomes", "dealer_usage", "mechanism_activity",
+    "contagion", "credit_creation", "network", "pricing", "beliefs", "funding",
+    # Visualizations (HTML)
+    "drilldowns", "deltas", "dynamics", "narrative", "treynor", "comparison",
 )
+
+
+def _run_per_run_analysis(
+    out_dir: Path,
+    analysis_name: str,
+    sweep_type: str,
+) -> Path | None:
+    """Run a per-run analysis across all runs, aggregate into CSV.
+
+    Reads comparison.csv to get run info, loads events for each run,
+    runs the appropriate extractor, and writes aggregate CSV.
+    """
+    import csv
+    import json
+
+    csv_path = out_dir / "aggregate" / "comparison.csv"
+    if not csv_path.is_file():
+        return None
+
+    with open(csv_path) as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+    if not rows:
+        return None
+
+    # Determine run_id columns based on sweep type
+    if sweep_type == "dealer":
+        arm_cols = [("passive", "run_id_passive"), ("active", "run_id_active")]
+    elif sweep_type in ("bank", "nbfi"):
+        arm_cols = [("idle", "run_id_idle"), ("lend", "run_id_lend")]
+    else:
+        arm_cols = [("passive", "run_id_passive"), ("active", "run_id_active")]
+
+    runs_dir = out_dir / "runs"
+    all_results: list[dict] = []
+
+    for row in rows:
+        kappa = row.get("kappa", "")
+        concentration = row.get("concentration", "")
+
+        for arm_label, col_name in arm_cols:
+            run_id = row.get(col_name, "")
+            if not run_id:
+                continue
+
+            # Find the run directory
+            events_path = None
+            for candidate in [runs_dir / run_id / "out" / "events.jsonl",
+                              runs_dir / run_id / "events.jsonl"]:
+                if candidate.is_file():
+                    events_path = candidate
+                    break
+
+            if events_path is None:
+                continue
+
+            # Load events
+            events: list[dict] = []
+            with open(events_path) as ef:
+                for line in ef:
+                    line = line.strip()
+                    if line:
+                        try:
+                            events.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+
+            if not events:
+                continue
+
+            # Run the appropriate extractor
+            try:
+                result_row = _extract_per_run(analysis_name, events, run_id, kappa, arm_label, concentration)
+                if result_row:
+                    all_results.append(result_row)
+            except Exception as e:
+                click.echo(f"  {analysis_name} ({run_id}): {e}")
+
+    if not all_results:
+        return None
+
+    # Write aggregate CSV
+    analysis_dir = out_dir / "aggregate" / "analysis"
+    analysis_dir.mkdir(parents=True, exist_ok=True)
+    out_path = analysis_dir / f"{analysis_name}.csv"
+
+    fieldnames = list(all_results[0].keys())
+    with open(out_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(all_results)
+
+    return out_path
+
+
+def _extract_per_run(
+    analysis_name: str,
+    events: list[dict],
+    run_id: str,
+    kappa: str,
+    arm: str,
+    concentration: str,
+) -> dict | None:
+    """Extract per-run metrics for a given analysis type."""
+    base = {"run_id": run_id, "kappa": kappa, "arm": arm, "concentration": concentration}
+
+    if analysis_name == "contagion":
+        from bilancio.analysis.contagion import default_counts_by_type, time_to_contagion
+        counts = default_counts_by_type(events)
+        ttc = time_to_contagion(events)
+        return {**base,
+                "n_primary": counts.get("primary", 0),
+                "n_secondary": counts.get("secondary", 0),
+                "n_total": counts.get("total", 0),
+                "time_to_contagion": ttc if ttc is not None else ""}
+
+    elif analysis_name == "credit_creation":
+        from bilancio.analysis.credit_creation import credit_created_by_type, credit_destroyed_by_type, net_credit_impulse
+        created = credit_created_by_type(events)
+        destroyed = credit_destroyed_by_type(events)
+        impulse = net_credit_impulse(events)
+        row = dict(base)
+        for k, v in created.items():
+            row[f"created_{k}"] = str(v)
+        for k, v in destroyed.items():
+            row[f"destroyed_{k}"] = str(v)
+        row["net_impulse"] = str(impulse)
+        return row
+
+    elif analysis_name == "network":
+        from bilancio.analysis.network_analysis import systemic_importance
+        rankings = systemic_importance(events)
+        if rankings:
+            top = rankings[0]
+            return {**base,
+                    "top_agent": top.get("agent_id", ""),
+                    "top_score": str(top.get("score", 0)),
+                    "n_agents": len(rankings)}
+        return {**base, "top_agent": "", "top_score": "", "n_agents": 0}
+
+    elif analysis_name == "pricing":
+        from bilancio.analysis.pricing_analysis import fire_sale_indicator, trade_prices_by_day
+        prices = trade_prices_by_day(events)
+        fire_sales = fire_sale_indicator(events)
+        # Compute average price ratio across all days
+        all_ratios = []
+        for day_trades in prices.values():
+            for t in day_trades:
+                pr = t.get("price_ratio")
+                if pr is not None:
+                    all_ratios.append(float(pr))
+        avg_ratio = sum(all_ratios) / len(all_ratios) if all_ratios else None
+        return {**base,
+                "avg_price_ratio": str(avg_ratio) if avg_ratio is not None else "",
+                "n_fire_sales": len(fire_sales),
+                "n_trade_days": len(prices)}
+
+    elif analysis_name == "beliefs":
+        # beliefs module needs estimates, not raw events — skip if not available
+        return {**base, "note": "requires estimate_log (not available from events.jsonl)"}
+
+    elif analysis_name == "funding":
+        from bilancio.analysis.funding_chains import liquidity_providers
+        providers = liquidity_providers(events)
+        if providers:
+            top = providers[0]
+            return {**base,
+                    "top_provider": top.get("agent_id", ""),
+                    "top_net_provision": str(top.get("net_provision", 0)),
+                    "n_providers": len(providers)}
+        return {**base, "top_provider": "", "top_net_provision": "", "n_providers": 0}
+
+    return None
 
 
 def _offer_post_sweep_analysis(
@@ -57,8 +234,11 @@ def _offer_post_sweep_analysis(
     """
     from bilancio.analysis.post_sweep import run_post_sweep_analysis
     from bilancio.ui.sweep_setup import (
+        DATA_ANALYSIS_MENU,
+        VIZ_MENU,
         PostSweepAnalysisResult,
-        _available_analyses,
+        _available_data_analyses,
+        _available_visualizations,
         run_post_sweep_questionnaire,
     )
 
@@ -74,16 +254,14 @@ def _offer_post_sweep_analysis(
     if post_analysis == "none":
         return
 
-    available = _available_analyses(sweep_type)
+    avail_data = _available_data_analyses(sweep_type)
+    avail_viz = _available_visualizations(sweep_type)
 
     if post_analysis == "all":
-        core = [k for k, v in available.items() if v["group"] == "core"]
-        extended = [k for k, v in available.items() if v["group"] == "extended"]
-        has_treynor = "treynor" in available
         result = PostSweepAnalysisResult(
-            analyses=core,
-            extended=extended,
-            treynor_kappas=["auto"] if has_treynor else None,
+            data_analyses=list(avail_data.keys()),
+            visualizations=list(avail_viz.keys()),
+            treynor_kappas=["auto"] if "treynor" in avail_viz else None,
             kappas=None,
         )
     elif post_analysis is not None:
@@ -92,13 +270,12 @@ def _offer_post_sweep_analysis(
         invalid = [a for a in requested if a not in VALID_POST_ANALYSES]
         if invalid:
             click.echo(f"  Warning: unknown analysis {invalid} (valid: {', '.join(VALID_POST_ANALYSES)})")
-        requested = [a for a in requested if a in VALID_POST_ANALYSES and a in available]
-        core = [a for a in requested if available.get(a, {}).get("group") == "core"]
-        extended = [a for a in requested if available.get(a, {}).get("group") == "extended"]
-        has_treynor = "treynor" in requested and "treynor" in available
+        sel_data = [a for a in requested if a in avail_data]
+        sel_viz = [a for a in requested if a in avail_viz]
+        has_treynor = "treynor" in sel_viz
         result = PostSweepAnalysisResult(
-            analyses=core,
-            extended=extended,
+            data_analyses=sel_data,
+            visualizations=sel_viz,
             treynor_kappas=["auto"] if has_treynor else None,
             kappas=None,
         )
@@ -106,45 +283,60 @@ def _offer_post_sweep_analysis(
         # Interactive questionnaire
         result = run_post_sweep_questionnaire(sweep_type)
 
-    if not result.analyses and not result.extended and not result.has_treynor:
+    if not result.data_analyses and not result.visualizations:
         return
 
-    # ── Run core analyses (drilldowns, deltas, dynamics, narrative) ────
-    if result.analyses:
-        click.echo(f"\nRunning core analyses: {', '.join(result.analyses)}...")
+    # ── Run core visualization analyses (drilldowns, deltas, dynamics, narrative) ──
+    core_viz = [v for v in result.visualizations if v not in ("treynor", "comparison")]
+    if core_viz:
+        click.echo(f"\nRunning core visualizations: {', '.join(core_viz)}...")
         try:
             core_results = run_post_sweep_analysis(
                 experiment_root=out_dir,
                 sweep_type=sweep_type,
-                analyses=result.analyses,
+                analyses=core_viz,
                 kappas=result.kappas,
             )
             if core_results:
                 for name, path in core_results.items():
                     click.echo(f"  {name}: {path}")
         except (ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
-            click.echo(f"  Core analysis failed: {e}")
+            click.echo(f"  Core visualization failed: {e}")
 
-    # ── Run extended analyses (strategy_outcomes, dealer_usage, mechanism_activity) ──
-    for ext_name in result.extended:
-        click.echo(f"\nRunning {ext_name}...")
+    # ── Run data analyses ────────────────────────────────────────────────
+    for data_name in result.data_analyses:
+        click.echo(f"\nRunning {data_name}...")
         try:
-            if ext_name == "strategy_outcomes":
+            if data_name == "frontier":
+                from bilancio.analysis.intermediary_frontier import build_frontier_artifact, write_frontier_artifact
+                artifact = build_frontier_artifact(out_dir)
+                analysis_dir = out_dir / "aggregate" / "analysis"
+                analysis_dir.mkdir(parents=True, exist_ok=True)
+                paths = write_frontier_artifact(artifact, analysis_dir)
+                for name, path in paths.items():
+                    click.echo(f"  {name}: {path}")
+            elif data_name == "strategy_outcomes":
                 from bilancio.analysis.strategy_outcomes import run_strategy_analysis
                 paths = run_strategy_analysis(out_dir)
                 for p in paths:
-                    click.echo(f"  {ext_name}: {p}")
-            elif ext_name == "dealer_usage":
+                    click.echo(f"  {data_name}: {p}")
+            elif data_name == "dealer_usage":
                 from bilancio.analysis.dealer_usage_summary import run_dealer_usage_analysis
                 path = run_dealer_usage_analysis(out_dir)
-                click.echo(f"  {ext_name}: {path}")
-            elif ext_name == "mechanism_activity":
+                click.echo(f"  {data_name}: {path}")
+            elif data_name == "mechanism_activity":
                 from bilancio.analysis.mechanism_activity import run_mechanism_activity_analysis
                 paths = run_mechanism_activity_analysis(out_dir, sweep_type)
                 for name, path in paths.items():
                     click.echo(f"  {name}: {path}")
+            elif data_name in ("contagion", "credit_creation", "network", "pricing", "beliefs", "funding"):
+                path = _run_per_run_analysis(out_dir, data_name, sweep_type)
+                if path:
+                    click.echo(f"  {data_name}: {path}")
+                else:
+                    click.echo(f"  {data_name}: no data found")
         except (ValueError, KeyError, TypeError, OSError, RuntimeError, ImportError) as e:
-            click.echo(f"  {ext_name} failed: {e}")
+            click.echo(f"  {data_name} failed: {e}")
 
     # ── Run Treynor per-run dashboards ────────────────────────────────
     if result.has_treynor:
@@ -188,6 +380,20 @@ def _offer_post_sweep_analysis(
                     click.echo(f"  treynor (kappa={kappa}): {out_path}")
         except (ValueError, KeyError, TypeError, OSError, RuntimeError, ImportError) as e:
             click.echo(f"  Treynor generation failed: {e}")
+
+    # ── Run comparison report ─────────────────────────────────────────
+    if "comparison" in result.visualizations:
+        click.echo("\nGenerating comparison report...")
+        try:
+            from bilancio.analysis.visualization.run_comparison import generate_comparison_html
+            analysis_dir = out_dir / "aggregate" / "analysis"
+            analysis_dir.mkdir(parents=True, exist_ok=True)
+            out_path = analysis_dir / "comparison_report.html"
+            html = generate_comparison_html(out_dir)
+            out_path.write_text(html)
+            click.echo(f"  comparison: {out_path}")
+        except Exception as e:
+            click.echo(f"  Comparison report failed: {e}")
 
     # Suggest opening first HTML output
     analysis_dir = out_dir / "aggregate" / "analysis"
@@ -1023,6 +1229,14 @@ def sweep_comparison(
     default=Decimal("0.3"),
     help="Min issuer default probability to trigger preventive lending (default: 0.3)",
 )
+@click.option("--lender-marginal-relief-min-ratio", type=Decimal, default=Decimal("0"), help="Min expected relief/loss ratio for NBFI lending (default: 0)")
+@click.option("--lender-stress-risk-premium-scale", type=Decimal, default=Decimal("0"), help="Stress risk premium convex scale (default: 0)")
+@click.option("--lender-high-risk-default-threshold", type=Decimal, default=Decimal("0.70"), help="High-risk default prob threshold (default: 0.70)")
+@click.option("--lender-high-risk-maturity-cap", type=int, default=2, help="Max maturity for high-risk borrowers (default: 2)")
+@click.option("--lender-daily-el-budget-ratio", type=Decimal, default=Decimal("0"), help="Daily expected loss budget / capital (default: 0)")
+@click.option("--lender-run-el-budget-ratio", type=Decimal, default=Decimal("0"), help="Run expected loss budget / capital (default: 0)")
+@click.option("--lender-stop-loss-ratio", type=Decimal, default=Decimal("0"), help="Stop lending when realized losses / capital exceed (default: 0)")
+@click.option("--lender-collateral-advance-rate", type=Decimal, default=Decimal("1.0"), help="Advance rate for collateralized NBFI terms (default: 1.0)")
 @click.option(
     "--trading-rounds",
     type=click.IntRange(min=1),
@@ -1066,6 +1280,15 @@ def sweep_comparison(
 @click.option("--incremental-intentions", is_flag=True, default=False, help="Incremental intention queues")
 @click.option("--matching-order", type=click.Choice(["random", "urgency"]), default=None, help="Matching order")
 @click.option("--dealer-backend", type=click.Choice(["python", "native"]), default=None, help="Kernel backend (native=Rust)")
+@click.option("--adaptive-planning-horizon/--no-adaptive-planning-horizon", default=None, help="Override adaptive planning horizon flag")
+@click.option("--adaptive-risk-aversion/--no-adaptive-risk-aversion", default=None, help="Override adaptive risk aversion flag")
+@click.option("--adaptive-reserves/--no-adaptive-reserves", default=None, help="Override adaptive reserves flag")
+@click.option("--adaptive-lookback/--no-adaptive-lookback", default=None, help="Override adaptive lookback flag")
+@click.option("--adaptive-issuer-specific/--no-adaptive-issuer-specific", default=None, help="Override adaptive issuer-specific pricing flag")
+@click.option("--adaptive-ev-term-structure/--no-adaptive-ev-term-structure", default=None, help="Override adaptive EV term structure flag")
+@click.option("--adaptive-term-structure/--no-adaptive-term-structure", default=None, help="Override adaptive VBT term structure flag")
+@click.option("--adaptive-base-spreads/--no-adaptive-base-spreads", default=None, help="Override adaptive base spreads flag")
+@click.option("--adaptive-convex-spreads/--no-adaptive-convex-spreads", default=None, help="Override adaptive convex spreads flag")
 @click.option(
     "--adapt", type=click.Choice(["static", "calibrated", "responsive", "full"]),
     default="static", help="Adaptive profile preset (Plan 050)",
@@ -1127,6 +1350,14 @@ def sweep_balanced(
     lender_coverage_penalty_scale: Decimal,
     lender_preventive_lending: bool,
     lender_prevention_threshold: Decimal,
+    lender_marginal_relief_min_ratio: Decimal,
+    lender_stress_risk_premium_scale: Decimal,
+    lender_high_risk_default_threshold: Decimal,
+    lender_high_risk_maturity_cap: int,
+    lender_daily_el_budget_ratio: Decimal,
+    lender_run_el_budget_ratio: Decimal,
+    lender_stop_loss_ratio: Decimal,
+    lender_collateral_advance_rate: Decimal,
     trading_rounds: int,
     issuer_specific_pricing: bool,
     flow_sensitivity: Decimal,
@@ -1142,6 +1373,15 @@ def sweep_balanced(
     incremental_intentions: bool,
     matching_order: str | None,
     dealer_backend: str | None,
+    adaptive_planning_horizon: bool | None,
+    adaptive_risk_aversion: bool | None,
+    adaptive_reserves: bool | None,
+    adaptive_lookback: bool | None,
+    adaptive_issuer_specific: bool | None,
+    adaptive_ev_term_structure: bool | None,
+    adaptive_term_structure: bool | None,
+    adaptive_base_spreads: bool | None,
+    adaptive_convex_spreads: bool | None,
     adapt: str,
     preset: Path | None,
 ) -> None:
@@ -1332,6 +1572,14 @@ def sweep_balanced(
         lender_coverage_penalty_scale=lender_coverage_penalty_scale,
         lender_preventive_lending=lender_preventive_lending,
         lender_prevention_threshold=lender_prevention_threshold,
+        lender_marginal_relief_min_ratio=lender_marginal_relief_min_ratio,
+        lender_stress_risk_premium_scale=lender_stress_risk_premium_scale,
+        lender_high_risk_default_threshold=lender_high_risk_default_threshold,
+        lender_high_risk_maturity_cap=lender_high_risk_maturity_cap,
+        lender_daily_expected_loss_budget_ratio=lender_daily_el_budget_ratio,
+        lender_run_expected_loss_budget_ratio=lender_run_el_budget_ratio,
+        lender_stop_loss_realized_ratio=lender_stop_loss_ratio,
+        lender_collateral_advance_rate=lender_collateral_advance_rate,
         cb_lending_cutoff_day=cb_lending_cutoff_day,
         n_banks=n_banks,
         reserve_multiplier=reserve_multiplier,
@@ -1342,6 +1590,22 @@ def sweep_balanced(
         adapt=adapt,
         performance=performance.to_dict() if performance else {},
     )
+
+    # Log adaptive flag overrides (if any set, they need runner support to take effect)
+    _adaptive_flags = {
+        "adaptive_planning_horizon": adaptive_planning_horizon,
+        "adaptive_risk_aversion": adaptive_risk_aversion,
+        "adaptive_reserves": adaptive_reserves,
+        "adaptive_lookback": adaptive_lookback,
+        "adaptive_issuer_specific": adaptive_issuer_specific,
+        "adaptive_ev_term_structure": adaptive_ev_term_structure,
+        "adaptive_term_structure": adaptive_term_structure,
+        "adaptive_base_spreads": adaptive_base_spreads,
+        "adaptive_convex_spreads": adaptive_convex_spreads,
+    }
+    _set_flags = {k: v for k, v in _adaptive_flags.items() if v is not None}
+    if _set_flags:
+        click.echo(f"Adaptive flag overrides: {_set_flags}")
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)
 

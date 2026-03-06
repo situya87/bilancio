@@ -9,10 +9,16 @@ import yaml
 
 from bilancio.ui.sweep_setup import (
     ANALYSIS_MENU,
+    DATA_ANALYSIS_MENU,
     FEATURE_SECTIONS,
+    VIZ_MENU,
     PostSweepAnalysisResult,
     SweepSetupResult,
+    _ADAPTIVE_FLAGS_DEFAULTS,
+    _LENDING_RISK_DEFAULTS,
     _available_analyses,
+    _available_data_analyses,
+    _available_visualizations,
     _compute_run_count,
     build_cli_args,
     load_preset,
@@ -432,70 +438,111 @@ class TestBuildCliArgs:
 
 
 class TestAnalysisMenu:
-    """Test ANALYSIS_MENU structure and filtering."""
+    """Test DATA_ANALYSIS_MENU, VIZ_MENU, and legacy ANALYSIS_MENU structure."""
 
-    def test_all_entries_have_required_keys(self):
-        for name, meta in ANALYSIS_MENU.items():
+    def test_data_menu_entries_have_required_keys(self):
+        for name, meta in DATA_ANALYSIS_MENU.items():
             assert "label" in meta, f"{name} missing 'label'"
             assert "desc" in meta, f"{name} missing 'desc'"
             assert "group" in meta, f"{name} missing 'group'"
             assert "sweep_types" in meta, f"{name} missing 'sweep_types'"
-            assert meta["group"] in ("core", "extended", "deep_dive"), f"{name} has invalid group: {meta['group']}"
+            assert meta["group"] == "data", f"{name} has group {meta['group']}, expected 'data'"
 
-    def test_core_analyses_available_for_all_sweep_types(self):
-        for name, meta in ANALYSIS_MENU.items():
-            if meta["group"] == "core":
-                assert "dealer" in meta["sweep_types"]
-                assert "bank" in meta["sweep_types"]
-                assert "nbfi" in meta["sweep_types"]
+    def test_viz_menu_entries_have_required_keys(self):
+        for name, meta in VIZ_MENU.items():
+            assert "label" in meta, f"{name} missing 'label'"
+            assert "desc" in meta, f"{name} missing 'desc'"
+            assert "group" in meta, f"{name} missing 'group'"
+            assert "sweep_types" in meta, f"{name} missing 'sweep_types'"
+            assert meta["group"] == "viz", f"{name} has group {meta['group']}, expected 'viz'"
 
-    def test_dealer_only_analyses(self):
-        """strategy_outcomes and dealer_usage are dealer-only."""
-        assert ANALYSIS_MENU["strategy_outcomes"]["sweep_types"] == ["dealer"]
-        assert ANALYSIS_MENU["dealer_usage"]["sweep_types"] == ["dealer"]
+    def test_legacy_menu_combines_both(self):
+        assert set(ANALYSIS_MENU.keys()) == set(DATA_ANALYSIS_MENU.keys()) | set(VIZ_MENU.keys())
+
+    def test_data_menu_has_expected_entries(self):
+        expected = {
+            "frontier", "strategy_outcomes", "dealer_usage", "mechanism_activity",
+            "contagion", "credit_creation", "network", "pricing", "beliefs", "funding",
+        }
+        assert set(DATA_ANALYSIS_MENU.keys()) == expected
+
+    def test_viz_menu_has_expected_entries(self):
+        expected = {
+            "drilldowns", "deltas", "dynamics", "narrative", "treynor", "comparison",
+        }
+        assert set(VIZ_MENU.keys()) == expected
+
+    def test_core_viz_available_for_all_sweep_types(self):
+        for name in ("drilldowns", "deltas", "dynamics", "narrative"):
+            meta = VIZ_MENU[name]
+            assert "dealer" in meta["sweep_types"]
+            assert "bank" in meta["sweep_types"]
+            assert "nbfi" in meta["sweep_types"]
+
+    def test_dealer_only_data_analyses(self):
+        assert DATA_ANALYSIS_MENU["strategy_outcomes"]["sweep_types"] == ["dealer"]
+        assert DATA_ANALYSIS_MENU["dealer_usage"]["sweep_types"] == ["dealer"]
+        assert DATA_ANALYSIS_MENU["pricing"]["sweep_types"] == ["dealer"]
 
     def test_treynor_not_available_for_nbfi(self):
-        assert "nbfi" not in ANALYSIS_MENU["treynor"]["sweep_types"]
-        assert "dealer" in ANALYSIS_MENU["treynor"]["sweep_types"]
-        assert "bank" in ANALYSIS_MENU["treynor"]["sweep_types"]
+        assert "nbfi" not in VIZ_MENU["treynor"]["sweep_types"]
+        assert "dealer" in VIZ_MENU["treynor"]["sweep_types"]
+        assert "bank" in VIZ_MENU["treynor"]["sweep_types"]
 
-    def test_menu_has_expected_entries(self):
-        expected = {
-            "drilldowns", "deltas", "dynamics", "narrative",
-            "strategy_outcomes", "dealer_usage", "mechanism_activity", "treynor",
-        }
-        assert set(ANALYSIS_MENU.keys()) == expected
+    def test_new_data_analyses_available_for_all(self):
+        for name in ("frontier", "contagion", "credit_creation", "network", "beliefs", "funding"):
+            meta = DATA_ANALYSIS_MENU[name]
+            assert "dealer" in meta["sweep_types"]
+            assert "bank" in meta["sweep_types"]
+            assert "nbfi" in meta["sweep_types"]
 
 
 class TestAvailableAnalyses:
-    """Test _available_analyses filtering by sweep type."""
+    """Test analysis filtering by sweep type."""
 
-    def test_dealer_gets_all_analyses(self):
-        available = _available_analyses("dealer")
-        assert len(available) == 8
+    def test_dealer_gets_all_data_analyses(self):
+        available = _available_data_analyses("dealer")
+        assert len(available) == 10  # All data analyses
         assert "strategy_outcomes" in available
         assert "dealer_usage" in available
-        assert "treynor" in available
+        assert "pricing" in available
 
-    def test_bank_excludes_dealer_specific(self):
-        available = _available_analyses("bank")
-        assert "strategy_outcomes" not in available
-        assert "dealer_usage" not in available
+    def test_dealer_gets_all_visualizations(self):
+        available = _available_visualizations("dealer")
+        assert len(available) == 6
         assert "treynor" in available
         assert "drilldowns" in available
+
+    def test_bank_excludes_dealer_specific_data(self):
+        available = _available_data_analyses("bank")
+        assert "strategy_outcomes" not in available
+        assert "dealer_usage" not in available
+        assert "pricing" not in available
+        assert "frontier" in available
         assert "mechanism_activity" in available
+
+    def test_bank_gets_treynor(self):
+        available = _available_visualizations("bank")
+        assert "treynor" in available
+        assert "drilldowns" in available
 
     def test_nbfi_excludes_dealer_and_treynor(self):
-        available = _available_analyses("nbfi")
-        assert "strategy_outcomes" not in available
-        assert "dealer_usage" not in available
-        assert "treynor" not in available
-        assert "drilldowns" in available
-        assert "mechanism_activity" in available
+        data = _available_data_analyses("nbfi")
+        viz = _available_visualizations("nbfi")
+        assert "strategy_outcomes" not in data
+        assert "dealer_usage" not in data
+        assert "pricing" not in data
+        assert "treynor" not in viz
+        assert "drilldowns" in viz
+        assert "mechanism_activity" in data
+
+    def test_legacy_available_analyses_combines(self):
+        available = _available_analyses("dealer")
+        assert len(available) == 16  # 10 data + 6 viz
 
     def test_unknown_sweep_type_returns_empty(self):
-        available = _available_analyses("unknown")
-        assert len(available) == 0
+        assert len(_available_data_analyses("unknown")) == 0
+        assert len(_available_visualizations("unknown")) == 0
 
 
 class TestPostSweepAnalysisResult:
@@ -503,53 +550,82 @@ class TestPostSweepAnalysisResult:
 
     def test_basic_construction(self):
         result = PostSweepAnalysisResult(
-            analyses=["drilldowns", "deltas"],
-            extended=["strategy_outcomes"],
+            data_analyses=["frontier", "contagion"],
+            visualizations=["drilldowns", "deltas"],
             treynor_kappas=None,
             kappas=None,
         )
-        assert result.analyses == ["drilldowns", "deltas"]
-        assert result.extended == ["strategy_outcomes"]
+        assert result.data_analyses == ["frontier", "contagion"]
+        assert result.visualizations == ["drilldowns", "deltas"]
         assert result.treynor_kappas is None
         assert result.kappas is None
 
-    def test_all_analyses_property(self):
+    def test_all_selected_property(self):
         result = PostSweepAnalysisResult(
-            analyses=["drilldowns"],
-            extended=["dealer_usage", "mechanism_activity"],
+            data_analyses=["frontier"],
+            visualizations=["drilldowns", "treynor"],
+            treynor_kappas=["auto"],
+            kappas=None,
+        )
+        assert result.all_selected == ["frontier", "drilldowns", "treynor"]
+
+    def test_legacy_analyses_property(self):
+        """Legacy .analyses returns viz items excluding treynor and comparison."""
+        result = PostSweepAnalysisResult(
+            data_analyses=["strategy_outcomes"],
+            visualizations=["drilldowns", "deltas", "treynor", "comparison"],
+            treynor_kappas=["auto"],
+            kappas=None,
+        )
+        assert result.analyses == ["drilldowns", "deltas"]
+
+    def test_legacy_extended_property(self):
+        """Legacy .extended returns data_analyses."""
+        result = PostSweepAnalysisResult(
+            data_analyses=["dealer_usage", "mechanism_activity"],
+            visualizations=["drilldowns"],
             treynor_kappas=None,
             kappas=None,
         )
-        assert result.all_analyses == ["drilldowns", "dealer_usage", "mechanism_activity"]
+        assert result.extended == ["dealer_usage", "mechanism_activity"]
+
+    def test_legacy_all_analyses_property(self):
+        result = PostSweepAnalysisResult(
+            data_analyses=["frontier"],
+            visualizations=["drilldowns"],
+            treynor_kappas=None,
+            kappas=None,
+        )
+        assert result.all_analyses == ["frontier", "drilldowns"]
 
     def test_has_treynor_when_kappas_set(self):
         result = PostSweepAnalysisResult(
-            analyses=[], extended=[], treynor_kappas=["0.5", "1.0"], kappas=None,
+            data_analyses=[], visualizations=[], treynor_kappas=["0.5", "1.0"], kappas=None,
         )
         assert result.has_treynor is True
 
     def test_has_treynor_with_auto(self):
         result = PostSweepAnalysisResult(
-            analyses=[], extended=[], treynor_kappas=["auto"], kappas=None,
+            data_analyses=[], visualizations=[], treynor_kappas=["auto"], kappas=None,
         )
         assert result.has_treynor is True
 
     def test_no_treynor_when_none(self):
         result = PostSweepAnalysisResult(
-            analyses=["drilldowns"], extended=[], treynor_kappas=None, kappas=None,
+            data_analyses=["frontier"], visualizations=[], treynor_kappas=None, kappas=None,
         )
         assert result.has_treynor is False
 
     def test_no_treynor_when_empty(self):
         result = PostSweepAnalysisResult(
-            analyses=[], extended=[], treynor_kappas=[], kappas=None,
+            data_analyses=[], visualizations=[], treynor_kappas=[], kappas=None,
         )
         assert result.has_treynor is False
 
     def test_kappas_focus(self):
         result = PostSweepAnalysisResult(
-            analyses=["drilldowns"],
-            extended=[],
+            data_analyses=["frontier"],
+            visualizations=[],
             treynor_kappas=None,
             kappas=[0.5, 1.0, 2.0],
         )
@@ -557,32 +633,103 @@ class TestPostSweepAnalysisResult:
 
     def test_empty_result(self):
         result = PostSweepAnalysisResult(
-            analyses=[], extended=[], treynor_kappas=None, kappas=None,
+            data_analyses=[], visualizations=[], treynor_kappas=None, kappas=None,
         )
-        assert result.all_analyses == []
+        assert result.all_selected == []
         assert result.has_treynor is False
 
 
 class TestValidPostAnalyses:
-    """Test that VALID_POST_ANALYSES in sweep.py includes new analysis names."""
+    """Test that VALID_POST_ANALYSES in sweep.py includes all menu keys."""
 
-    def test_valid_analyses_includes_extended(self):
+    def test_valid_analyses_includes_data(self):
         from bilancio.ui.cli.sweep import VALID_POST_ANALYSES
 
-        assert "strategy_outcomes" in VALID_POST_ANALYSES
-        assert "dealer_usage" in VALID_POST_ANALYSES
-        assert "mechanism_activity" in VALID_POST_ANALYSES
-        assert "treynor" in VALID_POST_ANALYSES
+        for key in DATA_ANALYSIS_MENU:
+            assert key in VALID_POST_ANALYSES, f"{key} missing from VALID_POST_ANALYSES"
 
-    def test_valid_analyses_includes_core(self):
+    def test_valid_analyses_includes_viz(self):
         from bilancio.ui.cli.sweep import VALID_POST_ANALYSES
 
-        assert "drilldowns" in VALID_POST_ANALYSES
-        assert "deltas" in VALID_POST_ANALYSES
-        assert "dynamics" in VALID_POST_ANALYSES
-        assert "narrative" in VALID_POST_ANALYSES
+        for key in VIZ_MENU:
+            assert key in VALID_POST_ANALYSES, f"{key} missing from VALID_POST_ANALYSES"
 
-    def test_valid_analyses_matches_menu_keys(self):
+    def test_valid_analyses_matches_all_menu_keys(self):
         from bilancio.ui.cli.sweep import VALID_POST_ANALYSES
 
-        assert set(VALID_POST_ANALYSES) == set(ANALYSIS_MENU.keys())
+        assert set(VALID_POST_ANALYSES) == set(DATA_ANALYSIS_MENU.keys()) | set(VIZ_MENU.keys())
+
+
+class TestAdaptiveAndLendingDefaults:
+    """Test new default dicts for adaptive flags and lending risk controls."""
+
+    def test_adaptive_flags_defaults_has_expected_keys(self):
+        expected = {
+            "adaptive_planning_horizon", "adaptive_risk_aversion", "adaptive_reserves",
+            "adaptive_lookback", "adaptive_issuer_specific", "adaptive_ev_term_structure",
+            "adaptive_term_structure", "adaptive_base_spreads", "adaptive_convex_spreads",
+        }
+        assert set(_ADAPTIVE_FLAGS_DEFAULTS.keys()) == expected
+
+    def test_adaptive_flags_all_default_false(self):
+        for k, v in _ADAPTIVE_FLAGS_DEFAULTS.items():
+            assert v is False, f"{k} should default to False"
+
+    def test_lending_risk_defaults_has_expected_keys(self):
+        expected = {
+            "marginal_relief_min_ratio", "stress_risk_premium_scale",
+            "high_risk_default_threshold", "high_risk_maturity_cap",
+            "daily_expected_loss_budget_ratio", "run_expected_loss_budget_ratio",
+            "stop_loss_realized_ratio", "collateral_advance_rate",
+        }
+        assert set(_LENDING_RISK_DEFAULTS.keys()) == expected
+
+    def test_lending_risk_defaults_types(self):
+        assert isinstance(_LENDING_RISK_DEFAULTS["high_risk_maturity_cap"], int)
+        # All others should be strings (for Decimal conversion)
+        for k, v in _LENDING_RISK_DEFAULTS.items():
+            if k != "high_risk_maturity_cap":
+                assert isinstance(v, str), f"{k} should be str, got {type(v)}"
+
+    def test_build_cli_args_emits_adaptive_flags(self):
+        result = SweepSetupResult(
+            sweep_type="balanced",
+            cloud=False,
+            params={
+                "adapt": "calibrated",
+                "adaptive_planning_horizon": True,
+                "adaptive_risk_aversion": False,
+            },
+        )
+        args = build_cli_args(result)
+        assert "--adaptive-planning-horizon" in args
+        assert "--no-adaptive-risk-aversion" in args
+
+    def test_build_cli_args_emits_lending_risk_controls(self):
+        result = SweepSetupResult(
+            sweep_type="balanced",
+            cloud=False,
+            params={
+                "enable_lender": True,
+                "marginal_relief_min_ratio": "0.05",
+                "stress_risk_premium_scale": "2.0",
+                "collateral_advance_rate": "0.80",
+            },
+        )
+        args = build_cli_args(result)
+        assert "--marginal-relief-min-ratio" in args
+        assert "0.05" in args
+        assert "--stress-risk-premium-scale" in args
+        assert "--collateral-advance-rate" in args
+
+    def test_build_cli_args_no_lending_risk_when_lender_disabled(self):
+        result = SweepSetupResult(
+            sweep_type="balanced",
+            cloud=False,
+            params={
+                "enable_lender": False,
+                "marginal_relief_min_ratio": "0.05",
+            },
+        )
+        args = build_cli_args(result)
+        assert "--marginal-relief-min-ratio" not in args
