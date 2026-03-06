@@ -118,10 +118,11 @@ jobs:
       - name: Run core smoke checks
         run: |
           PYTHONPATH=src python -m pytest \
+            -o addopts='' \
             tests/test_smoke.py \
             tests/ui/test_cli.py \
             tests/ui/test_cli_integration.py \
-            --no-cov -q
+            -q
 
   analysis-profile:
     name: Analysis Profile Smoke
@@ -146,6 +147,7 @@ jobs:
       - name: Run analysis smoke checks
         run: |
           PYTHONPATH=src python -m pytest \
+            -o addopts='' \
             tests/analysis/test_analysis_loaders.py \
             tests/analysis/test_treynor_viz.py \
-            --no-cov -q
+            -q
