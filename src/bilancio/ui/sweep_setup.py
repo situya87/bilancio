@@ -875,6 +875,12 @@ VIZ_MENU: dict[str, dict[str, Any]] = {
         "group": "viz",
         "sweep_types": ["dealer", "bank", "nbfi"],
     },
+    "report": {
+        "label": "Comprehensive report",
+        "desc": "Full analysis report with stats, heatmaps, network, dynamics, loss, Treynor",
+        "group": "viz",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
 }
 
 # Legacy alias for backward compatibility
