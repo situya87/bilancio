@@ -490,6 +490,7 @@ def _section_heatmaps(data: dict, meta: dict) -> str:
         ("kappa", "concentration", "kappa x concentration"),
         ("kappa", "mu", "kappa x mu"),
         ("kappa", "outside_mid_ratio", "kappa x rho"),
+        ("pool_scale", "kappa", "pool_scale x kappa"),
     ]
 
     charts = []
@@ -541,7 +542,7 @@ def _section_marginal_effects(data: dict, meta: dict) -> str:
     if effect_col not in data:
         return ""
 
-    params = ["kappa", "concentration", "mu", "outside_mid_ratio"]
+    params = ["kappa", "concentration", "mu", "outside_mid_ratio", "pool_scale"]
     active_params = [p for p in params if _n_unique(data, p) > 1]
 
     if not active_params:
@@ -997,7 +998,7 @@ def _section_regression(data: dict, meta: dict) -> str:
 
     # Build X from available parameters
     x_cols = []
-    for col in ["kappa", "concentration", "mu", "outside_mid_ratio"]:
+    for col in ["kappa", "concentration", "mu", "outside_mid_ratio", "pool_scale"]:
         if col in data and _n_unique(data, col) > 1:
             x_cols.append(col)
 

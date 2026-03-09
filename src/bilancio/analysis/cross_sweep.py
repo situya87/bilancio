@@ -61,7 +61,7 @@ ARM_LABELS = {
 # Data loading
 # ---------------------------------------------------------------------------
 
-_GRID_KEYS = ("kappa", "concentration", "mu", "outside_mid_ratio", "seed")
+_GRID_KEYS = ("kappa", "concentration", "mu", "outside_mid_ratio", "pool_scale", "seed")
 
 
 def _parse_num(v: str) -> float | int | str:

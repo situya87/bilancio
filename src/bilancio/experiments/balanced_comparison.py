@@ -83,6 +83,11 @@ class BalancedComparisonResult:
     vbt_share_per_bucket: Decimal = Decimal("0.25")
     dealer_share_per_bucket: Decimal = Decimal("0.125")
 
+    # Pool scale sweep (Plan 053)
+    pool_scale: Decimal = Decimal("0.375")
+    intermediary_capital_abs: float = 0.0
+    capital_fraction: float = 0.0
+
     # Informedness parameters
     alpha_vbt: Decimal = Decimal("0")
     alpha_trader: Decimal = Decimal("0")
@@ -481,7 +486,7 @@ class BalancedComparisonConfig(BaseModel):
     # Ring parameters
     n_agents: int = Field(default=100, description="Number of agents in ring")
     maturity_days: int = Field(default=10, description="Maturity horizon in days")
-    max_simulation_days: int = Field(default=15, description="Max days to run simulation")
+    max_simulation_days: int | None = Field(default=None, description="Max days to run simulation (None = auto)")
     Q_total: Decimal = Field(default=Decimal("10000"), description="Total debt amount")
     liquidity_mode: str = Field(default="uniform", description="Liquidity allocation mode")
     base_seed: int = Field(default=42, description="Base random seed")
@@ -541,6 +546,10 @@ class BalancedComparisonConfig(BaseModel):
     )
     dealer_share_per_bucket: Decimal = Field(
         default=Decimal("0.125"), description="Dealer holds 12.5% of claims per maturity bucket"
+    )
+    pool_scales: list[Decimal] = Field(
+        default_factory=lambda: [Decimal("0.375")],
+        description="Total intermediary pool sizes to sweep (Plan 053: dose-response)",
     )
     rollover_enabled: bool = Field(
         default=True, description="Enable continuous rollover of matured claims"
@@ -795,6 +804,9 @@ class BalancedComparisonRunner:
         "face_value",
         "outside_mid_ratio",
         "big_entity_share",
+        "pool_scale",
+        "intermediary_capital_abs",
+        "capital_fraction",
         "delta_passive",
         "delta_active",
         "trading_effect",
@@ -1065,13 +1077,18 @@ class BalancedComparisonRunner:
                 reader = csv.DictReader(fh)
                 for row in reader:
                     # Create key from parameters
-                    key = (
+                    key_parts = (
                         row["kappa"],
                         row["concentration"],
                         row["mu"],
                         row["monotonicity"],
                         row["outside_mid_ratio"],
                     )
+                    pool_scale_val = row.get("pool_scale", "")
+                    if pool_scale_val:
+                        key = key_parts + (pool_scale_val,)
+                    else:
+                        key = key_parts
                     self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
 
                     # Also track the seed to resume from correct position
@@ -1097,9 +1114,13 @@ class BalancedComparisonRunner:
         mu: Decimal,
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
-    ) -> tuple[str, str, str, str, str]:
+        pool_scale: Decimal | None = None,
+    ) -> tuple[str, ...]:
         """Create a key for tracking completed pairs."""
-        return (str(kappa), str(concentration), str(mu), str(monotonicity), str(outside_mid_ratio))
+        base = (str(kappa), str(concentration), str(mu), str(monotonicity), str(outside_mid_ratio))
+        if pool_scale is not None:
+            return base + (str(pool_scale),)
+        return base
 
     def _format_time(self, seconds: float) -> str:
         """Format seconds as human-readable time."""
@@ -1118,10 +1139,17 @@ class BalancedComparisonRunner:
         self.seed_counter += 1
         return seed
 
-    def _get_passive_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+    def _get_passive_runner(
+        self,
+        outside_mid_ratio: Decimal,
+        vbt_share_per_bucket: Decimal | None = None,
+        dealer_share_per_bucket: Decimal | None = None,
+    ) -> RingSweepRunner:
         """Get or create passive runner (no dealer trading)."""
         # For passive mode, we use the balanced scenario but with dealers disabled
         # In balanced mode, VBT/Dealer have inventory but don't trade
+        eff_vbt = vbt_share_per_bucket if vbt_share_per_bucket is not None else self.config.vbt_share_per_bucket
+        eff_dealer = dealer_share_per_bucket if dealer_share_per_bucket is not None else self.config.dealer_share_per_bucket
         return RingSweepRunner(
             out_dir=self.passive_dir,
             name_prefix=f"{self.config.name_prefix} (Passive)",
@@ -1139,8 +1167,8 @@ class BalancedComparisonRunner:
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,  # DEPRECATED
-            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            vbt_share_per_bucket=eff_vbt,
+            dealer_share_per_bucket=eff_dealer,
             rollover_enabled=self.config.rollover_enabled,
             detailed_dealer_logging=self.config.detailed_logging,  # Plan 022
             executor=self.executor,  # Plan 028 cloud support
@@ -1173,10 +1201,18 @@ class BalancedComparisonRunner:
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
             adapt_overrides=self.config.adaptive_overrides,
+            max_simulation_days=self.config.max_simulation_days,
         )
 
-    def _get_active_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+    def _get_active_runner(
+        self,
+        outside_mid_ratio: Decimal,
+        vbt_share_per_bucket: Decimal | None = None,
+        dealer_share_per_bucket: Decimal | None = None,
+    ) -> RingSweepRunner:
         """Get or create active runner (with dealer trading)."""
+        eff_vbt = vbt_share_per_bucket if vbt_share_per_bucket is not None else self.config.vbt_share_per_bucket
+        eff_dealer = dealer_share_per_bucket if dealer_share_per_bucket is not None else self.config.dealer_share_per_bucket
         dealer_config = {
             "ticket_size": int(self.config.face_value),
             "dealer_share": str(Decimal("0")),  # Dealers already have inventory from scenario
@@ -1200,8 +1236,8 @@ class BalancedComparisonRunner:
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,  # DEPRECATED
-            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            vbt_share_per_bucket=eff_vbt,
+            dealer_share_per_bucket=eff_dealer,
             rollover_enabled=self.config.rollover_enabled,
             detailed_dealer_logging=self.config.detailed_logging,  # Plan 022
             executor=self.executor,  # Plan 028 cloud support
@@ -1234,10 +1270,18 @@ class BalancedComparisonRunner:
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
             adapt_overrides=self.config.adaptive_overrides,
+            max_simulation_days=self.config.max_simulation_days,
         )
 
-    def _get_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+    def _get_lender_runner(
+        self,
+        outside_mid_ratio: Decimal,
+        vbt_share_per_bucket: Decimal | None = None,
+        dealer_share_per_bucket: Decimal | None = None,
+    ) -> RingSweepRunner:
         """Get or create lender runner (lending enabled, no dealer trading)."""
+        eff_vbt = vbt_share_per_bucket if vbt_share_per_bucket is not None else self.config.vbt_share_per_bucket
+        eff_dealer = dealer_share_per_bucket if dealer_share_per_bucket is not None else self.config.dealer_share_per_bucket
         return RingSweepRunner(
             out_dir=self.base_dir / "lender",
             name_prefix=f"{self.config.name_prefix} (Lender)",
@@ -1254,8 +1298,8 @@ class BalancedComparisonRunner:
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,
-            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            vbt_share_per_bucket=eff_vbt,
+            dealer_share_per_bucket=eff_dealer,
             rollover_enabled=self.config.rollover_enabled,
             detailed_dealer_logging=self.config.detailed_logging,
             executor=self.executor,
@@ -1317,15 +1361,23 @@ class BalancedComparisonRunner:
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
             adapt_overrides=self.config.adaptive_overrides,
+            max_simulation_days=self.config.max_simulation_days,
         )
 
-    def _get_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+    def _get_nbfi_runner(
+        self,
+        outside_mid_ratio: Decimal,
+        vbt_share_per_bucket: Decimal | None = None,
+        dealer_share_per_bucket: Decimal | None = None,
+    ) -> RingSweepRunner:
         """Get NBFI runner (lending enabled, no dealer, NBFI gets all VBT/dealer liquidity).
 
         In NBFI mode, VBT/Dealer get zero cash, all their liquidity goes to NBFI.
         This uses balanced_mode_override="nbfi" so the scenario compiler allocates
         cash accordingly.
         """
+        eff_vbt = vbt_share_per_bucket if vbt_share_per_bucket is not None else self.config.vbt_share_per_bucket
+        eff_dealer = dealer_share_per_bucket if dealer_share_per_bucket is not None else self.config.dealer_share_per_bucket
         return RingSweepRunner(
             out_dir=self.base_dir / "nbfi",
             name_prefix=f"{self.config.name_prefix} (NBFI)",
@@ -1342,8 +1394,8 @@ class BalancedComparisonRunner:
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,
-            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            vbt_share_per_bucket=eff_vbt,
+            dealer_share_per_bucket=eff_dealer,
             rollover_enabled=self.config.rollover_enabled,
             detailed_dealer_logging=self.config.detailed_logging,
             executor=self.executor,
@@ -1405,14 +1457,22 @@ class BalancedComparisonRunner:
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
             adapt_overrides=self.config.adaptive_overrides,
+            max_simulation_days=self.config.max_simulation_days,
         )
 
-    def _get_dealer_lender_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+    def _get_dealer_lender_runner(
+        self,
+        outside_mid_ratio: Decimal,
+        vbt_share_per_bucket: Decimal | None = None,
+        dealer_share_per_bucket: Decimal | None = None,
+    ) -> RingSweepRunner:
         """Get runner for combined dealer+lender arm (F).
 
         Both dealer trading and NBFI lending are enabled. Cash is split 50/50
         between VBT/Dealer and the lender using balanced_mode_override="nbfi_dealer".
         """
+        eff_vbt = vbt_share_per_bucket if vbt_share_per_bucket is not None else self.config.vbt_share_per_bucket
+        eff_dealer = dealer_share_per_bucket if dealer_share_per_bucket is not None else self.config.dealer_share_per_bucket
         dealer_config = {
             "ticket_size": int(self.config.face_value),
             "dealer_share": str(Decimal("0")),  # Dealers already have inventory from scenario
@@ -1435,8 +1495,8 @@ class BalancedComparisonRunner:
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,
-            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            vbt_share_per_bucket=eff_vbt,
+            dealer_share_per_bucket=eff_dealer,
             rollover_enabled=self.config.rollover_enabled,
             detailed_dealer_logging=self.config.detailed_logging,
             executor=self.executor,
@@ -1498,10 +1558,18 @@ class BalancedComparisonRunner:
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
             adapt_overrides=self.config.adaptive_overrides,
+            max_simulation_days=self.config.max_simulation_days,
         )
 
-    def _get_bank_passive_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+    def _get_bank_passive_runner(
+        self,
+        outside_mid_ratio: Decimal,
+        vbt_share_per_bucket: Decimal | None = None,
+        dealer_share_per_bucket: Decimal | None = None,
+    ) -> RingSweepRunner:
         """Banks + passive dealer: banks lend, dealer holds but doesn't trade."""
+        eff_vbt = vbt_share_per_bucket if vbt_share_per_bucket is not None else self.config.vbt_share_per_bucket
+        eff_dealer = dealer_share_per_bucket if dealer_share_per_bucket is not None else self.config.dealer_share_per_bucket
         effective_cutoff = self.config.cb_lending_cutoff_day if self.config.cb_lending_cutoff_day is not None else self.config.maturity_days
         return RingSweepRunner(
             out_dir=self.base_dir / "bank_passive",
@@ -1519,8 +1587,8 @@ class BalancedComparisonRunner:
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,
-            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            vbt_share_per_bucket=eff_vbt,
+            dealer_share_per_bucket=eff_dealer,
             rollover_enabled=self.config.rollover_enabled,
             detailed_dealer_logging=self.config.detailed_logging,
             executor=self.executor,
@@ -1557,10 +1625,18 @@ class BalancedComparisonRunner:
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
             adapt_overrides=self.config.adaptive_overrides,
+            max_simulation_days=self.config.max_simulation_days,
         )
 
-    def _get_bank_dealer_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+    def _get_bank_dealer_runner(
+        self,
+        outside_mid_ratio: Decimal,
+        vbt_share_per_bucket: Decimal | None = None,
+        dealer_share_per_bucket: Decimal | None = None,
+    ) -> RingSweepRunner:
         """Banks + active dealer: banks lend, dealer trades (50/50 liquidity split)."""
+        eff_vbt = vbt_share_per_bucket if vbt_share_per_bucket is not None else self.config.vbt_share_per_bucket
+        eff_dealer = dealer_share_per_bucket if dealer_share_per_bucket is not None else self.config.dealer_share_per_bucket
         dealer_config = {
             "ticket_size": int(self.config.face_value),
             "dealer_share": str(Decimal("0")),
@@ -1583,8 +1659,8 @@ class BalancedComparisonRunner:
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,
-            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            vbt_share_per_bucket=eff_vbt,
+            dealer_share_per_bucket=eff_dealer,
             rollover_enabled=self.config.rollover_enabled,
             detailed_dealer_logging=self.config.detailed_logging,
             executor=self.executor,
@@ -1621,10 +1697,18 @@ class BalancedComparisonRunner:
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
             adapt_overrides=self.config.adaptive_overrides,
+            max_simulation_days=self.config.max_simulation_days,
         )
 
-    def _get_bank_dealer_nbfi_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+    def _get_bank_dealer_nbfi_runner(
+        self,
+        outside_mid_ratio: Decimal,
+        vbt_share_per_bucket: Decimal | None = None,
+        dealer_share_per_bucket: Decimal | None = None,
+    ) -> RingSweepRunner:
         """Banks + active dealer + NBFI: three-way split."""
+        eff_vbt = vbt_share_per_bucket if vbt_share_per_bucket is not None else self.config.vbt_share_per_bucket
+        eff_dealer = dealer_share_per_bucket if dealer_share_per_bucket is not None else self.config.dealer_share_per_bucket
         dealer_config = {
             "ticket_size": int(self.config.face_value),
             "dealer_share": str(Decimal("0")),
@@ -1647,8 +1731,8 @@ class BalancedComparisonRunner:
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,
-            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            vbt_share_per_bucket=eff_vbt,
+            dealer_share_per_bucket=eff_dealer,
             rollover_enabled=self.config.rollover_enabled,
             detailed_dealer_logging=self.config.detailed_logging,
             executor=self.executor,
@@ -1712,6 +1796,7 @@ class BalancedComparisonRunner:
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
             adapt_preset=self.config.adapt,
             adapt_overrides=self.config.adaptive_overrides,
+            max_simulation_days=self.config.max_simulation_days,
         )
 
     def run_all(self) -> list[BalancedComparisonResult]:
@@ -1789,6 +1874,9 @@ class BalancedComparisonRunner:
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
         seed: int,
+        pool_scale: Decimal | None = None,
+        vbt_share_per_bucket: Decimal | None = None,
+        dealer_share_per_bucket: Decimal | None = None,
     ) -> BalancedComparisonResult:
         """Build a BalancedComparisonResult from a dict of arm_name -> RingRunSummary."""
         passive = arm_summaries["passive"]
@@ -1912,6 +2000,19 @@ class BalancedComparisonRunner:
                 "intermediary_capital_bank_dealer_nbfi": s.initial_intermediary_capital,
             }
 
+        eff_pool = pool_scale if pool_scale is not None else (self.config.vbt_share_per_bucket + self.config.dealer_share_per_bucket)
+        eff_vbt = vbt_share_per_bucket if vbt_share_per_bucket is not None else self.config.vbt_share_per_bucket
+        eff_dealer = dealer_share_per_bucket if dealer_share_per_bucket is not None else self.config.dealer_share_per_bucket
+
+        # Compute intermediary capital from whichever treatment arm is available
+        _cap = float(0)
+        for arm_name in ("active", "lender", "bank_passive"):
+            if arm_name in arm_summaries:
+                _cap = arm_summaries[arm_name].initial_intermediary_capital
+                if _cap > 0:
+                    break
+        _q = float(self.config.Q_total)
+
         result = BalancedComparisonResult(
             kappa=kappa,
             concentration=concentration,
@@ -1921,8 +2022,11 @@ class BalancedComparisonRunner:
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,
-            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            vbt_share_per_bucket=eff_vbt,
+            dealer_share_per_bucket=eff_dealer,
+            pool_scale=eff_pool,
+            intermediary_capital_abs=_cap,
+            capital_fraction=_cap / _q if _q > 0 else 0.0,
             delta_passive=passive.delta_total,
             phi_passive=passive.phi_total,
             passive_run_id=passive.run_id,
@@ -2052,6 +2156,8 @@ class BalancedComparisonRunner:
         """
         arm_defs = self._get_enabled_arm_defs()
         n_arms = len(arm_defs)
+        n_pool = len(self.config.pool_scales)
+        multi_pool = n_pool > 1
 
         total_combos = (
             len(self.config.kappas)
@@ -2059,6 +2165,7 @@ class BalancedComparisonRunner:
             * len(self.config.mus)
             * len(self.config.monotonicities)
             * len(self.config.outside_mid_ratios)
+            * n_pool
         )
 
         cells_done = sum(
@@ -2069,12 +2176,14 @@ class BalancedComparisonRunner:
         remaining = total_combos - skipped
 
         arm_names = [a[0] for a in arm_defs]
+        pool_label = f" × {n_pool} pool_scales" if multi_pool else ""
         logger.info(
-            "Starting BATCH balanced comparison sweep: %d kappas × %d concentrations × %d mus × %d ρ = %d combos × %d arms",
+            "Starting BATCH balanced comparison sweep: %d kappas × %d concentrations × %d mus × %d ρ%s = %d combos × %d arms",
             len(self.config.kappas),
             len(self.config.concentrations),
             len(self.config.mus),
             len(self.config.outside_mid_ratios),
+            pool_label,
             total_combos,
             n_arms,
         )
@@ -2088,58 +2197,73 @@ class BalancedComparisonRunner:
         self._start_time = time.time()
 
         # Phase 1: Prepare all runs for all enabled arms
-        # Each entry: (arm_preps_dict, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed)
+        # Each entry: (arm_preps_dict, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed, pool_scale)
         prepared_combos: list[
-            tuple[dict[str, PreparedRun], Decimal, Decimal, Decimal, Decimal, Decimal, int]
+            tuple[dict[str, PreparedRun], Decimal, Decimal, Decimal, Decimal, Decimal, int, Decimal]
         ] = []
 
-        # Cache runners per outside_mid_ratio to avoid re-creating them
-        runners_cache: dict[tuple[Decimal, str], Any] = {}
+        # Cache runners per (outside_mid_ratio, arm, pool_scale) to avoid re-creating them
+        runners_cache: dict[tuple[Decimal, str, Decimal], Any] = {}
 
         for outside_mid_ratio in self.config.outside_mid_ratios:
-            # Pre-create runners for this outside_mid_ratio
-            for arm_name, _phase, getter_name, _regime in arm_defs:
-                cache_key = (outside_mid_ratio, arm_name)
-                if cache_key not in runners_cache:
-                    runners_cache[cache_key] = getattr(self, getter_name)(outside_mid_ratio)
+            for pool_scale in self.config.pool_scales:
+                # Derive per-bucket shares from pool_scale
+                vbt_share_override: Decimal | None = None
+                dealer_share_override: Decimal | None = None
+                if multi_pool:
+                    vbt_share_override = pool_scale * Decimal(2) / Decimal(3)
+                    dealer_share_override = pool_scale * Decimal(1) / Decimal(3)
 
-            for kappa in self.config.kappas:
-                for concentration in self.config.concentrations:
-                    for mu in self.config.mus:
-                        for monotonicity in self.config.monotonicities:
-                            key = self._make_key(
-                                kappa, concentration, mu, monotonicity, outside_mid_ratio
+                # Pre-create runners for this (outside_mid_ratio, pool_scale)
+                for arm_name, _phase, getter_name, _regime in arm_defs:
+                    cache_key = (outside_mid_ratio, arm_name, pool_scale)
+                    if cache_key not in runners_cache:
+                        if arm_name == "passive":
+                            runners_cache[cache_key] = getattr(self, getter_name)(outside_mid_ratio)
+                        else:
+                            runners_cache[cache_key] = getattr(self, getter_name)(
+                                outside_mid_ratio, vbt_share_override, dealer_share_override,
                             )
-                            completed = self._completed_counts.get(key, 0)
-                            reps_needed = max(0, self.config.n_replicates - completed)
 
-                            for _rep in range(reps_needed):
-                                seed = self._next_seed()
-
-                                # Prepare all enabled arms for this combo
-                                arm_preps: dict[str, PreparedRun] = {}
-                                for arm_name, phase, _getter_name, _regime in arm_defs:
-                                    runner = runners_cache[(outside_mid_ratio, arm_name)]
-                                    arm_preps[arm_name] = runner._prepare_run(
-                                        phase=phase,
-                                        kappa=kappa,
-                                        concentration=concentration,
-                                        mu=mu,
-                                        monotonicity=monotonicity,
-                                        seed=seed,
-                                    )
-
-                                prepared_combos.append(
-                                    (
-                                        arm_preps,
-                                        kappa,
-                                        concentration,
-                                        mu,
-                                        monotonicity,
-                                        outside_mid_ratio,
-                                        seed,
-                                    )
+                for kappa in self.config.kappas:
+                    for concentration in self.config.concentrations:
+                        for mu in self.config.mus:
+                            for monotonicity in self.config.monotonicities:
+                                key = self._make_key(
+                                    kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                    pool_scale=pool_scale if multi_pool else None,
                                 )
+                                completed = self._completed_counts.get(key, 0)
+                                reps_needed = max(0, self.config.n_replicates - completed)
+
+                                for _rep in range(reps_needed):
+                                    seed = self._next_seed()
+
+                                    # Prepare all enabled arms for this combo
+                                    arm_preps: dict[str, PreparedRun] = {}
+                                    for arm_name, phase, _getter_name, _regime in arm_defs:
+                                        runner = runners_cache[(outside_mid_ratio, arm_name, pool_scale)]
+                                        arm_preps[arm_name] = runner._prepare_run(
+                                            phase=phase,
+                                            kappa=kappa,
+                                            concentration=concentration,
+                                            mu=mu,
+                                            monotonicity=monotonicity,
+                                            seed=seed,
+                                        )
+
+                                    prepared_combos.append(
+                                        (
+                                            arm_preps,
+                                            kappa,
+                                            concentration,
+                                            mu,
+                                            monotonicity,
+                                            outside_mid_ratio,
+                                            seed,
+                                            pool_scale,
+                                        )
+                                    )
 
         if not prepared_combos:
             print("All combos already completed!", flush=True)
@@ -2198,21 +2322,35 @@ class BalancedComparisonRunner:
             monotonicity,
             outside_mid_ratio,
             seed,
+            pool_scale,
         ) in enumerate(prepared_combos):
+            # Derive per-bucket shares from pool_scale
+            vbt_s: Decimal | None = None
+            dealer_s: Decimal | None = None
+            if multi_pool:
+                vbt_s = pool_scale * Decimal(2) / Decimal(3)
+                dealer_s = pool_scale * Decimal(1) / Decimal(3)
+
             # Finalize each arm
             arm_summaries: dict[str, RingRunSummary] = {}
             for arm_name, prep in arm_preps.items():
-                runner = runners_cache[(outside_mid_ratio, arm_name)]
+                runner = runners_cache[(outside_mid_ratio, arm_name, pool_scale)]
                 raw = combo_results[combo_idx][arm_name]
                 arm_summaries[arm_name] = runner._finalize_run(prep, raw)
 
             # Build BalancedComparisonResult from all arm summaries
             result = self._build_result_from_summaries(
-                arm_summaries, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed
+                arm_summaries, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed,
+                pool_scale=pool_scale if multi_pool else None,
+                vbt_share_per_bucket=vbt_s,
+                dealer_share_per_bucket=dealer_s,
             )
 
             self.comparison_results.append(result)
-            comp_key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio)
+            comp_key = self._make_key(
+                kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                pool_scale=pool_scale if multi_pool else None,
+            )
             self._completed_counts[comp_key] = self._completed_counts.get(comp_key, 0) + 1
 
             # Persist all arm runs to Supabase
@@ -2273,13 +2411,17 @@ class BalancedComparisonRunner:
 
     def _run_all_sequential(self) -> list[BalancedComparisonResult]:
         """Execute all pairs sequentially (fallback for LocalExecutor)."""
-        total_pairs = (
+        n_pool = len(self.config.pool_scales)
+        multi_pool = n_pool > 1
+
+        total_base_cells = (
             len(self.config.kappas)
             * len(self.config.concentrations)
             * len(self.config.mus)
             * len(self.config.monotonicities)
             * len(self.config.outside_mid_ratios)
         )
+        total_pairs = total_base_cells * n_pool
 
         cells_done = sum(
             1 for c in self._completed_counts.values()
@@ -2288,12 +2430,14 @@ class BalancedComparisonRunner:
         skipped = cells_done
         remaining = total_pairs - skipped
 
+        pool_label = f" × {n_pool} pool_scales" if multi_pool else ""
         logger.info(
-            "Starting balanced comparison sweep: %d kappas × %d concentrations × %d mus × %d ρ = %d pairs",
+            "Starting balanced comparison sweep: %d kappas × %d concentrations × %d mus × %d ρ%s = %d pairs",
             len(self.config.kappas),
             len(self.config.concentrations),
             len(self.config.mus),
             len(self.config.outside_mid_ratios),
+            pool_label,
             total_pairs,
         )
 
@@ -2309,62 +2453,80 @@ class BalancedComparisonRunner:
                 for concentration in self.config.concentrations:
                     for mu in self.config.mus:
                         for monotonicity in self.config.monotonicities:
-                            pair_idx += 1
+                            for rep in range(self.config.n_replicates):
+                                seed = self._next_seed()
 
-                            # Check how many replicates still needed
-                            key = self._make_key(
-                                kappa, concentration, mu, monotonicity, outside_mid_ratio
-                            )
-                            completed = self._completed_counts.get(key, 0)
-                            reps_needed = max(0, self.config.n_replicates - completed)
-                            if reps_needed == 0:
-                                continue
+                                # When sweeping pool_scales, run passive once and reuse
+                                passive_cached: RingRunSummary | None = None
+                                if multi_pool:
+                                    passive_runner = self._get_passive_runner(outside_mid_ratio)
+                                    passive_cached = passive_runner._execute_run(
+                                        phase="balanced_passive",
+                                        kappa=kappa,
+                                        concentration=concentration,
+                                        mu=mu,
+                                        monotonicity=monotonicity,
+                                        seed=seed,
+                                        progress_callback=self._make_progress_callback("passive"),
+                                    )
 
-                            for rep in range(reps_needed):
-                                rep_label = f" rep {completed + rep + 1}/{self.config.n_replicates}" if self.config.n_replicates > 1 else ""
+                                for pool_scale in self.config.pool_scales:
+                                    pair_idx += 1
+                                    key = self._make_key(
+                                        kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                        pool_scale=pool_scale if multi_pool else None,
+                                    )
+                                    completed = self._completed_counts.get(key, 0)
+                                    if completed >= self.config.n_replicates:
+                                        continue
 
-                                # Progress and ETA
-                                if completed_this_run > 0:
+                                    # Progress and ETA
+                                    if completed_this_run > 0:
+                                        elapsed = time.time() - self._start_time
+                                        avg_time = elapsed / completed_this_run
+                                        eta = avg_time * (remaining - completed_this_run)
+                                        progress_str = (
+                                            f"[{completed_this_run + 1}/{total_pairs}] "
+                                            f"ETA: {self._format_time(eta)}"
+                                        )
+                                    else:
+                                        progress_str = f"[1/{total_pairs}]"
+
+                                    pool_label_str = f", S={pool_scale}" if multi_pool else ""
+                                    print(
+                                        f"{progress_str} Running: κ={kappa}, c={concentration}, μ={mu}, ρ={outside_mid_ratio}{pool_label_str}",
+                                        flush=True,
+                                    )
+
+                                    result = self._run_pair(
+                                        kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                        pool_scale=pool_scale if multi_pool else None,
+                                        seed=seed,
+                                        passive_result=passive_cached,
+                                    )
+
+                                    self.comparison_results.append(result)
+                                    self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
+                                    completed_this_run += 1
+
+                                    # Write incremental results
+                                    self._write_comparison_csv()
+
+                                    # Log completion with timing
                                     elapsed = time.time() - self._start_time
-                                    avg_time = elapsed / completed_this_run
-                                    eta = avg_time * (remaining * self.config.n_replicates - completed_this_run)
-                                    progress_str = (
-                                        f"[{pair_idx}/{total_pairs}] ({completed_this_run} done) "
-                                        f"ETA: {self._format_time(eta)}"
-                                    )
-                                else:
-                                    progress_str = f"[{pair_idx}/{total_pairs}]"
-
-                                print(
-                                    f"{progress_str} Running{rep_label}: κ={kappa}, c={concentration}, μ={mu}, ρ={outside_mid_ratio}",
-                                    flush=True,
-                                )
-
-                                result = self._run_pair(
-                                    kappa, concentration, mu, monotonicity, outside_mid_ratio
-                                )
-                                self.comparison_results.append(result)
-                                self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
-                                completed_this_run += 1
-
-                                # Write incremental results
-                                self._write_comparison_csv()
-
-                                # Log completion with timing
-                                elapsed = time.time() - self._start_time
-                                if result.delta_passive is not None and result.delta_active is not None:
-                                    print(
-                                        f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
-                                        f"δ_passive={result.delta_passive:.3f}, δ_active={result.delta_active:.3f}, "
-                                        f"effect={result.trading_effect:.3f}",
-                                        flush=True,
-                                    )
-                                else:
-                                    print(
-                                        f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
-                                        f"(one or both runs failed)",
-                                        flush=True,
-                                    )
+                                    if result.delta_passive is not None and result.delta_active is not None:
+                                        print(
+                                            f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
+                                            f"δ_passive={result.delta_passive:.3f}, δ_active={result.delta_active:.3f}, "
+                                            f"effect={result.trading_effect:.3f}",
+                                            flush=True,
+                                        )
+                                    else:
+                                        print(
+                                            f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
+                                            f"(one or both runs failed)",
+                                            flush=True,
+                                        )
 
         # Write final summary
         self._write_summary_json()
@@ -2408,26 +2570,47 @@ class BalancedComparisonRunner:
         mu: Decimal,
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
+        pool_scale: Decimal | None = None,
+        seed: int | None = None,
+        passive_result: RingRunSummary | None = None,
     ) -> BalancedComparisonResult:
-        """Run one passive/active pair for given parameters."""
+        """Run one passive/active pair for given parameters.
+
+        If pool_scale is set, derives vbt/dealer shares from it (2:1 ratio).
+        If passive_result is provided, reuses it (for pool_scale sweeps where
+        passive is size-independent).
+        """
+        # Derive per-bucket shares from pool_scale
+        vbt_share_override: Decimal | None = None
+        dealer_share_override: Decimal | None = None
+        if pool_scale is not None:
+            vbt_share_override = pool_scale * Decimal(2) / Decimal(3)
+            dealer_share_override = pool_scale * Decimal(1) / Decimal(3)
+
         passive_runner = self._get_passive_runner(outside_mid_ratio)
-        active_runner = self._get_active_runner(outside_mid_ratio)
+        active_runner = self._get_active_runner(
+            outside_mid_ratio,
+            vbt_share_per_bucket=vbt_share_override,
+            dealer_share_per_bucket=dealer_share_override,
+        )
 
         # Use same seed for both runs
-        seed = self._next_seed()
+        if seed is None:
+            seed = self._next_seed()
 
-        # Run passive (no trading)
-        logger.info("  Running passive (no trading)...")
-        print("  Passive run:", flush=True)
-        passive_result = passive_runner._execute_run(
-            phase="balanced_passive",
-            kappa=kappa,
-            concentration=concentration,
-            mu=mu,
-            monotonicity=monotonicity,
-            seed=seed,
-            progress_callback=self._make_progress_callback("passive"),
-        )
+        # Run passive (no trading) — reuse if provided
+        if passive_result is None:
+            logger.info("  Running passive (no trading)...")
+            print("  Passive run:", flush=True)
+            passive_result = passive_runner._execute_run(
+                phase="balanced_passive",
+                kappa=kappa,
+                concentration=concentration,
+                mu=mu,
+                monotonicity=monotonicity,
+                seed=seed,
+                progress_callback=self._make_progress_callback("passive"),
+            )
 
         # Run active (with trading)
         logger.info("  Running active (with trading)...")
@@ -2450,7 +2633,7 @@ class BalancedComparisonRunner:
         if self.config.enable_lender:
             logger.info("  Running NBFI lender...")
             print("  NBFI run:", flush=True)
-            nbfi_runner = self._get_nbfi_runner(outside_mid_ratio)
+            nbfi_runner = self._get_nbfi_runner(outside_mid_ratio, vbt_share_override, dealer_share_override)
             lender_result = nbfi_runner._execute_run(
                 phase="balanced_nbfi",
                 kappa=kappa,
@@ -2481,7 +2664,7 @@ class BalancedComparisonRunner:
         if self.config.enable_dealer_lender:
             logger.info("  Running Dealer+Lender...")
             print("  Dealer+Lender run:", flush=True)
-            dl_runner = self._get_dealer_lender_runner(outside_mid_ratio)
+            dl_runner = self._get_dealer_lender_runner(outside_mid_ratio, vbt_share_override, dealer_share_override)
             dl_result = dl_runner._execute_run(
                 phase="balanced_dealer_lender",
                 kappa=kappa,
@@ -2514,7 +2697,7 @@ class BalancedComparisonRunner:
         if self.config.enable_bank_passive:
             logger.info("  Running Bank+Passive...")
             print("  Bank+Passive run:", flush=True)
-            bp_runner = self._get_bank_passive_runner(outside_mid_ratio)
+            bp_runner = self._get_bank_passive_runner(outside_mid_ratio, vbt_share_override, dealer_share_override)
             bp_result = bp_runner._execute_run(
                 phase="balanced_bank_passive",
                 kappa=kappa,
@@ -2554,7 +2737,7 @@ class BalancedComparisonRunner:
         if self.config.enable_bank_dealer:
             logger.info("  Running Bank+Dealer...")
             print("  Bank+Dealer run:", flush=True)
-            bd_runner = self._get_bank_dealer_runner(outside_mid_ratio)
+            bd_runner = self._get_bank_dealer_runner(outside_mid_ratio, vbt_share_override, dealer_share_override)
             bd_result = bd_runner._execute_run(
                 phase="balanced_bank_dealer",
                 kappa=kappa,
@@ -2594,7 +2777,7 @@ class BalancedComparisonRunner:
         if self.config.enable_bank_dealer_nbfi:
             logger.info("  Running Bank+Dealer+NBFI...")
             print("  Bank+Dealer+NBFI run:", flush=True)
-            bdn_runner = self._get_bank_dealer_nbfi_runner(outside_mid_ratio)
+            bdn_runner = self._get_bank_dealer_nbfi_runner(outside_mid_ratio, vbt_share_override, dealer_share_override)
             bdn_result = bdn_runner._execute_run(
                 phase="balanced_bank_dealer_nbfi",
                 kappa=kappa,
@@ -2629,6 +2812,14 @@ class BalancedComparisonRunner:
                 "intermediary_capital_bank_dealer_nbfi": bdn_result.initial_intermediary_capital,
             }
 
+        eff_pool = pool_scale if pool_scale is not None else (self.config.vbt_share_per_bucket + self.config.dealer_share_per_bucket)
+        eff_vbt = vbt_share_override if vbt_share_override is not None else self.config.vbt_share_per_bucket
+        eff_dealer = dealer_share_override if dealer_share_override is not None else self.config.dealer_share_per_bucket
+
+        # Compute intermediary capital from active arm
+        _cap = float(active_result.initial_intermediary_capital)
+        _q = float(self.config.Q_total)
+
         result = BalancedComparisonResult(
             kappa=kappa,
             concentration=concentration,
@@ -2638,8 +2829,11 @@ class BalancedComparisonRunner:
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,  # DEPRECATED
-            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
-            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            vbt_share_per_bucket=eff_vbt,
+            dealer_share_per_bucket=eff_dealer,
+            pool_scale=eff_pool,
+            intermediary_capital_abs=_cap,
+            capital_fraction=_cap / _q if _q > 0 else 0.0,
             delta_passive=passive_result.delta_total,
             phi_passive=passive_result.phi_total,
             passive_run_id=passive_result.run_id,
@@ -2898,6 +3092,9 @@ class BalancedComparisonRunner:
                     "face_value": str(result.face_value),
                     "outside_mid_ratio": str(result.outside_mid_ratio),
                     "big_entity_share": str(result.big_entity_share),
+                    "pool_scale": str(result.pool_scale),
+                    "intermediary_capital_abs": str(result.intermediary_capital_abs),
+                    "capital_fraction": str(result.capital_fraction),
                     "delta_passive": str(result.delta_passive)
                     if result.delta_passive is not None
                     else "",

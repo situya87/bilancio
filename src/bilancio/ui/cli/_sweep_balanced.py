@@ -31,6 +31,7 @@ def _deps() -> Any:
 @click.option("--out-dir", type=click.Path(path_type=Path), required=True, help="Output directory for results")
 @click.option("--n-agents", type=int, default=100, help="Number of agents in ring")
 @click.option("--maturity-days", type=int, default=10, help="Maturity horizon")
+@click.option("--max-simulation-days", type=int, default=None, help="Max simulation days (default: auto from maturity)")
 @click.option("--q-total", type=Decimal, default=Decimal("10000"), help="Total debt")
 @click.option("--base-seed", type=int, default=42, help="Base random seed")
 @click.option(
@@ -53,6 +54,12 @@ def _deps() -> Any:
     type=str,
     default="0.90",
     help="Comma-separated M/S ratios to sweep",
+)
+@click.option(
+    "--pool-scales",
+    type=str,
+    default="0.375",
+    help="Comma-separated pool scale values (Plan 053: dose-response sweep)",
 )
 @click.option(
     "--big-entity-share",
@@ -389,6 +396,7 @@ def sweep_balanced(
     out_dir: Path,
     n_agents: int,
     maturity_days: int,
+    max_simulation_days: int | None,
     q_total: Decimal,
     base_seed: int,
     n_replicates: int,
@@ -397,6 +405,7 @@ def sweep_balanced(
     mus: str,
     face_value: Decimal,
     outside_mid_ratios: str,
+    pool_scales: str,
     big_entity_share: Decimal,
     default_handling: str,
     detailed_logging: bool,
@@ -585,10 +594,15 @@ def sweep_balanced(
     if adaptive_overrides:
         click.echo(f"Adaptive flag overrides: {adaptive_overrides}")
 
+    config_kwargs: dict = {}
+    if max_simulation_days is not None:
+        config_kwargs["max_simulation_days"] = max_simulation_days
+
     config = BalancedComparisonConfig(
         n_agents=n_agents,
         maturity_days=maturity_days,
         Q_total=q_total,
+        **config_kwargs,
         base_seed=base_seed,
         n_replicates=n_replicates,
         kappas=as_decimal_list(kappas),
@@ -596,6 +610,7 @@ def sweep_balanced(
         mus=as_decimal_list(mus),
         face_value=face_value,
         outside_mid_ratios=as_decimal_list(outside_mid_ratios),
+        pool_scales=as_decimal_list(pool_scales),
         big_entity_share=big_entity_share,
         default_handling=default_handling,
         detailed_logging=detailed_logging,
