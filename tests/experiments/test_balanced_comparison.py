@@ -70,7 +70,7 @@ class TestBalancedComparisonConfigDefaults:
         cfg = BalancedComparisonConfig()
         assert cfg.n_agents == 100
         assert cfg.maturity_days == 10
-        assert cfg.max_simulation_days == 15
+        assert cfg.max_simulation_days is None
         assert cfg.Q_total == Decimal("10000")
         assert cfg.liquidity_mode == "uniform"
         assert cfg.base_seed == 42
@@ -1345,3 +1345,173 @@ class TestConfigRoundTripComprehensive:
         restored = BalancedComparisonConfig.model_validate(dumped)
         # Compare full model_dump outputs for equality
         assert original.model_dump() == restored.model_dump()
+
+
+# =============================================================================
+# Plan 053: Pool scale (dose-response) tests
+# =============================================================================
+
+
+class TestPoolScaleConfig:
+    """Tests for pool_scales config field (Plan 053)."""
+
+    def test_pool_scales_default(self):
+        """Default pool_scales is single value [0.375]."""
+        cfg = BalancedComparisonConfig()
+        assert cfg.pool_scales == [Decimal("0.375")]
+
+    def test_pool_scales_custom(self):
+        """Config accepts custom pool_scales list."""
+        cfg = BalancedComparisonConfig(
+            pool_scales=[Decimal("0.10"), Decimal("0.25"), Decimal("0.50")],
+        )
+        assert len(cfg.pool_scales) == 3
+        assert cfg.pool_scales[0] == Decimal("0.10")
+        assert cfg.pool_scales[2] == Decimal("0.50")
+
+    def test_pool_scales_serialization_round_trip(self):
+        """pool_scales survives model_dump → model_validate."""
+        original = BalancedComparisonConfig(
+            pool_scales=[Decimal("0.05"), Decimal("0.375"), Decimal("0.65")],
+        )
+        dumped = original.model_dump()
+        restored = BalancedComparisonConfig.model_validate(dumped)
+        assert restored.pool_scales == original.pool_scales
+
+    def test_pool_scales_in_model_dump(self):
+        """pool_scales appears in model_dump output."""
+        cfg = BalancedComparisonConfig()
+        dumped = cfg.model_dump()
+        assert "pool_scales" in dumped
+
+
+class TestPoolScaleResult:
+    """Tests for pool_scale fields in BalancedComparisonResult (Plan 053)."""
+
+    def test_pool_scale_default(self):
+        """Default pool_scale is 0.375."""
+        r = _make_result()
+        assert r.pool_scale == Decimal("0.375")
+
+    def test_pool_scale_custom(self):
+        """pool_scale can be set to custom value."""
+        r = _make_result(pool_scale=Decimal("0.10"))
+        assert r.pool_scale == Decimal("0.10")
+
+    def test_intermediary_capital_abs_default(self):
+        """Default intermediary_capital_abs is 0."""
+        r = _make_result()
+        assert r.intermediary_capital_abs == 0.0
+
+    def test_intermediary_capital_abs_custom(self):
+        """intermediary_capital_abs can be set."""
+        r = _make_result(intermediary_capital_abs=1500.0)
+        assert r.intermediary_capital_abs == 1500.0
+
+    def test_capital_fraction_default(self):
+        """Default capital_fraction is 0."""
+        r = _make_result()
+        assert r.capital_fraction == 0.0
+
+    def test_capital_fraction_custom(self):
+        """capital_fraction can be set."""
+        r = _make_result(capital_fraction=0.15)
+        assert r.capital_fraction == 0.15
+
+    def test_pool_scale_in_csv(self, tmp_path: Path):
+        """CSV output includes pool_scale, intermediary_capital_abs, capital_fraction."""
+        cfg = BalancedComparisonConfig()
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [
+            _make_result(
+                pool_scale=Decimal("0.10"),
+                intermediary_capital_abs=500.0,
+                capital_fraction=0.05,
+            ),
+            _make_result(
+                pool_scale=Decimal("0.375"),
+                intermediary_capital_abs=1875.0,
+                capital_fraction=0.1875,
+            ),
+        ]
+        runner._write_comparison_csv()
+
+        csv_path = tmp_path / "aggregate" / "comparison.csv"
+        with csv_path.open("r") as fh:
+            reader = csv.DictReader(fh)
+            rows = list(reader)
+
+        assert len(rows) == 2
+        assert rows[0]["pool_scale"] == "0.10"
+        assert rows[0]["intermediary_capital_abs"] == "500.0"
+        assert rows[0]["capital_fraction"] == "0.05"
+        assert rows[1]["pool_scale"] == "0.375"
+        assert rows[1]["intermediary_capital_abs"] == "1875.0"
+
+    def test_multiple_pool_scales_produce_distinct_results(self):
+        """Results with different pool_scales are distinguishable."""
+        r1 = _make_result(pool_scale=Decimal("0.10"), intermediary_capital_abs=500.0)
+        r2 = _make_result(pool_scale=Decimal("0.375"), intermediary_capital_abs=1875.0)
+        assert r1.pool_scale != r2.pool_scale
+        assert r1.intermediary_capital_abs != r2.intermediary_capital_abs
+
+
+class TestPoolScaleMakeKey:
+    """Tests for _make_key with pool_scale (Plan 053)."""
+
+    def test_make_key_without_pool_scale(self, tmp_path: Path):
+        """_make_key without pool_scale returns 5-element tuple (backward compat)."""
+        cfg = BalancedComparisonConfig()
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        key = runner._make_key(
+            Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), Decimal("0.90"),
+        )
+        assert key == ("0.5", "1", "0", "0", "0.90")
+        assert len(key) == 5
+
+    def test_make_key_with_pool_scale(self, tmp_path: Path):
+        """_make_key with pool_scale returns 6-element tuple."""
+        cfg = BalancedComparisonConfig()
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        key = runner._make_key(
+            Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), Decimal("0.90"),
+            pool_scale=Decimal("0.10"),
+        )
+        assert key == ("0.5", "1", "0", "0", "0.90", "0.10")
+        assert len(key) == 6
+
+    def test_make_key_different_pool_scales_differ(self, tmp_path: Path):
+        """Different pool_scale values produce different keys."""
+        cfg = BalancedComparisonConfig()
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        key1 = runner._make_key(
+            Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), Decimal("0.90"),
+            pool_scale=Decimal("0.10"),
+        )
+        key2 = runner._make_key(
+            Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), Decimal("0.90"),
+            pool_scale=Decimal("0.375"),
+        )
+        assert key1 != key2
+
+    def test_make_key_with_pool_scale_hashable(self, tmp_path: Path):
+        """Keys with pool_scale are hashable for dict use."""
+        cfg = BalancedComparisonConfig()
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        key = runner._make_key(
+            Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), Decimal("0.90"),
+            pool_scale=Decimal("0.10"),
+        )
+        d = {key: "test"}
+        assert d[key] == "test"
+
+
+class TestPoolScaleComparisonFields:
+    """Tests that COMPARISON_FIELDS includes pool_scale fields."""
+
+    def test_pool_scale_in_comparison_fields(self):
+        """COMPARISON_FIELDS includes pool_scale, intermediary_capital_abs, capital_fraction."""
+        fields = BalancedComparisonRunner.COMPARISON_FIELDS
+        assert "pool_scale" in fields
+        assert "intermediary_capital_abs" in fields
+        assert "capital_fraction" in fields
