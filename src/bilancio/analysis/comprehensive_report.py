@@ -86,11 +86,11 @@ _SWEEP_META: dict[str, dict[str, Any]] = {
     "nbfi": {
         "effect_col": "lending_effect",
         "treatment_label": "NBFI Lending",
-        "baseline_label": "Passive",
-        "delta_treatment": "delta_lender",
-        "delta_baseline": "delta_passive",
-        "run_id_treatment_candidates": ["lender_run_id", "run_id_lender"],
-        "run_id_baseline_candidates": ["passive_run_id", "run_id_passive"],
+        "baseline_label": "NBFI Idle",
+        "delta_treatment": "delta_lend",
+        "delta_baseline": "delta_idle",
+        "run_id_treatment_candidates": ["lend_run_id", "run_id_lend"],
+        "run_id_baseline_candidates": ["idle_run_id", "run_id_idle"],
     },
 }
 
