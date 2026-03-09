@@ -2205,16 +2205,15 @@ class BalancedComparisonRunner:
         # Cache runners per (outside_mid_ratio, arm, pool_scale) to avoid re-creating them
         runners_cache: dict[tuple[Decimal, str, Decimal], Any] = {}
 
+        # Pre-create runners for all (outside_mid_ratio, pool_scale) combinations
         for outside_mid_ratio in self.config.outside_mid_ratios:
             for pool_scale in self.config.pool_scales:
-                # Derive per-bucket shares from pool_scale
                 vbt_share_override: Decimal | None = None
                 dealer_share_override: Decimal | None = None
                 if multi_pool:
                     vbt_share_override = pool_scale * Decimal(2) / Decimal(3)
                     dealer_share_override = pool_scale * Decimal(1) / Decimal(3)
 
-                # Pre-create runners for this (outside_mid_ratio, pool_scale)
                 for arm_name, _phase, getter_name, _regime in arm_defs:
                     cache_key = (outside_mid_ratio, arm_name, pool_scale)
                     if cache_key not in runners_cache:
@@ -2225,32 +2224,55 @@ class BalancedComparisonRunner:
                                 outside_mid_ratio, vbt_share_override, dealer_share_override,
                             )
 
-                for kappa in self.config.kappas:
-                    for concentration in self.config.concentrations:
-                        for mu in self.config.mus:
-                            for monotonicity in self.config.monotonicities:
-                                key = self._make_key(
-                                    kappa, concentration, mu, monotonicity, outside_mid_ratio,
-                                    pool_scale=pool_scale if multi_pool else None,
-                                )
-                                completed = self._completed_counts.get(key, 0)
-                                reps_needed = max(0, self.config.n_replicates - completed)
+        # Prepare combos: seed is drawn once per (grid cell, rep), then reused
+        # across pool_scales so each pool_scale gets the same stochastic realization.
+        for outside_mid_ratio in self.config.outside_mid_ratios:
+            for kappa in self.config.kappas:
+                for concentration in self.config.concentrations:
+                    for mu in self.config.mus:
+                        for monotonicity in self.config.monotonicities:
+                            for _rep in range(self.config.n_replicates):
+                                seed = self._next_seed()
 
-                                for _rep in range(reps_needed):
-                                    seed = self._next_seed()
+                                # Prepare passive once per seed (shared across pool_scales)
+                                passive_prep: PreparedRun | None = None
+                                if multi_pool:
+                                    passive_phase = next(p for n, p, _, _ in arm_defs if n == "passive")
+                                    passive_runner = runners_cache[(outside_mid_ratio, "passive", self.config.pool_scales[0])]
+                                    passive_prep = passive_runner._prepare_run(
+                                        phase=passive_phase,
+                                        kappa=kappa,
+                                        concentration=concentration,
+                                        mu=mu,
+                                        monotonicity=monotonicity,
+                                        seed=seed,
+                                    )
+
+                                for pool_scale in self.config.pool_scales:
+                                    key = self._make_key(
+                                        kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                        pool_scale=pool_scale if multi_pool else None,
+                                    )
+                                    completed = self._completed_counts.get(key, 0)
+                                    if completed >= self.config.n_replicates:
+                                        continue
 
                                     # Prepare all enabled arms for this combo
                                     arm_preps: dict[str, PreparedRun] = {}
                                     for arm_name, phase, _getter_name, _regime in arm_defs:
-                                        runner = runners_cache[(outside_mid_ratio, arm_name, pool_scale)]
-                                        arm_preps[arm_name] = runner._prepare_run(
-                                            phase=phase,
-                                            kappa=kappa,
-                                            concentration=concentration,
-                                            mu=mu,
-                                            monotonicity=monotonicity,
-                                            seed=seed,
-                                        )
+                                        if arm_name == "passive" and passive_prep is not None:
+                                            # Reuse the shared passive preparation
+                                            arm_preps[arm_name] = passive_prep
+                                        else:
+                                            runner = runners_cache[(outside_mid_ratio, arm_name, pool_scale)]
+                                            arm_preps[arm_name] = runner._prepare_run(
+                                                phase=phase,
+                                                kappa=kappa,
+                                                concentration=concentration,
+                                                mu=mu,
+                                                monotonicity=monotonicity,
+                                                seed=seed,
+                                            )
 
                                     prepared_combos.append(
                                         (
@@ -2498,12 +2520,17 @@ class BalancedComparisonRunner:
                                         flush=True,
                                     )
 
-                                    result = self._run_pair(
-                                        kappa, concentration, mu, monotonicity, outside_mid_ratio,
-                                        pool_scale=pool_scale if multi_pool else None,
-                                        seed=seed,
-                                        passive_result=passive_cached,
-                                    )
+                                    if multi_pool:
+                                        result = self._run_pair(
+                                            kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                            pool_scale=pool_scale,
+                                            seed=seed,
+                                            passive_result=passive_cached,
+                                        )
+                                    else:
+                                        result = self._run_pair(
+                                            kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                        )
 
                                     self.comparison_results.append(result)
                                     self._completed_counts[key] = self._completed_counts.get(key, 0) + 1

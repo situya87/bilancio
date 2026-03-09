@@ -594,7 +594,7 @@ def sweep_balanced(
     if adaptive_overrides:
         click.echo(f"Adaptive flag overrides: {adaptive_overrides}")
 
-    config_kwargs: dict = {}
+    config_kwargs: dict[str, Any] = {}
     if max_simulation_days is not None:
         config_kwargs["max_simulation_days"] = max_simulation_days
 
