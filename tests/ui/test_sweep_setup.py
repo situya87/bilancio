@@ -481,6 +481,7 @@ class TestAnalysisMenu:
             "narrative",
             "treynor",
             "comparison",
+            "report",
         }
         assert set(VIZ_MENU.keys()) == expected
 
@@ -521,7 +522,7 @@ class TestAvailableAnalyses:
 
     def test_dealer_gets_all_visualizations(self):
         available = _available_visualizations("dealer")
-        assert len(available) == 6
+        assert len(available) == 7
         assert "treynor" in available
         assert "drilldowns" in available
 
@@ -550,7 +551,7 @@ class TestAvailableAnalyses:
 
     def test_legacy_available_analyses_combines(self):
         available = _available_analyses("dealer")
-        assert len(available) == 16  # 10 data + 6 viz
+        assert len(available) == 17  # 10 data + 7 viz
 
     def test_unknown_sweep_type_returns_empty(self):
         assert len(_available_data_analyses("unknown")) == 0

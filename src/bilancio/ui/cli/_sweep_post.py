@@ -30,7 +30,26 @@ VALID_POST_ANALYSES = (
     "narrative",
     "treynor",
     "comparison",
+    "report",
 )
+
+
+def _arm_runs_dir(out_dir: Path, sweep_type: str, arm_label: str) -> Path:
+    """Resolve the runs directory for a given sweep type and arm.
+
+    The actual run directories live under arm-specific subdirectories,
+    not a flat ``out_dir/runs`` path.
+    """
+    _DIR_MAP: dict[tuple[str, str], str] = {
+        ("dealer", "active"): "active",
+        ("dealer", "passive"): "passive",
+        ("bank", "lend"): "bank_lend",
+        ("bank", "idle"): "bank_idle",
+        ("nbfi", "lend"): "nbfi_lend",
+        ("nbfi", "idle"): "nbfi_idle",
+    }
+    subdir = _DIR_MAP.get((sweep_type, arm_label), arm_label)
+    return out_dir / subdir / "runs"
 
 
 def _run_per_run_analysis(
@@ -51,13 +70,12 @@ def _run_per_run_analysis(
         return None
 
     if sweep_type == "dealer":
-        arm_cols = [("passive", "run_id_passive"), ("active", "run_id_active")]
+        arm_cols = [("passive", "passive_run_id"), ("active", "active_run_id")]
     elif sweep_type in ("bank", "nbfi"):
-        arm_cols = [("idle", "run_id_idle"), ("lend", "run_id_lend")]
+        arm_cols = [("idle", "idle_run_id"), ("lend", "lend_run_id")]
     else:
-        arm_cols = [("passive", "run_id_passive"), ("active", "run_id_active")]
+        arm_cols = [("passive", "passive_run_id"), ("active", "active_run_id")]
 
-    runs_dir = out_dir / "runs"
     all_results: list[dict[str, Any]] = []
 
     for row in rows:
@@ -69,6 +87,7 @@ def _run_per_run_analysis(
             if not run_id:
                 continue
 
+            runs_dir = _arm_runs_dir(out_dir, sweep_type, arm_label)
             events_path = None
             for candidate in [
                 runs_dir / run_id / "out" / "events.jsonl",
@@ -283,7 +302,7 @@ def _offer_post_sweep_analysis(
     if not result.data_analyses and not result.visualizations:
         return
 
-    core_viz = [name for name in result.visualizations if name not in ("treynor", "comparison")]
+    core_viz = [name for name in result.visualizations if name not in ("treynor", "comparison", "report")]
     if core_viz:
         click.echo(f"\nRunning core visualizations: {', '.join(core_viz)}...")
         try:
@@ -368,12 +387,11 @@ def _offer_post_sweep_analysis(
             if not kappa_values:
                 click.echo("  No kappas found for Treynor generation.")
             else:
-                runs_dir = out_dir / "runs"
                 run_id_col = {
-                    "dealer": "run_id_active",
-                    "bank": "run_id_lend",
-                    "nbfi": "run_id_lend",
-                }.get(sweep_type, "run_id_active")
+                    "dealer": "active_run_id",
+                    "bank": "lend_run_id",
+                    "nbfi": "lend_run_id",
+                }.get(sweep_type, "active_run_id")
                 arm_label = {
                     "dealer": "active",
                     "bank": "lend",
@@ -388,6 +406,7 @@ def _offer_post_sweep_analysis(
                     if not run_id:
                         click.echo(f"  Treynor (kappa={kappa}): no matching run found")
                         continue
+                    runs_dir = _arm_runs_dir(out_dir, sweep_type, arm_label)
                     run_dir = _run_dir_path(runs_dir, run_id)
                     if run_dir is None:
                         click.echo(f"  Treynor (kappa={kappa}): run dir not found for {run_id}")
@@ -416,6 +435,22 @@ def _offer_post_sweep_analysis(
             click.echo(f"  Comparison report failed: {optional_extra_message('comparison reports', 'analysis')} ({exc})")
         except Exception as exc:
             click.echo(f"  Comparison report failed: {exc}")
+
+    if "report" in result.visualizations:
+        click.echo("\nGenerating comprehensive report...")
+        try:
+            from bilancio.analysis.comprehensive_report import build_comprehensive_report
+
+            analysis_dir = out_dir / "aggregate" / "analysis"
+            analysis_dir.mkdir(parents=True, exist_ok=True)
+            report_html = build_comprehensive_report(out_dir, sweep_type)
+            out_path = analysis_dir / "comprehensive_report.html"
+            out_path.write_text(report_html)
+            click.echo(f"  report: {out_path}")
+        except ImportError as exc:
+            click.echo(f"  Report generation failed: {optional_extra_message('comprehensive report', 'analysis')} ({exc})")
+        except Exception as exc:
+            click.echo(f"  Report generation failed: {exc}")
 
     analysis_dir = out_dir / "aggregate" / "analysis"
     if analysis_dir.is_dir():
