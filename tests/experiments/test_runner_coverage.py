@@ -2659,7 +2659,7 @@ class TestBalancedRunAllSequential:
 
         pair_calls = []
 
-        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio):
+        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology="ring"):
             pair_calls.append(kappa)
             return BalancedComparisonResult(
                 kappa=kappa, concentration=concentration, mu=mu,
@@ -2673,6 +2673,7 @@ class TestBalancedRunAllSequential:
                 n_defaults_passive=5, n_defaults_active=3,
                 cascade_fraction_passive=Decimal("0.10"),
                 cascade_fraction_active=Decimal("0.05"),
+                topology=topology,
             )
 
         with patch.object(runner, "_run_pair", mock_run_pair):
@@ -3370,7 +3371,9 @@ class TestBalancedMakeKeyAndSeed:
         )
         runner = BalancedComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
         key = runner._make_key(Decimal("1"), Decimal("2"), Decimal("0"), Decimal("0"), Decimal("0.9"))
-        assert key == ("1", "2", "0", "0", "0.9")
+        assert key == ("1", "2", "0", "0", "0.9", "ring")
+        key2 = runner._make_key(Decimal("1"), Decimal("2"), Decimal("0"), Decimal("0"), Decimal("0.9"), topology="k_regular")
+        assert key2 == ("1", "2", "0", "0", "0.9", "k_regular")
 
     def test_balanced_next_seed(self, tmp_path: Path):
         from bilancio.experiments.balanced_comparison import (

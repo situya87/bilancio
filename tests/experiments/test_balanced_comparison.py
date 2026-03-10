@@ -600,10 +600,17 @@ class TestRunnerHelpers:
         key = runner._make_key(
             Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), Decimal("0.90"),
         )
-        assert key == ("0.5", "1", "0", "0", "0.90")
+        assert key == ("0.5", "1", "0", "0", "0.90", "ring")
+        # With explicit topology
+        key2 = runner._make_key(
+            Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), Decimal("0.90"),
+            topology="k_regular",
+        )
+        assert key2 == ("0.5", "1", "0", "0", "0.90", "k_regular")
         # Keys should be hashable for use in dicts
-        d = {key: 1}
+        d = {key: 1, key2: 2}
         assert d[key] == 1
+        assert d[key2] == 2
 
 
 # =============================================================================

@@ -276,10 +276,15 @@ class TestGoldenMetricSnapshot:
     """
 
     def test_golden_metric_snapshot_seed_42(self) -> None:
-        """Pinned expected value for seed=42, n=10, kappa=1 ring scenario."""
+        """Pinned expected value for seed=42, n=10, kappa=1 ring scenario.
+
+        Updated in Plan 055 (network topology generalization): receivable
+        reassignment now runs unconditionally on agent default, not only
+        when rollover_enabled=True. This slightly changes the default cascade.
+        """
         metrics = _run_small_ring("compatible", seed=42)
-        expected_delta = Decimal("0.6579739217652958876629889669")
-        expected_phi = Decimal("0.3420260782347041123370110331")
+        expected_delta = Decimal("0.6633366633366633366633366633")
+        expected_phi = Decimal("0.3366633366633366633366633367")
         assert metrics["delta_total"] == expected_delta, (
             f"Golden delta_total changed! "
             f"expected={expected_delta}, actual={metrics['delta_total']}. "
@@ -292,12 +297,16 @@ class TestGoldenMetricSnapshot:
         )
 
     def test_golden_metric_snapshot_stressed(self) -> None:
-        """Pinned expected value for seed=42, n=20, kappa=0.5 (stressed system)."""
+        """Pinned expected value for seed=42, n=20, kappa=0.5 (stressed system).
+
+        Updated in Plan 055 (network topology generalization): receivable
+        reassignment now runs unconditionally on agent default.
+        """
         metrics = _run_ring(
             "compatible", seed=42, n_agents=20, kappa="0.5",
         )
-        expected_delta = Decimal("0.8256281407035175879396984925")
-        expected_phi = Decimal("0.1743718592964824120603015075")
+        expected_delta = Decimal("0.8262179809141135107985936715")
+        expected_phi = Decimal("0.1737820190858864892014063285")
         assert metrics["delta_total"] == expected_delta, (
             f"Golden delta_total (stressed) changed! "
             f"expected={expected_delta}, actual={metrics['delta_total']}. "
