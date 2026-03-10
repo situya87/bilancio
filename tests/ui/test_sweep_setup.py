@@ -482,6 +482,7 @@ class TestAnalysisMenu:
             "treynor",
             "comparison",
             "report",
+            "notebook",
         }
         assert set(VIZ_MENU.keys()) == expected
 
@@ -522,9 +523,10 @@ class TestAvailableAnalyses:
 
     def test_dealer_gets_all_visualizations(self):
         available = _available_visualizations("dealer")
-        assert len(available) == 7
+        assert len(available) == 8
         assert "treynor" in available
         assert "drilldowns" in available
+        assert "notebook" in available
 
     def test_bank_excludes_dealer_specific_data(self):
         available = _available_data_analyses("bank")
@@ -551,7 +553,7 @@ class TestAvailableAnalyses:
 
     def test_legacy_available_analyses_combines(self):
         available = _available_analyses("dealer")
-        assert len(available) == 17  # 10 data + 7 viz
+        assert len(available) == 18  # 10 data + 8 viz
 
     def test_unknown_sweep_type_returns_empty(self):
         assert len(_available_data_analyses("unknown")) == 0

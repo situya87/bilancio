@@ -137,7 +137,7 @@ class TestCloudConfig:
         assert config.volume_name == "bilancio-results"
         assert config.timeout_seconds == 600
         assert config.memory_mb == 2048
-        assert config.max_parallel == 10
+        assert config.max_parallel == 7
         assert config.gpu is None
 
     def test_env_override(self, monkeypatch):
