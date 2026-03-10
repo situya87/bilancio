@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from collections.abc import Generator
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
@@ -549,6 +550,186 @@ def _action_references_contract(
     return False
 
 
+def _collect_creditor_weights(
+    system: System, agent_id: str, *, exclude_contract_id: str | None = None
+) -> dict[str, Decimal]:
+    """Collect normalized creditor weights from agent's outstanding liabilities.
+
+    Scans all contracts where the agent is the liability issuer to determine
+    what fraction of total debt is owed to each creditor. Used for pro-rata
+    receivable reassignment on default.
+
+    Args:
+        system: The System instance
+        agent_id: ID of the defaulting agent
+        exclude_contract_id: Contract ID to exclude (the trigger payable)
+
+    Returns:
+        Dict mapping creditor_id -> weight (0-1), normalized to sum=1.
+        Empty dict if no creditors found.
+    """
+    claims: dict[str, Decimal] = {}  # creditor_id -> total amount owed
+    for cid, contract in system.state.contracts.items():
+        if contract.liability_issuer_id != agent_id:
+            continue
+        if exclude_contract_id and cid == exclude_contract_id:
+            continue
+        creditor_id = contract.asset_holder_id
+        claims[creditor_id] = claims.get(creditor_id, Decimal(0)) + Decimal(str(contract.amount))
+
+    total = sum(claims.values())
+    if total <= 0:
+        return {}
+
+    return {cid: amount / total for cid, amount in claims.items()}
+
+
+def _reassign_receivables(
+    system: System,
+    defaulted_agent_id: str,
+    creditor_weights: dict[str, Decimal],
+    day: int,
+) -> list[dict[str, object]]:
+    """Reassign receivables of a defaulted agent pro-rata to its creditors.
+
+    When agent X defaults, any payables where X is the creditor (receivables)
+    are redistributed among X's own creditors proportionally to what X owed them.
+
+    For the ring topology (one debtor, one creditor), this produces identical
+    results to _reconnect_ring().
+
+    Args:
+        system: The System instance
+        defaulted_agent_id: ID of the agent that defaulted
+        creditor_weights: Dict mapping creditor_id -> weight (from _collect_creditor_weights)
+        day: Current simulation day
+
+    Returns:
+        List of dicts with reassignment info
+    """
+    reassignments: list[dict[str, object]] = []
+
+    # Find all receivables: payables where the defaulted agent is the creditor
+    receivables = []
+    for cid, contract in list(system.state.contracts.items()):
+        if (
+            contract.kind == InstrumentKind.PAYABLE
+            and isinstance(contract, Payable)
+            and contract.asset_holder_id == defaulted_agent_id
+            and contract.liability_issuer_id != defaulted_agent_id
+            and contract.liability_issuer_id not in system.state.defaulted_agent_ids
+        ):
+            receivables.append(contract)
+
+    if not receivables and not creditor_weights:
+        # Check for network collapse: only one non-defaulted non-CB agent left
+        active_agents = [
+            a for a in system.state.agents.values()
+            if a.kind != AgentKind.CENTRAL_BANK and not a.defaulted
+        ]
+        if len(active_agents) <= 1:
+            remaining = active_agents[0].id if active_agents else None
+            system.log(
+                EventKind.NETWORK_COLLAPSED,
+                defaulted_agent=defaulted_agent_id,
+                remaining_agent=remaining,
+            )
+        return reassignments
+
+    if not creditor_weights:
+        # No creditors to reassign to — receivables become debt relief
+        for receivable in receivables:
+            _remove_contract(system, receivable.id)
+        return reassignments
+
+    for receivable in receivables:
+        debtor_id = receivable.liability_issuer_id
+        original_amount = receivable.amount
+        maturity_distance = receivable.maturity_distance
+        if maturity_distance is None:
+            if receivable.due_day is not None:
+                maturity_distance = max(1, receivable.due_day - day)
+            else:
+                maturity_distance = 1
+
+        new_due_day = day + maturity_distance
+
+        # Check for ring collapse: single creditor == debtor
+        if len(creditor_weights) == 1:
+            sole_creditor = next(iter(creditor_weights))
+            if sole_creditor == debtor_id:
+                # Self-loop: remove the receivable (debt cancelled)
+                system.log(
+                    EventKind.RING_COLLAPSED,
+                    defaulted_agent=defaulted_agent_id,
+                    remaining_agent=debtor_id,
+                    removed_payable=receivable.id,
+                )
+                _remove_contract(system, receivable.id)
+                continue
+
+        # Remove the original receivable
+        old_payable_id = receivable.id
+        _remove_contract(system, old_payable_id)
+
+        # Create new payables pro-rata
+        for creditor_id, weight in creditor_weights.items():
+            # Skip self-loops
+            if creditor_id == debtor_id:
+                continue
+
+            new_amount = int(Decimal(str(original_amount)) * weight)
+            if new_amount < 1:
+                continue  # Skip tiny amounts
+
+            new_payable = Payable(
+                id=system.new_contract_id("PAY"),
+                kind=InstrumentKind.PAYABLE,
+                amount=new_amount,
+                denom="X",
+                asset_holder_id=creditor_id,
+                liability_issuer_id=debtor_id,
+                due_day=new_due_day,
+                maturity_distance=maturity_distance,
+            )
+            system.add_contract(new_payable)
+
+            system.log(
+                EventKind.RECEIVABLE_REASSIGNED,
+                defaulted_agent=defaulted_agent_id,
+                debtor=debtor_id,
+                new_creditor=creditor_id,
+                old_payable=old_payable_id,
+                new_payable=new_payable.id,
+                amount=new_amount,
+                weight=float(weight),
+                maturity_distance=maturity_distance,
+                new_due_day=new_due_day,
+            )
+
+            system.log(
+                EventKind.PAYABLE_CREATED,
+                contract_id=new_payable.id,
+                debtor=debtor_id,
+                creditor=creditor_id,
+                amount=new_amount,
+                due_day=new_due_day,
+                maturity_distance=maturity_distance,
+                reason="receivable_reassignment",
+            )
+
+            reassignments.append({
+                "debtor": debtor_id,
+                "new_creditor": creditor_id,
+                "old_payable": old_payable_id,
+                "new_payable": new_payable.id,
+                "amount": new_amount,
+                "weight": float(weight),
+            })
+
+    return reassignments
+
+
 def _reconnect_ring(
     system: System, defaulted_agent_id: str, successor_id: str, day: int
 ) -> dict[str, object] | None:
@@ -566,6 +747,11 @@ def _reconnect_ring(
     Returns:
         Dict with reconnection info, or None if reconnection not possible
     """
+    warnings.warn(
+        "_reconnect_ring() is deprecated. Use _reassign_receivables() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     # Find predecessor: an active ring payable where asset_holder_id == defaulted_agent_id
     # (i.e., someone owes the defaulted agent).
     # NOTE: We intentionally use asset_holder_id (original creditor), NOT effective_creditor,
@@ -1379,7 +1565,7 @@ def _handle_payable_default(
         amount=remaining,
     )
 
-    ring_successor_id = payable.asset_holder_id
+    creditor_weights = _collect_creditor_weights(system, debtor.id)
     _remove_contract(system, payable.id)
     _expel_agent(
         system,
@@ -1391,8 +1577,7 @@ def _handle_payable_default(
         cancelled_aliases=cancelled_aliases,
     )
     _update_risk_history(system, day=day, issuer_id=debtor.id, defaulted=True)
-    if rollover_enabled:
-        _reconnect_ring(system, debtor.id, ring_successor_id, day)
+    _reassign_receivables(system, debtor.id, creditor_weights, day)
     return False
 
 

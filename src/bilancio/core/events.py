@@ -61,6 +61,8 @@ class EventKind(str, Enum):
     # ── Ring topology events ─────────────────────────────────────────
     RING_RECONNECTED = "RingReconnected"
     RING_COLLAPSED = "RingCollapsed"
+    RECEIVABLE_REASSIGNED = "ReceivableReassigned"
+    NETWORK_COLLAPSED = "NetworkCollapsed"
 
     # ── Interbank / clearing events ──────────────────────────────────
     INTERBANK_CLEARED = "InterbankCleared"

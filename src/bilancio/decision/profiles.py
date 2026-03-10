@@ -104,6 +104,8 @@ class VBTProfile:
     adaptive_base_spreads: bool = False       # [PRE] base spreads scale with kappa stress
     adaptive_convex_spreads: bool = False     # [RUN] O = base + sens * p^2/(1-p)
     term_strength: Decimal = Decimal("0.5")   # dampening for term-structure hazard rate
+    mu_tilt_strength: Decimal = Decimal("0.15")   # mu-driven per-bucket M term structure tilt
+    kappa_spread_strength: Decimal = Decimal("0.5")  # kappa-driven base spread scaling
 
 
 @dataclass(frozen=True)

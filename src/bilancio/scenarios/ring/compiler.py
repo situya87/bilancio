@@ -15,6 +15,7 @@ from bilancio.config.models import (
     RingExplorerGeneratorConfig,
     RingExplorerParamsModel,
 )
+from bilancio.scenarios.ring.topology import DebtEdge, topology_from_config
 
 # Ensure ample precision for Decimal arithmetic when scaling Dirichlet weights
 getcontext().prec = 28
@@ -52,6 +53,7 @@ class RingExplorerParams:
     maturity: MaturitySpec
     currency: str
     policy_overrides: dict[str, Any] | None
+    topology_config: dict[str, Any] | None = None
 
     @classmethod
     def from_model(cls, model: RingExplorerParamsModel) -> RingExplorerParams:
@@ -92,6 +94,10 @@ class RingExplorerParams:
         if model.policy_overrides is not None:
             policy_overrides = model.policy_overrides.model_dump(exclude_none=True)
 
+        topology_config = None
+        if hasattr(model, 'topology_config') and model.topology_config is not None:
+            topology_config = model.topology_config
+
         return cls(
             n_agents=model.n_agents,
             seed=model.seed,
@@ -102,6 +108,7 @@ class RingExplorerParams:
             maturity=maturity_spec,
             currency=model.currency,
             policy_overrides=policy_overrides,
+            topology_config=topology_config,
         )
 
 
@@ -140,11 +147,15 @@ def compile_ring_explorer(
             }
         )
 
-    # Create ring payables
-    for idx, amount in enumerate(payable_amounts):
-        from_agent = f"H{idx + 1}"
-        to_agent = f"H{(idx + 1) % params.n_agents + 1}"
-        due_day = due_days[idx]
+    # Create payables using topology
+    topology = topology_from_config(getattr(params, 'topology_config', None))
+    edges = topology.generate_edges(params.n_agents, random.Random(params.seed + 1000))
+    edge_amounts = _distribute_amounts_to_edges(payable_amounts, edges, params.n_agents)
+    edge_due_days = _expand_due_days(due_days, edges, params.n_agents)
+
+    for edge, amount, due_day in zip(edges, edge_amounts, edge_due_days):
+        from_agent = edge.debtor
+        to_agent = edge.creditor
         initial_actions.append(
             {
                 "create_payable": {
@@ -363,11 +374,15 @@ def compile_ring_explorer_balanced(
                 }
             )
 
-    # Create ring payables (trader-to-trader, original structure)
-    for idx, amount in enumerate(base_payable_amounts):
-        from_agent = f"H{idx + 1}"
-        to_agent = f"H{(idx + 1) % params.n_agents + 1}"
-        due_day = due_days[idx]
+    # Create ring payables (trader-to-trader, using topology)
+    topology = topology_from_config(getattr(params, 'topology_config', None))
+    edges = topology.generate_edges(params.n_agents, random.Random(params.seed + 1000))
+    edge_amounts = _distribute_amounts_to_edges(base_payable_amounts, edges, params.n_agents)
+    edge_due_days = _expand_due_days(due_days, edges, params.n_agents)
+
+    for edge, amount, due_day in zip(edges, edge_amounts, edge_due_days):
+        from_agent = edge.debtor
+        to_agent = edge.creditor
         initial_actions.append(
             {
                 "create_payable": {
@@ -710,6 +725,7 @@ def compile_ring_explorer_balanced(
             "cb_lending_cutoff_day": cb_lending_cutoff_day,
             "equalize_capacity": equalize_capacity,
             "reserve_ratio": float(reserve_ratio) if reserve_ratio is not None else None,
+            "topology_config": getattr(params, 'topology_config', None),
         },
     }
 
@@ -758,6 +774,7 @@ def compile_ring_explorer_balanced(
             }
             if kappa is not None:
                 scenario["balanced_dealer"]["kappa"] = str(kappa)
+            scenario["balanced_dealer"]["mu"] = str(params.maturity.mu)
 
     if config.compile.emit_yaml:
         _emit_yaml(
@@ -845,6 +862,86 @@ def _build_action_specs(
         specs.append(lender_spec)
 
     return specs
+
+
+def _distribute_amounts_to_edges(
+    per_agent_amounts: list[Decimal],
+    edges: list[DebtEdge],
+    n_agents: int,
+) -> list[Decimal]:
+    """Distribute per-agent total amounts across outgoing edges.
+
+    For the ring (1 edge per agent), this is identity.
+    For k-regular (k edges per agent), each agent's total is split evenly.
+
+    Args:
+        per_agent_amounts: Total amount per agent (index 0 = H1, etc.)
+        edges: Debt edges from topology
+        n_agents: Number of agents
+
+    Returns:
+        List of amounts, one per edge, in the same order as edges
+    """
+    # Count outgoing edges per agent
+    out_degree: dict[str, int] = {}
+    for edge in edges:
+        out_degree[edge.debtor] = out_degree.get(edge.debtor, 0) + 1
+
+    # Assign amounts: split each agent's total evenly across outgoing edges
+    edge_amounts: list[Decimal] = []
+    agent_edge_count: dict[str, int] = {}  # track which edge index per agent
+    for edge in edges:
+        debtor = edge.debtor
+        # Extract agent index (H1 -> 0, H2 -> 1, etc.)
+        agent_idx = int(debtor[1:]) - 1
+        if agent_idx >= len(per_agent_amounts):
+            edge_amounts.append(Decimal("0"))
+            continue
+
+        total = per_agent_amounts[agent_idx]
+        degree = out_degree.get(debtor, 1)
+
+        count = agent_edge_count.get(debtor, 0)
+        agent_edge_count[debtor] = count + 1
+
+        if count == degree - 1:
+            # Last edge: assign remainder to avoid rounding errors
+            already_assigned = sum(
+                edge_amounts[i] for i, e in enumerate(edges[:len(edge_amounts)])
+                if e.debtor == debtor
+            )
+            edge_amounts.append(total - already_assigned)
+        else:
+            edge_amounts.append(total / Decimal(degree))
+
+    return edge_amounts
+
+
+def _expand_due_days(
+    per_agent_due_days: list[int],
+    edges: list[DebtEdge],
+    n_agents: int,
+) -> list[int]:
+    """Expand per-agent due days to per-edge due days.
+
+    All edges from the same agent share the same due day.
+
+    Args:
+        per_agent_due_days: Due day per agent
+        edges: Debt edges from topology
+        n_agents: Number of agents
+
+    Returns:
+        List of due days, one per edge
+    """
+    result: list[int] = []
+    for edge in edges:
+        agent_idx = int(edge.debtor[1:]) - 1
+        if agent_idx < len(per_agent_due_days):
+            result.append(per_agent_due_days[agent_idx])
+        else:
+            result.append(1)
+    return result
 
 
 def _draw_payables(

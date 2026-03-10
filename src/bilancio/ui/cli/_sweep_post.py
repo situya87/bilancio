@@ -31,6 +31,7 @@ VALID_POST_ANALYSES = (
     "treynor",
     "comparison",
     "report",
+    "notebook",
 )
 
 
@@ -302,7 +303,7 @@ def _offer_post_sweep_analysis(
     if not result.data_analyses and not result.visualizations:
         return
 
-    core_viz = [name for name in result.visualizations if name not in ("treynor", "comparison", "report")]
+    core_viz = [name for name in result.visualizations if name not in ("treynor", "comparison", "report", "notebook")]
     if core_viz:
         click.echo(f"\nRunning core visualizations: {', '.join(core_viz)}...")
         try:
@@ -451,6 +452,20 @@ def _offer_post_sweep_analysis(
             click.echo(f"  Report generation failed: {optional_extra_message('comprehensive report', 'analysis')} ({exc})")
         except Exception as exc:
             click.echo(f"  Report generation failed: {exc}")
+
+    if "notebook" in result.visualizations:
+        click.echo("\nGenerating presentation notebook...")
+        try:
+            from bilancio.analysis.notebook_generator import generate_sweep_notebook
+
+            analysis_dir = out_dir / "aggregate" / "analysis"
+            analysis_dir.mkdir(parents=True, exist_ok=True)
+            nb_path = generate_sweep_notebook(out_dir, sweep_type, analysis_dir)
+            click.echo(f"  notebook: {nb_path}")
+        except ImportError as exc:
+            click.echo(f"  Notebook generation failed: {optional_extra_message('presentation notebook', 'analysis')} ({exc})")
+        except Exception as exc:
+            click.echo(f"  Notebook generation failed: {exc}")
 
     analysis_dir = out_dir / "aggregate" / "analysis"
     if analysis_dir.is_dir():

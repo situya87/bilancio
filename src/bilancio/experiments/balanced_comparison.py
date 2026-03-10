@@ -73,6 +73,9 @@ class BalancedComparisonResult:
     active_run_id: str
     active_status: str
 
+    # Network topology (Plan 055)
+    topology: str = "ring"
+
     # Cascade/contagion metrics
     n_defaults_passive: int = 0
     n_defaults_active: int = 0
@@ -525,6 +528,12 @@ class BalancedComparisonConfig(BaseModel):
     )
     monotonicities: list[Decimal] = Field(default_factory=lambda: [Decimal("0")])
 
+    # Network topology (Plan 055)
+    topologies: list[dict[str, Any]] = Field(
+        default_factory=lambda: [{"type": "ring"}],
+        description="Network topologies to sweep (default: ring only)",
+    )
+
     # Balanced dealer parameters (Plan 024)
     face_value: Decimal = Field(
         default=Decimal("20"), description="Face value S (cashflow at maturity)"
@@ -792,6 +801,7 @@ class BalancedComparisonRunner:
         "mu",
         "monotonicity",
         "seed",
+        "topology",
         "face_value",
         "outside_mid_ratio",
         "big_entity_share",
@@ -1071,6 +1081,7 @@ class BalancedComparisonRunner:
                         row["mu"],
                         row["monotonicity"],
                         row["outside_mid_ratio"],
+                        row.get("topology", "ring"),
                     )
                     self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
 
@@ -1097,9 +1108,10 @@ class BalancedComparisonRunner:
         mu: Decimal,
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
-    ) -> tuple[str, str, str, str, str]:
+        topology: str = "ring",
+    ) -> tuple[str, str, str, str, str, str]:
         """Create a key for tracking completed pairs."""
-        return (str(kappa), str(concentration), str(mu), str(monotonicity), str(outside_mid_ratio))
+        return (str(kappa), str(concentration), str(mu), str(monotonicity), str(outside_mid_ratio), topology)
 
     def _format_time(self, seconds: float) -> str:
         """Format seconds as human-readable time."""
@@ -1789,6 +1801,7 @@ class BalancedComparisonRunner:
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
         seed: int,
+        topology: str = "ring",
     ) -> BalancedComparisonResult:
         """Build a BalancedComparisonResult from a dict of arm_name -> RingRunSummary."""
         passive = arm_summaries["passive"]
@@ -1918,6 +1931,7 @@ class BalancedComparisonRunner:
             mu=mu,
             monotonicity=monotonicity,
             seed=seed,
+            topology=topology,
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,
@@ -2059,6 +2073,7 @@ class BalancedComparisonRunner:
             * len(self.config.mus)
             * len(self.config.monotonicities)
             * len(self.config.outside_mid_ratios)
+            * len(self.config.topologies)
         )
 
         cells_done = sum(
@@ -2070,11 +2085,12 @@ class BalancedComparisonRunner:
 
         arm_names = [a[0] for a in arm_defs]
         logger.info(
-            "Starting BATCH balanced comparison sweep: %d kappas × %d concentrations × %d mus × %d ρ = %d combos × %d arms",
+            "Starting BATCH balanced comparison sweep: %d kappas × %d concentrations × %d mus × %d ρ × %d topologies = %d combos × %d arms",
             len(self.config.kappas),
             len(self.config.concentrations),
             len(self.config.mus),
             len(self.config.outside_mid_ratios),
+            len(self.config.topologies),
             total_combos,
             n_arms,
         )
@@ -2088,9 +2104,9 @@ class BalancedComparisonRunner:
         self._start_time = time.time()
 
         # Phase 1: Prepare all runs for all enabled arms
-        # Each entry: (arm_preps_dict, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed)
+        # Each entry: (arm_preps_dict, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed, topology_label)
         prepared_combos: list[
-            tuple[dict[str, PreparedRun], Decimal, Decimal, Decimal, Decimal, Decimal, int]
+            tuple[dict[str, PreparedRun], Decimal, Decimal, Decimal, Decimal, Decimal, int, str]
         ] = []
 
         # Cache runners per outside_mid_ratio to avoid re-creating them
@@ -2107,39 +2123,45 @@ class BalancedComparisonRunner:
                 for concentration in self.config.concentrations:
                     for mu in self.config.mus:
                         for monotonicity in self.config.monotonicities:
-                            key = self._make_key(
-                                kappa, concentration, mu, monotonicity, outside_mid_ratio
-                            )
-                            completed = self._completed_counts.get(key, 0)
-                            reps_needed = max(0, self.config.n_replicates - completed)
-
-                            for _rep in range(reps_needed):
+                            for _rep in range(self.config.n_replicates):
+                                # Draw seed ONCE per replicate — shared across all topologies
                                 seed = self._next_seed()
 
-                                # Prepare all enabled arms for this combo
-                                arm_preps: dict[str, PreparedRun] = {}
-                                for arm_name, phase, _getter_name, _regime in arm_defs:
-                                    runner = runners_cache[(outside_mid_ratio, arm_name)]
-                                    arm_preps[arm_name] = runner._prepare_run(
-                                        phase=phase,
-                                        kappa=kappa,
-                                        concentration=concentration,
-                                        mu=mu,
-                                        monotonicity=monotonicity,
-                                        seed=seed,
+                                for topology_config in self.config.topologies:
+                                    topology_label = topology_config.get("type", "ring")
+                                    key = self._make_key(
+                                        kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                        topology=topology_label,
                                     )
+                                    completed = self._completed_counts.get(key, 0)
+                                    if completed >= self.config.n_replicates:
+                                        continue
 
-                                prepared_combos.append(
-                                    (
-                                        arm_preps,
-                                        kappa,
-                                        concentration,
-                                        mu,
-                                        monotonicity,
-                                        outside_mid_ratio,
-                                        seed,
+                                    # Prepare all enabled arms for this combo
+                                    arm_preps: dict[str, PreparedRun] = {}
+                                    for arm_name, phase, _getter_name, _regime in arm_defs:
+                                        runner = runners_cache[(outside_mid_ratio, arm_name)]
+                                        arm_preps[arm_name] = runner._prepare_run(
+                                            phase=phase,
+                                            kappa=kappa,
+                                            concentration=concentration,
+                                            mu=mu,
+                                            monotonicity=monotonicity,
+                                            seed=seed,
+                                        )
+
+                                    prepared_combos.append(
+                                        (
+                                            arm_preps,
+                                            kappa,
+                                            concentration,
+                                            mu,
+                                            monotonicity,
+                                            outside_mid_ratio,
+                                            seed,
+                                            topology_label,
+                                        )
                                     )
-                                )
 
         if not prepared_combos:
             print("All combos already completed!", flush=True)
@@ -2198,6 +2220,7 @@ class BalancedComparisonRunner:
             monotonicity,
             outside_mid_ratio,
             seed,
+            topology_label,
         ) in enumerate(prepared_combos):
             # Finalize each arm
             arm_summaries: dict[str, RingRunSummary] = {}
@@ -2208,11 +2231,12 @@ class BalancedComparisonRunner:
 
             # Build BalancedComparisonResult from all arm summaries
             result = self._build_result_from_summaries(
-                arm_summaries, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed
+                arm_summaries, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed,
+                topology=topology_label,
             )
 
             self.comparison_results.append(result)
-            comp_key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio)
+            comp_key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology=topology_label)
             self._completed_counts[comp_key] = self._completed_counts.get(comp_key, 0) + 1
 
             # Persist all arm runs to Supabase
@@ -2279,6 +2303,7 @@ class BalancedComparisonRunner:
             * len(self.config.mus)
             * len(self.config.monotonicities)
             * len(self.config.outside_mid_ratios)
+            * len(self.config.topologies)
         )
 
         cells_done = sum(
@@ -2289,11 +2314,12 @@ class BalancedComparisonRunner:
         remaining = total_pairs - skipped
 
         logger.info(
-            "Starting balanced comparison sweep: %d kappas × %d concentrations × %d mus × %d ρ = %d pairs",
+            "Starting balanced comparison sweep: %d kappas × %d concentrations × %d mus × %d ρ × %d topologies = %d pairs",
             len(self.config.kappas),
             len(self.config.concentrations),
             len(self.config.mus),
             len(self.config.outside_mid_ratios),
+            len(self.config.topologies),
             total_pairs,
         )
 
@@ -2311,60 +2337,69 @@ class BalancedComparisonRunner:
                         for monotonicity in self.config.monotonicities:
                             pair_idx += 1
 
-                            # Check how many replicates still needed
-                            key = self._make_key(
-                                kappa, concentration, mu, monotonicity, outside_mid_ratio
-                            )
-                            completed = self._completed_counts.get(key, 0)
-                            reps_needed = max(0, self.config.n_replicates - completed)
-                            if reps_needed == 0:
-                                continue
+                            for rep in range(self.config.n_replicates):
+                                # Draw seed ONCE per replicate — shared across all topologies
+                                seed = self._next_seed()
 
-                            for rep in range(reps_needed):
-                                rep_label = f" rep {completed + rep + 1}/{self.config.n_replicates}" if self.config.n_replicates > 1 else ""
+                                for topology_config in self.config.topologies:
+                                    topology_label = topology_config.get("type", "ring")
 
-                                # Progress and ETA
-                                if completed_this_run > 0:
+                                    # Check how many replicates still needed for this topology
+                                    key = self._make_key(
+                                        kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                        topology=topology_label,
+                                    )
+                                    completed = self._completed_counts.get(key, 0)
+                                    if completed >= self.config.n_replicates:
+                                        continue
+
+                                    rep_label = f" rep {completed + rep + 1}/{self.config.n_replicates}" if self.config.n_replicates > 1 else ""
+
+                                    # Progress and ETA
+                                    if completed_this_run > 0:
+                                        elapsed = time.time() - self._start_time
+                                        avg_time = elapsed / completed_this_run
+                                        eta = avg_time * (remaining * self.config.n_replicates - completed_this_run)
+                                        progress_str = (
+                                            f"[{pair_idx}/{total_pairs}] ({completed_this_run} done) "
+                                            f"ETA: {self._format_time(eta)}"
+                                        )
+                                    else:
+                                        progress_str = f"[{pair_idx}/{total_pairs}]"
+
+                                    topo_str = f", topo={topology_label}" if topology_label != "ring" else ""
+                                    print(
+                                        f"{progress_str} Running{rep_label}: κ={kappa}, c={concentration}, μ={mu}, ρ={outside_mid_ratio}{topo_str}",
+                                        flush=True,
+                                    )
+
+                                    result = self._run_pair(
+                                        kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                        topology=topology_label,
+                                        seed=seed,
+                                    )
+                                    self.comparison_results.append(result)
+                                    self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
+                                    completed_this_run += 1
+
+                                    # Write incremental results
+                                    self._write_comparison_csv()
+
+                                    # Log completion with timing
                                     elapsed = time.time() - self._start_time
-                                    avg_time = elapsed / completed_this_run
-                                    eta = avg_time * (remaining * self.config.n_replicates - completed_this_run)
-                                    progress_str = (
-                                        f"[{pair_idx}/{total_pairs}] ({completed_this_run} done) "
-                                        f"ETA: {self._format_time(eta)}"
-                                    )
-                                else:
-                                    progress_str = f"[{pair_idx}/{total_pairs}]"
-
-                                print(
-                                    f"{progress_str} Running{rep_label}: κ={kappa}, c={concentration}, μ={mu}, ρ={outside_mid_ratio}",
-                                    flush=True,
-                                )
-
-                                result = self._run_pair(
-                                    kappa, concentration, mu, monotonicity, outside_mid_ratio
-                                )
-                                self.comparison_results.append(result)
-                                self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
-                                completed_this_run += 1
-
-                                # Write incremental results
-                                self._write_comparison_csv()
-
-                                # Log completion with timing
-                                elapsed = time.time() - self._start_time
-                                if result.delta_passive is not None and result.delta_active is not None:
-                                    print(
-                                        f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
-                                        f"δ_passive={result.delta_passive:.3f}, δ_active={result.delta_active:.3f}, "
-                                        f"effect={result.trading_effect:.3f}",
-                                        flush=True,
-                                    )
-                                else:
-                                    print(
-                                        f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
-                                        f"(one or both runs failed)",
-                                        flush=True,
-                                    )
+                                    if result.delta_passive is not None and result.delta_active is not None:
+                                        print(
+                                            f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
+                                            f"δ_passive={result.delta_passive:.3f}, δ_active={result.delta_active:.3f}, "
+                                            f"effect={result.trading_effect:.3f}",
+                                            flush=True,
+                                        )
+                                    else:
+                                        print(
+                                            f"  Completed in {self._format_time(elapsed / completed_this_run)} avg | "
+                                            f"(one or both runs failed)",
+                                            flush=True,
+                                        )
 
         # Write final summary
         self._write_summary_json()
@@ -2408,13 +2443,16 @@ class BalancedComparisonRunner:
         mu: Decimal,
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
+        topology: str = "ring",
+        seed: int | None = None,
     ) -> BalancedComparisonResult:
         """Run one passive/active pair for given parameters."""
         passive_runner = self._get_passive_runner(outside_mid_ratio)
         active_runner = self._get_active_runner(outside_mid_ratio)
 
         # Use same seed for both runs
-        seed = self._next_seed()
+        if seed is None:
+            seed = self._next_seed()
 
         # Run passive (no trading)
         logger.info("  Running passive (no trading)...")
@@ -2635,6 +2673,7 @@ class BalancedComparisonRunner:
             mu=mu,
             monotonicity=monotonicity,
             seed=seed,
+            topology=topology,
             face_value=self.config.face_value,
             outside_mid_ratio=outside_mid_ratio,
             big_entity_share=self.config.big_entity_share,  # DEPRECATED
@@ -2895,6 +2934,7 @@ class BalancedComparisonRunner:
                     "mu": str(result.mu),
                     "monotonicity": str(result.monotonicity),
                     "seed": str(result.seed),
+                    "topology": result.topology,
                     "face_value": str(result.face_value),
                     "outside_mid_ratio": str(result.outside_mid_ratio),
                     "big_entity_share": str(result.big_entity_share),

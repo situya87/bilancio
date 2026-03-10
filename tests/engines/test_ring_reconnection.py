@@ -372,10 +372,10 @@ class TestSettleDueIntegration:
     """Integration tests that verify reconnection through settle_due."""
 
     def test_settle_due_triggers_reconnection(self):
-        """Verify settle_due calls _reconnect_ring when an agent defaults with rollover.
+        """Verify settle_due reassigns receivables when an agent defaults with rollover.
 
         H1 has no cash and defaults immediately. The predecessor payable H5→H1
-        hasn't been settled yet (it's later in iteration order), so reconnection
+        hasn't been settled yet (it's later in iteration order), so reassignment
         can find it and create H5→H2.
         """
         system, agents, payables = _ring_system(5)
@@ -392,15 +392,15 @@ class TestSettleDueIntegration:
 
         assert "H1" in system.state.defaulted_agent_ids
 
-        reconnected_events = [e for e in system.state.events if e["kind"] == "RingReconnected"]
-        h1_reconnect = [e for e in reconnected_events if e["defaulted_agent"] == "H1"]
-        assert len(h1_reconnect) == 1
-        evt = h1_reconnect[0]
-        assert evt["predecessor"] == "H5"
-        assert evt["successor"] == "H2"
+        reassigned_events = [e for e in system.state.events if e["kind"] == "ReceivableReassigned"]
+        h1_reassign = [e for e in reassigned_events if e["defaulted_agent"] == "H1"]
+        assert len(h1_reassign) == 1
+        evt = h1_reassign[0]
+        assert evt["debtor"] == "H5"
+        assert evt["new_creditor"] == "H2"
 
     def test_settle_due_no_reconnection_first_agent(self):
-        """H1 defaults (first in settlement order, no cash), reconnects H5→H2."""
+        """H1 defaults (first in settlement order, no cash), reassigns H5→H2."""
         system, agents, payables = _ring_system(5)
         system.state.day = 3
 
@@ -410,12 +410,12 @@ class TestSettleDueIntegration:
 
         assert "H1" in system.state.defaulted_agent_ids
 
-        reconnected_events = [e for e in system.state.events if e["kind"] == "RingReconnected"]
-        # At least H1's default should trigger reconnection
-        h1_reconnect = [e for e in reconnected_events if e["defaulted_agent"] == "H1"]
-        assert len(h1_reconnect) == 1
-        assert h1_reconnect[0]["predecessor"] == "H5"
-        assert h1_reconnect[0]["successor"] == "H2"
+        reassigned_events = [e for e in system.state.events if e["kind"] == "ReceivableReassigned"]
+        # At least H1's default should trigger reassignment
+        h1_reassign = [e for e in reassigned_events if e["defaulted_agent"] == "H1"]
+        assert len(h1_reassign) == 1
+        assert h1_reassign[0]["debtor"] == "H5"
+        assert h1_reassign[0]["new_creditor"] == "H2"
 
 
 # ---------------------------------------------------------------------------

@@ -400,6 +400,17 @@ def _initialize_balanced_market_makers(
         for k in BASE_SPREAD_BY_BUCKET:
             BASE_SPREAD_BY_BUCKET[k] = BASE_SPREAD_BY_BUCKET[k] * max(Decimal("1"), stress_factor)
 
+    # Kappa-driven spread scaling (Plan 055): lower kappa → wider initial spreads
+    if subsystem.kappa is not None:
+        kappa = subsystem.kappa
+        kappa_stress = max(Decimal("0"), Decimal("1") - kappa) / (Decimal("1") + kappa)
+        kappa_spread_strength = Decimal("0.5")
+        if vbt_profile is not None and hasattr(vbt_profile, 'kappa_spread_strength'):
+            kappa_spread_strength = vbt_profile.kappa_spread_strength
+        spread_factor = Decimal("1") + kappa_spread_strength * kappa_stress
+        for k in BASE_SPREAD_BY_BUCKET:
+            BASE_SPREAD_BY_BUCKET[k] = BASE_SPREAD_BY_BUCKET[k] * spread_factor
+
     # VBT mid = ρ × (1 - P_prior) via pricing model for consistency
     if subsystem.vbt_pricing_model is not None:
         credit_adjusted_mid = subsystem.vbt_pricing_model.compute_mid(
@@ -407,6 +418,22 @@ def _initialize_balanced_market_makers(
         )
     else:
         credit_adjusted_mid = Decimal(1) - shared_prior
+
+    # Mu-driven term structure tilt on M (Plan 055)
+    BUCKET_TAU_MIDPOINTS = {"short": Decimal("2"), "mid": Decimal("6"), "long": Decimal("12")}
+    tau_mid = sum(BUCKET_TAU_MIDPOINTS.values()) / Decimal(str(len(BUCKET_TAU_MIDPOINTS)))
+    mu_tilt_strength = Decimal("0.15")
+    if vbt_profile is not None and hasattr(vbt_profile, 'mu_tilt_strength'):
+        mu_tilt_strength = vbt_profile.mu_tilt_strength
+
+    mu_tilt_factors: dict[str, Decimal] = {}
+    if subsystem.mu is not None:
+        mu_direction = Decimal("0.5") - subsystem.mu
+        for bucket_id, tau_avg in BUCKET_TAU_MIDPOINTS.items():
+            tau_position = (tau_mid - tau_avg) / tau_mid
+            risk_tilt = mu_direction * tau_position
+            mu_tilt_factors[bucket_id] = Decimal("1") - mu_tilt_strength * risk_tilt
+    subsystem.mu_tilt_factors = mu_tilt_factors
 
     for bucket_config in subsystem.bucket_configs:
         bucket_id = bucket_config.name
@@ -423,6 +450,10 @@ def _initialize_balanced_market_makers(
 
         # M = ρ × (1 - P_prior) (credit discount with outside mid ratio)
         M = credit_adjusted_mid
+
+        # Apply mu tilt factor if available (Plan 055)
+        if bucket_id in mu_tilt_factors:
+            M = M * mu_tilt_factors[bucket_id]
 
         # Per-bucket spread: base_spread + spread_sensitivity × P_prior
         # spread_sensitivity is from the VBT pricing model (default 0.6)

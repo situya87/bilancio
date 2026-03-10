@@ -167,6 +167,7 @@ class DealerSubsystem:
     alpha_vbt: Decimal = Decimal(0)
     alpha_trader: Decimal = Decimal(0)
     kappa: Decimal | None = None
+    mu: Decimal | None = None
 
     # VBT credit facility: inventory ratio below which VBT injects cash
     layoff_threshold: Decimal = Decimal("0.7")
@@ -198,6 +199,9 @@ class DealerSubsystem:
 
     # Observed default rate (Plan 050: within-run adaptation)
     observed_default_rate: Decimal = Decimal("0")
+
+    # Per-bucket mu tilt factors for VBT M adjustment
+    mu_tilt_factors: dict[str, Decimal] = field(default_factory=dict)
 
     # Concentration limit (Feature 3): max fraction of total dealer inventory
     # from a single issuer.  0 = disabled (no limit).
@@ -455,6 +459,7 @@ def initialize_balanced_dealer_subsystem(
     alpha_vbt: Decimal = Decimal("0"),
     alpha_trader: Decimal = Decimal("0"),
     kappa: Decimal | None = None,
+    mu: Decimal | None = None,
     trader_profile: TraderProfile | None = None,
     vbt_profile: VBTProfile | None = None,
     trader_information_profile: InformationProfile | None = None,
@@ -526,6 +531,7 @@ def initialize_balanced_dealer_subsystem(
         alpha_vbt=alpha_vbt,
         alpha_trader=alpha_trader,
         kappa=kappa,
+        mu=mu,
     )
 
     # Attach decision profiles

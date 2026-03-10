@@ -319,6 +319,10 @@ def _update_vbt_credit_mids(
             else:
                 vbt.M = new_M  # existing single-value behavior
 
+            # Apply mu tilt factor (Plan 055)
+            if bucket_id in subsystem.mu_tilt_factors:
+                vbt.M = vbt.M * subsystem.mu_tilt_factors[bucket_id]
+
             # Per-bucket base spread for daily update (falls back to initial_spread)
             base_O = subsystem.base_spread_by_bucket.get(
                 bucket_id,
@@ -356,6 +360,10 @@ def _update_vbt_credit_mids(
 
         for bucket_id, vbt in subsystem.vbts.items():
             vbt.M = new_M
+
+            # Apply mu tilt factor (Plan 055)
+            if bucket_id in subsystem.mu_tilt_factors:
+                vbt.M = vbt.M * subsystem.mu_tilt_factors[bucket_id]
 
             # Update spread if spread_sensitivity > 0
             if spread_sens > 0:
