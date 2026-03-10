@@ -2659,11 +2659,11 @@ class TestBalancedRunAllSequential:
 
         pair_calls = []
 
-        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology="ring"):
+        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology="ring", seed=None):
             pair_calls.append(kappa)
             return BalancedComparisonResult(
                 kappa=kappa, concentration=concentration, mu=mu,
-                monotonicity=monotonicity, seed=1,
+                monotonicity=monotonicity, seed=seed or 1,
                 face_value=Decimal("20"), outside_mid_ratio=outside_mid_ratio,
                 big_entity_share=Decimal("0.25"),
                 delta_passive=Decimal("0.50"), phi_passive=Decimal("0.50"),

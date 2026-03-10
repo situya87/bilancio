@@ -2112,28 +2112,30 @@ class BalancedComparisonRunner:
         # Cache runners per outside_mid_ratio to avoid re-creating them
         runners_cache: dict[tuple[Decimal, str], Any] = {}
 
-        for topology_config in self.config.topologies:
-            topology_label = topology_config.get("type", "ring")
-            for outside_mid_ratio in self.config.outside_mid_ratios:
-                # Pre-create runners for this outside_mid_ratio
-                for arm_name, _phase, getter_name, _regime in arm_defs:
-                    cache_key = (outside_mid_ratio, arm_name)
-                    if cache_key not in runners_cache:
-                        runners_cache[cache_key] = getattr(self, getter_name)(outside_mid_ratio)
+        for outside_mid_ratio in self.config.outside_mid_ratios:
+            # Pre-create runners for this outside_mid_ratio
+            for arm_name, _phase, getter_name, _regime in arm_defs:
+                cache_key = (outside_mid_ratio, arm_name)
+                if cache_key not in runners_cache:
+                    runners_cache[cache_key] = getattr(self, getter_name)(outside_mid_ratio)
 
-                for kappa in self.config.kappas:
-                    for concentration in self.config.concentrations:
-                        for mu in self.config.mus:
-                            for monotonicity in self.config.monotonicities:
-                                key = self._make_key(
-                                    kappa, concentration, mu, monotonicity, outside_mid_ratio,
-                                    topology=topology_label,
-                                )
-                                completed = self._completed_counts.get(key, 0)
-                                reps_needed = max(0, self.config.n_replicates - completed)
+            for kappa in self.config.kappas:
+                for concentration in self.config.concentrations:
+                    for mu in self.config.mus:
+                        for monotonicity in self.config.monotonicities:
+                            for _rep in range(self.config.n_replicates):
+                                # Draw seed ONCE per replicate — shared across all topologies
+                                seed = self._next_seed()
 
-                                for _rep in range(reps_needed):
-                                    seed = self._next_seed()
+                                for topology_config in self.config.topologies:
+                                    topology_label = topology_config.get("type", "ring")
+                                    key = self._make_key(
+                                        kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                        topology=topology_label,
+                                    )
+                                    completed = self._completed_counts.get(key, 0)
+                                    if completed >= self.config.n_replicates:
+                                        continue
 
                                     # Prepare all enabled arms for this combo
                                     arm_preps: dict[str, PreparedRun] = {}
@@ -2328,26 +2330,29 @@ class BalancedComparisonRunner:
         pair_idx = 0
         completed_this_run = 0
 
-        for topology_config in self.config.topologies:
-            topology_label = topology_config.get("type", "ring")
-            for outside_mid_ratio in self.config.outside_mid_ratios:
-                for kappa in self.config.kappas:
-                    for concentration in self.config.concentrations:
-                        for mu in self.config.mus:
-                            for monotonicity in self.config.monotonicities:
-                                pair_idx += 1
+        for outside_mid_ratio in self.config.outside_mid_ratios:
+            for kappa in self.config.kappas:
+                for concentration in self.config.concentrations:
+                    for mu in self.config.mus:
+                        for monotonicity in self.config.monotonicities:
+                            pair_idx += 1
 
-                                # Check how many replicates still needed
-                                key = self._make_key(
-                                    kappa, concentration, mu, monotonicity, outside_mid_ratio,
-                                    topology=topology_label,
-                                )
-                                completed = self._completed_counts.get(key, 0)
-                                reps_needed = max(0, self.config.n_replicates - completed)
-                                if reps_needed == 0:
-                                    continue
+                            for rep in range(self.config.n_replicates):
+                                # Draw seed ONCE per replicate — shared across all topologies
+                                seed = self._next_seed()
 
-                                for rep in range(reps_needed):
+                                for topology_config in self.config.topologies:
+                                    topology_label = topology_config.get("type", "ring")
+
+                                    # Check how many replicates still needed for this topology
+                                    key = self._make_key(
+                                        kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                        topology=topology_label,
+                                    )
+                                    completed = self._completed_counts.get(key, 0)
+                                    if completed >= self.config.n_replicates:
+                                        continue
+
                                     rep_label = f" rep {completed + rep + 1}/{self.config.n_replicates}" if self.config.n_replicates > 1 else ""
 
                                     # Progress and ETA
@@ -2371,6 +2376,7 @@ class BalancedComparisonRunner:
                                     result = self._run_pair(
                                         kappa, concentration, mu, monotonicity, outside_mid_ratio,
                                         topology=topology_label,
+                                        seed=seed,
                                     )
                                     self.comparison_results.append(result)
                                     self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
@@ -2438,13 +2444,15 @@ class BalancedComparisonRunner:
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
         topology: str = "ring",
+        seed: int | None = None,
     ) -> BalancedComparisonResult:
         """Run one passive/active pair for given parameters."""
         passive_runner = self._get_passive_runner(outside_mid_ratio)
         active_runner = self._get_active_runner(outside_mid_ratio)
 
         # Use same seed for both runs
-        seed = self._next_seed()
+        if seed is None:
+            seed = self._next_seed()
 
         # Run passive (no trading)
         logger.info("  Running passive (no trading)...")
