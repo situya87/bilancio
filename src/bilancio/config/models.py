@@ -1350,6 +1350,9 @@ class RingExplorerParamsModel(BaseModel):
     policy_overrides: PolicyOverrides | None = Field(
         None, description="Policy overrides to apply to generated scenario"
     )
+    topology_config: dict[str, Any] | None = Field(
+        None, description="Network topology config (e.g. {'type': 'k_regular', 'degree': 2})"
+    )
 
 
 class GeneratorCompileConfig(BaseModel):

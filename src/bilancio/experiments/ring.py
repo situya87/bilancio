@@ -691,6 +691,7 @@ class RingSweepRunner:
         monotonicity: Decimal,
         seed: int,
         *,
+        topology_config: dict[str, Any] | None = None,
         label: str | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> RingRunSummary:
@@ -844,6 +845,9 @@ class RingSweepRunner:
             },
             "compile": {"emit_yaml": False},
         }
+
+        if topology_config is not None:
+            generator_data["params"]["topology_config"] = topology_config
 
         generator_config = RingExplorerGeneratorConfig.model_validate(generator_data)
 
@@ -1202,6 +1206,7 @@ class RingSweepRunner:
         monotonicity: Decimal,
         seed: int,
         label: str = "",
+        topology_config: dict[str, Any] | None = None,
     ) -> PreparedRun:
         """Prepare a run without executing it.
 
@@ -1273,6 +1278,9 @@ class RingSweepRunner:
             },
             "compile": {"emit_yaml": False},
         }
+
+        if topology_config is not None:
+            generator_data["params"]["topology_config"] = topology_config
 
         generator_config = RingExplorerGeneratorConfig.model_validate(generator_data)
 

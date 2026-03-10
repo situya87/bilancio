@@ -1101,6 +1101,21 @@ class BalancedComparisonRunner:
         except EXTERNAL_OPERATION_ERRORS as e:
             logger.warning("Could not load existing results: %s", e)
 
+    @staticmethod
+    def _topology_label(topology_config: dict[str, Any]) -> str:
+        """Build a descriptive label from a topology config dict.
+
+        Examples: 'ring', 'k_regular_2', 'k_regular_3', 'erdos_renyi_0.1'.
+        """
+        ttype = topology_config.get("type", "ring")
+        if ttype == "k_regular":
+            degree = topology_config.get("degree", 2)
+            return f"k_regular_{degree}"
+        if ttype == "erdos_renyi":
+            edge_prob = topology_config.get("edge_prob", 0.1)
+            return f"erdos_renyi_{edge_prob}"
+        return ttype
+
     def _make_key(
         self,
         kappa: Decimal,
@@ -2128,7 +2143,7 @@ class BalancedComparisonRunner:
                                 seed = self._next_seed()
 
                                 for topology_config in self.config.topologies:
-                                    topology_label = topology_config.get("type", "ring")
+                                    topology_label = self._topology_label(topology_config)
                                     key = self._make_key(
                                         kappa, concentration, mu, monotonicity, outside_mid_ratio,
                                         topology=topology_label,
@@ -2148,6 +2163,7 @@ class BalancedComparisonRunner:
                                             mu=mu,
                                             monotonicity=monotonicity,
                                             seed=seed,
+                                            topology_config=topology_config,
                                         )
 
                                     prepared_combos.append(
@@ -2342,7 +2358,7 @@ class BalancedComparisonRunner:
                                 seed = self._next_seed()
 
                                 for topology_config in self.config.topologies:
-                                    topology_label = topology_config.get("type", "ring")
+                                    topology_label = self._topology_label(topology_config)
 
                                     # Check how many replicates still needed for this topology
                                     key = self._make_key(
@@ -2377,6 +2393,7 @@ class BalancedComparisonRunner:
                                         kappa, concentration, mu, monotonicity, outside_mid_ratio,
                                         topology=topology_label,
                                         seed=seed,
+                                        topology_config=topology_config,
                                     )
                                     self.comparison_results.append(result)
                                     self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
@@ -2445,6 +2462,7 @@ class BalancedComparisonRunner:
         outside_mid_ratio: Decimal,
         topology: str = "ring",
         seed: int | None = None,
+        topology_config: dict[str, Any] | None = None,
     ) -> BalancedComparisonResult:
         """Run one passive/active pair for given parameters."""
         passive_runner = self._get_passive_runner(outside_mid_ratio)
@@ -2464,6 +2482,7 @@ class BalancedComparisonRunner:
             mu=mu,
             monotonicity=monotonicity,
             seed=seed,
+            topology_config=topology_config,
             progress_callback=self._make_progress_callback("passive"),
         )
 
@@ -2477,6 +2496,7 @@ class BalancedComparisonRunner:
             mu=mu,
             monotonicity=monotonicity,
             seed=seed,
+            topology_config=topology_config,
             progress_callback=self._make_progress_callback("active"),
         )
 
@@ -2496,6 +2516,7 @@ class BalancedComparisonRunner:
                 mu=mu,
                 monotonicity=monotonicity,
                 seed=seed,
+                topology_config=topology_config,
                 progress_callback=self._make_progress_callback("nbfi"),
             )
             lender_result_data = {
@@ -2527,6 +2548,7 @@ class BalancedComparisonRunner:
                 mu=mu,
                 monotonicity=monotonicity,
                 seed=seed,
+                topology_config=topology_config,
                 progress_callback=self._make_progress_callback("dealer+lender"),
             )
             dealer_lender_data = {
@@ -2560,6 +2582,7 @@ class BalancedComparisonRunner:
                 mu=mu,
                 monotonicity=monotonicity,
                 seed=seed,
+                topology_config=topology_config,
                 progress_callback=self._make_progress_callback("bank+passive"),
             )
             bank_passive_data = {
@@ -2600,6 +2623,7 @@ class BalancedComparisonRunner:
                 mu=mu,
                 monotonicity=monotonicity,
                 seed=seed,
+                topology_config=topology_config,
                 progress_callback=self._make_progress_callback("bank+dealer"),
             )
             bank_dealer_data = {
@@ -2640,6 +2664,7 @@ class BalancedComparisonRunner:
                 mu=mu,
                 monotonicity=monotonicity,
                 seed=seed,
+                topology_config=topology_config,
                 progress_callback=self._make_progress_callback("bank+dealer+nbfi"),
             )
             bank_dealer_nbfi_data = {
