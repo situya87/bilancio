@@ -918,6 +918,93 @@ if "kappa" in df.columns and df["kappa"].nunique() > 1:
     ]
 
 
+def _analysis_convergence(ctx: SweepNotebookContext) -> list[dict[str, Any]]:
+    meta = ctx.meta
+    # Determine which convergence columns to use based on sweep type
+    if ctx.has_dealer:
+        quality_cols = [("convergence_quality_passive", "Passive"),
+                        ("convergence_quality_active", "Active")]
+        day_cols = [("convergence_day_passive", "Passive"),
+                    ("convergence_day_active", "Active")]
+    elif ctx.has_bank:
+        quality_cols = [("convergence_quality_bank_passive", "Bank Idle"),
+                        ("convergence_quality_bank_dealer", "Bank Lend")]
+        day_cols = [("convergence_day_bank_passive", "Bank Idle"),
+                    ("convergence_day_bank_dealer", "Bank Lend")]
+    elif ctx.has_nbfi:
+        quality_cols = [("convergence_quality_passive", "NBFI Idle"),
+                        ("convergence_quality_lender", "NBFI Lend")]
+        day_cols = [("convergence_day_passive", "NBFI Idle"),
+                    ("convergence_day_lender", "NBFI Lend")]
+    else:
+        return []
+
+    # Build column lists as Python source for the code cell
+    q_cols_src = "[" + ", ".join(f'("{c}", "{l}")' for c, l in quality_cols) + "]"
+    d_cols_src = "[" + ", ".join(f'("{c}", "{l}")' for c, l in day_cols) + "]"
+
+    return [
+        _md(f"""\
+### Convergence Analysis
+
+Multi-channel convergence evaluates whether the simulation reached equilibrium
+by tracking clearing rate, default rate, and other channels simultaneously.
+
+- **Convergence day**: First day at which all monitored channels stabilised
+- **Convergence quality**: Score in [0, 1] reflecting how many channels converged
+  and how tightly they converged (1.0 = all channels fully stable)
+"""),
+        _code(f"""\
+# Convergence quality by kappa
+quality_cols = {q_cols_src}
+day_cols = {d_cols_src}
+
+available_q = [(c, l) for c, l in quality_cols if c in df.columns]
+available_d = [(c, l) for c, l in day_cols if c in df.columns]
+
+if available_q and "kappa" in df.columns and df["kappa"].nunique() > 1:
+    fig = go.Figure()
+    colors = ["#9e9e9e", "#2196F3", "#FF9800", "#4CAF50"]
+    for i, (col, label) in enumerate(available_q):
+        grouped = df.groupby("kappa")[col].mean().sort_index()
+        fig.add_trace(go.Scatter(
+            x=grouped.index, y=grouped.values, mode="lines+markers",
+            name=label, line=dict(color=colors[i % len(colors)], width=2),
+            marker=dict(size=8),
+        ))
+    fig.update_layout(
+        title="Mean Convergence Quality vs Kappa",
+        xaxis_title="Kappa (liquidity ratio)", yaxis_title="Convergence quality",
+        xaxis_type="log", yaxis_range=[0, 1.05], height=450,
+    )
+    fig.show()
+else:
+    print("Convergence quality columns not found in data or only one kappa value.")
+"""),
+        _code(f"""\
+# Convergence day by kappa
+if available_d and "kappa" in df.columns and df["kappa"].nunique() > 1:
+    fig = go.Figure()
+    colors = ["#9e9e9e", "#2196F3", "#FF9800", "#4CAF50"]
+    for i, (col, label) in enumerate(available_d):
+        grouped = df.groupby("kappa")[col].mean().sort_index()
+        fig.add_trace(go.Scatter(
+            x=grouped.index, y=grouped.values, mode="lines+markers",
+            name=label, line=dict(color=colors[i % len(colors)], width=2),
+            marker=dict(size=8),
+        ))
+    fig.update_layout(
+        title="Mean Convergence Day vs Kappa",
+        xaxis_title="Kappa (liquidity ratio)", yaxis_title="Convergence day",
+        xaxis_type="log", height=450,
+    )
+    fig.show()
+else:
+    print("Convergence day columns not found in data or only one kappa value.")
+"""),
+    ]
+
+
 def _analysis_conclusions(ctx: SweepNotebookContext) -> list[dict[str, Any]]:
     meta = ctx.meta
     return [_md(f"""\
@@ -932,6 +1019,7 @@ This notebook analyzed the **{meta['mechanism_name']}** sweep experiment.
 - Parameter sensitivity heatmaps (which parameter combinations matter most)
 - Regression analysis (quantitative decomposition of the effect)
 - Statistical tests (formal evidence for/against mechanism effectiveness)
+- Convergence analysis (whether simulations reached equilibrium)
 
 **To reproduce:** Re-run all cells with the sweep data in `{{SWEEP_DIR}}`.
 """)]
@@ -991,6 +1079,7 @@ def generate_sweep_notebook(
         _analysis_heatmaps,
         _analysis_regression,
         _analysis_statistical_tests,
+        _analysis_convergence,
         _analysis_conclusions,
     ]:
         analysis_cells = analysis_fn(ctx)

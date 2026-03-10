@@ -57,6 +57,8 @@ class RingRunSummary:
     delta_total: Decimal | None
     phi_total: Decimal | None
     time_to_stability: int
+    convergence_day: int | None = None
+    convergence_quality: float | None = None
     # Cascade/contagion metrics
     n_defaults: int = 0
     cascade_fraction: Decimal | None = None
@@ -1556,6 +1558,14 @@ class RingSweepRunner:
             n_defaults = int(result.metrics.get("n_defaults", 0))
             cascade_fraction_val = result.metrics.get("cascade_fraction")
 
+            # Convergence metrics (Plan 057)
+            convergence_day_val = result.metrics.get("convergence_day")
+            if convergence_day_val is not None:
+                convergence_day_val = int(convergence_day_val)
+            convergence_quality_val = result.metrics.get("convergence_quality")
+            if convergence_quality_val is not None:
+                convergence_quality_val = float(convergence_quality_val)
+
             # Convert to Decimal for consistency
             if delta_total is not None:
                 delta_total = Decimal(str(delta_total))
@@ -1580,6 +1590,8 @@ class RingSweepRunner:
                 time_to_stability=time_to_stability,
                 n_defaults=n_defaults,
                 cascade_fraction=cascade_fraction_val,
+                convergence_day=convergence_day_val,
+                convergence_quality=convergence_quality_val,
                 dealer_metrics=None,  # Dealer metrics not available in cloud path
                 modal_call_id=result.modal_call_id,
                 cb_loans_created_count=int(result.metrics.get("cb_loans_created_count", 0)),
@@ -1628,6 +1640,14 @@ class RingSweepRunner:
         time_to_stability = int(bundle.summary.get("max_day") or 0)
         n_defaults = int(bundle.summary.get("n_defaults", 0))
         cascade_fraction_val = bundle.summary.get("cascade_fraction")
+
+        # Convergence metrics (Plan 057)
+        convergence_day_val = bundle.summary.get("convergence_day")
+        if convergence_day_val is not None:
+            convergence_day_val = int(convergence_day_val)
+        convergence_quality_val = bundle.summary.get("convergence_quality")
+        if convergence_quality_val is not None:
+            convergence_quality_val = float(convergence_quality_val)
 
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = prepared.out_dir / "dealer_metrics.json"
@@ -1679,6 +1699,8 @@ class RingSweepRunner:
             time_to_stability=time_to_stability,
             n_defaults=n_defaults,
             cascade_fraction=cascade_fraction_val,
+            convergence_day=convergence_day_val,
+            convergence_quality=convergence_quality_val,
             dealer_metrics=dealer_metrics,
             modal_call_id=result.modal_call_id,
             cb_loans_created_count=int(bundle.summary.get("cb_loans_created_count", 0)),

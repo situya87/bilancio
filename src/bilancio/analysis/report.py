@@ -445,6 +445,20 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
     phi_total = (phi_weighted / S_total) if S_total else None
     delta_total = (delta_weighted / S_total) if S_total else None
 
+    # Convergence analysis (Plan 057)
+    try:
+        from bilancio.analysis.convergence import evaluate_convergence, ConvergenceConfig
+        conv_result = evaluate_convergence(
+            list(day_metrics),
+            [],  # no raw events available here
+            config=ConvergenceConfig(enabled_channels={"clearing", "default"}),
+        )
+        convergence_day = conv_result.convergence_day
+        convergence_quality = conv_result.quality
+    except Exception:  # noqa: BLE001
+        convergence_day = None
+        convergence_quality = None
+
     return {
         "phi_total": phi_total,
         "delta_total": delta_total,
@@ -455,6 +469,8 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
         "HHIplus_1": HHIplus_1,
         "max_day": max_day,
         "S_total": float(S_total) if S_total else 0.0,
+        "convergence_day": convergence_day,
+        "convergence_quality": convergence_quality,
     }
 
 
