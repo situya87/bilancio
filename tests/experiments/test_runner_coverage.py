@@ -2659,7 +2659,7 @@ class TestBalancedRunAllSequential:
 
         pair_calls = []
 
-        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology="ring", seed=None):
+        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology="ring", seed=None, topology_config=None):
             pair_calls.append(kappa)
             return BalancedComparisonResult(
                 kappa=kappa, concentration=concentration, mu=mu,
