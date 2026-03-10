@@ -711,6 +711,8 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 adaptive_base_spreads=config.balanced_dealer.adaptive_base_spreads,
                 adaptive_convex_spreads=config.balanced_dealer.adaptive_convex_spreads,
                 term_strength=config.balanced_dealer.term_strength,
+                mu_tilt_strength=config.balanced_dealer.mu_tilt_strength,
+                kappa_spread_strength=config.balanced_dealer.kappa_spread_strength,
             )
 
             if config.balanced_dealer.alpha_vbt > 0:
@@ -739,6 +741,7 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 alpha_vbt=config.balanced_dealer.alpha_vbt,
                 alpha_trader=config.balanced_dealer.alpha_trader,
                 kappa=config.balanced_dealer.kappa,
+                mu=config.balanced_dealer.mu,
                 trader_profile=trader_profile,
                 vbt_profile=vbt_profile,
             )
@@ -1017,6 +1020,8 @@ def _init_dealer_from_action_specs(
             adaptive_base_spreads=bd.adaptive_base_spreads,
             adaptive_convex_spreads=bd.adaptive_convex_spreads,
             term_strength=bd.term_strength,
+            mu_tilt_strength=bd.mu_tilt_strength,
+            kappa_spread_strength=bd.kappa_spread_strength,
         )
 
     # Read risk_assessment from dealer config
@@ -1100,6 +1105,7 @@ def _init_dealer_from_action_specs(
         alpha_vbt=bd.alpha_vbt,
         alpha_trader=bd.alpha_trader,
         kappa=bd.kappa,
+        mu=bd.mu,
         trader_profile=trader_profile,
         vbt_profile=vbt_profile,
     )

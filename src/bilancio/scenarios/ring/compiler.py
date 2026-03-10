@@ -774,6 +774,7 @@ def compile_ring_explorer_balanced(
             }
             if kappa is not None:
                 scenario["balanced_dealer"]["kappa"] = str(kappa)
+            scenario["balanced_dealer"]["mu"] = str(params.maturity.mu)
 
     if config.compile.emit_yaml:
         _emit_yaml(

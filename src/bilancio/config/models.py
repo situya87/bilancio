@@ -762,6 +762,21 @@ class BalancedDealerConfig(BaseModel):
         default=None,
         description="Kappa (injected from run parameters for informedness computation)",
     )
+    mu: Decimal | None = Field(
+        default=None,
+        description="Maturity timing skew for VBT pricing (injected from run parameters)",
+    )
+    mu_tilt_strength: Decimal = Field(
+        default=Decimal("0.15"),
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="Mu-driven M term structure tilt strength (0=no tilt, 1=max)",
+    )
+    kappa_spread_strength: Decimal = Field(
+        default=Decimal("0.5"),
+        ge=Decimal("0"),
+        description="Kappa-driven spread scaling strength (0=no scaling)",
+    )
 
     # Decision module parameters
     risk_aversion: Decimal = Field(
