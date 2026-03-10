@@ -275,6 +275,22 @@ class BalancedComparisonResult:
     loss_capital_ratio_bank_dealer: float | None = None
     loss_capital_ratio_bank_dealer_nbfi: float | None = None
 
+    # Convergence metrics (Plan 057)
+    convergence_day_passive: int | None = None
+    convergence_quality_passive: float | None = None
+    convergence_day_active: int | None = None
+    convergence_quality_active: float | None = None
+    convergence_day_lender: int | None = None
+    convergence_quality_lender: float | None = None
+    convergence_day_dealer_lender: int | None = None
+    convergence_quality_dealer_lender: float | None = None
+    convergence_day_bank_passive: int | None = None
+    convergence_quality_bank_passive: float | None = None
+    convergence_day_bank_dealer: int | None = None
+    convergence_quality_bank_dealer: float | None = None
+    convergence_day_bank_dealer_nbfi: int | None = None
+    convergence_quality_bank_dealer_nbfi: float | None = None
+
     @staticmethod
     def _compute_incremental_pnl(
         active_metrics: dict[str, Any] | None,
@@ -973,6 +989,21 @@ class BalancedComparisonRunner:
         "loss_capital_ratio_bank_passive",
         "loss_capital_ratio_bank_dealer",
         "loss_capital_ratio_bank_dealer_nbfi",
+        # Convergence metrics (Plan 057)
+        "convergence_day_passive",
+        "convergence_quality_passive",
+        "convergence_day_active",
+        "convergence_quality_active",
+        "convergence_day_lender",
+        "convergence_quality_lender",
+        "convergence_day_dealer_lender",
+        "convergence_quality_dealer_lender",
+        "convergence_day_bank_passive",
+        "convergence_quality_bank_passive",
+        "convergence_day_bank_dealer",
+        "convergence_quality_bank_dealer",
+        "convergence_day_bank_dealer_nbfi",
+        "convergence_quality_bank_dealer_nbfi",
     ]
 
     def __init__(
@@ -1841,6 +1872,8 @@ class BalancedComparisonRunner:
                 "intermediary_loss_lender": s.intermediary_loss_total,
                 "intermediary_capital_lender": s.initial_intermediary_capital,
                 "total_loans": s.nbfi_loans_created,
+                "convergence_day_lender": s.convergence_day,
+                "convergence_quality_lender": s.convergence_quality,
             }
 
         dealer_lender_data: dict[str, Any] = {}
@@ -1860,6 +1893,8 @@ class BalancedComparisonRunner:
                 "intermediary_loss_dealer_lender": s.intermediary_loss_total,
                 "intermediary_capital_dealer_lender": s.initial_intermediary_capital,
                 "total_loans": s.nbfi_loans_created,
+                "convergence_day_dealer_lender": s.convergence_day,
+                "convergence_quality_dealer_lender": s.convergence_quality,
             }
 
         bank_passive_data: dict[str, Any] = {}
@@ -1886,6 +1921,8 @@ class BalancedComparisonRunner:
                 "total_loss_pct_bank_passive": s.total_loss_pct,
                 "intermediary_loss_bank_passive": s.intermediary_loss_total,
                 "intermediary_capital_bank_passive": s.initial_intermediary_capital,
+                "convergence_day_bank_passive": s.convergence_day,
+                "convergence_quality_bank_passive": s.convergence_quality,
             }
 
         bank_dealer_data: dict[str, Any] = {}
@@ -1912,6 +1949,8 @@ class BalancedComparisonRunner:
                 "total_loss_pct_bank_dealer": s.total_loss_pct,
                 "intermediary_loss_bank_dealer": s.intermediary_loss_total,
                 "intermediary_capital_bank_dealer": s.initial_intermediary_capital,
+                "convergence_day_bank_dealer": s.convergence_day,
+                "convergence_quality_bank_dealer": s.convergence_quality,
             }
 
         bank_dealer_nbfi_data: dict[str, Any] = {}
@@ -1938,6 +1977,8 @@ class BalancedComparisonRunner:
                 "total_loss_pct_bank_dealer_nbfi": s.total_loss_pct,
                 "intermediary_loss_bank_dealer_nbfi": s.intermediary_loss_total,
                 "intermediary_capital_bank_dealer_nbfi": s.initial_intermediary_capital,
+                "convergence_day_bank_dealer_nbfi": s.convergence_day,
+                "convergence_quality_bank_dealer_nbfi": s.convergence_quality,
             }
 
         result = BalancedComparisonResult(
@@ -1967,6 +2008,10 @@ class BalancedComparisonRunner:
             n_defaults_active=active.n_defaults,
             cascade_fraction_passive=passive.cascade_fraction,
             cascade_fraction_active=active.cascade_fraction,
+            convergence_day_passive=passive.convergence_day,
+            convergence_quality_passive=passive.convergence_quality,
+            convergence_day_active=active.convergence_day,
+            convergence_quality_active=active.convergence_quality,
             passive_modal_call_id=passive.modal_call_id,
             active_modal_call_id=active.modal_call_id,
             payable_default_loss_passive=passive.payable_default_loss,
@@ -2533,6 +2578,8 @@ class BalancedComparisonRunner:
                 "intermediary_loss_lender": lender_result.intermediary_loss_total,
                 "intermediary_capital_lender": lender_result.initial_intermediary_capital,
                 "total_loans": lender_result.nbfi_loans_created,
+                "convergence_day_lender": lender_result.convergence_day,
+                "convergence_quality_lender": lender_result.convergence_quality,
             }
 
         # Run dealer+lender (optional fourth arm — combined mode)
@@ -2567,6 +2614,8 @@ class BalancedComparisonRunner:
                 "intermediary_loss_dealer_lender": dl_result.intermediary_loss_total,
                 "intermediary_capital_dealer_lender": dl_result.initial_intermediary_capital,
                 "total_loans": dl_result.nbfi_loans_created,
+                "convergence_day_dealer_lender": dl_result.convergence_day,
+                "convergence_quality_dealer_lender": dl_result.convergence_quality,
             }
 
         # Run bank+passive (optional — banking arm E)
@@ -2608,6 +2657,8 @@ class BalancedComparisonRunner:
                 "total_loss_pct_bank_passive": bp_result.total_loss_pct,
                 "intermediary_loss_bank_passive": bp_result.intermediary_loss_total,
                 "intermediary_capital_bank_passive": bp_result.initial_intermediary_capital,
+                "convergence_day_bank_passive": bp_result.convergence_day,
+                "convergence_quality_bank_passive": bp_result.convergence_quality,
             }
 
         # Run bank+dealer (optional — banking arm F)
@@ -2649,6 +2700,8 @@ class BalancedComparisonRunner:
                 "total_loss_pct_bank_dealer": bd_result.total_loss_pct,
                 "intermediary_loss_bank_dealer": bd_result.intermediary_loss_total,
                 "intermediary_capital_bank_dealer": bd_result.initial_intermediary_capital,
+                "convergence_day_bank_dealer": bd_result.convergence_day,
+                "convergence_quality_bank_dealer": bd_result.convergence_quality,
             }
 
         # Run bank+dealer+nbfi (optional — banking arm G)
@@ -2690,6 +2743,8 @@ class BalancedComparisonRunner:
                 "total_loss_pct_bank_dealer_nbfi": bdn_result.total_loss_pct,
                 "intermediary_loss_bank_dealer_nbfi": bdn_result.intermediary_loss_total,
                 "intermediary_capital_bank_dealer_nbfi": bdn_result.initial_intermediary_capital,
+                "convergence_day_bank_dealer_nbfi": bdn_result.convergence_day,
+                "convergence_quality_bank_dealer_nbfi": bdn_result.convergence_quality,
             }
 
         result = BalancedComparisonResult(
@@ -2719,6 +2774,10 @@ class BalancedComparisonRunner:
             n_defaults_active=active_result.n_defaults,
             cascade_fraction_passive=passive_result.cascade_fraction,
             cascade_fraction_active=active_result.cascade_fraction,
+            convergence_day_passive=passive_result.convergence_day,
+            convergence_quality_passive=passive_result.convergence_quality,
+            convergence_day_active=active_result.convergence_day,
+            convergence_quality_active=active_result.convergence_quality,
             passive_modal_call_id=passive_result.modal_call_id,
             active_modal_call_id=active_result.modal_call_id,
             payable_default_loss_passive=passive_result.payable_default_loss,
@@ -2917,6 +2976,16 @@ class BalancedComparisonRunner:
                 and run_result.time_to_stability is not None
             ):
                 metrics["time_to_stability"] = run_result.time_to_stability
+            if (
+                hasattr(run_result, "convergence_day")
+                and run_result.convergence_day is not None
+            ):
+                metrics["convergence_day"] = run_result.convergence_day
+            if (
+                hasattr(run_result, "convergence_quality")
+                and run_result.convergence_quality is not None
+            ):
+                metrics["convergence_quality"] = run_result.convergence_quality
             if hasattr(run_result, "dealer_metrics") and run_result.dealer_metrics:
                 dm = run_result.dealer_metrics
                 if "total_trades" in dm:
@@ -3333,6 +3402,49 @@ class BalancedComparisonRunner:
                     "loss_capital_ratio_bank_dealer_nbfi": (
                         str(result.loss_capital_ratio_bank_dealer_nbfi)
                         if result.loss_capital_ratio_bank_dealer_nbfi is not None else ""
+                    ),
+                    # Convergence metrics (Plan 057)
+                    "convergence_day_passive": (
+                        str(result.convergence_day_passive) if result.convergence_day_passive is not None else ""
+                    ),
+                    "convergence_quality_passive": (
+                        str(result.convergence_quality_passive) if result.convergence_quality_passive is not None else ""
+                    ),
+                    "convergence_day_active": (
+                        str(result.convergence_day_active) if result.convergence_day_active is not None else ""
+                    ),
+                    "convergence_quality_active": (
+                        str(result.convergence_quality_active) if result.convergence_quality_active is not None else ""
+                    ),
+                    "convergence_day_lender": (
+                        str(result.convergence_day_lender) if result.convergence_day_lender is not None else ""
+                    ),
+                    "convergence_quality_lender": (
+                        str(result.convergence_quality_lender) if result.convergence_quality_lender is not None else ""
+                    ),
+                    "convergence_day_dealer_lender": (
+                        str(result.convergence_day_dealer_lender) if result.convergence_day_dealer_lender is not None else ""
+                    ),
+                    "convergence_quality_dealer_lender": (
+                        str(result.convergence_quality_dealer_lender) if result.convergence_quality_dealer_lender is not None else ""
+                    ),
+                    "convergence_day_bank_passive": (
+                        str(result.convergence_day_bank_passive) if result.convergence_day_bank_passive is not None else ""
+                    ),
+                    "convergence_quality_bank_passive": (
+                        str(result.convergence_quality_bank_passive) if result.convergence_quality_bank_passive is not None else ""
+                    ),
+                    "convergence_day_bank_dealer": (
+                        str(result.convergence_day_bank_dealer) if result.convergence_day_bank_dealer is not None else ""
+                    ),
+                    "convergence_quality_bank_dealer": (
+                        str(result.convergence_quality_bank_dealer) if result.convergence_quality_bank_dealer is not None else ""
+                    ),
+                    "convergence_day_bank_dealer_nbfi": (
+                        str(result.convergence_day_bank_dealer_nbfi) if result.convergence_day_bank_dealer_nbfi is not None else ""
+                    ),
+                    "convergence_quality_bank_dealer_nbfi": (
+                        str(result.convergence_quality_bank_dealer_nbfi) if result.convergence_quality_bank_dealer_nbfi is not None else ""
                     ),
                 }
                 writer.writerow(row)
