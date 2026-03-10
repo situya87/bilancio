@@ -574,7 +574,7 @@ def _collect_creditor_weights(
             continue
         if exclude_contract_id and cid == exclude_contract_id:
             continue
-        creditor_id = contract.asset_holder_id
+        creditor_id = contract.effective_creditor
         claims[creditor_id] = claims.get(creditor_id, Decimal(0)) + Decimal(str(contract.amount))
 
     total = sum(claims.values())
@@ -615,7 +615,7 @@ def _reassign_receivables(
         if (
             contract.kind == InstrumentKind.PAYABLE
             and isinstance(contract, Payable)
-            and contract.asset_holder_id == defaulted_agent_id
+            and contract.effective_creditor == defaulted_agent_id
             and contract.liability_issuer_id != defaulted_agent_id
             and contract.liability_issuer_id not in system.state.defaulted_agent_ids
         ):
