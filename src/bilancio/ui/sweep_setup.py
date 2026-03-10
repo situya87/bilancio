@@ -881,6 +881,12 @@ VIZ_MENU: dict[str, dict[str, Any]] = {
         "group": "viz",
         "sweep_types": ["dealer", "bank", "nbfi"],
     },
+    "notebook": {
+        "label": "Presentation notebook",
+        "desc": "Jupyter notebook with theory sections + sweep analysis",
+        "group": "viz",
+        "sweep_types": ["dealer", "bank", "nbfi"],
+    },
 }
 
 # Legacy alias for backward compatibility
