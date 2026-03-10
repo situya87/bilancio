@@ -1,5 +1,16 @@
 - Use implementation subagents (in parallel) to execute code changes whenever possible, but always review what the subagents wrote, find possible issues, and fix them if necessary.
 
+## Feature Development Process
+
+**MANDATORY**: When the user says "let's create a new feature", "let's implement X", or any equivalent, follow the full process in [`docs/FEATURE_PROCESS.md`](docs/FEATURE_PROCESS.md). The four phases are:
+
+1. **Plan & Specify** — Create branch `plan/<NNN>-<short-name>`, write plan doc with goal/scope/location/design/acceptance criteria. **Must include sweep surface spec**: which backend layers and sweep pipeline layers are touched, and what the sweep should show.
+2. **Implement & Smoke Sweep** — Write code, verify each acceptance criterion, then run a small local sweep to confirm the feature integrates correctly with the full pipeline.
+3. **Test & Commit** — Write unit + integration tests, run full suite (`uv run pytest tests/ -v`), commit.
+4. **PR, Review & Merge** — Push, open PR, Claude reviews diff, fix issues, merge to main.
+
+Do NOT skip any phase. Do NOT start coding before the plan is finalized.
+
 ## New Agent Type Design Checklist
 
 When introducing a new agent type, you MUST explicitly define all four aspects before writing implementation code. Do not proceed until each is documented in the plan:
