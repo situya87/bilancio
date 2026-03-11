@@ -385,6 +385,12 @@ def _deps() -> Any:
     default=None,
     help="Load preset YAML to override defaults",
 )
+@click.option(
+    "--topologies",
+    type=str,
+    default="ring",
+    help="Comma-separated topology specs (e.g. 'ring,k_regular:4,erdos_renyi:0.1')",
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -473,6 +479,7 @@ def sweep_balanced(
     adaptive_convex_spreads: bool | None,
     adapt: str,
     preset: Path | None,
+    topologies: str,
 ) -> None:
     """Run balanced C vs D comparison experiments."""
     deps = _deps()
@@ -498,6 +505,10 @@ def sweep_balanced(
     out_dir = Path(out_dir)
     if job_id is None:
         job_id = deps.generate_job_id()
+
+    from bilancio.scenarios.ring.topology import parse_topology_string
+
+    parsed_topologies = [parse_topology_string(t.strip()) for t in topologies.split(",")]
 
     performance_flags: dict[str, object] = {}
     if perf_preset:
@@ -651,6 +662,7 @@ def sweep_balanced(
         adapt=adapt,
         adaptive_overrides=adaptive_overrides,
         performance=performance.to_dict() if performance else {},
+        topologies=parsed_topologies,
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)
