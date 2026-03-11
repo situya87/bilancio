@@ -69,6 +69,7 @@ class NBFIComparisonResult:
     lend_status: str
 
     # Fields with defaults
+    topology: str = "ring"
     n_defaults_idle: int = 0
     cascade_fraction_idle: Decimal | None = None
     idle_modal_call_id: str | None = None
@@ -143,6 +144,10 @@ class NBFIComparisonConfig(BaseModel):
     mus: list[Decimal] = Field(default_factory=lambda: [Decimal("0")])
     monotonicities: list[Decimal] = Field(default_factory=lambda: [Decimal("0")])
     outside_mid_ratios: list[Decimal] = Field(default_factory=lambda: [Decimal("0.90")])
+    topologies: list[dict[str, Any]] = Field(
+        default_factory=lambda: [{"type": "ring"}],
+        description="Network topologies to sweep (default: ring only)",
+    )
 
     # Balanced dealer parameters (VBT/Dealer hold inventory passively in both arms)
     face_value: Decimal = Field(default=Decimal("20"), description="Face value per ticket")
@@ -278,6 +283,7 @@ class NBFIComparisonRunner:
         "mu",
         "monotonicity",
         "seed",
+        "topology",
         "outside_mid_ratio",
         "delta_idle",
         "delta_lend",
@@ -339,7 +345,9 @@ class NBFIComparisonRunner:
 
         self.seed_counter = config.base_seed
         self._start_time: float | None = None
-        self._completed_counts: dict[tuple[str, str, str, str, str], int] = {}
+        self._completed_counts: dict[tuple[str, str, str, str, str, str], int] = {}
+        # Seeds already used per (kappa, conc, mu, mono, omr) cell — for resume
+        self._cell_seeds: dict[tuple[str, str, str, str, str], list[int]] = {}
 
         self.job_id = job_id
 
@@ -375,11 +383,18 @@ class NBFIComparisonRunner:
                         row["mu"],
                         row["monotonicity"],
                         row["outside_mid_ratio"],
+                        row.get("topology", "ring"),
                     )
                     self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
                     seed = int(row["seed"])
                     if seed >= self.seed_counter:
                         self.seed_counter = seed + 1
+                    # Track seeds per cell (without topology) for resume pairing
+                    cell_key = (row["kappa"], row["concentration"], row["mu"],
+                                row["monotonicity"], row["outside_mid_ratio"])
+                    seeds_list = self._cell_seeds.setdefault(cell_key, [])
+                    if seed not in seeds_list:
+                        seeds_list.append(seed)
             if self._completed_counts:
                 total_completed = sum(self._completed_counts.values())
                 logger.info(
@@ -397,8 +412,21 @@ class NBFIComparisonRunner:
         mu: Decimal,
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
-    ) -> tuple[str, str, str, str, str]:
-        return (str(kappa), str(concentration), str(mu), str(monotonicity), str(outside_mid_ratio))
+        topology: str = "ring",
+    ) -> tuple[str, str, str, str, str, str]:
+        return (str(kappa), str(concentration), str(mu), str(monotonicity), str(outside_mid_ratio), topology)
+
+    @staticmethod
+    def _topology_label(topology_config: dict[str, Any]) -> str:
+        """Build a descriptive label from a topology config dict."""
+        ttype = topology_config.get("type", "ring")
+        if ttype == "k_regular":
+            degree = topology_config.get("degree", 2)
+            return f"k_regular_{degree}"
+        if ttype == "erdos_renyi":
+            edge_prob = topology_config.get("edge_prob", 0.1)
+            return f"erdos_renyi_{edge_prob}"
+        return ttype
 
     def _format_time(self, seconds: float) -> str:
         if seconds < 60:
@@ -552,6 +580,7 @@ class NBFIComparisonRunner:
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
         seed: int,
+        topology: str = "ring",
     ) -> NBFIComparisonResult:
         """Build result from arm summaries."""
         idle = arm_summaries["idle"]
@@ -568,6 +597,7 @@ class NBFIComparisonRunner:
             monotonicity=monotonicity,
             seed=seed,
             outside_mid_ratio=outside_mid_ratio,
+            topology=topology,
             delta_idle=idle.delta_total,
             phi_idle=idle.phi_total,
             idle_run_id=idle.run_id,
@@ -616,6 +646,7 @@ class NBFIComparisonRunner:
             * len(self.config.mus)
             * len(self.config.monotonicities)
             * len(self.config.outside_mid_ratios)
+            * len(self.config.topologies)
         )
 
         cells_done = sum(
@@ -638,7 +669,7 @@ class NBFIComparisonRunner:
 
         # Phase 1: Prepare all runs
         prepared_combos: list[
-            tuple[dict[str, PreparedRun], Decimal, Decimal, Decimal, Decimal, Decimal, int]
+            tuple[dict[str, PreparedRun], Decimal, Decimal, Decimal, Decimal, Decimal, int, str]
         ] = []
         runners_cache: dict[tuple[Decimal, str], Any] = {}
 
@@ -652,26 +683,36 @@ class NBFIComparisonRunner:
                 for concentration in self.config.concentrations:
                     for mu in self.config.mus:
                         for monotonicity in self.config.monotonicities:
-                            key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio)
-                            completed = self._completed_counts.get(key, 0)
-                            reps_needed = max(0, self.config.n_replicates - completed)
-
-                            for _rep in range(reps_needed):
-                                seed = self._next_seed()
-                                arm_preps: dict[str, PreparedRun] = {}
-                                for arm_name, phase, _getter_name, _regime in arm_defs:
-                                    runner = runners_cache[(outside_mid_ratio, arm_name)]
-                                    arm_preps[arm_name] = runner._prepare_run(
-                                        phase=phase,
-                                        kappa=kappa,
-                                        concentration=concentration,
-                                        mu=mu,
-                                        monotonicity=monotonicity,
-                                        seed=seed,
+                            # Reuse seeds from prior (partial) runs, then draw fresh ones
+                            cell_key = (str(kappa), str(concentration), str(mu),
+                                        str(monotonicity), str(outside_mid_ratio))
+                            prior_seeds = list(self._cell_seeds.get(cell_key, []))
+                            for _rep in range(self.config.n_replicates):
+                                if _rep < len(prior_seeds):
+                                    seed = prior_seeds[_rep]
+                                else:
+                                    seed = self._next_seed()
+                                for topology_config in self.config.topologies:
+                                    topology_label = self._topology_label(topology_config)
+                                    key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology=topology_label)
+                                    completed = self._completed_counts.get(key, 0)
+                                    if completed >= self.config.n_replicates:
+                                        continue
+                                    arm_preps: dict[str, PreparedRun] = {}
+                                    for arm_name, phase, _getter_name, _regime in arm_defs:
+                                        runner = runners_cache[(outside_mid_ratio, arm_name)]
+                                        arm_preps[arm_name] = runner._prepare_run(
+                                            phase=phase,
+                                            kappa=kappa,
+                                            concentration=concentration,
+                                            mu=mu,
+                                            monotonicity=monotonicity,
+                                            seed=seed,
+                                            topology_config=topology_config,
+                                        )
+                                    prepared_combos.append(
+                                        (arm_preps, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed, topology_label)
                                     )
-                                prepared_combos.append(
-                                    (arm_preps, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed)
-                                )
 
         if not prepared_combos:
             print("All combos already completed!", flush=True)
@@ -718,7 +759,7 @@ class NBFIComparisonRunner:
         print("Finalizing results...", flush=True)
 
         for combo_idx, (
-            arm_preps, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed,
+            arm_preps, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed, topology_label,
         ) in enumerate(prepared_combos):
             arm_summaries: dict[str, RingRunSummary] = {}
             for arm_name, prep in arm_preps.items():
@@ -727,10 +768,11 @@ class NBFIComparisonRunner:
                 arm_summaries[arm_name] = runner._finalize_run(prep, raw)
 
             result = self._build_result_from_summaries(
-                arm_summaries, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed
+                arm_summaries, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed,
+                topology=topology_label,
             )
             self.comparison_results.append(result)
-            comp_key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio)
+            comp_key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology=topology_label)
             self._completed_counts[comp_key] = self._completed_counts.get(comp_key, 0) + 1
 
             for arm_name, _phase, _getter, regime in arm_defs:
@@ -762,6 +804,7 @@ class NBFIComparisonRunner:
             * len(self.config.mus)
             * len(self.config.monotonicities)
             * len(self.config.outside_mid_ratios)
+            * len(self.config.topologies)
         )
 
         cells_done = sum(
@@ -788,50 +831,65 @@ class NBFIComparisonRunner:
                     for mu in self.config.mus:
                         for monotonicity in self.config.monotonicities:
                             combo_idx += 1
-                            key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio)
-                            completed = self._completed_counts.get(key, 0)
-                            reps_needed = max(0, self.config.n_replicates - completed)
-                            if reps_needed == 0:
-                                continue
+                            # Reuse seeds from prior (partial) runs, then draw fresh ones
+                            cell_key = (str(kappa), str(concentration), str(mu),
+                                        str(monotonicity), str(outside_mid_ratio))
+                            prior_seeds = list(self._cell_seeds.get(cell_key, []))
 
-                            for rep in range(reps_needed):
-                                rep_label = (
-                                    f" rep {completed + rep + 1}/{self.config.n_replicates}"
-                                    if self.config.n_replicates > 1
-                                    else ""
-                                )
-
-                                if completed_this_run > 0:
-                                    elapsed = time.time() - self._start_time
-                                    avg_time = elapsed / completed_this_run
-                                    eta = avg_time * (remaining * self.config.n_replicates - completed_this_run)
-                                    progress_str = f"[{combo_idx}/{total_combos}] ({completed_this_run} done) ETA: {self._format_time(eta)}"
+                            for rep in range(self.config.n_replicates):
+                                if rep < len(prior_seeds):
+                                    seed = prior_seeds[rep]
                                 else:
-                                    progress_str = f"[{combo_idx}/{total_combos}]"
+                                    seed = self._next_seed()
 
-                                print(
-                                    f"{progress_str} Running{rep_label}: k={kappa}, c={concentration}, mu={mu}, rho={outside_mid_ratio}",
-                                    flush=True,
-                                )
+                                for topology_config in self.config.topologies:
+                                    topology_label = self._topology_label(topology_config)
+                                    key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology=topology_label)
+                                    completed = self._completed_counts.get(key, 0)
+                                    if completed >= self.config.n_replicates:
+                                        continue
 
-                                result = self._run_pair(
-                                    kappa, concentration, mu, monotonicity, outside_mid_ratio
-                                )
-                                self.comparison_results.append(result)
-                                self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
-                                completed_this_run += 1
+                                    rep_label = (
+                                        f" rep {completed + rep + 1}/{self.config.n_replicates}"
+                                        if self.config.n_replicates > 1
+                                        else ""
+                                    )
 
-                                self._write_comparison_csv()
+                                    if completed_this_run > 0:
+                                        elapsed = time.time() - self._start_time
+                                        avg_time = elapsed / completed_this_run
+                                        eta = avg_time * (remaining * self.config.n_replicates * len(self.config.topologies) - completed_this_run)
+                                        progress_str = f"[{combo_idx}/{total_combos}] ({completed_this_run} done) ETA: {self._format_time(eta)}"
+                                    else:
+                                        progress_str = f"[{combo_idx}/{total_combos}]"
 
-                                elapsed = time.time() - self._start_time
-                                if result.lending_effect is not None:
+                                    topo_str = f", topo={topology_label}" if topology_label != "ring" else ""
                                     print(
-                                        f"  Completed | delta_idle={result.delta_idle:.3f}, delta_lend={result.delta_lend:.3f}, "
-                                        f"lending_effect={result.lending_effect:.3f}",
+                                        f"{progress_str} Running{rep_label}: k={kappa}, c={concentration}, mu={mu}, rho={outside_mid_ratio}{topo_str}",
                                         flush=True,
                                     )
-                                else:
-                                    print("  Completed | (one or both runs failed)", flush=True)
+
+                                    result = self._run_pair(
+                                        kappa, concentration, mu, monotonicity, outside_mid_ratio,
+                                        topology=topology_label,
+                                        seed=seed,
+                                        topology_config=topology_config,
+                                    )
+                                    self.comparison_results.append(result)
+                                    self._completed_counts[key] = self._completed_counts.get(key, 0) + 1
+                                    completed_this_run += 1
+
+                                    self._write_comparison_csv()
+
+                                    elapsed = time.time() - self._start_time
+                                    if result.lending_effect is not None:
+                                        print(
+                                            f"  Completed | delta_idle={result.delta_idle:.3f}, delta_lend={result.delta_lend:.3f}, "
+                                            f"lending_effect={result.lending_effect:.3f}",
+                                            flush=True,
+                                        )
+                                    else:
+                                        print("  Completed | (one or both runs failed)", flush=True)
 
         self._write_summary_json()
         self._write_stats_analysis()
@@ -859,12 +917,15 @@ class NBFIComparisonRunner:
         mu: Decimal,
         monotonicity: Decimal,
         outside_mid_ratio: Decimal,
+        topology: str = "ring",
+        seed: int | None = None,
+        topology_config: dict[str, Any] | None = None,
     ) -> NBFIComparisonResult:
         """Run one idle/lend pair."""
         idle_runner = self._get_idle_runner(outside_mid_ratio)
         lend_runner = self._get_lend_runner(outside_mid_ratio)
-
-        seed = self._next_seed()
+        if seed is None:
+            seed = self._next_seed()
 
         logger.info("  Running nbfi_idle...")
         print("  NBFI Idle run:", flush=True)
@@ -875,6 +936,7 @@ class NBFIComparisonRunner:
             mu=mu,
             monotonicity=monotonicity,
             seed=seed,
+            topology_config=topology_config,
         )
 
         logger.info("  Running nbfi_lend...")
@@ -886,11 +948,13 @@ class NBFIComparisonRunner:
             mu=mu,
             monotonicity=monotonicity,
             seed=seed,
+            topology_config=topology_config,
         )
 
         arm_summaries = {"idle": idle_result, "lend": lend_result}
         return self._build_result_from_summaries(
-            arm_summaries, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed
+            arm_summaries, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed,
+            topology=topology,
         )
 
     # ── Persistence ──────────────────────────────────────────────────────
@@ -953,6 +1017,7 @@ class NBFIComparisonRunner:
                     "mu": str(r.mu),
                     "monotonicity": str(r.monotonicity),
                     "seed": str(r.seed),
+                    "topology": r.topology,
                     "outside_mid_ratio": str(r.outside_mid_ratio),
                     "delta_idle": str(r.delta_idle) if r.delta_idle is not None else "",
                     "delta_lend": str(r.delta_lend) if r.delta_lend is not None else "",
@@ -1055,7 +1120,16 @@ class NBFIComparisonRunner:
                 "phi_idle": "phi_passive",
                 "phi_lend": "phi_active",
             })
-            analysis = RingSweepAnalysis(comp_df.to_dict("records"))
+            records = comp_df.to_dict("records")
+            # Include topology in cell grouping when multiple topologies present
+            from bilancio.experiments.sweep_analysis import RING_PARAM_FIELDS
+            param_fields = list(RING_PARAM_FIELDS)
+            if "topology" in comp_df.columns and comp_df["topology"].nunique() > 1:
+                param_fields.append("topology")
+            analysis = RingSweepAnalysis.__new__(RingSweepAnalysis)
+            analysis.records = records
+            from bilancio.stats.analyzer import SweepAnalyzer
+            analysis._analyzer = SweepAnalyzer(records, param_fields=param_fields)
             if analysis.min_replicates() < 2:
                 logger.info(
                     "Skipping statistical analysis: need >= 2 replicates per cell, have %d",

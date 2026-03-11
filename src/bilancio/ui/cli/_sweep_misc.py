@@ -121,6 +121,7 @@ def sweep_dealer_usage(experiment: Path, verbose: bool) -> None:
         "dealer_usage, mechanism_activity, treynor. Default: interactive prompt."
     ),
 )
+@click.option("--topologies", type=str, default="ring", help="Comma-separated topology specs (e.g. 'ring,k_regular:4,erdos_renyi:0.1')")
 @click.option("--preset", type=click.Path(exists=True, path_type=Path), default=None, help="Load preset YAML")
 def sweep_nbfi(
     out_dir: Path,
@@ -140,6 +141,7 @@ def sweep_nbfi(
     quiet: bool,
     nbfi_share: Decimal,
     default_handling: str,
+    topologies: str,
     post_analysis: str | None,
     preset: Path | None,
 ) -> None:
@@ -180,6 +182,10 @@ def sweep_nbfi(
         )
         click.echo("Cloud execution enabled")
 
+    from bilancio.scenarios.ring.topology import parse_topology_string
+
+    parsed_topologies = [parse_topology_string(t.strip()) for t in topologies.split(",")]
+
     config = NBFIComparisonConfig(
         name_prefix=job_id,
         n_agents=n_agents,
@@ -196,6 +202,7 @@ def sweep_nbfi(
         quiet=quiet,
         default_handling=default_handling,
         lender_share=nbfi_share,
+        topologies=parsed_topologies,
     )
 
     runner = NBFIComparisonRunner(
@@ -268,6 +275,7 @@ def sweep_nbfi(
         "dealer_usage, mechanism_activity, treynor. Default: interactive prompt."
     ),
 )
+@click.option("--topologies", type=str, default="ring", help="Comma-separated topology specs (e.g. 'ring,k_regular:4,erdos_renyi:0.1')")
 @click.option("--preset", type=click.Path(exists=True, path_type=Path), default=None, help="Load preset YAML")
 def sweep_bank(
     out_dir: Path,
@@ -294,6 +302,7 @@ def sweep_bank(
     cb_max_outstanding_ratio: Decimal,
     default_handling: str,
     fast_atomic: bool,
+    topologies: str,
     post_analysis: str | None,
     preset: Path | None,
 ) -> None:
@@ -334,6 +343,10 @@ def sweep_bank(
         )
         click.echo("Cloud execution enabled")
 
+    from bilancio.scenarios.ring.topology import parse_topology_string
+
+    parsed_topologies = [parse_topology_string(t.strip()) for t in topologies.split(",")]
+
     performance = {"fast_atomic": True} if fast_atomic else {}
     config = BankComparisonConfig(
         name_prefix=job_id,
@@ -358,6 +371,7 @@ def sweep_bank(
         cb_rate_escalation_slope=cb_rate_escalation_slope,
         cb_max_outstanding_ratio=cb_max_outstanding_ratio,
         performance=performance,
+        topologies=parsed_topologies,
     )
 
     runner = BankComparisonRunner(
