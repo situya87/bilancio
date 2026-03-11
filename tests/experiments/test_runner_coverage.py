@@ -2020,7 +2020,7 @@ class TestBankNBFIMakeKeyAndSeed:
         config = BankComparisonConfig()
         runner = BankComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
         key = runner._make_key(Decimal("1"), Decimal("2"), Decimal("0"), Decimal("0"), Decimal("0.9"))
-        assert key == ("1", "2", "0", "0", "0.9")
+        assert key == ("1", "2", "0", "0", "0.9", "ring")
 
     def test_bank_next_seed(self, tmp_path: Path):
         """BankComparisonRunner._next_seed increments counter."""
@@ -2040,7 +2040,7 @@ class TestBankNBFIMakeKeyAndSeed:
         config = NBFIComparisonConfig()
         runner = NBFIComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
         key = runner._make_key(Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), Decimal("0.90"))
-        assert key == ("0.5", "1", "0", "0", "0.90")
+        assert key == ("0.5", "1", "0", "0", "0.90", "ring")
 
     def test_nbfi_next_seed(self, tmp_path: Path):
         """NBFIComparisonRunner._next_seed increments counter."""
@@ -2526,16 +2526,17 @@ class TestBankRunAllSequential:
 
         pair_calls = []
 
-        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio):
+        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology="ring", seed=None, topology_config=None):
             pair_calls.append(kappa)
             return BankComparisonResult(
                 kappa=kappa, concentration=concentration, mu=mu,
-                monotonicity=monotonicity, seed=len(pair_calls),
+                monotonicity=monotonicity, seed=seed or len(pair_calls),
                 outside_mid_ratio=outside_mid_ratio,
                 delta_idle=Decimal("0.40"), phi_idle=Decimal("0.60"),
                 idle_run_id=f"i{len(pair_calls)}", idle_status="completed",
                 delta_lend=Decimal("0.20"), phi_lend=Decimal("0.80"),
                 lend_run_id=f"l{len(pair_calls)}", lend_status="completed",
+                topology=topology,
             )
 
         with patch.object(runner, "_run_pair", mock_run_pair):
@@ -2567,16 +2568,17 @@ class TestBankRunAllSequential:
 
         pair_calls = []
 
-        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio):
+        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology="ring", seed=None, topology_config=None):
             pair_calls.append(kappa)
             return BankComparisonResult(
                 kappa=kappa, concentration=concentration, mu=mu,
-                monotonicity=monotonicity, seed=len(pair_calls),
+                monotonicity=monotonicity, seed=seed or len(pair_calls),
                 outside_mid_ratio=outside_mid_ratio,
                 delta_idle=Decimal("0.30"), phi_idle=Decimal("0.70"),
                 idle_run_id=f"i{len(pair_calls)}", idle_status="completed",
                 delta_lend=Decimal("0.10"), phi_lend=Decimal("0.90"),
                 lend_run_id=f"l{len(pair_calls)}", lend_status="completed",
+                topology=topology,
             )
 
         with patch.object(runner, "_run_pair", mock_run_pair):
@@ -2612,16 +2614,17 @@ class TestNBFIRunAllSequential:
 
         pair_calls = []
 
-        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio):
+        def mock_run_pair(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology="ring", seed=None, topology_config=None):
             pair_calls.append(kappa)
             return NBFIComparisonResult(
                 kappa=kappa, concentration=concentration, mu=mu,
-                monotonicity=monotonicity, seed=len(pair_calls),
+                monotonicity=monotonicity, seed=seed or len(pair_calls),
                 outside_mid_ratio=outside_mid_ratio,
                 delta_idle=Decimal("0.40"), phi_idle=Decimal("0.60"),
                 idle_run_id=f"i{len(pair_calls)}", idle_status="completed",
                 delta_lend=Decimal("0.20"), phi_lend=Decimal("0.80"),
                 lend_run_id=f"l{len(pair_calls)}", lend_status="completed",
+                topology=topology,
             )
 
         with patch.object(runner, "_run_pair", mock_run_pair):
