@@ -346,6 +346,8 @@ class NBFIComparisonRunner:
         self.seed_counter = config.base_seed
         self._start_time: float | None = None
         self._completed_counts: dict[tuple[str, str, str, str, str, str], int] = {}
+        # Seeds already used per (kappa, conc, mu, mono, omr) cell — for resume
+        self._cell_seeds: dict[tuple[str, str, str, str, str], list[int]] = {}
 
         self.job_id = job_id
 
@@ -387,6 +389,12 @@ class NBFIComparisonRunner:
                     seed = int(row["seed"])
                     if seed >= self.seed_counter:
                         self.seed_counter = seed + 1
+                    # Track seeds per cell (without topology) for resume pairing
+                    cell_key = (row["kappa"], row["concentration"], row["mu"],
+                                row["monotonicity"], row["outside_mid_ratio"])
+                    seeds_list = self._cell_seeds.setdefault(cell_key, [])
+                    if seed not in seeds_list:
+                        seeds_list.append(seed)
             if self._completed_counts:
                 total_completed = sum(self._completed_counts.values())
                 logger.info(
@@ -675,8 +683,15 @@ class NBFIComparisonRunner:
                 for concentration in self.config.concentrations:
                     for mu in self.config.mus:
                         for monotonicity in self.config.monotonicities:
+                            # Reuse seeds from prior (partial) runs, then draw fresh ones
+                            cell_key = (str(kappa), str(concentration), str(mu),
+                                        str(monotonicity), str(outside_mid_ratio))
+                            prior_seeds = list(self._cell_seeds.get(cell_key, []))
                             for _rep in range(self.config.n_replicates):
-                                seed = self._next_seed()
+                                if _rep < len(prior_seeds):
+                                    seed = prior_seeds[_rep]
+                                else:
+                                    seed = self._next_seed()
                                 for topology_config in self.config.topologies:
                                     topology_label = self._topology_label(topology_config)
                                     key = self._make_key(kappa, concentration, mu, monotonicity, outside_mid_ratio, topology=topology_label)
@@ -816,9 +831,16 @@ class NBFIComparisonRunner:
                     for mu in self.config.mus:
                         for monotonicity in self.config.monotonicities:
                             combo_idx += 1
+                            # Reuse seeds from prior (partial) runs, then draw fresh ones
+                            cell_key = (str(kappa), str(concentration), str(mu),
+                                        str(monotonicity), str(outside_mid_ratio))
+                            prior_seeds = list(self._cell_seeds.get(cell_key, []))
 
                             for rep in range(self.config.n_replicates):
-                                seed = self._next_seed()
+                                if rep < len(prior_seeds):
+                                    seed = prior_seeds[rep]
+                                else:
+                                    seed = self._next_seed()
 
                                 for topology_config in self.config.topologies:
                                     topology_label = self._topology_label(topology_config)
@@ -1098,7 +1120,16 @@ class NBFIComparisonRunner:
                 "phi_idle": "phi_passive",
                 "phi_lend": "phi_active",
             })
-            analysis = RingSweepAnalysis(comp_df.to_dict("records"))
+            records = comp_df.to_dict("records")
+            # Include topology in cell grouping when multiple topologies present
+            from bilancio.experiments.sweep_analysis import RING_PARAM_FIELDS
+            param_fields = list(RING_PARAM_FIELDS)
+            if "topology" in comp_df.columns and comp_df["topology"].nunique() > 1:
+                param_fields.append("topology")
+            analysis = RingSweepAnalysis.__new__(RingSweepAnalysis)
+            analysis.records = records
+            from bilancio.stats.analyzer import SweepAnalyzer
+            analysis._analyzer = SweepAnalyzer(records, param_fields=param_fields)
             if analysis.min_replicates() < 2:
                 logger.info(
                     "Skipping statistical analysis: need >= 2 replicates per cell, have %d",

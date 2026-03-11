@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -113,3 +115,49 @@ class TestNBFIComparisonResultTopology:
             topology="k_regular_4",
         )
         assert result.topology == "k_regular_4"
+
+
+class TestNBFIResumeSeedPairing:
+    """P1 regression: resumed runs must reuse the same seed across topologies."""
+
+    def _write_partial_csv(self, path: Path, seed: int = 42, topology: str = "ring") -> None:
+        """Write a minimal comparison.csv with one completed row."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=NBFIComparisonRunner.COMPARISON_FIELDS)
+            writer.writeheader()
+            row = {f: "" for f in NBFIComparisonRunner.COMPARISON_FIELDS}
+            row.update({
+                "kappa": "1", "concentration": "1", "mu": "0",
+                "monotonicity": "0", "seed": str(seed),
+                "topology": topology, "outside_mid_ratio": "0.90",
+                "delta_idle": "0.1", "delta_lend": "0.05",
+                "idle_run_id": "i1", "idle_status": "completed",
+                "lend_run_id": "l1", "lend_status": "completed",
+            })
+            writer.writerow(row)
+
+    def test_resume_reuses_seed_for_missing_topology(self, tmp_path):
+        """If ring completed with seed=42, resuming k_regular must also use seed=42."""
+        cfg = NBFIComparisonConfig(
+            n_agents=5, maturity_days=3,
+            kappas=[Decimal("1")], concentrations=[Decimal("1")],
+            mus=[Decimal("0")], outside_mid_ratios=[Decimal("0.90")],
+            topologies=[{"type": "ring"}, {"type": "k_regular", "degree": 4}],
+        )
+        # Write partial CSV: ring done for seed 42
+        agg_dir = tmp_path / "aggregate"
+        self._write_partial_csv(agg_dir / "comparison.csv", seed=42, topology="ring")
+
+        runner = NBFIComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+
+        # Verify the seed was recorded in _cell_seeds
+        cell_key = ("1", "1", "0", "0", "0.90")
+        assert cell_key in runner._cell_seeds
+        assert 42 in runner._cell_seeds[cell_key]
+
+        # ring should be marked as completed, k_regular_4 should not
+        ring_key = runner._make_key(Decimal("1"), Decimal("1"), Decimal("0"), Decimal("0"), Decimal("0.90"), topology="ring")
+        kr_key = runner._make_key(Decimal("1"), Decimal("1"), Decimal("0"), Decimal("0"), Decimal("0.90"), topology="k_regular_4")
+        assert runner._completed_counts.get(ring_key, 0) >= 1
+        assert runner._completed_counts.get(kr_key, 0) == 0
