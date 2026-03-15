@@ -521,7 +521,7 @@ def compile_ring_explorer_balanced(
         elif mode == "bank_dealer_nbfi":
             lender_cash = total_vbt_dealer_liquidity / Decimal("3")  # 33% three-way split
         elif mode in ("nbfi_idle", "nbfi_lend", "nbfi_collateral"):
-            lender_cash = base_liquidity * lender_share  # Independent endowment
+            lender_cash = total_vbt_dealer_liquidity  # Same pool as nbfi mode
         else:
             lender_cash = Decimal(0)
         if lender_cash > 0:
