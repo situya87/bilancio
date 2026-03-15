@@ -1081,6 +1081,27 @@ class LenderScenarioConfig(BaseModel):
         default=Decimal("1.0"), gt=Decimal("0"), le=Decimal("1"),
         description="Advance rate for collateralized terms (loan <= advance_rate × collateral)"
     )
+    # Plan 059: Collateralized NBFI lending
+    collateral_mode: Literal["none", "soft_cap", "pledged"] = Field(
+        default="none",
+        description="Collateral mode: none (unsecured), soft_cap (cap only), pledged (full lifecycle)"
+    )
+    base_haircut: Decimal = Field(
+        default=Decimal("0.05"), ge=Decimal("0"), le=Decimal("0.95"),
+        description="Minimum haircut applied to collateral face value"
+    )
+    haircut_risk_sensitivity: Decimal = Field(
+        default=Decimal("1.0"), ge=Decimal("0"),
+        description="Sensitivity of haircut to issuer default probability"
+    )
+    haircut_maturity_sensitivity: Decimal = Field(
+        default=Decimal("0.5"), ge=Decimal("0"),
+        description="Sensitivity of haircut to remaining time to maturity"
+    )
+    max_ring_maturity_for_haircut: int = Field(
+        default=10, ge=1,
+        description="Maturity denominator for haircut calculation"
+    )
 
 
 class RatingAgencyScenarioConfig(BaseModel):

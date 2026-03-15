@@ -78,6 +78,21 @@ class NBFIComparisonResult:
     cascade_fraction_lend: Decimal | None = None
     lend_modal_call_id: str | None = None
 
+    # Collateral arm metrics (Plan 059)
+    delta_collateral: Decimal | None = None
+    phi_collateral: Decimal | None = None
+    collateral_run_id: str | None = None
+    collateral_status: str | None = None
+    n_defaults_collateral: int = 0
+    cascade_fraction_collateral: Decimal | None = None
+    collateral_modal_call_id: str | None = None
+    total_loss_collateral: int = 0
+    total_loss_pct_collateral: float | None = None
+    intermediary_loss_collateral: float = 0.0
+    intermediary_loss_pct_collateral: float | None = None
+    system_loss_collateral: float = 0.0
+    system_loss_pct_collateral: float | None = None
+
     # Loss metrics
     total_loss_idle: int = 0
     total_loss_lend: int = 0
@@ -119,6 +134,20 @@ class NBFIComparisonResult:
         if self.system_loss_pct_idle is None or self.system_loss_pct_lend is None:
             return None
         return self.system_loss_pct_idle - self.system_loss_pct_lend
+
+    @property
+    def collateral_effect(self) -> Decimal | None:
+        """Effect of collateralized lending = delta_idle - delta_collateral."""
+        if self.delta_idle is None or self.delta_collateral is None:
+            return None
+        return self.delta_idle - self.delta_collateral
+
+    @property
+    def collateral_vs_unsecured(self) -> Decimal | None:
+        """Difference between unsecured and collateralized lending."""
+        if self.delta_lend is None or self.delta_collateral is None:
+            return None
+        return self.delta_lend - self.delta_collateral
 
 
 class NBFIComparisonConfig(BaseModel):
@@ -220,6 +249,26 @@ class NBFIComparisonConfig(BaseModel):
         default=Decimal("1.0"), description="Advance rate for collateralized NBFI terms"
     )
 
+    # Plan 059: Collateralized NBFI lending
+    lender_collateral_mode: str = Field(
+        default="none", description="Collateral mode: none, soft_cap, pledged"
+    )
+    lender_base_haircut: Decimal = Field(
+        default=Decimal("0.05"), description="Base haircut for pledged collateral"
+    )
+    lender_haircut_risk_sensitivity: Decimal = Field(
+        default=Decimal("1.0"), description="Haircut sensitivity to issuer default risk"
+    )
+    lender_haircut_maturity_sensitivity: Decimal = Field(
+        default=Decimal("0.5"), description="Haircut sensitivity to remaining maturity"
+    )
+    lender_max_ring_maturity_for_haircut: int = Field(
+        default=10, description="Maturity denominator for haircut calculation"
+    )
+    enable_collateral_arm: bool = Field(
+        default=False, description="Enable 3rd arm: NBFI collateralized lending"
+    )
+
     # Risk assessment configuration
     risk_assessment_enabled: bool = Field(default=True, description="Enable risk-based decisions")
     risk_assessment_config: dict[str, Any] = Field(
@@ -312,6 +361,21 @@ class NBFIComparisonRunner:
         "system_loss_pct_idle",
         "system_loss_pct_lend",
         "system_loss_lending_effect",
+        # Plan 059: Collateral arm fields
+        "delta_collateral",
+        "phi_collateral",
+        "collateral_run_id",
+        "collateral_status",
+        "n_defaults_collateral",
+        "cascade_fraction_collateral",
+        "total_loss_collateral",
+        "total_loss_pct_collateral",
+        "intermediary_loss_collateral",
+        "intermediary_loss_pct_collateral",
+        "system_loss_collateral",
+        "system_loss_pct_collateral",
+        "collateral_effect",
+        "collateral_vs_unsecured",
     ]
 
     def __init__(
@@ -332,11 +396,14 @@ class NBFIComparisonRunner:
 
         self.idle_dir = self.base_dir / "nbfi_idle"
         self.lend_dir = self.base_dir / "nbfi_lend"
+        self.collateral_dir = self.base_dir / "nbfi_collateral"
         self.aggregate_dir = self.base_dir / "aggregate"
 
         if not self.skip_local_processing:
             self.idle_dir.mkdir(parents=True, exist_ok=True)
             self.lend_dir.mkdir(parents=True, exist_ok=True)
+            if config.enable_collateral_arm:
+                self.collateral_dir.mkdir(parents=True, exist_ok=True)
             self.aggregate_dir.mkdir(parents=True, exist_ok=True)
 
         self.comparison_results: list[NBFIComparisonResult] = []
@@ -562,14 +629,94 @@ class NBFIComparisonRunner:
             performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
         )
 
+    def _get_collateral_runner(self, outside_mid_ratio: Decimal) -> RingSweepRunner:
+        """Collateral arm: VBT+Dealer passive, NBFI lending with pledged collateral."""
+        return RingSweepRunner(
+            out_dir=self.collateral_dir,
+            name_prefix=f"{self.config.name_prefix} (NBFI Collateral)",
+            n_agents=self.config.n_agents,
+            maturity_days=self.config.maturity_days,
+            Q_total=self.config.Q_total,
+            liquidity_mode=self.config.liquidity_mode,
+            liquidity_agent=None,
+            base_seed=self.config.base_seed,
+            default_handling=self.config.default_handling,
+            dealer_enabled=False,  # No dealer trading
+            dealer_config=None,
+            balanced_mode=True,
+            face_value=self.config.face_value,
+            outside_mid_ratio=outside_mid_ratio,
+            vbt_share_per_bucket=self.config.vbt_share_per_bucket,
+            dealer_share_per_bucket=self.config.dealer_share_per_bucket,
+            rollover_enabled=self.config.rollover_enabled,
+            detailed_dealer_logging=self.config.detailed_logging,
+            executor=self.executor,
+            quiet=self.config.quiet,
+            risk_assessment_enabled=self.config.risk_assessment_enabled,
+            risk_assessment_config=self.config.risk_assessment_config
+            if self.config.risk_assessment_enabled
+            else None,
+            alpha_vbt=self.config.alpha_vbt,
+            alpha_trader=self.config.alpha_trader,
+            risk_aversion=self.config.risk_aversion,
+            planning_horizon=self.config.planning_horizon,
+            aggressiveness=self.config.aggressiveness,
+            default_observability=self.config.default_observability,
+            vbt_mid_sensitivity=self.config.vbt_mid_sensitivity,
+            vbt_spread_sensitivity=self.config.vbt_spread_sensitivity,
+            trading_motive=self.config.trading_motive,
+            lender_mode=True,  # NBFI actively lending
+            lender_share=self.config.lender_share,
+            lender_base_rate=self.config.lender_base_rate,
+            lender_risk_premium_scale=self.config.lender_risk_premium_scale,
+            lender_max_single_exposure=self.config.lender_max_single_exposure,
+            lender_max_total_exposure=self.config.lender_max_total_exposure,
+            lender_maturity_days=self.config.lender_maturity_days,
+            lender_horizon=self.config.lender_horizon,
+            lender_min_coverage=self.config.lender_min_coverage,
+            lender_maturity_matching=self.config.lender_maturity_matching,
+            lender_min_loan_maturity=self.config.lender_min_loan_maturity,
+            lender_max_loans_per_borrower_per_day=self.config.lender_max_loans_per_borrower_per_day,
+            lender_ranking_mode=self.config.lender_ranking_mode,
+            lender_cascade_weight=self.config.lender_cascade_weight,
+            lender_coverage_mode=self.config.lender_coverage_mode,
+            lender_coverage_penalty_scale=self.config.lender_coverage_penalty_scale,
+            lender_preventive_lending=self.config.lender_preventive_lending,
+            lender_prevention_threshold=self.config.lender_prevention_threshold,
+            lender_marginal_relief_min_ratio=self.config.lender_marginal_relief_min_ratio,
+            lender_stress_risk_premium_scale=self.config.lender_stress_risk_premium_scale,
+            lender_high_risk_default_threshold=self.config.lender_high_risk_default_threshold,
+            lender_high_risk_maturity_cap=self.config.lender_high_risk_maturity_cap,
+            lender_daily_expected_loss_budget_ratio=self.config.lender_daily_expected_loss_budget_ratio,
+            lender_run_expected_loss_budget_ratio=self.config.lender_run_expected_loss_budget_ratio,
+            lender_stop_loss_realized_ratio=self.config.lender_stop_loss_realized_ratio,
+            lender_collateralized_terms=self.config.lender_collateralized_terms,
+            lender_collateral_advance_rate=self.config.lender_collateral_advance_rate,
+            lender_collateral_mode="pledged",
+            lender_base_haircut=self.config.lender_base_haircut,
+            lender_haircut_risk_sensitivity=self.config.lender_haircut_risk_sensitivity,
+            lender_haircut_maturity_sensitivity=self.config.lender_haircut_maturity_sensitivity,
+            lender_max_ring_maturity_for_haircut=self.config.lender_max_ring_maturity_for_haircut,
+            balanced_mode_override="nbfi_collateral",
+            n_banks=self.config.n_banks,
+            reserve_multiplier=self.config.reserve_multiplier,
+            spread_scale=self.config.spread_scale,
+            trading_rounds=self.config.trading_rounds,
+            flow_sensitivity=self.config.flow_sensitivity,
+            performance=PerformanceConfig.from_dict(self.config.performance) if self.config.performance else None,
+        )
+
     def _get_enabled_arm_defs(
         self,
     ) -> list[tuple[str, str, str, str]]:
         """Return (arm_name, phase_name, runner_getter_name, supabase_regime) for each arm."""
-        return [
+        arms = [
             ("idle", "nbfi_idle", "_get_idle_runner", "nbfi_idle"),
             ("lend", "nbfi_lend", "_get_lend_runner", "nbfi_lend"),
         ]
+        if self.config.enable_collateral_arm:
+            arms.append(("collateral", "nbfi_collateral", "_get_collateral_runner", "nbfi_collateral"))
+        return arms
 
     def _build_result_from_summaries(
         self,
@@ -590,7 +737,7 @@ class NBFIComparisonRunner:
         idle_system_loss = idle.total_loss + idle.intermediary_loss_total
         lend_system_loss = lend.total_loss + lend.intermediary_loss_total
 
-        return NBFIComparisonResult(
+        result = NBFIComparisonResult(
             kappa=kappa,
             concentration=concentration,
             mu=mu,
@@ -625,6 +772,26 @@ class NBFIComparisonRunner:
             system_loss_pct_idle=idle_system_loss / idle.S_total if idle.S_total > 0 else None,
             system_loss_pct_lend=lend_system_loss / lend.S_total if lend.S_total > 0 else None,
         )
+
+        # Plan 059: Populate collateral arm if present
+        if "collateral" in arm_summaries:
+            coll = arm_summaries["collateral"]
+            coll_system_loss = coll.total_loss + coll.intermediary_loss_total
+            result.delta_collateral = coll.delta_total
+            result.phi_collateral = coll.phi_total
+            result.collateral_run_id = coll.run_id
+            result.collateral_status = "completed" if coll.delta_total is not None else "failed"
+            result.n_defaults_collateral = coll.n_defaults
+            result.cascade_fraction_collateral = coll.cascade_fraction
+            result.collateral_modal_call_id = coll.modal_call_id
+            result.total_loss_collateral = coll.total_loss
+            result.total_loss_pct_collateral = coll.total_loss_pct
+            result.intermediary_loss_collateral = coll.intermediary_loss_total
+            result.intermediary_loss_pct_collateral = coll.intermediary_loss_total / coll.S_total if coll.S_total > 0 else None
+            result.system_loss_collateral = coll_system_loss
+            result.system_loss_pct_collateral = coll_system_loss / coll.S_total if coll.S_total > 0 else None
+
+        return result
 
     # ── Execution ────────────────────────────────────────────────────────
 
@@ -888,6 +1055,12 @@ class NBFIComparisonRunner:
                                             f"lending_effect={result.lending_effect:.3f}",
                                             flush=True,
                                         )
+                                        if result.collateral_effect is not None:
+                                            print(
+                                                f"           delta_collateral={result.delta_collateral:.3f}, "
+                                                f"collateral_effect={result.collateral_effect:.3f}",
+                                                flush=True,
+                                            )
                                     else:
                                         print("  Completed | (one or both runs failed)", flush=True)
 
@@ -952,6 +1125,22 @@ class NBFIComparisonRunner:
         )
 
         arm_summaries = {"idle": idle_result, "lend": lend_result}
+
+        if self.config.enable_collateral_arm:
+            collateral_runner = self._get_collateral_runner(outside_mid_ratio)
+            logger.info("  Running nbfi_collateral...")
+            print("  NBFI Collateral run:", flush=True)
+            collateral_result = collateral_runner._execute_run(
+                phase="nbfi_collateral",
+                kappa=kappa,
+                concentration=concentration,
+                mu=mu,
+                monotonicity=monotonicity,
+                seed=seed,
+                topology_config=topology_config,
+            )
+            arm_summaries["collateral"] = collateral_result
+
         return self._build_result_from_summaries(
             arm_summaries, kappa, concentration, mu, monotonicity, outside_mid_ratio, seed,
             topology=topology,
@@ -1046,6 +1235,20 @@ class NBFIComparisonRunner:
                     "system_loss_pct_idle": str(r.system_loss_pct_idle) if r.system_loss_pct_idle is not None else "",
                     "system_loss_pct_lend": str(r.system_loss_pct_lend) if r.system_loss_pct_lend is not None else "",
                     "system_loss_lending_effect": str(r.system_loss_lending_effect) if r.system_loss_lending_effect is not None else "",
+                    "delta_collateral": str(r.delta_collateral) if r.delta_collateral is not None else "",
+                    "phi_collateral": str(r.phi_collateral) if r.phi_collateral is not None else "",
+                    "collateral_run_id": r.collateral_run_id or "",
+                    "collateral_status": r.collateral_status or "",
+                    "n_defaults_collateral": str(r.n_defaults_collateral),
+                    "cascade_fraction_collateral": str(r.cascade_fraction_collateral) if r.cascade_fraction_collateral is not None else "",
+                    "total_loss_collateral": str(r.total_loss_collateral),
+                    "total_loss_pct_collateral": str(r.total_loss_pct_collateral) if r.total_loss_pct_collateral is not None else "",
+                    "intermediary_loss_collateral": str(r.intermediary_loss_collateral),
+                    "intermediary_loss_pct_collateral": str(r.intermediary_loss_pct_collateral) if r.intermediary_loss_pct_collateral is not None else "",
+                    "system_loss_collateral": str(r.system_loss_collateral),
+                    "system_loss_pct_collateral": str(r.system_loss_pct_collateral) if r.system_loss_pct_collateral is not None else "",
+                    "collateral_effect": str(r.collateral_effect) if r.collateral_effect is not None else "",
+                    "collateral_vs_unsecured": str(r.collateral_vs_unsecured) if r.collateral_vs_unsecured is not None else "",
                 }
                 writer.writerow(row)
 
@@ -1067,10 +1270,18 @@ class NBFIComparisonRunner:
             improved = sum(1 for r in completed if r.lending_effect and r.lending_effect > 0)
             unchanged = sum(1 for r in completed if r.lending_effect == 0)
             worsened = sum(1 for r in completed if r.lending_effect and r.lending_effect < 0)
+
+            # Collateral arm stats
+            delta_collaterals = [float(r.delta_collateral) for r in completed if r.delta_collateral is not None]
+            mean_delta_collateral = sum(delta_collaterals) / len(delta_collaterals) if delta_collaterals else None
+            collateral_effects = [float(r.collateral_effect) for r in completed if r.collateral_effect is not None]
+            mean_collateral_effect = sum(collateral_effects) / len(collateral_effects) if collateral_effects else None
         else:
             mean_delta_idle = None
             mean_delta_lend = None
             mean_effect = None
+            mean_delta_collateral = None
+            mean_collateral_effect = None
             improved = 0
             unchanged = 0
             worsened = 0
@@ -1081,6 +1292,8 @@ class NBFIComparisonRunner:
             "mean_delta_idle": mean_delta_idle,
             "mean_delta_lend": mean_delta_lend,
             "mean_lending_effect": mean_effect,
+            "mean_delta_collateral": mean_delta_collateral,
+            "mean_collateral_effect": mean_collateral_effect,
             "combos_improved": improved,
             "combos_unchanged": unchanged,
             "combos_worsened": worsened,

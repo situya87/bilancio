@@ -794,6 +794,10 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
                 stop_loss_realized_ratio=config.lender.stop_loss_realized_ratio,
                 collateralized_terms=config.lender.collateralized_terms,
                 collateral_advance_rate=config.lender.collateral_advance_rate,
+                collateral_mode=config.lender.collateral_mode,
+                base_haircut=config.lender.base_haircut,
+                haircut_risk_sensitivity=config.lender.haircut_risk_sensitivity,
+                haircut_maturity_sensitivity=config.lender.haircut_maturity_sensitivity,
             )
 
         # Create NBFI RiskAssessor when profile has risk_assessment_params
@@ -861,6 +865,11 @@ def _apply_legacy_subsystem_configs(config: ScenarioConfig, system: System) -> N
             stop_loss_realized_ratio=config.lender.stop_loss_realized_ratio,
             collateralized_terms=config.lender.collateralized_terms,
             collateral_advance_rate=config.lender.collateral_advance_rate,
+            collateral_mode=config.lender.collateral_mode,
+            base_haircut=config.lender.base_haircut,
+            haircut_risk_sensitivity=config.lender.haircut_risk_sensitivity,
+            haircut_maturity_sensitivity=config.lender.haircut_maturity_sensitivity,
+            max_ring_maturity_for_haircut=config.lender.max_ring_maturity_for_haircut,
         )
 
     # Set up rating agency config if present in scenario
@@ -1206,6 +1215,11 @@ def _init_lending_from_action_specs(
     stop_loss_realized_ratio = _resolve_lender_value("stop_loss_realized_ratio", Decimal("0"))
     collateralized_terms = _resolve_lender_value("collateralized_terms", False)
     collateral_advance_rate = _resolve_lender_value("collateral_advance_rate", Decimal("1.0"))
+    collateral_mode = _resolve_lender_value("collateral_mode", "none")
+    base_haircut = _resolve_lender_value("base_haircut", Decimal("0.05"))
+    haircut_risk_sensitivity = _resolve_lender_value("haircut_risk_sensitivity", Decimal("1.0"))
+    haircut_maturity_sensitivity = _resolve_lender_value("haircut_maturity_sensitivity", Decimal("0.5"))
+    max_ring_maturity_for_haircut = _resolve_lender_value("max_ring_maturity_for_haircut", 10)
 
     system.state.lender_config = LendingConfig(
         base_rate=base_rate,
@@ -1238,6 +1252,11 @@ def _init_lending_from_action_specs(
         stop_loss_realized_ratio=stop_loss_realized_ratio,
         collateralized_terms=collateralized_terms,
         collateral_advance_rate=collateral_advance_rate,
+        collateral_mode=collateral_mode,
+        base_haircut=base_haircut,
+        haircut_risk_sensitivity=haircut_risk_sensitivity,
+        haircut_maturity_sensitivity=haircut_maturity_sensitivity,
+        max_ring_maturity_for_haircut=max_ring_maturity_for_haircut,
     )
 
 

@@ -110,6 +110,11 @@ def sweep_dealer_usage(experiment: Path, verbose: bool) -> None:
 @click.option("--rollover/--no-rollover", default=True, help="Enable continuous rollover")
 @click.option("--quiet/--no-quiet", default=True, help="Suppress per-event output")
 @click.option("--nbfi-share", type=Decimal, default=Decimal("0.10"), help="NBFI cash share")
+@click.option("--enable-collateral-arm", is_flag=True, default=False, help="Enable 3rd arm: NBFI collateralized lending")
+@click.option("--lender-collateral-mode", type=str, default="pledged", help="Collateral mode for collateral arm")
+@click.option("--lender-base-haircut", type=Decimal, default=Decimal("0.05"), help="Base haircut for collateral")
+@click.option("--lender-haircut-risk-sensitivity", type=Decimal, default=Decimal("1.0"), help="Haircut risk sensitivity")
+@click.option("--lender-haircut-maturity-sensitivity", type=Decimal, default=Decimal("0.5"), help="Haircut maturity sensitivity")
 @click.option("--default-handling", type=str, default="expel-agent", help="Default handling mode")
 @click.option(
     "--post-analysis",
@@ -140,6 +145,11 @@ def sweep_nbfi(
     rollover: bool,
     quiet: bool,
     nbfi_share: Decimal,
+    enable_collateral_arm: bool,
+    lender_collateral_mode: str,
+    lender_base_haircut: Decimal,
+    lender_haircut_risk_sensitivity: Decimal,
+    lender_haircut_maturity_sensitivity: Decimal,
     default_handling: str,
     topologies: str,
     post_analysis: str | None,
@@ -202,6 +212,11 @@ def sweep_nbfi(
         quiet=quiet,
         default_handling=default_handling,
         lender_share=nbfi_share,
+        enable_collateral_arm=enable_collateral_arm,
+        lender_collateral_mode=lender_collateral_mode,
+        lender_base_haircut=lender_base_haircut,
+        lender_haircut_risk_sensitivity=lender_haircut_risk_sensitivity,
+        lender_haircut_maturity_sensitivity=lender_haircut_maturity_sensitivity,
         topologies=parsed_topologies,
     )
 
@@ -220,7 +235,8 @@ def sweep_nbfi(
         * len(as_decimal_list(mus))
         * len(as_decimal_list(outside_mid_ratios))
     )
-    click.echo(f"Preparing {n_combos * 2} runs ({n_combos} combos × 2 arms)...")
+    n_arms = 3 if enable_collateral_arm else 2
+    click.echo(f"Preparing {n_combos * n_arms} runs ({n_combos} combos × {n_arms} arms)...")
 
     results = runner.run_all()
     completed = sum(1 for result in results if result.lending_effect is not None)
@@ -230,6 +246,9 @@ def sweep_nbfi(
     click.echo(f"  Total combos: {len(results)}")
     click.echo(f"  Completed: {completed}")
     click.echo(f"  Lending helped: {improved}")
+    if enable_collateral_arm:
+        collateral_improved = sum(1 for result in results if result.collateral_effect and result.collateral_effect > 0)
+        click.echo(f"  Collateral helped: {collateral_improved}")
     click.echo(f"\nResults at: {out_dir / 'aggregate' / 'comparison.csv'}")
 
     deps._offer_post_sweep_analysis(out_dir, "nbfi", post_analysis, cloud=cloud)

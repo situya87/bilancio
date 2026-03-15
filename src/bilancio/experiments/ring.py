@@ -335,6 +335,11 @@ class RingSweepRunner:
         lender_stop_loss_realized_ratio: Decimal = Decimal("0"),
         lender_collateralized_terms: bool = False,
         lender_collateral_advance_rate: Decimal = Decimal("1.0"),
+        lender_collateral_mode: str = "none",
+        lender_base_haircut: Decimal = Decimal("0.05"),
+        lender_haircut_risk_sensitivity: Decimal = Decimal("1.0"),
+        lender_haircut_maturity_sensitivity: Decimal = Decimal("0.5"),
+        lender_max_ring_maturity_for_haircut: int = 10,
         balanced_mode_override: str | None = None,
         n_banks: int = 0,
         reserve_multiplier: float = 10.0,
@@ -416,6 +421,11 @@ class RingSweepRunner:
         self.lender_stop_loss_realized_ratio = lender_stop_loss_realized_ratio
         self.lender_collateralized_terms = lender_collateralized_terms
         self.lender_collateral_advance_rate = lender_collateral_advance_rate
+        self.lender_collateral_mode = lender_collateral_mode
+        self.lender_base_haircut = lender_base_haircut
+        self.lender_haircut_risk_sensitivity = lender_haircut_risk_sensitivity
+        self.lender_haircut_maturity_sensitivity = lender_haircut_maturity_sensitivity
+        self.lender_max_ring_maturity_for_haircut = lender_max_ring_maturity_for_haircut
         self.balanced_mode_override = balanced_mode_override
         self.n_banks = n_banks
         self.reserve_multiplier = reserve_multiplier
@@ -979,6 +989,11 @@ class RingSweepRunner:
                     "stop_loss_realized_ratio": str(self.lender_stop_loss_realized_ratio),
                     "collateralized_terms": self.lender_collateralized_terms,
                     "collateral_advance_rate": str(self.lender_collateral_advance_rate),
+                    "collateral_mode": self.lender_collateral_mode,
+                    "base_haircut": str(self.lender_base_haircut),
+                    "haircut_risk_sensitivity": str(self.lender_haircut_risk_sensitivity),
+                    "haircut_maturity_sensitivity": str(self.lender_haircut_maturity_sensitivity),
+                    "max_ring_maturity_for_haircut": self.lender_max_ring_maturity_for_haircut,
                 }
 
         if self.default_handling:
@@ -1411,6 +1426,11 @@ class RingSweepRunner:
                     "stop_loss_realized_ratio": str(self.lender_stop_loss_realized_ratio),
                     "collateralized_terms": self.lender_collateralized_terms,
                     "collateral_advance_rate": str(self.lender_collateral_advance_rate),
+                    "collateral_mode": self.lender_collateral_mode,
+                    "base_haircut": str(self.lender_base_haircut),
+                    "haircut_risk_sensitivity": str(self.lender_haircut_risk_sensitivity),
+                    "haircut_maturity_sensitivity": str(self.lender_haircut_maturity_sensitivity),
+                    "max_ring_maturity_for_haircut": self.lender_max_ring_maturity_for_haircut,
                 }
 
         # Plan 050: Adaptive profile overrides
