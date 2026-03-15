@@ -735,7 +735,7 @@ class BalancedDealerConfig(BaseModel):
     mode: Literal[
         "passive", "active", "lender", "nbfi", "nbfi_dealer",
         "banking", "bank_dealer", "bank_dealer_nbfi",
-        "nbfi_idle", "nbfi_lend", "bank_idle", "bank_lend",
+        "nbfi_idle", "nbfi_lend", "nbfi_collateral", "bank_idle", "bank_lend",
     ] = Field(
         default="active",
         description=(

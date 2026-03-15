@@ -468,7 +468,7 @@ def compile_ring_explorer_balanced(
         vbt_dealer_cash_scale = Decimal("1") / Decimal("3")  # Three-way split
     elif mode in ("bank_idle", "bank_lend"):
         vbt_dealer_cash_scale = Decimal("0")  # No VBT/Dealer in bank-only modes
-    elif mode in ("nbfi_idle", "nbfi_lend"):
+    elif mode in ("nbfi_idle", "nbfi_lend", "nbfi_collateral"):
         vbt_dealer_cash_scale = Decimal("1")  # VBT/Dealer keep full cash
     else:
         vbt_dealer_cash_scale = Decimal("1")  # Normal modes
@@ -504,7 +504,7 @@ def compile_ring_explorer_balanced(
             )
 
     # Add non-bank lender agent and cash (lender/nbfi/nbfi_dealer/bank_dealer_nbfi/nbfi_idle/nbfi_lend modes)
-    if mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi", "nbfi_idle", "nbfi_lend"):
+    if mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi", "nbfi_idle", "nbfi_lend", "nbfi_collateral"):
         agents.append(
             {
                 "id": "lender",
@@ -520,7 +520,7 @@ def compile_ring_explorer_balanced(
             lender_cash = total_vbt_dealer_liquidity * Decimal("0.5")  # 50% of VBT+dealer cash
         elif mode == "bank_dealer_nbfi":
             lender_cash = total_vbt_dealer_liquidity / Decimal("3")  # 33% three-way split
-        elif mode in ("nbfi_idle", "nbfi_lend"):
+        elif mode in ("nbfi_idle", "nbfi_lend", "nbfi_collateral"):
             lender_cash = base_liquidity * lender_share  # Independent endowment
         else:
             lender_cash = Decimal(0)
@@ -754,7 +754,7 @@ def compile_ring_explorer_balanced(
         # Emit dealer/balanced_dealer config for modes that need B_Dealer phase.
         # Without these, apply_action_specs cannot initialize the dealer subsystem.
         has_dealer = mode in ("active", "nbfi_dealer", "bank_dealer", "bank_dealer_nbfi")
-        has_passive = mode in ("passive", "nbfi_idle", "nbfi_lend")
+        has_passive = mode in ("passive", "nbfi_idle", "nbfi_lend", "nbfi_collateral")
         if has_dealer or has_passive:
             scenario["dealer"] = {
                 "enabled": True,
@@ -821,7 +821,7 @@ def _build_action_specs(
     # Modes with dealer trading
     has_dealer = mode in ("active", "nbfi_dealer", "bank_dealer", "bank_dealer_nbfi")
     # Modes with NBFI lending
-    has_lending = mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi", "nbfi_lend")
+    has_lending = mode in ("lender", "nbfi", "nbfi_dealer", "bank_dealer_nbfi", "nbfi_lend", "nbfi_collateral")
     # Modes with bank lending (households can borrow from banks)
     has_bank_lending = mode in ("banking", "bank_dealer", "bank_dealer_nbfi", "bank_lend")
     # Modes with banking infrastructure (deposits, but not necessarily lending)
