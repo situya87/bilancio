@@ -205,6 +205,14 @@ class LenderProfile:
     collateralized_terms: bool = False  # [RUN] cap loan principal using receivable collateral value
     collateral_advance_rate: Decimal = Decimal("1.0")  # [RUN] loan <= advance_rate * collateral_value
 
+    # Plan 059: Pledged collateral mode
+    collateral_mode: str = "none"  # "none" | "soft_cap" | "pledged"
+    base_haircut: Decimal = Decimal("0.05")  # floor haircut even for zero-risk collateral
+    haircut_risk_sensitivity: Decimal = Decimal("1.0")  # p_default → haircut scaling
+    haircut_maturity_sensitivity: Decimal = Decimal("0.5")  # maturity → haircut scaling
+    lender_liquidation_mode: str = "hold_to_maturity"  # "hold_to_maturity" (only option for now)
+    max_collateral_concentration: Decimal = Decimal("1.0")  # no per-issuer cap
+
     def __post_init__(self) -> None:
         if self.kappa <= Decimal("0"):
             raise ValueError("kappa must be positive")
@@ -248,6 +256,18 @@ class LenderProfile:
             raise ValueError("stop_loss_realized_ratio must be in [0, 1]")
         if not (Decimal("0") < self.collateral_advance_rate <= Decimal("1")):
             raise ValueError("collateral_advance_rate must be in (0, 1]")
+        if self.collateral_mode not in ("none", "soft_cap", "pledged"):
+            raise ValueError("collateral_mode must be one of: none, soft_cap, pledged")
+        if self.base_haircut < Decimal("0") or self.base_haircut >= Decimal("1"):
+            raise ValueError("base_haircut must be in [0, 1)")
+        if self.haircut_risk_sensitivity < Decimal("0"):
+            raise ValueError("haircut_risk_sensitivity must be non-negative")
+        if self.haircut_maturity_sensitivity < Decimal("0"):
+            raise ValueError("haircut_maturity_sensitivity must be non-negative")
+        if self.lender_liquidation_mode not in ("hold_to_maturity",):
+            raise ValueError("lender_liquidation_mode must be: hold_to_maturity")
+        if not (Decimal("0") < self.max_collateral_concentration <= Decimal("1")):
+            raise ValueError("max_collateral_concentration must be in (0, 1]")
 
     @property
     def base_default_estimate(self) -> Decimal:

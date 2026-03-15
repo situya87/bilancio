@@ -52,3 +52,6 @@ class State:
     estimate_log: list[Any] = field(default_factory=list)
     estimate_logging_enabled: bool = False
     cb_lending_frozen: bool = False
+    # Plan 059: Collateral pledges for secured NBFI lending
+    collateral_pledges: dict[str, Any] = field(default_factory=dict)  # pledge_id -> CollateralPledge
+    pledged_payable_ids: set[str] = field(default_factory=set)  # payable IDs currently pledged

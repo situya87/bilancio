@@ -108,11 +108,14 @@ def _convert_payables_to_tickets(
     from bilancio.engines.dealer_integration import _assign_bucket
 
     serial_counter = 0
+    pledged_ids = system.state.pledged_payable_ids  # Plan 059: skip pledged collateral
     for contract_id, contract in system.state.contracts.items():
         if not isinstance(contract, Payable):
             continue
         if contract.due_day is None:
             continue
+        if contract_id in pledged_ids:
+            continue  # Plan 059: pledged payables cannot be traded
         if contract.amount <= 0:
             continue  # Skip zero-face payables (Dirichlet rounding artifacts)
 

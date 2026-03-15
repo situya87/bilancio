@@ -65,6 +65,14 @@ class LendingConfig:
     stop_loss_realized_ratio: Decimal = Decimal("0")
     collateralized_terms: bool = False
     collateral_advance_rate: Decimal = Decimal("1.0")
+    # Plan 059: Pledged collateral mode
+    collateral_mode: str = "none"  # "none" | "soft_cap" | "pledged"
+    base_haircut: Decimal = Decimal("0.05")
+    haircut_risk_sensitivity: Decimal = Decimal("1.0")
+    haircut_maturity_sensitivity: Decimal = Decimal("0.5")
+    lender_liquidation_mode: str = "hold_to_maturity"
+    max_collateral_concentration: Decimal = Decimal("1.0")
+    max_ring_maturity_for_haircut: int = 10  # normalization for maturity sensitivity
     run_expected_loss_spent: Decimal = Decimal("0")
     # Decision protocol overrides (None = auto-construct from scalar params)
     portfolio_strategy: PortfolioStrategy | None = None
@@ -475,12 +483,38 @@ def _collect_lending_opportunities(
             continue
 
         loan_amount = min(shortfall, max_to_this_borrower)
-        if config.collateralized_terms:
+
+        # Collateral handling (Plan 049 soft_cap + Plan 059 pledged)
+        effective_mode = config.collateral_mode
+        if effective_mode == "none" and config.collateralized_terms:
+            effective_mode = "soft_cap"  # backward compat
+
+        selected_pledges: list[dict] = []
+        if effective_mode == "soft_cap":
             collateral_value = _quality_adjusted_receivables(
                 system, agent_id, current_day, config.horizon
             )
             collateral_cap = int(Decimal(str(collateral_value)) * config.collateral_advance_rate)
             loan_amount = min(loan_amount, collateral_cap)
+            if loan_amount <= 0:
+                continue
+        elif effective_mode == "pledged":
+            p_default_map = {agent_id: p_default}  # use borrower's p as proxy for issuer
+            selected_pledges = _select_pledgeable_payables(
+                system, agent_id, current_day, config.horizon,
+                loan_amount, config, p_default_map,
+            )
+            if not selected_pledges:
+                events.append({
+                    "kind": "LoanRejectedNoCollateral",
+                    "day": current_day,
+                    "lender_id": lender_id,
+                    "borrower_id": agent_id,
+                    "shortfall": shortfall,
+                })
+                continue
+            total_collateral = sum(s["collateral_value"] for s in selected_pledges)
+            loan_amount = min(loan_amount, total_collateral)
             if loan_amount <= 0:
                 continue
 
@@ -519,6 +553,7 @@ def _collect_lending_opportunities(
                 "shortfall": shortfall,
                 "downstream": _downstream_obligation_total(system, agent_id, current_day),
                 "coverage_ratio": Decimal(str(max(agent_cash, 0))) / Decimal(str(max(upcoming_due, 1))),
+                "selected_pledges": selected_pledges,
             }
         )
     return opportunities
@@ -679,6 +714,14 @@ def _execute_ranked_opportunities(
                     "p_default": str(opp["p_default"]),
                 }
             )
+            # Plan 059: Create collateral pledges if in pledged mode
+            selected_pledges = opp.get("selected_pledges", [])
+            if selected_pledges:
+                pledge_events = _create_pledges(
+                    system, loan_id, opp["borrower_id"], lender_id,
+                    current_day, selected_pledges,
+                )
+                events.extend(pledge_events)
             daily_expected_loss_spent += expected_loss
             config.run_expected_loss_spent += expected_loss
             logger.debug(
@@ -769,12 +812,31 @@ def _collect_preventive_opportunities(
                 continue
 
         loan_amount = min(at_risk, max_to_this)
-        if config.collateralized_terms:
+
+        # Collateral handling (Plan 049 soft_cap + Plan 059 pledged)
+        effective_mode = config.collateral_mode
+        if effective_mode == "none" and config.collateralized_terms:
+            effective_mode = "soft_cap"  # backward compat
+
+        selected_pledges: list[dict] = []
+        if effective_mode == "soft_cap":
             collateral_value = _quality_adjusted_receivables(
                 system, agent_id, current_day, config.horizon
             )
             collateral_cap = int(Decimal(str(collateral_value)) * config.collateral_advance_rate)
             loan_amount = min(loan_amount, collateral_cap)
+            if loan_amount <= 0:
+                continue
+        elif effective_mode == "pledged":
+            p_default_map = {agent_id: p_default}  # use borrower's p as proxy for issuer
+            selected_pledges = _select_pledgeable_payables(
+                system, agent_id, current_day, config.horizon,
+                loan_amount, config, p_default_map,
+            )
+            if not selected_pledges:
+                continue
+            total_collateral = sum(s["collateral_value"] for s in selected_pledges)
+            loan_amount = min(loan_amount, total_collateral)
             if loan_amount <= 0:
                 continue
 
@@ -802,6 +864,7 @@ def _collect_preventive_opportunities(
                 "downstream": _downstream_obligation_total(system, agent_id, current_day),
                 "coverage_ratio": Decimal(str(max(agent_cash, 0))) / Decimal(str(max(upcoming_due, 1))),
                 "preventive": True,
+                "selected_pledges": selected_pledges,
             }
         )
     return preventive_opps
@@ -929,6 +992,14 @@ def _execute_preventive_opportunities(
                     "at_risk_receivables": opp["amount"],
                 }
             )
+            # Plan 059: Create collateral pledges for preventive loans
+            selected_pledges = opp.get("selected_pledges", [])
+            if selected_pledges:
+                pledge_events = _create_pledges(
+                    system, loan_id, opp["borrower_id"], lender_id,
+                    current_day, selected_pledges,
+                )
+                events.extend(pledge_events)
             daily_expected_loss_spent += expected_loss
             config.run_expected_loss_spent += expected_loss
         except (ValidationError, ValueError, KeyError) as e:
@@ -1175,6 +1246,7 @@ def run_loan_repayments(system: System, current_day: int) -> list[dict[str, Any]
             continue
 
         borrower_id = loan.liability_issuer_id
+        lender_id = loan.asset_holder_id
         try:
             repaid = system.nonbank_repay_loan(loan_id, borrower_id)
             events.append(
@@ -1186,6 +1258,15 @@ def run_loan_repayments(system: System, current_day: int) -> list[dict[str, Any]
                     "repaid": repaid,
                 }
             )
+            # Plan 059: Release or seize collateral pledges
+            if system.state.collateral_pledges:
+                if repaid:
+                    pledge_events = _release_pledges_for_loan(system, loan_id, current_day)
+                else:
+                    pledge_events = _seize_pledges_for_loan(
+                        system, loan_id, lender_id, current_day
+                    )
+                events.extend(pledge_events)
             # Update NBFI BeliefTracker with loan outcome
             if assessor is not None:
                 assessor.update_history(current_day, borrower_id, defaulted=not repaid)
@@ -1398,6 +1479,277 @@ def _quality_adjusted_receivables(
             if contract.liability_issuer_id not in defaulted:
                 total += contract.amount
     return total
+
+
+def compute_collateral_haircut(
+    p_default: Decimal,
+    remaining_tau: int,
+    maturity_days: int,
+    base_haircut: Decimal = Decimal("0.05"),
+    risk_sensitivity: Decimal = Decimal("1.0"),
+    maturity_sensitivity: Decimal = Decimal("0.5"),
+) -> Decimal:
+    """Compute risk-sensitive haircut for a pledged payable.
+
+    haircut = base_haircut + risk_sensitivity × p_default
+              + maturity_sensitivity × (remaining_tau / maturity_days)
+
+    Clamped to [base_haircut, 0.95].
+
+    Args:
+        p_default: Estimated default probability of the payable's issuer
+        remaining_tau: Days until payable maturity
+        maturity_days: System maturity horizon (for normalization)
+        base_haircut: Floor haircut even for zero-risk collateral
+        risk_sensitivity: How much p_default affects haircut
+        maturity_sensitivity: How much longer maturity increases haircut
+
+    Returns:
+        Haircut as a Decimal in [base_haircut, 0.95]
+    """
+    tau_fraction = Decimal(str(remaining_tau)) / Decimal(str(max(maturity_days, 1)))
+    raw = base_haircut + risk_sensitivity * p_default + maturity_sensitivity * tau_fraction
+    return max(base_haircut, min(raw, Decimal("0.95")))
+
+
+def _select_pledgeable_payables(
+    system: "System",
+    borrower_id: str,
+    current_day: int,
+    horizon: int,
+    loan_amount: int,
+    config: "LendingConfig",
+    p_default_map: dict[str, Decimal],
+) -> list[dict]:
+    """Select payables to pledge as collateral, greedy by collateral value.
+
+    Args:
+        system: The simulation system
+        borrower_id: Agent pledging collateral
+        current_day: Current simulation day
+        horizon: Look-ahead horizon
+        loan_amount: Target loan amount to cover
+        config: Lending configuration with haircut params
+        p_default_map: Map of issuer_id -> default probability
+
+    Returns:
+        List of dicts with keys: payable_id, face_value, haircut, collateral_value, issuer_id
+        Empty list if insufficient collateral available.
+    """
+    from bilancio.domain.instruments.base import InstrumentKind
+
+    agent = system.state.agents.get(borrower_id)
+    if agent is None:
+        return []
+
+    defaulted = system.state.defaulted_agent_ids
+    pledged = system.state.pledged_payable_ids
+    maturity_days = config.max_ring_maturity_for_haircut or 10
+
+    candidates = []
+    for cid in agent.asset_ids:
+        contract = system.state.contracts.get(cid)
+        if contract is None or contract.kind != InstrumentKind.PAYABLE:
+            continue
+        if cid in pledged:
+            continue  # already pledged
+        due_day = contract.due_day
+        if due_day is None or due_day <= current_day:
+            continue  # matured or no due day
+        if contract.liability_issuer_id in defaulted:
+            continue  # issuer defaulted
+
+        remaining_tau = due_day - current_day
+        issuer_id = contract.liability_issuer_id
+        p_def = p_default_map.get(issuer_id, config.initial_prior)
+
+        haircut = compute_collateral_haircut(
+            p_default=p_def,
+            remaining_tau=remaining_tau,
+            maturity_days=maturity_days,
+            base_haircut=config.base_haircut,
+            risk_sensitivity=config.haircut_risk_sensitivity,
+            maturity_sensitivity=config.haircut_maturity_sensitivity,
+        )
+        collateral_value = int(Decimal(str(contract.amount)) * (Decimal("1") - haircut))
+        if collateral_value <= 0:
+            continue
+
+        candidates.append({
+            "payable_id": cid,
+            "face_value": contract.amount,
+            "haircut": haircut,
+            "collateral_value": collateral_value,
+            "issuer_id": issuer_id,
+            "remaining_tau": remaining_tau,
+        })
+
+    # Sort by collateral value descending (greedy: pick best collateral first)
+    candidates.sort(key=lambda c: c["collateral_value"], reverse=True)
+
+    # Select until we cover the loan amount
+    selected = []
+    total_collateral = 0
+    for c in candidates:
+        if total_collateral >= loan_amount:
+            break
+        selected.append(c)
+        total_collateral += c["collateral_value"]
+
+    return selected
+
+
+def _create_pledges(
+    system: "System",
+    loan_id: str,
+    borrower_id: str,
+    lender_id: str,
+    current_day: int,
+    selected_payables: list[dict],
+) -> list[dict]:
+    """Create CollateralPledge records for selected payables.
+
+    Args:
+        system: The simulation system
+        loan_id: The loan being secured
+        borrower_id: Who pledged
+        lender_id: Who holds the lien
+        current_day: When pledge was created
+        selected_payables: Output of _select_pledgeable_payables
+
+    Returns:
+        List of pledge event dicts
+    """
+    from bilancio.core.ids import new_id
+    from bilancio.domain.instruments.collateral import CollateralPledge
+
+    events = []
+    for sp in selected_payables:
+        pledge_id = new_id("PLG")
+        pledge = CollateralPledge(
+            pledge_id=pledge_id,
+            loan_id=loan_id,
+            payable_id=sp["payable_id"],
+            borrower_id=borrower_id,
+            lender_id=lender_id,
+            pledged_day=current_day,
+            face_value=sp["face_value"],
+            haircut=sp["haircut"],
+            collateral_value=sp["collateral_value"],
+        )
+        system.state.collateral_pledges[pledge_id] = pledge
+        system.state.pledged_payable_ids.add(sp["payable_id"])
+        events.append({
+            "kind": "CollateralPledged",
+            "day": current_day,
+            "pledge_id": pledge_id,
+            "loan_id": loan_id,
+            "payable_id": sp["payable_id"],
+            "borrower_id": borrower_id,
+            "lender_id": lender_id,
+            "face_value": sp["face_value"],
+            "haircut": str(sp["haircut"]),
+            "collateral_value": sp["collateral_value"],
+        })
+    return events
+
+
+def _release_pledges_for_loan(
+    system: "System",
+    loan_id: str,
+    current_day: int,
+) -> list[dict]:
+    """Release all active pledges for a repaid loan.
+
+    Returns:
+        List of release event dicts
+    """
+    events = []
+    for pledge in system.state.collateral_pledges.values():
+        if pledge.loan_id == loan_id and pledge.status == "active":
+            pledge.status = "released"
+            system.state.pledged_payable_ids.discard(pledge.payable_id)
+            events.append({
+                "kind": "CollateralReleased",
+                "day": current_day,
+                "pledge_id": pledge.pledge_id,
+                "loan_id": loan_id,
+                "payable_id": pledge.payable_id,
+            })
+    return events
+
+
+def _seize_pledges_for_loan(
+    system: "System",
+    loan_id: str,
+    lender_id: str,
+    current_day: int,
+) -> list[dict]:
+    """Seize collateral for a defaulted loan. Lender becomes holder of pledged payables.
+
+    Returns:
+        List of seizure event dicts
+    """
+    from bilancio.domain.instruments.credit import Payable
+
+    events = []
+    for pledge in system.state.collateral_pledges.values():
+        if pledge.loan_id == loan_id and pledge.status == "active":
+            pledge.status = "seized"
+            system.state.pledged_payable_ids.discard(pledge.payable_id)
+
+            # Transfer payable ownership to lender
+            payable = system.state.contracts.get(pledge.payable_id)
+            if payable is not None and isinstance(payable, Payable):
+                payable.holder_id = lender_id
+
+            events.append({
+                "kind": "CollateralSeized",
+                "day": current_day,
+                "pledge_id": pledge.pledge_id,
+                "loan_id": loan_id,
+                "payable_id": pledge.payable_id,
+                "lender_id": lender_id,
+                "recovery_value": pledge.collateral_value,
+            })
+    return events
+
+
+def seize_pledges_for_defaulted_borrower(
+    system: "System",
+    borrower_id: str,
+    current_day: int,
+) -> list[dict]:
+    """Seize all active collateral pledged by a defaulting borrower.
+
+    Called from settlement._expel_agent when an agent defaults on ring payables.
+
+    Returns:
+        List of seizure event dicts
+    """
+    from bilancio.domain.instruments.credit import Payable
+
+    events = []
+    for pledge in system.state.collateral_pledges.values():
+        if pledge.borrower_id == borrower_id and pledge.status == "active":
+            pledge.status = "seized"
+            system.state.pledged_payable_ids.discard(pledge.payable_id)
+
+            payable = system.state.contracts.get(pledge.payable_id)
+            if payable is not None and isinstance(payable, Payable):
+                payable.holder_id = pledge.lender_id
+
+            events.append({
+                "kind": "CollateralSeized",
+                "day": current_day,
+                "pledge_id": pledge.pledge_id,
+                "loan_id": pledge.loan_id,
+                "payable_id": pledge.payable_id,
+                "lender_id": pledge.lender_id,
+                "recovery_value": pledge.collateral_value,
+                "trigger": "borrower_default",
+            })
+    return events
 
 
 def _get_performing_loan_exposure(system: System, lender_id: str) -> int:

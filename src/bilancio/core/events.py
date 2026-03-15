@@ -103,6 +103,13 @@ class EventKind(str, Enum):
     NONBANK_LOAN_DEFAULTED = "NonBankLoanDefaulted"
     PRO_RATA_RECOVERY = "ProRataRecovery"
 
+    # ── Collateral events (Plan 059) ────────────────────────────────────
+    COLLATERAL_PLEDGED = "CollateralPledged"
+    COLLATERAL_RELEASED = "CollateralReleased"
+    COLLATERAL_SEIZED = "CollateralSeized"
+    COLLATERAL_IMPAIRED = "CollateralImpaired"
+    LOAN_REJECTED_NO_COLLATERAL = "LoanRejectedNoCollateral"
+
     # ── Rating agency events ──────────────────────────────────────────
     RATINGS_PUBLISHED = "RatingsPublished"
 

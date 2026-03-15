@@ -1272,6 +1272,21 @@ def _expel_agent(
         mode=_get_default_mode(system),
     )
 
+    # Plan 059: Seize collateral pledged by the defaulting agent
+    if system.state.collateral_pledges:
+        from bilancio.engines.lending import seize_pledges_for_defaulted_borrower
+
+        seizure_events = seize_pledges_for_defaulted_borrower(
+            system, agent_id, system.state.day
+        )
+        for evt in seizure_events:
+            system.log(
+                EventKind.COLLATERAL_SEIZED,
+                agent=agent_id,
+                frm=agent_id,
+                **{k: v for k, v in evt.items() if k != "kind"},
+            )
+
     # Bank resolution: distribute reserves to depositors
     # Non-bank recovery: distribute cash to creditors pro-rata
     if agent.kind == AgentKind.BANK:
