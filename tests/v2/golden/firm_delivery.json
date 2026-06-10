@@ -1,0 +1,527 @@
+{
+ "events": [
+  {
+   "kind": "ReservesMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "B1",
+   "amount": "50000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H1",
+   "amount": "5000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H2",
+   "amount": "4000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F1",
+   "amount": "10000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F2",
+   "amount": "8000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "H1",
+   "bank": "B1",
+   "amount": "4000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "H2",
+   "bank": "B1",
+   "amount": "3000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "F1",
+   "bank": "B1",
+   "amount": "8000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "F2",
+   "bank": "B1",
+   "amount": "6000"
+  },
+  {
+   "kind": "StockCreated",
+   "day": 0,
+   "phase": "setup",
+   "owner": "F1",
+   "sku": "WIDGET",
+   "qty": 100,
+   "unit_price": "25",
+   "stock_id": "S_9"
+  },
+  {
+   "kind": "StockCreated",
+   "day": 0,
+   "phase": "setup",
+   "owner": "F2",
+   "sku": "GADGET",
+   "qty": 50,
+   "unit_price": "100",
+   "stock_id": "S_10"
+  },
+  {
+   "kind": "DeliveryObligationCreated",
+   "day": 0,
+   "phase": "setup",
+   "id": "D_11",
+   "frm": "F1",
+   "to": "H1",
+   "sku": "WIDGET",
+   "qty": 10,
+   "due_day": 1,
+   "unit_price": "25"
+  },
+  {
+   "kind": "DeliveryObligationCreated",
+   "day": 0,
+   "phase": "setup",
+   "id": "D_12",
+   "frm": "F1",
+   "to": "F2",
+   "sku": "WIDGET",
+   "qty": 20,
+   "due_day": 2,
+   "unit_price": "25"
+  },
+  {
+   "kind": "DeliveryObligationCreated",
+   "day": 0,
+   "phase": "setup",
+   "id": "D_13",
+   "frm": "F2",
+   "to": "H2",
+   "sku": "GADGET",
+   "qty": 5,
+   "due_day": 3,
+   "unit_price": "100"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H1",
+   "creditor": "F1",
+   "amount": "250",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_14",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F2",
+   "creditor": "F1",
+   "amount": "500",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_15",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H2",
+   "creditor": "F2",
+   "amount": "500",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_16",
+   "alias": null
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "H1",
+   "payee": "F1",
+   "bank": "B1",
+   "amount": "250"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_14",
+   "contract_id": "PAY_14",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "F1",
+   "amount": "250"
+  },
+  {
+   "kind": "StockSplit",
+   "day": 1,
+   "phase": "simulation",
+   "original_id": "S_9",
+   "new_id": "S_split_S_9_1_2",
+   "sku": "WIDGET",
+   "original_qty": 100,
+   "split_qty": 10,
+   "remaining_qty": 90
+  },
+  {
+   "kind": "StockTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "F1",
+   "to": "H1",
+   "stock_id": "S_split_S_9_1_2",
+   "sku": "WIDGET",
+   "qty": 10
+  },
+  {
+   "kind": "DeliveryObligationCancelled",
+   "day": 1,
+   "phase": "simulation",
+   "obligation_id": "D_11",
+   "contract_id": "D_11",
+   "alias": null,
+   "debtor": "F1",
+   "creditor": "H1",
+   "sku": "WIDGET",
+   "qty": 10
+  },
+  {
+   "kind": "DeliveryObligationSettled",
+   "day": 1,
+   "phase": "simulation",
+   "obligation_id": "D_11",
+   "contract_id": "D_11",
+   "alias": null,
+   "debtor": "F1",
+   "creditor": "H1",
+   "sku": "WIDGET",
+   "qty": 10
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 2,
+   "phase": "simulation",
+   "payer": "F2",
+   "payee": "F1",
+   "bank": "B1",
+   "amount": "500"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_15",
+   "contract_id": "PAY_15",
+   "alias": null,
+   "debtor": "F2",
+   "creditor": "F1",
+   "amount": "500"
+  },
+  {
+   "kind": "StockSplit",
+   "day": 2,
+   "phase": "simulation",
+   "original_id": "S_9",
+   "new_id": "S_split_S_9_2_3",
+   "sku": "WIDGET",
+   "original_qty": 90,
+   "split_qty": 20,
+   "remaining_qty": 70
+  },
+  {
+   "kind": "StockTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "F1",
+   "to": "F2",
+   "stock_id": "S_split_S_9_2_3",
+   "sku": "WIDGET",
+   "qty": 20
+  },
+  {
+   "kind": "DeliveryObligationCancelled",
+   "day": 2,
+   "phase": "simulation",
+   "obligation_id": "D_12",
+   "contract_id": "D_12",
+   "alias": null,
+   "debtor": "F1",
+   "creditor": "F2",
+   "sku": "WIDGET",
+   "qty": 20
+  },
+  {
+   "kind": "DeliveryObligationSettled",
+   "day": 2,
+   "phase": "simulation",
+   "obligation_id": "D_12",
+   "contract_id": "D_12",
+   "alias": null,
+   "debtor": "F1",
+   "creditor": "F2",
+   "sku": "WIDGET",
+   "qty": 20
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 3,
+   "phase": "simulation",
+   "payer": "H2",
+   "payee": "F2",
+   "bank": "B1",
+   "amount": "500"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_16",
+   "contract_id": "PAY_16",
+   "alias": null,
+   "debtor": "H2",
+   "creditor": "F2",
+   "amount": "500"
+  },
+  {
+   "kind": "StockSplit",
+   "day": 3,
+   "phase": "simulation",
+   "original_id": "S_10",
+   "new_id": "S_split_S_10_3_4",
+   "sku": "GADGET",
+   "original_qty": 50,
+   "split_qty": 5,
+   "remaining_qty": 45
+  },
+  {
+   "kind": "StockTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "F2",
+   "to": "H2",
+   "stock_id": "S_split_S_10_3_4",
+   "sku": "GADGET",
+   "qty": 5
+  },
+  {
+   "kind": "DeliveryObligationCancelled",
+   "day": 3,
+   "phase": "simulation",
+   "obligation_id": "D_13",
+   "contract_id": "D_13",
+   "alias": null,
+   "debtor": "F2",
+   "creditor": "H2",
+   "sku": "GADGET",
+   "qty": 5
+  },
+  {
+   "kind": "DeliveryObligationSettled",
+   "day": 3,
+   "phase": "simulation",
+   "obligation_id": "D_13",
+   "contract_id": "D_13",
+   "alias": null,
+   "debtor": "F2",
+   "creditor": "H2",
+   "sku": "GADGET",
+   "qty": 5
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "B1": "21000",
+   "F1": "2000",
+   "F2": "2000",
+   "H1": "1000",
+   "H2": "1000"
+  },
+  "reserves": {
+   "B1": "50000"
+  },
+  "deposits": {
+   "F1@B1": "8750",
+   "F2@B1": "6000",
+   "H1@B1": "3750",
+   "H2@B1": "2500"
+  },
+  "defaulted": []
+ }
+}

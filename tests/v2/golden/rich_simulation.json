@@ -1,0 +1,1154 @@
+{
+ "events": [
+  {
+   "kind": "ReservesMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "BANK1",
+   "amount": "50000"
+  },
+  {
+   "kind": "ReservesMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "BANK2",
+   "amount": "50000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H1",
+   "amount": "10000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H2",
+   "amount": "10000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H3",
+   "amount": "10000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H4",
+   "amount": "10000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "FIRM1",
+   "amount": "20000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "FIRM2",
+   "amount": "20000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "H1",
+   "bank": "BANK1",
+   "amount": "8000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "H2",
+   "bank": "BANK1",
+   "amount": "8000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "H3",
+   "bank": "BANK2",
+   "amount": "8000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "H4",
+   "bank": "BANK2",
+   "amount": "8000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "FIRM1",
+   "bank": "BANK1",
+   "amount": "15000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "FIRM2",
+   "bank": "BANK2",
+   "amount": "15000"
+  },
+  {
+   "kind": "StockCreated",
+   "day": 0,
+   "phase": "setup",
+   "owner": "FIRM1",
+   "sku": "TECH_STOCK",
+   "qty": 1000,
+   "unit_price": "10",
+   "stock_id": "S_14"
+  },
+  {
+   "kind": "StockCreated",
+   "day": 0,
+   "phase": "setup",
+   "owner": "FIRM2",
+   "sku": "RETAIL_STOCK",
+   "qty": 500,
+   "unit_price": "20",
+   "stock_id": "S_15"
+  },
+  {
+   "kind": "DeliveryObligationCreated",
+   "day": 0,
+   "phase": "setup",
+   "id": "D_16",
+   "frm": "FIRM1",
+   "to": "H1",
+   "sku": "TECH_STOCK",
+   "qty": 100,
+   "due_day": 1,
+   "unit_price": "10"
+  },
+  {
+   "kind": "DeliveryObligationCreated",
+   "day": 0,
+   "phase": "setup",
+   "id": "D_17",
+   "frm": "FIRM1",
+   "to": "H3",
+   "sku": "TECH_STOCK",
+   "qty": 150,
+   "due_day": 1,
+   "unit_price": "10"
+  },
+  {
+   "kind": "DeliveryObligationCreated",
+   "day": 0,
+   "phase": "setup",
+   "id": "D_18",
+   "frm": "FIRM2",
+   "to": "H2",
+   "sku": "RETAIL_STOCK",
+   "qty": 50,
+   "due_day": 1,
+   "unit_price": "20"
+  },
+  {
+   "kind": "DeliveryObligationCreated",
+   "day": 0,
+   "phase": "setup",
+   "id": "D_19",
+   "frm": "FIRM2",
+   "to": "H4",
+   "sku": "RETAIL_STOCK",
+   "qty": 75,
+   "due_day": 1,
+   "unit_price": "20"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H1",
+   "creditor": "H2",
+   "amount": "500",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_20",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H2",
+   "creditor": "FIRM1",
+   "amount": "300",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_21",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H3",
+   "creditor": "H4",
+   "amount": "400",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_22",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H4",
+   "creditor": "FIRM2",
+   "amount": "600",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_23",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H1",
+   "creditor": "H3",
+   "amount": "1000",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_24",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H2",
+   "creditor": "H4",
+   "amount": "800",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_25",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "FIRM1",
+   "creditor": "FIRM2",
+   "amount": "2000",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_26",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H3",
+   "creditor": "H1",
+   "amount": "700",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_27",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H4",
+   "creditor": "H2",
+   "amount": "900",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_28",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "FIRM2",
+   "creditor": "FIRM1",
+   "amount": "1500",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_29",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "FIRM1",
+   "creditor": "H1",
+   "amount": "100",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_30",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "FIRM1",
+   "creditor": "H3",
+   "amount": "150",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_31",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "FIRM2",
+   "creditor": "H2",
+   "amount": "100",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_32",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "FIRM2",
+   "creditor": "H4",
+   "amount": "150",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_33",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H1",
+   "creditor": "H2",
+   "amount": "200",
+   "due_day": 4,
+   "maturity_distance": 4,
+   "payable_id": "PAY_34",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H3",
+   "creditor": "H4",
+   "amount": "300",
+   "due_day": 4,
+   "maturity_distance": 4,
+   "payable_id": "PAY_35",
+   "alias": null
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "H1",
+   "payee": "H2",
+   "bank": "BANK1",
+   "amount": "500"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_20",
+   "contract_id": "PAY_20",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "H2",
+   "amount": "500"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "H2",
+   "payee": "FIRM1",
+   "bank": "BANK1",
+   "amount": "300"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_21",
+   "contract_id": "PAY_21",
+   "alias": null,
+   "debtor": "H2",
+   "creditor": "FIRM1",
+   "amount": "300"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "H3",
+   "payee": "H4",
+   "bank": "BANK2",
+   "amount": "400"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_22",
+   "contract_id": "PAY_22",
+   "alias": null,
+   "debtor": "H3",
+   "creditor": "H4",
+   "amount": "400"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "H4",
+   "payee": "FIRM2",
+   "bank": "BANK2",
+   "amount": "600"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_23",
+   "contract_id": "PAY_23",
+   "alias": null,
+   "debtor": "H4",
+   "creditor": "FIRM2",
+   "amount": "600"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "H1",
+   "payer_bank": "BANK1",
+   "payee": "H3",
+   "payee_bank": "BANK2",
+   "amount": "1000"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_24",
+   "contract_id": "PAY_24",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "H3",
+   "amount": "1000"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "H2",
+   "payer_bank": "BANK1",
+   "payee": "H4",
+   "payee_bank": "BANK2",
+   "amount": "800"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_25",
+   "contract_id": "PAY_25",
+   "alias": null,
+   "debtor": "H2",
+   "creditor": "H4",
+   "amount": "800"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "FIRM1",
+   "to": "FIRM2",
+   "amount": "2000"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 1,
+   "phase": "simulation",
+   "keep": "cash:FIRM2",
+   "removed": "cash:FIRM2:merged:1:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_26",
+   "contract_id": "PAY_26",
+   "alias": null,
+   "debtor": "FIRM1",
+   "creditor": "FIRM2",
+   "amount": "2000"
+  },
+  {
+   "kind": "StockSplit",
+   "day": 1,
+   "phase": "simulation",
+   "original_id": "S_14",
+   "new_id": "S_split_S_14_1_2",
+   "sku": "TECH_STOCK",
+   "original_qty": 1000,
+   "split_qty": 100,
+   "remaining_qty": 900
+  },
+  {
+   "kind": "StockTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "FIRM1",
+   "to": "H1",
+   "stock_id": "S_split_S_14_1_2",
+   "sku": "TECH_STOCK",
+   "qty": 100
+  },
+  {
+   "kind": "DeliveryObligationCancelled",
+   "day": 1,
+   "phase": "simulation",
+   "obligation_id": "D_16",
+   "contract_id": "D_16",
+   "alias": null,
+   "debtor": "FIRM1",
+   "creditor": "H1",
+   "sku": "TECH_STOCK",
+   "qty": 100
+  },
+  {
+   "kind": "DeliveryObligationSettled",
+   "day": 1,
+   "phase": "simulation",
+   "obligation_id": "D_16",
+   "contract_id": "D_16",
+   "alias": null,
+   "debtor": "FIRM1",
+   "creditor": "H1",
+   "sku": "TECH_STOCK",
+   "qty": 100
+  },
+  {
+   "kind": "StockSplit",
+   "day": 1,
+   "phase": "simulation",
+   "original_id": "S_14",
+   "new_id": "S_split_S_14_1_3",
+   "sku": "TECH_STOCK",
+   "original_qty": 900,
+   "split_qty": 150,
+   "remaining_qty": 750
+  },
+  {
+   "kind": "StockTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "FIRM1",
+   "to": "H3",
+   "stock_id": "S_split_S_14_1_3",
+   "sku": "TECH_STOCK",
+   "qty": 150
+  },
+  {
+   "kind": "DeliveryObligationCancelled",
+   "day": 1,
+   "phase": "simulation",
+   "obligation_id": "D_17",
+   "contract_id": "D_17",
+   "alias": null,
+   "debtor": "FIRM1",
+   "creditor": "H3",
+   "sku": "TECH_STOCK",
+   "qty": 150
+  },
+  {
+   "kind": "DeliveryObligationSettled",
+   "day": 1,
+   "phase": "simulation",
+   "obligation_id": "D_17",
+   "contract_id": "D_17",
+   "alias": null,
+   "debtor": "FIRM1",
+   "creditor": "H3",
+   "sku": "TECH_STOCK",
+   "qty": 150
+  },
+  {
+   "kind": "StockSplit",
+   "day": 1,
+   "phase": "simulation",
+   "original_id": "S_15",
+   "new_id": "S_split_S_15_1_4",
+   "sku": "RETAIL_STOCK",
+   "original_qty": 500,
+   "split_qty": 50,
+   "remaining_qty": 450
+  },
+  {
+   "kind": "StockTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "FIRM2",
+   "to": "H2",
+   "stock_id": "S_split_S_15_1_4",
+   "sku": "RETAIL_STOCK",
+   "qty": 50
+  },
+  {
+   "kind": "DeliveryObligationCancelled",
+   "day": 1,
+   "phase": "simulation",
+   "obligation_id": "D_18",
+   "contract_id": "D_18",
+   "alias": null,
+   "debtor": "FIRM2",
+   "creditor": "H2",
+   "sku": "RETAIL_STOCK",
+   "qty": 50
+  },
+  {
+   "kind": "DeliveryObligationSettled",
+   "day": 1,
+   "phase": "simulation",
+   "obligation_id": "D_18",
+   "contract_id": "D_18",
+   "alias": null,
+   "debtor": "FIRM2",
+   "creditor": "H2",
+   "sku": "RETAIL_STOCK",
+   "qty": 50
+  },
+  {
+   "kind": "StockSplit",
+   "day": 1,
+   "phase": "simulation",
+   "original_id": "S_15",
+   "new_id": "S_split_S_15_1_5",
+   "sku": "RETAIL_STOCK",
+   "original_qty": 450,
+   "split_qty": 75,
+   "remaining_qty": 375
+  },
+  {
+   "kind": "StockTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "FIRM2",
+   "to": "H4",
+   "stock_id": "S_split_S_15_1_5",
+   "sku": "RETAIL_STOCK",
+   "qty": 75
+  },
+  {
+   "kind": "DeliveryObligationCancelled",
+   "day": 1,
+   "phase": "simulation",
+   "obligation_id": "D_19",
+   "contract_id": "D_19",
+   "alias": null,
+   "debtor": "FIRM2",
+   "creditor": "H4",
+   "sku": "RETAIL_STOCK",
+   "qty": 75
+  },
+  {
+   "kind": "DeliveryObligationSettled",
+   "day": 1,
+   "phase": "simulation",
+   "obligation_id": "D_19",
+   "contract_id": "D_19",
+   "alias": null,
+   "debtor": "FIRM2",
+   "creditor": "H4",
+   "sku": "RETAIL_STOCK",
+   "qty": 75
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "ReservesTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "BANK1",
+   "to": "BANK2",
+   "amount": "1800"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 1,
+   "phase": "simulation",
+   "keep": "reserve:BANK2",
+   "removed": "transfer:BANK1:BANK2:1"
+  },
+  {
+   "kind": "InterbankCleared",
+   "day": 1,
+   "phase": "simulation",
+   "debtor_bank": "BANK1",
+   "creditor_bank": "BANK2",
+   "amount": "1800"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 2,
+   "phase": "simulation",
+   "payer": "H3",
+   "payer_bank": "BANK2",
+   "payee": "H1",
+   "payee_bank": "BANK1",
+   "amount": "700"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_27",
+   "contract_id": "PAY_27",
+   "alias": null,
+   "debtor": "H3",
+   "creditor": "H1",
+   "amount": "700"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 2,
+   "phase": "simulation",
+   "payer": "H4",
+   "payer_bank": "BANK2",
+   "payee": "H2",
+   "payee_bank": "BANK1",
+   "amount": "900"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_28",
+   "contract_id": "PAY_28",
+   "alias": null,
+   "debtor": "H4",
+   "creditor": "H2",
+   "amount": "900"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "FIRM2",
+   "to": "FIRM1",
+   "amount": "1500"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:FIRM1",
+   "removed": "cash:FIRM1:merged:2:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_29",
+   "contract_id": "PAY_29",
+   "alias": null,
+   "debtor": "FIRM2",
+   "creditor": "FIRM1",
+   "amount": "1500"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "ReservesTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "BANK2",
+   "to": "BANK1",
+   "amount": "1600"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "reserve:BANK1",
+   "removed": "transfer:BANK2:BANK1:2"
+  },
+  {
+   "kind": "InterbankCleared",
+   "day": 2,
+   "phase": "simulation",
+   "debtor_bank": "BANK2",
+   "creditor_bank": "BANK1",
+   "amount": "1600"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "FIRM1",
+   "to": "H1",
+   "amount": "100"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H1",
+   "removed": "cash:H1:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_30",
+   "contract_id": "PAY_30",
+   "alias": null,
+   "debtor": "FIRM1",
+   "creditor": "H1",
+   "amount": "100"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "FIRM1",
+   "to": "H3",
+   "amount": "150"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H3",
+   "removed": "cash:H3:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_31",
+   "contract_id": "PAY_31",
+   "alias": null,
+   "debtor": "FIRM1",
+   "creditor": "H3",
+   "amount": "150"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "FIRM2",
+   "to": "H2",
+   "amount": "100"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H2",
+   "removed": "cash:H2:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_32",
+   "contract_id": "PAY_32",
+   "alias": null,
+   "debtor": "FIRM2",
+   "creditor": "H2",
+   "amount": "100"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "FIRM2",
+   "to": "H4",
+   "amount": "150"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H4",
+   "removed": "cash:H4:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_33",
+   "contract_id": "PAY_33",
+   "alias": null,
+   "debtor": "FIRM2",
+   "creditor": "H4",
+   "amount": "150"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 4,
+   "phase": "simulation",
+   "payer": "H1",
+   "payee": "H2",
+   "bank": "BANK1",
+   "amount": "200"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 4,
+   "phase": "simulation",
+   "pid": "PAY_34",
+   "contract_id": "PAY_34",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "H2",
+   "amount": "200"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 4,
+   "phase": "simulation",
+   "payer": "H3",
+   "payee": "H4",
+   "bank": "BANK2",
+   "amount": "300"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 4,
+   "phase": "simulation",
+   "pid": "PAY_35",
+   "contract_id": "PAY_35",
+   "alias": null,
+   "debtor": "H3",
+   "creditor": "H4",
+   "amount": "300"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 6,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "BANK1": "31000",
+   "BANK2": "31000",
+   "FIRM1": "4250",
+   "FIRM2": "5250",
+   "H1": "2100",
+   "H2": "2100",
+   "H3": "2150",
+   "H4": "2150"
+  },
+  "reserves": {
+   "BANK1": "49800",
+   "BANK2": "50200"
+  },
+  "deposits": {
+   "FIRM1@BANK1": "15300",
+   "FIRM2@BANK2": "15600",
+   "H1@BANK1": "7000",
+   "H2@BANK1": "8500",
+   "H3@BANK2": "7600",
+   "H4@BANK2": "8000"
+  },
+  "defaulted": []
+ }
+}
