@@ -1,0 +1,232 @@
+{
+ "events": [
+  {
+   "kind": "ReservesMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "B_US",
+   "amount": "10000"
+  },
+  {
+   "kind": "ReservesMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "B_EU",
+   "amount": "8000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F_US",
+   "amount": "5000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F_EU",
+   "amount": "4000"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F_US",
+   "creditor": "F_EU",
+   "amount": "1000",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_4",
+   "alias": null
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "F_US",
+   "to": "F_EU",
+   "amount": "1000"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:F_EU",
+   "removed": "cash:F_EU:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_4",
+   "contract_id": "PAY_4",
+   "alias": null,
+   "debtor": "F_US",
+   "creditor": "F_EU",
+   "amount": "1000"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "F_EU": "5000",
+   "F_US": "4000"
+  },
+  "reserves": {
+   "B_EU": "8000",
+   "B_US": "10000"
+  },
+  "deposits": {},
+  "defaulted": []
+ }
+}

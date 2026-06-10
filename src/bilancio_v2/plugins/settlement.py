@@ -24,6 +24,12 @@ from bilancio_v2.ledger import ZERO, DeliveryObligation, Ledger, Payable
 from bilancio_v2.plugins.base import RunContext
 
 
+def update_dealer_risk_history(ledger: Ledger, *, issuer_id: str, defaulted: bool) -> None:
+    from bilancio_v2.plugins.dealer import update_dealer_risk_history as _update
+
+    _update(ledger, issuer_id=issuer_id, defaulted=defaulted)
+
+
 class SettlementPhase:
     name = "SubphaseB2"
 
@@ -90,6 +96,7 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[b
         creditor=payable.creditor,
         amount=payable.amount,
     )
+    update_dealer_risk_history(ledger, issuer_id=payable.debtor, defaulted=False)
     rollover_info = None
     if ctx.rollover_enabled:
         rollover_info = (
@@ -227,6 +234,7 @@ def handle_payable_default(ledger: Ledger, payable: Payable, remaining: Decimal,
         trigger_contract_id=payable.id,
         trigger_shortfall=remaining,
     )
+    update_dealer_risk_history(ledger, issuer_id=payable.debtor, defaulted=True)
     reassign_receivables(ledger, payable.debtor, creditor_weights)
     return False
 

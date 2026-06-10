@@ -83,14 +83,19 @@ winddown, final CB settlement, interbank auction records). Banking is
 configured via ``CleanBankingConfig`` passed to ``prepare_scenario`` /
 ``run_scenario`` — same surface as the existing engine.
 
-Rejected explicitly (`UnsupportedScenarioError`) until rebuilt as plugins:
+Also supported: the **dealer subsystem** in all three modes — marker
+(daily pricing snapshots), balanced passive (equity baseline + PnL at
+export), and balanced active (payables-as-tickets, per-bucket market
+makers, trading rounds via the shared matching engine, ledger-audited
+cash reconciliation) — plus the **action-specs** configurations and the
+jurisdiction-carrying scenarios clean-core accepts.
 
-1. **Dealer / balanced dealer** (largest; port against the dealer metrics
-   golden outputs)
-2. **Jurisdictions/FX, action specs** (to the extent clean-core supports
-   them)
+**The v2 kernel's supported domain now equals the clean-core engine's by
+construction**: scenario gating reuses the clean-core gate functions, so
+both engines accept and reject exactly the same scenarios (multi-currency
+jurisdiction *semantics* remain a legacy-v1-only feature on both).
 
-Each subsystem should land as a phase plugin plus capability-matrix rows,
-validated the same way: capture goldens from the existing engine first,
-then port until the parity suite passes, then extend the property-based
-generator to cover the new behavior.
+The remaining migration steps are consumers, not engine features: point
+the CLI/run pipeline and sweep runners at `bilancio_v2`, then delete the
+two legacy engines. The parity suite (`tests/v2/`) is the gate for both
+steps.

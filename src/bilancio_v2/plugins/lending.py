@@ -728,12 +728,20 @@ def lender_profile_default_probability(
 
 
 def lender_signal_default_probability(ledger: Ledger, agent_id: str) -> Decimal:
-    # The existing engine consults the dealer risk assessor first; the v2
-    # kernel has no dealer subsystem yet, so the signal falls through to the
-    # rating registry and then the population base rate (same as legacy when
-    # no dealer is configured).
     if agent_id in ledger.defaulted_agent_ids:
         return Decimal("1.0")
+    subsystem = ledger.dealer_subsystem
+    risk_assessor = getattr(subsystem, "risk_assessor", None)
+    if risk_assessor is not None:
+        p_default = risk_assessor.estimate_default_prob(agent_id, ledger.day)
+        if p_default is not None:
+            return Decimal(str(p_default))
+    if ledger.dealer_config is not None and ledger.dealer_config.risk_enabled:
+        if ledger.dealer_config.kappa is not None:
+            from bilancio.dealer.priors import kappa_informed_prior
+
+            return Decimal(kappa_informed_prior(ledger.dealer_config.kappa))
+        return Decimal(ledger.dealer_config.initial_prior)
     if ledger.rating_registry:
         return ledger.rating_registry.get(agent_id, Decimal("0.15"))
     base_rate = Decimal(len(ledger.defaulted_agent_ids)) / Decimal(max(len(ledger.agents), 1))

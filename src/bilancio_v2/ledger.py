@@ -193,6 +193,13 @@ class Ledger:
     estimate_logging_enabled: bool = False
     estimate_log: list[Any] = field(default_factory=list)
 
+    # Dealer subsystem working state (active mode reuses the shared trading
+    # machinery from bilancio.dealer; system-side balances stay ledger-owned
+    # and are reconciled at the same points as the existing engine).
+    dealer_config: Any | None = None
+    dealer_subsystem: Any | None = None
+    dealer_metrics: Any | None = None
+
     cash_minted_total: Decimal = ZERO
     cash_burned_total: Decimal = ZERO
     cash_converted_from_reserves: Decimal = ZERO
@@ -630,6 +637,22 @@ class Ledger:
         )
         self.payables.append(payable)
         return payable
+
+    # -- dealer cash reconciliation ----------------------------------------------
+
+    def sync_mint_cash(self, agent_id: str, amount: Decimal) -> None:
+        """Dealer-subsystem reconciliation: trading gains materialize as cash."""
+        self.cash[agent_id] += amount
+        self._add_cash_lot(agent_id, amount)
+        self.cash_minted_total += amount
+        self.log("CashMinted", to=agent_id, amount=amount)
+
+    def sync_retire_cash(self, agent_id: str, amount: Decimal) -> None:
+        """Dealer-subsystem reconciliation: trading losses retire cash."""
+        self._take_cash_lots(agent_id, amount)
+        self.cash[agent_id] -= amount
+        self.cash_burned_total += amount
+        self.log("CashRetired", frm=agent_id, amount=amount)
 
     # -- bank loan / resolution operations --------------------------------------
 

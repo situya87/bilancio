@@ -1,0 +1,384 @@
+{
+ "events": [
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H1",
+   "amount": "200"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H2",
+   "amount": "200"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H3",
+   "amount": "200"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H4",
+   "amount": "200"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H5",
+   "amount": "200"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H1",
+   "creditor": "H2",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_5",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H2",
+   "creditor": "H3",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_6",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H3",
+   "creditor": "H4",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_7",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H4",
+   "creditor": "H5",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_8",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H5",
+   "creditor": "H1",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_9",
+   "alias": null
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "H1",
+   "to": "H2",
+   "amount": "200"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H2",
+   "removed": "cash:H2:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_5",
+   "contract_id": "PAY_5",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "H2",
+   "amount": "200"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "H2",
+   "to": "H3",
+   "amount": "200"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H3",
+   "removed": "cash:H3:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_6",
+   "contract_id": "PAY_6",
+   "alias": null,
+   "debtor": "H2",
+   "creditor": "H3",
+   "amount": "200"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "H3",
+   "to": "H4",
+   "amount": "200"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H4",
+   "removed": "cash:H4:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_7",
+   "contract_id": "PAY_7",
+   "alias": null,
+   "debtor": "H3",
+   "creditor": "H4",
+   "amount": "200"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "H4",
+   "to": "H5",
+   "amount": "200"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H5",
+   "removed": "cash:H5:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_8",
+   "contract_id": "PAY_8",
+   "alias": null,
+   "debtor": "H4",
+   "creditor": "H5",
+   "amount": "200"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "H5",
+   "to": "H1",
+   "amount": "200"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_9",
+   "contract_id": "PAY_9",
+   "alias": null,
+   "debtor": "H5",
+   "creditor": "H1",
+   "amount": "200"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "H1": "200",
+   "H2": "200",
+   "H3": "200",
+   "H4": "200",
+   "H5": "200"
+  },
+  "reserves": {},
+  "deposits": {},
+  "defaulted": []
+ }
+}

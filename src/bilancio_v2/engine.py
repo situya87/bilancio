@@ -17,7 +17,13 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from bilancio.config.models import ScenarioConfig
-from bilancio.engines.clean_core_config import build_lender_config, build_rating_config
+from bilancio.engines.clean_core_config import (
+    build_dealer_config,
+    build_lender_config,
+    build_rating_config,
+    clean_core_configuration_error_reason,
+    clean_core_unsupported_reason,
+)
 from bilancio.engines.clean_core_types import CleanBankingConfig
 from bilancio.engines.termination import (
     DEFAULT_EVENTS,
@@ -34,6 +40,11 @@ from bilancio_v2.plugins.banking import (
     initial_banking_reserve_targets,
 )
 from bilancio_v2.plugins.base import PhasePlugin, RunContext
+from bilancio_v2.plugins.dealer import (
+    DealerPhase,
+    initialize_active_dealer_subsystem,
+    initialize_dealer_marker,
+)
 from bilancio_v2.plugins.interbank import InterbankPhase
 from bilancio_v2.plugins.lending import LendingPhase
 from bilancio_v2.plugins.rating import RatingPhase
@@ -88,17 +99,11 @@ class RunResult:
 
 
 def _unsupported_reason(config: ScenarioConfig) -> str | None:
-    if config.dealer is not None:
-        return "dealer subsystem"
-    if config.balanced_dealer is not None:
-        return "balanced dealer subsystem"
-    if config.action_specs:
-        return "action specs"
-    if config.jurisdictions:
-        return "jurisdictions"
-    if config.fx_rates:
-        return "fx rates"
-    return None
+    # The clean-core gate functions define the supported domain; v2 matches
+    # it exactly so both engines accept and reject the same scenarios.
+    # (Jurisdiction/FX metadata is carried but, like clean-core, not acted
+    # on — multi-currency semantics live only in the legacy v1 engine.)
+    return clean_core_unsupported_reason(config)
 
 
 def prepare_scenario(
@@ -107,9 +112,14 @@ def prepare_scenario(
     banking_config: CleanBankingConfig | None = None,
 ) -> Runtime:
     """Apply scenario setup and return a runtime that can be stepped day by day."""
+    configuration_error = clean_core_configuration_error_reason(config)
+    if configuration_error is not None:
+        from bilancio.core.errors import ConfigurationError
+
+        raise ConfigurationError(configuration_error)
     reason = _unsupported_reason(config)
     if reason is not None:
-        raise UnsupportedScenarioError(f"v2 kernel does not support {reason} yet")
+        raise UnsupportedScenarioError(reason)
 
     policy = CapabilityMatrix.default()
     if config.policy_overrides is not None:
@@ -127,6 +137,14 @@ def prepare_scenario(
     ledger.cb_reserves_initial = ledger.cb_reserves_outstanding
     ledger.estimate_logging_enabled = config.run.estimate_logging
     ledger.check_invariants()
+
+    dealer_config = build_dealer_config(config)
+    ledger.dealer_config = dealer_config
+    if dealer_config is not None:
+        if dealer_config.balanced_active:
+            initialize_active_dealer_subsystem(ledger, dealer_config)
+        else:
+            initialize_dealer_marker(ledger, dealer_config)
 
     if banking_config is not None and not banking_config.reserve_targets:
         banking_config = replace(
@@ -154,6 +172,8 @@ def prepare_scenario(
         phases.append(LendingPhase(config=lender_config))
     if banking_config is not None and banking_config.enable_bank_lending:
         phases.append(BankLendingPhase(config=banking_config))
+    if dealer_config is not None:
+        phases.append(DealerPhase(config=dealer_config))
     phases.append(SettlementPhase())
     phases.append(InterbankPhase())
     return Runtime(ledger=ledger, ctx=ctx, phases=tuple(phases))
