@@ -1,0 +1,786 @@
+{
+ "events": [
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H1",
+   "amount": "100",
+   "alias": "LIQ_H1"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H2",
+   "amount": "100",
+   "alias": "LIQ_H2"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H3",
+   "amount": "100",
+   "alias": "LIQ_H3"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H4",
+   "amount": "100",
+   "alias": "LIQ_H4"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H5",
+   "amount": "100",
+   "alias": "LIQ_H5"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "lender",
+   "amount": "300",
+   "alias": "LIQ_lender"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H1",
+   "creditor": "H2",
+   "amount": "200",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_6",
+   "alias": "P_H1_H2"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H2",
+   "creditor": "H3",
+   "amount": "200",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_7",
+   "alias": "P_H2_H3"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H3",
+   "creditor": "H4",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_8",
+   "alias": "P_H3_H4"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H4",
+   "creditor": "H5",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_9",
+   "alias": "P_H4_H5"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H5",
+   "creditor": "H1",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_10",
+   "alias": "P_H5_H1"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "phase": "simulation",
+   "lender_id": "lender",
+   "borrower_id": "H1",
+   "amount": "90",
+   "loan_id": "NBL_0",
+   "rate": "0.1477777777777777777777777778",
+   "maturity_day": 3
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "phase": "simulation",
+   "lender_id": "lender",
+   "borrower_id": "H2",
+   "amount": "90",
+   "loan_id": "NBL_1",
+   "rate": "0.1477777777777777777777777778",
+   "maturity_day": 3
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "phase": "simulation",
+   "lender_id": "lender",
+   "borrower_id": "H3",
+   "amount": "60",
+   "loan_id": "NBL_2",
+   "rate": "0.1477777777777777777777777778",
+   "maturity_day": 3
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "lender_id": "lender",
+   "borrower_id": "H1",
+   "amount": "90",
+   "rate": "0.1477777777777777777777777778",
+   "loan_id": "NBL_0",
+   "p_default": "0.4444444444444444444444444445"
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "lender_id": "lender",
+   "borrower_id": "H2",
+   "amount": "90",
+   "rate": "0.1477777777777777777777777778",
+   "loan_id": "NBL_1",
+   "p_default": "0.4444444444444444444444444445"
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "lender_id": "lender",
+   "borrower_id": "H3",
+   "amount": "60",
+   "rate": "0.1477777777777777777777777778",
+   "loan_id": "NBL_2",
+   "p_default": "0.4444444444444444444444444445"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "H1",
+   "to": "H2",
+   "amount": "100"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "H1",
+   "to": "H2",
+   "amount": "90"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:H2",
+   "removed": "cash:H2:merged:2:0"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:H2",
+   "removed": "cash:H2:merged:2:1"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:H2",
+   "removed": "cash:H2:merged:2:2"
+  },
+  {
+   "kind": "PartialSettlement",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_6",
+   "alias": "P_H1_H2",
+   "debtor": "H1",
+   "creditor": "H2",
+   "contract_kind": "payable",
+   "settlement_kind": "payable",
+   "amount_paid": "190",
+   "shortfall": "10",
+   "original_amount": "200",
+   "distribution": [
+    {
+     "method": "cash",
+     "amount": "190"
+    }
+   ]
+  },
+  {
+   "kind": "ObligationDefaulted",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_6",
+   "alias": "P_H1_H2",
+   "debtor": "H1",
+   "creditor": "H2",
+   "contract_kind": "payable",
+   "shortfall": "10",
+   "amount_paid": "190",
+   "original_amount": "200",
+   "amount": "10"
+  },
+  {
+   "kind": "AgentDefaulted",
+   "day": 2,
+   "phase": "simulation",
+   "agent": "H1",
+   "frm": "H1",
+   "trigger_contract": "PAY_6",
+   "contract_kind": "payable",
+   "shortfall": "10",
+   "mode": "expel-agent"
+  },
+  {
+   "kind": "ObligationWrittenOff",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "NBL_0",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "lender",
+   "contract_kind": "non_bank_loan",
+   "amount": "90"
+  },
+  {
+   "kind": "ReceivableReassigned",
+   "day": 2,
+   "phase": "simulation",
+   "defaulted_agent": "H1",
+   "debtor": "H5",
+   "new_creditor": "H2",
+   "old_payable": "PAY_10",
+   "new_payable": "PAY_reassigned_5",
+   "amount": "137",
+   "weight": 0.6896551724137931,
+   "maturity_distance": 3,
+   "new_due_day": 5
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_5",
+   "debtor": "H5",
+   "creditor": "H2",
+   "amount": "137",
+   "due_day": 5,
+   "maturity_distance": 3,
+   "reason": "receivable_reassignment"
+  },
+  {
+   "kind": "ReceivableReassigned",
+   "day": 2,
+   "phase": "simulation",
+   "defaulted_agent": "H1",
+   "debtor": "H5",
+   "new_creditor": "lender",
+   "old_payable": "PAY_10",
+   "new_payable": "PAY_reassigned_6",
+   "amount": "62",
+   "weight": 0.3103448275862069,
+   "maturity_distance": 3,
+   "new_due_day": 5
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_6",
+   "debtor": "H5",
+   "creditor": "lender",
+   "amount": "62",
+   "due_day": 5,
+   "maturity_distance": 3,
+   "reason": "receivable_reassignment"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "H2",
+   "to": "H3",
+   "amount": "200"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:H3",
+   "removed": "cash:H3:merged:2:0"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:H3",
+   "removed": "cash:H3:merged:2:1"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_7",
+   "contract_id": "PAY_7",
+   "alias": "P_H2_H3",
+   "debtor": "H2",
+   "creditor": "H3",
+   "amount": "200"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 3,
+   "phase": "simulation",
+   "lender_id": "lender",
+   "borrower_id": "H5",
+   "amount": "18",
+   "loan_id": "NBL_3",
+   "rate": "0.1472888888888888888888888889",
+   "maturity_day": 6
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 3,
+   "lender_id": "lender",
+   "borrower_id": "H5",
+   "amount": "18",
+   "rate": "0.1472888888888888888888888889",
+   "loan_id": "NBL_3",
+   "p_default": "0.4422222222222222222222222221"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "H3",
+   "to": "H4",
+   "amount": "200"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H4",
+   "removed": "cash:H4:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_8",
+   "contract_id": "PAY_8",
+   "alias": "P_H3_H4",
+   "debtor": "H3",
+   "creditor": "H4",
+   "amount": "200"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "H4",
+   "to": "H5",
+   "amount": "200"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H5",
+   "removed": "cash:H5:merged:3:0"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H5",
+   "removed": "cash:H5:merged:3:1"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_9",
+   "contract_id": "PAY_9",
+   "alias": "P_H4_H5",
+   "debtor": "H4",
+   "creditor": "H5",
+   "amount": "200"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "NonBankLoanRepaid",
+   "day": 3,
+   "phase": "simulation",
+   "loan_id": "NBL_1",
+   "borrower_id": "H2",
+   "lender_id": "lender",
+   "principal": "90",
+   "interest": "13",
+   "total_repaid": "103"
+  },
+  {
+   "kind": "NonBankLoanRepaid",
+   "day": 3,
+   "phase": "simulation",
+   "loan_id": "NBL_2",
+   "borrower_id": "H3",
+   "lender_id": "lender",
+   "principal": "60",
+   "interest": "8",
+   "total_repaid": "68"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 5,
+   "phase": "simulation",
+   "frm": "H5",
+   "to": "H2",
+   "amount": "137"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 5,
+   "phase": "simulation",
+   "keep": "cash:H2",
+   "removed": "cash:H2:merged:5:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 5,
+   "phase": "simulation",
+   "pid": "PAY_reassigned_5",
+   "contract_id": "PAY_reassigned_5",
+   "alias": null,
+   "debtor": "H5",
+   "creditor": "H2",
+   "amount": "137"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 5,
+   "phase": "simulation",
+   "frm": "H5",
+   "to": "lender",
+   "amount": "62"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 5,
+   "phase": "simulation",
+   "keep": "cash:lender",
+   "removed": "cash:lender:merged:5:0"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 5,
+   "phase": "simulation",
+   "keep": "cash:lender",
+   "removed": "cash:lender:merged:5:1"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 5,
+   "phase": "simulation",
+   "keep": "cash:lender",
+   "removed": "cash:lender:merged:5:2"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 5,
+   "phase": "simulation",
+   "pid": "PAY_reassigned_6",
+   "contract_id": "PAY_reassigned_6",
+   "alias": null,
+   "debtor": "H5",
+   "creditor": "lender",
+   "amount": "62"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "NonBankLoanRepaid",
+   "day": 6,
+   "phase": "simulation",
+   "loan_id": "NBL_3",
+   "borrower_id": "H5",
+   "lender_id": "lender",
+   "principal": "18",
+   "interest": "2",
+   "total_repaid": "20"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 7,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "H2": "214",
+   "H3": "92",
+   "H4": "100",
+   "H5": "99",
+   "lender": "295"
+  },
+  "reserves": {},
+  "deposits": {},
+  "defaulted": [
+   "H1"
+  ]
+ }
+}

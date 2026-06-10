@@ -6,8 +6,8 @@ the stability stop rule, and the daily invariant check — everything else
 
 Scenarios are loaded through the existing ``bilancio.config`` schema, so
 every YAML file that runs on the existing engines runs here unchanged.
-Features not yet rebuilt (dealer, lender, rating agency, rollover,
-jurisdictions) are rejected explicitly at preparation time.
+Features not yet rebuilt (dealer, rollover, jurisdictions, action specs)
+are rejected explicitly at preparation time.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from bilancio.config.models import ScenarioConfig
+from bilancio.engines.clean_core_config import build_lender_config, build_rating_config
 from bilancio.engines.termination import (
     DEFAULT_EVENTS,
     IMPACT_EVENTS,
@@ -27,6 +28,8 @@ from bilancio_v2.actions import apply_action
 from bilancio_v2.ledger import Ledger
 from bilancio_v2.plugins.base import PhasePlugin, RunContext
 from bilancio_v2.plugins.interbank import InterbankPhase
+from bilancio_v2.plugins.lending import LendingPhase
+from bilancio_v2.plugins.rating import RatingPhase
 from bilancio_v2.plugins.settlement import SettlementPhase
 from bilancio_v2.policy import CapabilityMatrix
 
@@ -82,10 +85,6 @@ def _unsupported_reason(config: ScenarioConfig) -> str | None:
         return "dealer subsystem"
     if config.balanced_dealer is not None:
         return "balanced dealer subsystem"
-    if config.lender is not None:
-        return "non-bank lender subsystem"
-    if config.rating_agency is not None:
-        return "rating agency subsystem"
     if config.action_specs:
         return "action specs"
     if config.jurisdictions:
@@ -117,15 +116,23 @@ def prepare_scenario(config: ScenarioConfig) -> Runtime:
     for index, action in enumerate(config.initial_actions):
         apply_action(ledger, action, index=index, setup=True)
     ledger.cb_reserves_initial = ledger.cb_reserves_outstanding
+    ledger.estimate_logging_enabled = config.run.estimate_logging
     ledger.check_invariants()
 
+    # The YAML→subsystem-config mapping is shared with the existing engine
+    # so both kernels always read a scenario identically.
+    rating_config = build_rating_config(config)
+    lender_config = build_lender_config(config)
+
     ctx = RunContext(policy=policy, default_mode=config.run.default_handling)
-    phases: tuple[PhasePlugin, ...] = (
-        ScheduledActionsPhase(),
-        SettlementPhase(),
-        InterbankPhase(),
-    )
-    return Runtime(ledger=ledger, ctx=ctx, phases=phases)
+    phases: list[PhasePlugin] = [ScheduledActionsPhase()]
+    if rating_config is not None:
+        phases.append(RatingPhase(config=rating_config))
+    if lender_config is not None:
+        phases.append(LendingPhase(config=lender_config))
+    phases.append(SettlementPhase())
+    phases.append(InterbankPhase())
+    return Runtime(ledger=ledger, ctx=ctx, phases=tuple(phases))
 
 
 def run_day(runtime: Runtime, day: int) -> bool:

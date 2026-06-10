@@ -70,17 +70,21 @@ Supported now: agents, cash/reserves/deposits, payables, delivery
 obligations and stock, CB loans with refinancing, interbank netting,
 fail-fast and expel-agent default handling (partial settlement, pro-rata
 recovery, write-offs, receivable reassignment), means-of-payment policy
-overrides, scheduled actions, stability-based termination.
+overrides, scheduled actions, stability-based termination, the **rating
+agency** (deterministic sampling, seeded-noise realistic profile, rating
+registry), and the **non-bank lender** (kappa-aware and signal-based
+pricing, information visibility models, exposure/concentration/coverage/
+expected-loss screens, preventive lending, loan servicing and defaults,
+loan write-offs in expulsion cascades).
 
 Rejected explicitly (`UnsupportedScenarioError`) until rebuilt as plugins,
 in suggested order:
 
-1. **Banking** (bank lending, routed deposits, reserve targets, CB freeze)
-2. **Non-bank lender** (decision protocol + information model)
-3. **Rating agency** (estimates feed the information layer)
-4. **Dealer / balanced dealer** (largest; port against the dealer metrics
+1. **Banking** (bank lending, routed deposits, reserve targets, CB freeze;
+   only reachable via sweep runners — build its oracle from sweep outputs)
+2. **Dealer / balanced dealer** (largest; port against the dealer metrics
    golden outputs)
-5. **Rollover, jurisdictions/FX, action specs**
+3. **Rollover, jurisdictions/FX, action specs**
 
 Each subsystem should land as a phase plugin plus capability-matrix rows,
 validated the same way: capture goldens from the existing engine first,

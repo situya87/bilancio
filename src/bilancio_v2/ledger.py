@@ -81,12 +81,40 @@ class CBLoan:
 
 
 @dataclass
+class NonBankLoan:
+    id: str
+    lender: str
+    borrower: str
+    amount: Decimal
+    rate: Decimal
+    issuance_day: int
+    maturity_days: int
+    settled: bool = False
+
+    @property
+    def maturity_day(self) -> int:
+        return self.issuance_day + self.maturity_days
+
+    @property
+    def repayment_amount(self) -> Decimal:
+        return Decimal(int(self.amount * (Decimal("1") + self.rate)))
+
+    @property
+    def interest_amount(self) -> Decimal:
+        return self.repayment_amount - self.amount
+
+
+@dataclass
 class StockLot:
     id: str
     owner: str
     sku: str
     quantity: int
     unit_price: Decimal
+
+    @property
+    def value(self) -> Decimal:
+        return Decimal(self.quantity) * self.unit_price
 
 
 @dataclass
@@ -131,11 +159,17 @@ class Ledger:
 
     payables: list[Payable] = field(default_factory=list)
     cb_loans: list[CBLoan] = field(default_factory=list)
+    non_bank_loans: list[NonBankLoan] = field(default_factory=list)
     stocks: dict[str, StockLot] = field(default_factory=dict)
     delivery_obligations: list[DeliveryObligation] = field(default_factory=list)
 
     scheduled_actions_by_day: dict[int, list[dict[str, Any]]] = field(default_factory=dict)
     defaulted_agent_ids: set[str] = field(default_factory=set)
+
+    rating_registry: dict[str, Decimal] = field(default_factory=dict)
+    lender_run_expected_loss_spent: Decimal = ZERO
+    estimate_logging_enabled: bool = False
+    estimate_log: list[Any] = field(default_factory=list)
 
     cash_minted_total: Decimal = ZERO
     cash_burned_total: Decimal = ZERO
@@ -163,6 +197,10 @@ class Ledger:
             self.log_setup(kind, **data)
         else:
             self.log(kind, **data)
+
+    def log_raw(self, kind: str, **data: Any) -> None:
+        """Record an informational event with no phase key (legacy subsystem shape)."""
+        self.journal.append(kind, day=self.day, phase=None, **data)
 
     # -- agent registration -------------------------------------------------
 
@@ -338,6 +376,7 @@ class Ledger:
             *(payable.id for payable in self.payables),
             *(obligation.id for obligation in self.delivery_obligations),
             *(loan.id for loan in self.cb_loans),
+            *(loan.id for loan in self.non_bank_loans),
         }
         candidate = f"{prefix}_{preferred_index}"
         if candidate not in used:
@@ -540,6 +579,83 @@ class Ledger:
             principal=loan.amount,
             interest=loan.interest_amount,
             total_repaid=repayment,
+        )
+
+    # -- non-bank loan operations ----------------------------------------------
+
+    def disburse_non_bank_loan(
+        self,
+        *,
+        lender_id: str,
+        borrower_id: str,
+        amount: Decimal,
+        rate: Decimal,
+        maturity_days: int,
+    ) -> NonBankLoan:
+        """Create a non-bank loan, moving lender cash to the borrower.
+
+        The cash movement is deliberately silent (no ``CashTransferred``
+        events) — loan disbursement is observable only through
+        ``NonBankLoanCreated``, matching the existing engine.
+        """
+        self._require(self.cash[lender_id], amount, f"{lender_id} cash")
+        self._take_cash_lots(lender_id, amount)
+        self.cash[lender_id] -= amount
+        self.cash[borrower_id] += amount
+        self._add_cash_lot(borrower_id, amount)
+        loan_id = f"NBL_{len(self.non_bank_loans)}"
+        loan = NonBankLoan(
+            id=loan_id,
+            lender=lender_id,
+            borrower=borrower_id,
+            amount=amount,
+            rate=rate,
+            issuance_day=self.day,
+            maturity_days=maturity_days,
+        )
+        self.non_bank_loans.append(loan)
+        self.log(
+            "NonBankLoanCreated",
+            lender_id=lender_id,
+            borrower_id=borrower_id,
+            amount=amount,
+            loan_id=loan_id,
+            rate=str(rate),
+            maturity_day=loan.maturity_day,
+        )
+        return loan
+
+    def default_non_bank_loan(self, loan: NonBankLoan, *, borrower_liquid: Decimal) -> None:
+        """Write off a matured loan the borrower cannot repay (lender absorbs)."""
+        loan.settled = True
+        self.log(
+            "NonBankLoanDefaulted",
+            loan_id=loan.id,
+            borrower_id=loan.borrower,
+            lender_id=loan.lender,
+            amount_owed=loan.repayment_amount,
+            cash_available=borrower_liquid,
+        )
+
+    def repay_non_bank_loan_with_cash(self, loan: NonBankLoan) -> None:
+        """Repay a matured loan from borrower cash (silent movement, like disbursal)."""
+        repayment = loan.repayment_amount
+        self._take_cash_lots(loan.borrower, repayment)
+        self.cash[loan.borrower] -= repayment
+        self.cash[loan.lender] += repayment
+        self._add_cash_lot(loan.lender, repayment)
+        self.mark_non_bank_loan_repaid(loan)
+
+    def mark_non_bank_loan_repaid(self, loan: NonBankLoan) -> None:
+        loan.settled = True
+        self.log(
+            "NonBankLoanRepaid",
+            loan_id=loan.id,
+            borrower_id=loan.borrower,
+            lender_id=loan.lender,
+            principal=loan.amount,
+            interest=loan.interest_amount,
+            total_repaid=loan.repayment_amount,
         )
 
     # -- inventory operations ------------------------------------------------

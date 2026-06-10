@@ -29,6 +29,7 @@ SUPPORTED = [
     "rich_simulation",
     "sasa_scenario",
     "simple_bank",
+    "simple_nbfi",
     "two_banks_interbank",
 ]
 
@@ -43,7 +44,6 @@ FAIL_IDENTICALLY = [
 # Explicitly out of the rebuilt slice: v2 must reject, not mis-simulate.
 UNSUPPORTED = [
     "ring_with_action_specs",
-    "simple_nbfi",
     "two_jurisdictions",
 ]
 

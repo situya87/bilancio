@@ -21,10 +21,14 @@ from typing import Any
 class Event:
     kind: str
     day: int
-    phase: str  # "setup" | "simulation"
+    # "setup" | "simulation" | None — informational subsystem events
+    # (ratings, lending decisions) carry no phase, matching the existing engine.
+    phase: str | None
     data: Mapping[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
+        if self.phase is None:
+            return {"kind": self.kind, "day": self.day, **self.data}
         return {"kind": self.kind, "day": self.day, "phase": self.phase, **self.data}
 
 
@@ -34,7 +38,7 @@ class EventJournal:
 
     _events: list[Event] = field(default_factory=list)
 
-    def append(self, kind: str, *, day: int, phase: str, **data: Any) -> Event:
+    def append(self, kind: str, *, day: int, phase: str | None, **data: Any) -> Event:
         event = Event(kind=kind, day=day, phase=phase, data=MappingProxyType(dict(data)))
         self._events.append(event)
         return event

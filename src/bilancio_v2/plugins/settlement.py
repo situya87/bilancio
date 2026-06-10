@@ -168,10 +168,14 @@ def collect_creditor_weights(ledger: Ledger, agent_id: str) -> dict[str, Decimal
         if payable.settled or payable.debtor != agent_id:
             continue
         claims[payable.creditor] += payable.amount
-    for loan in ledger.cb_loans:
-        if loan.settled or loan.bank != agent_id:
+    for nb_loan in ledger.non_bank_loans:
+        if nb_loan.settled or nb_loan.borrower != agent_id:
             continue
-        claims[loan.central_bank] += loan.amount
+        claims[nb_loan.lender] += nb_loan.amount
+    for cb_loan in ledger.cb_loans:
+        if cb_loan.settled or cb_loan.bank != agent_id:
+            continue
+        claims[cb_loan.central_bank] += cb_loan.amount
     for obligation in ledger.delivery_obligations:
         if obligation.settled or obligation.debtor != agent_id:
             continue
@@ -193,6 +197,10 @@ def distribute_pro_rata_recovery(ledger: Ledger, agent_id: str) -> None:
         if payable.settled or payable.debtor != agent_id:
             continue
         claims.append((payable.creditor, payable.amount))
+    for loan in ledger.non_bank_loans:
+        if loan.settled or loan.borrower != agent_id:
+            continue
+        claims.append((loan.lender, loan.repayment_amount))
 
     total_claims = sum((amount for _, amount in claims), ZERO)
     if total_claims <= ZERO:
@@ -249,6 +257,20 @@ def write_off_liabilities(ledger: Ledger, agent_id: str, *, skip_contract_id: st
             contract_kind="payable",
             amount=payable.amount,
             due_day=payable.due_day,
+        )
+
+    for loan in ledger.non_bank_loans:
+        if loan.settled or loan.borrower != agent_id or loan.id == skip_contract_id:
+            continue
+        loan.settled = True
+        ledger.log(
+            "ObligationWrittenOff",
+            contract_id=loan.id,
+            alias=None,
+            debtor=loan.borrower,
+            creditor=loan.lender,
+            contract_kind="non_bank_loan",
+            amount=loan.amount,
         )
 
     for obligation in ledger.delivery_obligations:

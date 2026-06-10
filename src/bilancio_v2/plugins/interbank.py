@@ -13,6 +13,7 @@ from decimal import Decimal
 
 from bilancio_v2.ledger import ZERO, Ledger
 from bilancio_v2.plugins.base import RunContext
+from bilancio_v2.plugins.lending import repay_due_non_bank_loans
 
 CB_REFINANCE_RATE = Decimal("0.03")
 CB_LOAN_GRACE_DAYS = 2
@@ -29,6 +30,7 @@ class InterbankPhase:
             ledger.log("InterbankCleared", debtor_bank=from_bank, creditor_bank=to_bank, amount=amount)
             impactful = True
         repay_due_cb_loans(ledger)
+        repay_due_non_bank_loans(ledger)
         return impactful
 
 
