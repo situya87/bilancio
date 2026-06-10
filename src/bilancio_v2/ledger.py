@@ -581,6 +581,32 @@ class Ledger:
             total_repaid=repayment,
         )
 
+    def add_rollover_payable(
+        self,
+        *,
+        debtor: str,
+        creditor: str,
+        amount: Decimal,
+        due_day: int,
+        maturity_distance: int,
+    ) -> Payable:
+        """Append a rollover-refinanced payable without a creation event.
+
+        Rollover is observable through ``PayableRolledOver``/``RolloverPartial``
+        (emitted by the settlement plugin after the cash return-flow), not
+        ``PayableCreated`` — matching the existing engine.
+        """
+        payable = Payable(
+            id=f"PAY_rollover_{len(self.payables)}",
+            debtor=debtor,
+            creditor=creditor,
+            amount=amount,
+            due_day=due_day,
+            maturity_distance=maturity_distance,
+        )
+        self.payables.append(payable)
+        return payable
+
     # -- non-bank loan operations ----------------------------------------------
 
     def disburse_non_bank_loan(

@@ -22,6 +22,7 @@ class RunContext:
 
     policy: CapabilityMatrix
     default_mode: str  # "fail-fast" | "expel-agent"
+    rollover_enabled: bool = False
 
 
 class PhasePlugin(Protocol):

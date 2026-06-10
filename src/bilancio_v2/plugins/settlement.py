@@ -28,18 +28,25 @@ class SettlementPhase:
 
     def run(self, ledger: Ledger, ctx: RunContext) -> bool:
         impactful = False
+        settled_for_rollover: list[tuple[str, str, Decimal, int]] = []
         for payable in list(ledger.payables):
             if payable.settled or payable.due_day != ledger.day:
                 continue
-            impactful = settle_payable(ledger, payable, ctx) or impactful
+            settled, rollover_info = settle_payable(ledger, payable, ctx)
+            impactful = settled or impactful
+            if rollover_info is not None:
+                settled_for_rollover.append(rollover_info)
         for obligation in ledger.delivery_obligations:
             if obligation.settled or obligation.due_day != ledger.day:
                 continue
             impactful = settle_delivery_obligation(ledger, obligation, ctx) or impactful
+        if ctx.rollover_enabled and settled_for_rollover:
+            ledger.log("SubphaseB_Rollover")
+            rollover_settled_payables(ledger, settled_for_rollover)
         return impactful
 
 
-def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> bool:
+def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[bool, tuple[str, str, Decimal, int] | None]:
     checkpoint = ledger.checkpoint() if ctx.default_mode == "fail-fast" else None
 
     remaining = payable.amount
@@ -60,7 +67,7 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> bool:
 
     if remaining:
         try:
-            return handle_payable_default(ledger, payable, remaining, ctx)
+            return handle_payable_default(ledger, payable, remaining, ctx), None
         except DefaultError:
             if checkpoint is not None:
                 ledger.restore(checkpoint)
@@ -76,7 +83,15 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> bool:
         creditor=payable.creditor,
         amount=payable.amount,
     )
-    return True
+    rollover_info = None
+    if ctx.rollover_enabled:
+        rollover_info = (
+            payable.debtor,
+            payable.creditor,
+            payable.amount,
+            payable.maturity_distance,
+        )
+    return True, rollover_info
 
 
 def pay_with_deposit(ledger: Ledger, payer: str, payee: str, amount: Decimal) -> Decimal:
@@ -430,6 +445,89 @@ def deliver_stock_for_obligation(ledger: Ledger, debtor: str, creditor: str, sku
         )
         remaining -= transfer_qty
     return deliver_quantity
+
+
+def rollover_settled_payables(ledger: Ledger, settled_payables: list[tuple[str, str, Decimal, int]]) -> list[str]:
+    """Refinance settled payables past the latest open maturity (Plan 024).
+
+    The creditor returns the settlement cash to the debtor (deposit first,
+    then cash) and a new payable is created at ``max open due day +
+    maturity distance``, keeping the debt ring rolling indefinitely.
+    """
+    max_due_day = ledger.day
+    for payable in ledger.payables:
+        if payable.settled:
+            continue
+        if payable.due_day > max_due_day:
+            max_due_day = payable.due_day
+
+    new_payable_ids: list[str] = []
+    for debtor_id, creditor_id, amount, maturity_distance in settled_payables:
+        payable_id = rollover_single_payable(
+            ledger,
+            debtor_id,
+            creditor_id,
+            amount,
+            maturity_distance,
+            max_due_day + maturity_distance,
+        )
+        if payable_id is not None:
+            new_payable_ids.append(payable_id)
+    return new_payable_ids
+
+
+def rollover_single_payable(
+    ledger: Ledger,
+    debtor_id: str,
+    creditor_id: str,
+    amount: Decimal,
+    maturity_distance: int,
+    new_due_day: int,
+) -> str | None:
+    if debtor_id not in ledger.agents or debtor_id in ledger.defaulted_agent_ids:
+        return None
+    if creditor_id not in ledger.agents or creditor_id in ledger.defaulted_agent_ids:
+        return None
+
+    new_payable = ledger.add_rollover_payable(
+        debtor=debtor_id,
+        creditor=creditor_id,
+        amount=amount,
+        due_day=new_due_day,
+        maturity_distance=maturity_distance,
+    )
+
+    cash_transferred = pay_with_deposit(ledger, creditor_id, debtor_id, amount)
+    remaining = amount - cash_transferred
+    if remaining > ZERO:
+        cash_paid = min(ledger.cash[creditor_id], remaining)
+        if cash_paid > ZERO:
+            ledger.transfer_cash(creditor_id, debtor_id, cash_paid)
+            cash_transferred += cash_paid
+
+    if cash_transferred != amount:
+        ledger.log(
+            "RolloverPartial",
+            debtor=debtor_id,
+            creditor=creditor_id,
+            amount=amount,
+            cash_transferred=cash_transferred,
+            new_due_day=new_due_day,
+            payable_id=new_payable.id,
+            cash_transfer=True,
+        )
+    else:
+        ledger.log(
+            "PayableRolledOver",
+            debtor=debtor_id,
+            creditor=creditor_id,
+            amount=amount,
+            new_due_day=new_due_day,
+            maturity_distance=maturity_distance,
+            payable_id=new_payable.id,
+            cash_transfer=True,
+        )
+    return new_payable.id
 
 
 def handle_delivery_default(

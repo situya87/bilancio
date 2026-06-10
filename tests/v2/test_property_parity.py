@@ -68,6 +68,7 @@ def scenario_configs(draw: st.DrawFn) -> ScenarioConfig:
                 "max_days": 15,
                 "quiet_days": 2,
                 "default_handling": "expel-agent",
+                "rollover_enabled": draw(st.booleans()),
             },
         }
     )

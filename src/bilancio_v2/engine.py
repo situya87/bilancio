@@ -91,8 +91,6 @@ def _unsupported_reason(config: ScenarioConfig) -> str | None:
         return "jurisdictions"
     if config.fx_rates:
         return "fx rates"
-    if config.run.rollover_enabled:
-        return "payable rollover"
     return None
 
 
@@ -124,7 +122,11 @@ def prepare_scenario(config: ScenarioConfig) -> Runtime:
     rating_config = build_rating_config(config)
     lender_config = build_lender_config(config)
 
-    ctx = RunContext(policy=policy, default_mode=config.run.default_handling)
+    ctx = RunContext(
+        policy=policy,
+        default_mode=config.run.default_handling,
+        rollover_enabled=config.run.rollover_enabled,
+    )
     phases: list[PhasePlugin] = [ScheduledActionsPhase()]
     if rating_config is not None:
         phases.append(RatingPhase(config=rating_config))
@@ -182,7 +184,12 @@ def update_stability(
     else:
         tracker.consecutive_no_defaults = 0
 
-    if day == 0:
+    if runtime.ctx.rollover_enabled:
+        # Rollover keeps obligations open forever; stability is measured by
+        # consecutive default-free days instead of quiet days.
+        ledger.quiet_days = tracker.consecutive_no_defaults
+        stable_today = ledger.quiet_days >= quiet_days
+    elif day == 0:
         if not impactful:
             ledger.quiet_days += 1
         stable_today = False
@@ -194,7 +201,7 @@ def update_stability(
     tracker.snapshots.append(
         StabilitySnapshot(
             day=day,
-            consecutive_quiet=ledger.quiet_days,
+            consecutive_quiet=(tracker.consecutive_quiet if runtime.ctx.rollover_enabled else ledger.quiet_days),
             consecutive_no_defaults=tracker.consecutive_no_defaults,
             has_open_obligations=has_pending_future_obligations(ledger),
             impacted_count=impacted_on_day(ledger, day),
