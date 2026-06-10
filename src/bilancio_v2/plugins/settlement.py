@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from decimal import Decimal
+from typing import Any
 
 from bilancio.core.errors import DefaultError
 from bilancio_v2.actions import action_references_agent
@@ -60,7 +61,13 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[b
                 ledger.transfer_cash(payable.debtor, payable.creditor, paid)
                 remaining -= paid
         elif means == "bank_deposit":
-            paid = pay_with_deposit(ledger, payable.debtor, payable.creditor, remaining)
+            paid = pay_with_deposit(
+                ledger,
+                payable.debtor,
+                payable.creditor,
+                remaining,
+                banking_config=ctx.banking_config,
+            )
             remaining -= paid
         # Other means (e.g. reserve_deposit) have no payable-settlement
         # channel in this slice, matching the existing engine.
@@ -94,7 +101,17 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[b
     return True, rollover_info
 
 
-def pay_with_deposit(ledger: Ledger, payer: str, payee: str, amount: Decimal) -> Decimal:
+def pay_with_deposit(
+    ledger: Ledger,
+    payer: str,
+    payee: str,
+    amount: Decimal,
+    *,
+    banking_config: Any | None = None,
+) -> Decimal:
+    if banking_config is not None:
+        return pay_with_routed_deposits(ledger, payer, payee, amount, banking_config)
+
     payer_bank = ledger.primary_bank_for_customer(payer)
     payee_bank = ledger.primary_bank_for_customer(payee)
     if payer_bank is None:
@@ -106,6 +123,67 @@ def pay_with_deposit(ledger: Ledger, payer: str, payee: str, amount: Decimal) ->
         return ZERO
     ledger.move_deposit(payer, payer_bank, payee, payee_bank, paid)
     return paid
+
+
+def pay_with_routed_deposits(ledger: Ledger, payer: str, payee: str, amount: Decimal, banking_config: Any) -> Decimal:
+    """Banking-mode deposit payment: drain the payer's cheapest-deposit-rate
+    banks first, crediting the payee at its highest-deposit-rate bank."""
+    from bilancio_v2.plugins.banking import bank_profile, bank_quote
+
+    payer_balances = {
+        bank_id: balance for (customer_id, bank_id), balance in ledger.deposits.items() if customer_id == payer and balance > ZERO
+    }
+    if not payer_balances:
+        return ZERO
+
+    pay_amount = min(amount, sum(payer_balances.values(), ZERO))
+    payee_bank = select_receive_bank(ledger, payee, banking_config)
+    if payee_bank is None:
+        return ZERO
+
+    profile = bank_profile(banking_config)
+    sorted_banks: list[tuple[Decimal, str, Decimal]] = []
+    for bank_id, balance in payer_balances.items():
+        quote, _params = bank_quote(ledger, bank_id, banking_config, profile)
+        sorted_banks.append((quote.deposit_rate, bank_id, balance))
+    sorted_banks.sort(key=lambda item: item[0])
+
+    paid_total = ZERO
+    remaining = pay_amount
+    for _rate, payer_bank, balance in sorted_banks:
+        if remaining <= ZERO:
+            break
+        paid = min(balance, remaining)
+        ledger.move_deposit(payer, payer_bank, payee, payee_bank, paid)
+        paid_total += paid
+        remaining -= paid
+    return paid_total
+
+
+def select_receive_bank(ledger: Ledger, payee: str, banking_config: Any) -> str | None:
+    from bilancio_v2.plugins.banking import agent_banks, bank_profile, bank_quote
+
+    profile = bank_profile(banking_config)
+    candidates: list[tuple[Decimal, str]] = []
+    for customer_id, bank_id in ledger.deposits:
+        if customer_id != payee:
+            continue
+        bank = ledger.agents.get(bank_id)
+        if bank is None or bank.kind != "bank" or bank_id in ledger.defaulted_agent_ids:
+            continue
+        quote, _params = bank_quote(ledger, bank_id, banking_config, profile)
+        candidates.append((quote.deposit_rate, bank_id))
+    if not candidates:
+        for bank_id in agent_banks(ledger, payee, banking_config):
+            bank = ledger.agents.get(bank_id)
+            if bank is None or bank.kind != "bank" or bank_id in ledger.defaulted_agent_ids:
+                continue
+            quote, _params = bank_quote(ledger, bank_id, banking_config, profile)
+            candidates.append((quote.deposit_rate, bank_id))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
 
 
 def handle_payable_default(ledger: Ledger, payable: Payable, remaining: Decimal, ctx: RunContext) -> bool:
@@ -187,6 +265,10 @@ def collect_creditor_weights(ledger: Ledger, agent_id: str) -> dict[str, Decimal
         if nb_loan.settled or nb_loan.borrower != agent_id:
             continue
         claims[nb_loan.lender] += nb_loan.amount
+    for bank_loan in ledger.bank_loans:
+        if bank_loan.settled or bank_loan.borrower != agent_id:
+            continue
+        claims[bank_loan.bank] += bank_loan.amount
     for cb_loan in ledger.cb_loans:
         if cb_loan.settled or cb_loan.bank != agent_id:
             continue
@@ -286,6 +368,20 @@ def write_off_liabilities(ledger: Ledger, agent_id: str, *, skip_contract_id: st
             creditor=loan.lender,
             contract_kind="non_bank_loan",
             amount=loan.amount,
+        )
+
+    for bank_loan in ledger.bank_loans:
+        if bank_loan.settled or bank_loan.borrower != agent_id or bank_loan.id == skip_contract_id:
+            continue
+        bank_loan.settled = True
+        ledger.log(
+            "ObligationWrittenOff",
+            contract_id=bank_loan.id,
+            alias=None,
+            debtor=bank_loan.borrower,
+            creditor=bank_loan.bank,
+            contract_kind="bank_loan",
+            amount=bank_loan.amount,
         )
 
     for obligation in ledger.delivery_obligations:

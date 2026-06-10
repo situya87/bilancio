@@ -10,10 +10,13 @@ against this one interface — nothing is special-cased in the engine.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from bilancio_v2.ledger import Ledger
 from bilancio_v2.policy import CapabilityMatrix
+
+if TYPE_CHECKING:
+    from bilancio.engines.clean_core_types import CleanBankingConfig
 
 
 @dataclass(frozen=True)
@@ -23,6 +26,7 @@ class RunContext:
     policy: CapabilityMatrix
     default_mode: str  # "fail-fast" | "expel-agent"
     rollover_enabled: bool = False
+    banking_config: CleanBankingConfig | None = None
 
 
 class PhasePlugin(Protocol):

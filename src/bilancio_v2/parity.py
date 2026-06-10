@@ -64,10 +64,27 @@ def compare_runs(
     *,
     max_days: int | None = None,
     quiet_days: int | None = None,
+    banking_config: Any | None = None,
     max_event_diffs: int = 5,
 ) -> ParityReport:
-    legacy_result = clean_core.run_basic_scenario(config, max_days=max_days, quiet_days=quiet_days)
-    v2_result = run_scenario(config, max_days=max_days, quiet_days=quiet_days)
+    if banking_config is not None:
+        # Banking mode mirrors the CLI sequence: prepare with the banking
+        # config, run until stable, then run the end-of-run banking shutdown.
+        legacy_runtime = clean_core.prepare_scenario(config, banking_config=banking_config)
+        legacy_result = clean_core.run_runtime_until_stable(
+            legacy_runtime,
+            max_days=max_days if max_days is not None else config.run.max_days,
+            quiet_days=quiet_days if quiet_days is not None else config.run.quiet_days,
+        )
+        clean_core.finalize_banking_marker_events(
+            legacy_result.state,
+            final_day=legacy_result.final_day,
+            reached_stable=legacy_result.reached_stable,
+            banking_config=banking_config,
+        )
+    else:
+        legacy_result = clean_core.run_basic_scenario(config, max_days=max_days, quiet_days=quiet_days)
+    v2_result = run_scenario(config, max_days=max_days, quiet_days=quiet_days, banking_config=banking_config)
 
     diffs: list[str] = []
 

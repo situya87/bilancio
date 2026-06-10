@@ -38,7 +38,10 @@ class EventJournal:
 
     _events: list[Event] = field(default_factory=list)
 
-    def append(self, kind: str, *, day: int, phase: str | None, **data: Any) -> Event:
+    def append(self, kind: str, day: int, phase: str | None, /, **data: Any) -> Event:
+        # Positional-only so payloads may legitimately carry their own "day"
+        # key (some legacy events do); ``to_dict`` lets the payload win,
+        # matching the legacy dict-construction semantics.
         event = Event(kind=kind, day=day, phase=phase, data=MappingProxyType(dict(data)))
         self._events.append(event)
         return event

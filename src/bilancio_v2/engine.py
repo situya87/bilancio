@@ -13,11 +13,12 @@ rejected explicitly at preparation time.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from bilancio.config.models import ScenarioConfig
 from bilancio.engines.clean_core_config import build_lender_config, build_rating_config
+from bilancio.engines.clean_core_types import CleanBankingConfig
 from bilancio.engines.termination import (
     DEFAULT_EVENTS,
     IMPACT_EVENTS,
@@ -26,6 +27,12 @@ from bilancio.engines.termination import (
 )
 from bilancio_v2.actions import apply_action
 from bilancio_v2.ledger import Ledger
+from bilancio_v2.plugins.banking import (
+    BankLendingPhase,
+    BankQuotesPhase,
+    finalize_banking,
+    initial_banking_reserve_targets,
+)
 from bilancio_v2.plugins.base import PhasePlugin, RunContext
 from bilancio_v2.plugins.interbank import InterbankPhase
 from bilancio_v2.plugins.lending import LendingPhase
@@ -94,7 +101,11 @@ def _unsupported_reason(config: ScenarioConfig) -> str | None:
     return None
 
 
-def prepare_scenario(config: ScenarioConfig) -> Runtime:
+def prepare_scenario(
+    config: ScenarioConfig,
+    *,
+    banking_config: CleanBankingConfig | None = None,
+) -> Runtime:
     """Apply scenario setup and return a runtime that can be stepped day by day."""
     reason = _unsupported_reason(config)
     if reason is not None:
@@ -117,6 +128,12 @@ def prepare_scenario(config: ScenarioConfig) -> Runtime:
     ledger.estimate_logging_enabled = config.run.estimate_logging
     ledger.check_invariants()
 
+    if banking_config is not None and not banking_config.reserve_targets:
+        banking_config = replace(
+            banking_config,
+            reserve_targets=initial_banking_reserve_targets(ledger, banking_config),
+        )
+
     # The YAML→subsystem-config mapping is shared with the existing engine
     # so both kernels always read a scenario identically.
     rating_config = build_rating_config(config)
@@ -126,12 +143,17 @@ def prepare_scenario(config: ScenarioConfig) -> Runtime:
         policy=policy,
         default_mode=config.run.default_handling,
         rollover_enabled=config.run.rollover_enabled,
+        banking_config=banking_config,
     )
     phases: list[PhasePlugin] = [ScheduledActionsPhase()]
     if rating_config is not None:
         phases.append(RatingPhase(config=rating_config))
+    if banking_config is not None:
+        phases.append(BankQuotesPhase())
     if lender_config is not None:
         phases.append(LendingPhase(config=lender_config))
+    if banking_config is not None and banking_config.enable_bank_lending:
+        phases.append(BankLendingPhase(config=banking_config))
     phases.append(SettlementPhase())
     phases.append(InterbankPhase())
     return Runtime(ledger=ledger, ctx=ctx, phases=tuple(phases))
@@ -141,6 +163,15 @@ def run_day(runtime: Runtime, day: int) -> bool:
     """Run a single day and return whether it had impactful settlement events."""
     ledger = runtime.ledger
     ledger.day = day
+    banking_config = runtime.ctx.banking_config
+    if (
+        banking_config is not None
+        and banking_config.cb_lending_cutoff_day is not None
+        and day >= banking_config.cb_lending_cutoff_day
+        and not ledger.cb_lending_frozen
+    ):
+        ledger.cb_lending_frozen = True
+        ledger.log("CBLendingFreezeActivated", cutoff_day=banking_config.cb_lending_cutoff_day)
     ledger.log("PhaseA")
     ledger.log("PhaseB")
     impactful = False
@@ -245,11 +276,23 @@ def run_scenario(
     *,
     max_days: int | None = None,
     quiet_days: int | None = None,
+    banking_config: CleanBankingConfig | None = None,
 ) -> RunResult:
-    """Prepare and run a scenario with the legacy-compatible stop rule."""
-    runtime = prepare_scenario(config)
-    return run_until_stable(
+    """Prepare and run a scenario with the legacy-compatible stop rule.
+
+    In banking mode the end-of-run shutdown (bank loan winddown + final CB
+    settlement) runs after the stop rule fires, matching the existing CLI.
+    """
+    runtime = prepare_scenario(config, banking_config=banking_config)
+    result = run_until_stable(
         runtime,
         max_days=max_days if max_days is not None else config.run.max_days,
         quiet_days=quiet_days if quiet_days is not None else config.run.quiet_days,
     )
+    finalize_banking(
+        result.ledger,
+        final_day=result.final_day,
+        reached_stable=result.reached_stable,
+        banking_config=banking_config,
+    )
+    return result

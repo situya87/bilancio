@@ -70,21 +70,25 @@ Supported now: agents, cash/reserves/deposits, payables, delivery
 obligations and stock, CB loans with refinancing, interbank netting,
 fail-fast and expel-agent default handling (partial settlement, pro-rata
 recovery, write-offs, receivable reassignment), means-of-payment policy
-overrides, scheduled actions, stability-based termination, the **rating
-agency** (deterministic sampling, seeded-noise realistic profile, rating
-registry), and the **non-bank lender** (kappa-aware and signal-based
-pricing, information visibility models, exposure/concentration/coverage/
-expected-loss screens, preventive lending, loan servicing and defaults,
-loan write-offs in expulsion cascades).
+overrides, scheduled actions, stability-based termination, **payable
+rollover** (Plan 024), the **rating agency** (deterministic sampling,
+seeded-noise realistic profile, rating registry), the **non-bank lender**
+(kappa-aware and signal-based pricing, information visibility models,
+exposure/concentration/coverage/expected-loss screens, preventive lending,
+loan servicing and defaults, loan write-offs in expulsion cascades), and
+the **banking subsystem** (pricing-kernel quotes, bank lending with credit
+creation, routed deposits, corridor-priced lender rates, CB refinance and
+lending freeze, bank defaults with resolution and deposit write-offs, loan
+winddown, final CB settlement, interbank auction records). Banking is
+configured via ``CleanBankingConfig`` passed to ``prepare_scenario`` /
+``run_scenario`` — same surface as the existing engine.
 
-Rejected explicitly (`UnsupportedScenarioError`) until rebuilt as plugins,
-in suggested order:
+Rejected explicitly (`UnsupportedScenarioError`) until rebuilt as plugins:
 
-1. **Banking** (bank lending, routed deposits, reserve targets, CB freeze;
-   only reachable via sweep runners — build its oracle from sweep outputs)
-2. **Dealer / balanced dealer** (largest; port against the dealer metrics
+1. **Dealer / balanced dealer** (largest; port against the dealer metrics
    golden outputs)
-3. **Rollover, jurisdictions/FX, action specs**
+2. **Jurisdictions/FX, action specs** (to the extent clean-core supports
+   them)
 
 Each subsystem should land as a phase plugin plus capability-matrix rows,
 validated the same way: capture goldens from the existing engine first,

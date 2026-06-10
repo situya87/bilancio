@@ -105,6 +105,26 @@ class NonBankLoan:
 
 
 @dataclass
+class BankLoan:
+    id: str
+    bank: str
+    borrower: str
+    amount: Decimal
+    rate: Decimal
+    issuance_day: int
+    maturity_day: int
+    settled: bool = False
+
+    @property
+    def repayment_amount(self) -> Decimal:
+        return Decimal(int(self.amount * (Decimal("1") + self.rate)))
+
+    @property
+    def interest_amount(self) -> Decimal:
+        return self.repayment_amount - self.amount
+
+
+@dataclass
 class StockLot:
     id: str
     owner: str
@@ -160,6 +180,8 @@ class Ledger:
     payables: list[Payable] = field(default_factory=list)
     cb_loans: list[CBLoan] = field(default_factory=list)
     non_bank_loans: list[NonBankLoan] = field(default_factory=list)
+    bank_loans: list[BankLoan] = field(default_factory=list)
+    bank_defaulted_borrowers: set[str] = field(default_factory=set)
     stocks: dict[str, StockLot] = field(default_factory=dict)
     delivery_obligations: list[DeliveryObligation] = field(default_factory=list)
 
@@ -173,6 +195,7 @@ class Ledger:
 
     cash_minted_total: Decimal = ZERO
     cash_burned_total: Decimal = ZERO
+    cash_converted_from_reserves: Decimal = ZERO
     cb_reserves_initial: Decimal = ZERO
     cb_reserves_outstanding: Decimal = ZERO
     cb_loans_outstanding: Decimal = ZERO
@@ -187,10 +210,10 @@ class Ledger:
     # -- journal helpers ----------------------------------------------------
 
     def log(self, kind: str, **data: Any) -> None:
-        self.journal.append(kind, day=self.day, phase="simulation", **data)
+        self.journal.append(kind, self.day, "simulation", **data)
 
     def log_setup(self, kind: str, **data: Any) -> None:
-        self.journal.append(kind, day=0, phase="setup", **data)
+        self.journal.append(kind, 0, "setup", **data)
 
     def record(self, kind: str, *, setup: bool, **data: Any) -> None:
         if setup:
@@ -200,7 +223,7 @@ class Ledger:
 
     def log_raw(self, kind: str, **data: Any) -> None:
         """Record an informational event with no phase key (legacy subsystem shape)."""
-        self.journal.append(kind, day=self.day, phase=None, **data)
+        self.journal.append(kind, self.day, None, **data)
 
     # -- agent registration -------------------------------------------------
 
@@ -377,6 +400,7 @@ class Ledger:
             *(obligation.id for obligation in self.delivery_obligations),
             *(loan.id for loan in self.cb_loans),
             *(loan.id for loan in self.non_bank_loans),
+            *(loan.id for loan in self.bank_loans),
         }
         candidate = f"{prefix}_{preferred_index}"
         if candidate not in used:
@@ -607,6 +631,59 @@ class Ledger:
         self.payables.append(payable)
         return payable
 
+    # -- bank loan / resolution operations --------------------------------------
+
+    def create_bank_loan(
+        self,
+        *,
+        bank_id: str,
+        borrower_id: str,
+        amount: Decimal,
+        rate: Decimal,
+        maturity: int,
+    ) -> BankLoan:
+        """Issue a bank loan by crediting the borrower's deposit (no event;
+        observable through ``BankLoanIssued``, emitted by the banking plugin)."""
+        loan = BankLoan(
+            id=f"BL_{len(self.bank_loans)}",
+            bank=bank_id,
+            borrower=borrower_id,
+            amount=amount,
+            rate=rate,
+            issuance_day=self.day,
+            maturity_day=self.day + maturity,
+        )
+        self.bank_loans.append(loan)
+        self.deposits[(borrower_id, bank_id)] += amount
+        return loan
+
+    def decrease_deposit(self, agent_id: str, bank_id: str, amount: Decimal) -> Decimal:
+        """Debit up to ``amount`` from a deposit balance (no event)."""
+        debited = min(self.deposits[(agent_id, bank_id)], amount)
+        if debited > ZERO:
+            self.deposits[(agent_id, bank_id)] -= debited
+        return debited
+
+    def credit_deposit(self, agent_id: str, bank_id: str, amount: Decimal) -> None:
+        """Credit a deposit balance (no event; caller emits the domain event)."""
+        self.deposits[(agent_id, bank_id)] += amount
+
+    def move_reserves_logged(self, from_bank: str, to_bank: str, amount: Decimal, **extra: Any) -> None:
+        """Move reserves with a bare ``ReservesTransferred`` event (no merge event)."""
+        self.reserves[from_bank] -= amount
+        self.reserves[to_bank] += amount
+        self.log("ReservesTransferred", frm=from_bank, to=to_bank, amount=amount, **extra)
+
+    def convert_reserves_to_cash(self, bank_id: str, depositor_id: str, amount: Decimal, *, instr_id: str) -> None:
+        """Bank-resolution payout: failed bank's reserves become depositor cash."""
+        self.reserves[bank_id] -= amount
+        self.cb_reserves_outstanding -= amount
+        self.cash_converted_from_reserves += amount
+        self.log("ReservesToCash", bank_id=bank_id, amount=amount, instr_id=instr_id)
+        self.cash[depositor_id] += amount
+        self._add_cash_lot(depositor_id, amount)
+        self.log("CashTransferred", frm=bank_id, to=depositor_id, amount=amount, instr_id=instr_id)
+
     # -- non-bank loan operations ----------------------------------------------
 
     def disburse_non_bank_loan(
@@ -629,6 +706,24 @@ class Ledger:
         self.cash[lender_id] -= amount
         self.cash[borrower_id] += amount
         self._add_cash_lot(borrower_id, amount)
+        return self.record_non_bank_loan(
+            lender_id=lender_id,
+            borrower_id=borrower_id,
+            amount=amount,
+            rate=rate,
+            maturity_days=maturity_days,
+        )
+
+    def record_non_bank_loan(
+        self,
+        *,
+        lender_id: str,
+        borrower_id: str,
+        amount: Decimal,
+        rate: Decimal,
+        maturity_days: int,
+    ) -> NonBankLoan:
+        """Record a disbursed loan (funding already moved by the caller)."""
         loan_id = f"NBL_{len(self.non_bank_loans)}"
         loan = NonBankLoan(
             id=loan_id,
@@ -793,9 +888,11 @@ class Ledger:
             if balance < ZERO:
                 raise InvariantViolation(f"negative deposit for {customer} at {bank}: {balance}")
         cash_in_circulation = sum(self.cash.values(), ZERO)
-        expected_cash = self.cash_minted_total - self.cash_burned_total
+        expected_cash = self.cash_minted_total - self.cash_burned_total + self.cash_converted_from_reserves
         if cash_in_circulation != expected_cash:
-            raise InvariantViolation(f"cash conservation broken: in circulation {cash_in_circulation}, minted-burned {expected_cash}")
+            raise InvariantViolation(
+                f"cash conservation broken: in circulation {cash_in_circulation}, minted-burned+converted {expected_cash}"
+            )
         reserves_in_circulation = sum(self.reserves.values(), ZERO)
         if reserves_in_circulation != self.cb_reserves_outstanding:
             raise InvariantViolation(

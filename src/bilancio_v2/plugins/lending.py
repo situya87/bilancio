@@ -22,8 +22,8 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any
 
-from bilancio.engines.clean_core_types import CleanLenderConfig
-from bilancio_v2.ledger import ZERO, InsufficientFundsError, Ledger
+from bilancio.engines.clean_core_types import CleanBankingConfig, CleanLenderConfig
+from bilancio_v2.ledger import ZERO, InsufficientFundsError, Ledger, NonBankLoan
 from bilancio_v2.plugins.base import RunContext
 from bilancio_v2.plugins.settlement import pay_with_deposit
 
@@ -34,7 +34,7 @@ class LendingPhase:
     config: CleanLenderConfig
 
     def run(self, ledger: Ledger, ctx: RunContext) -> bool:
-        run_lending_phase(ledger, self.config)
+        run_lending_phase(ledger, self.config, banking_config=ctx.banking_config)
         # Lending decisions never count toward the stability impact signal,
         # matching the existing engine (which discards this phase's result).
         return False
@@ -45,7 +45,12 @@ class LendingPhase:
 # ---------------------------------------------------------------------------
 
 
-def run_lending_phase(ledger: Ledger, config: CleanLenderConfig) -> bool:
+def run_lending_phase(
+    ledger: Ledger,
+    config: CleanLenderConfig,
+    *,
+    banking_config: CleanBankingConfig | None = None,
+) -> bool:
     lender_id = active_lender_id(ledger)
     if lender_id is None:
         return False
@@ -87,7 +92,7 @@ def run_lending_phase(ledger: Ledger, config: CleanLenderConfig) -> bool:
             )
             return False
 
-    opportunities = collect_lending_opportunities(ledger, config, lender_id, initial_capital)
+    opportunities = collect_lending_opportunities(ledger, config, lender_id, initial_capital, banking_config=banking_config)
     rank_lending_opportunities(opportunities, config)
 
     remaining = available
@@ -157,12 +162,14 @@ def run_lending_phase(ledger: Ledger, config: CleanLenderConfig) -> bool:
                 continue
 
         rate, maturity_days = resolve_non_bank_loan_terms(ledger, config, opportunity)
-        loan = ledger.disburse_non_bank_loan(
+        loan = create_non_bank_loan(
+            ledger,
             lender_id=lender_id,
             borrower_id=opportunity["borrower_id"],
             amount=amount,
             rate=rate,
             maturity_days=maturity_days,
+            banking_config=banking_config,
         )
         remaining -= amount
         created = True
@@ -241,6 +248,8 @@ def collect_lending_opportunities(
     config: CleanLenderConfig,
     lender_id: str,
     initial_capital: Decimal,
+    *,
+    banking_config: CleanBankingConfig | None = None,
 ) -> list[dict[str, Any]]:
     opportunities: list[dict[str, Any]] = []
     for agent_id, agent in ledger.agents.items():
@@ -319,7 +328,7 @@ def collect_lending_opportunities(
                 )
                 continue
 
-        rate = lender_loan_rate(config, p_default) + coverage_rate_penalty
+        rate = lender_loan_rate(config, p_default, banking_config=banking_config) + coverage_rate_penalty
         opportunities.append(
             {
                 "borrower_id": agent_id,
@@ -422,6 +431,8 @@ def execute_preventive_lending_opportunities(
     remaining_capital: Decimal,
     daily_expected_loss_spent: Decimal,
     decision_events: list[tuple[str, dict[str, Any]]],
+    *,
+    banking_config: CleanBankingConfig | None = None,
 ) -> tuple[Decimal, Decimal, bool]:
     daily_expected_loss_cap = (
         initial_capital * config.daily_expected_loss_budget_ratio if config.daily_expected_loss_budget_ratio > ZERO else None
@@ -506,6 +517,41 @@ def execute_preventive_lending_opportunities(
     return remaining_capital, daily_expected_loss_spent, created
 
 
+def create_non_bank_loan(
+    ledger: Ledger,
+    *,
+    lender_id: str,
+    borrower_id: str,
+    amount: Decimal,
+    rate: Decimal,
+    maturity_days: int,
+    banking_config: CleanBankingConfig | None = None,
+) -> NonBankLoan:
+    """Disburse a loan: routed deposits in banking mode, silent cash otherwise."""
+    from bilancio.core.errors import DefaultError
+    from bilancio_v2.plugins.banking import agent_deposits_total
+    from bilancio_v2.plugins.settlement import pay_with_routed_deposits
+
+    if banking_config is not None and agent_deposits_total(ledger, lender_id) > ZERO:
+        paid = pay_with_routed_deposits(ledger, lender_id, borrower_id, amount, banking_config)
+        if paid != amount:
+            raise DefaultError(f"Insufficient deposits to create non-bank loan from {lender_id}: {amount - paid} still needed")
+        return ledger.record_non_bank_loan(
+            lender_id=lender_id,
+            borrower_id=borrower_id,
+            amount=amount,
+            rate=rate,
+            maturity_days=maturity_days,
+        )
+    return ledger.disburse_non_bank_loan(
+        lender_id=lender_id,
+        borrower_id=borrower_id,
+        amount=amount,
+        rate=rate,
+        maturity_days=maturity_days,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Phase C servicing
 # ---------------------------------------------------------------------------
@@ -568,7 +614,7 @@ def lending_cascade_score(opportunity: dict[str, Any], max_downstream: int) -> f
     return float(coverage) * norm_downstream * (1.0 - float(opportunity["p_default"]))
 
 
-def upcoming_obligations(ledger: Ledger, agent_id: str, horizon: int) -> Decimal:
+def upcoming_obligations(ledger: Ledger, agent_id: str, horizon: int, *, include_bank_loans: bool = True) -> Decimal:
     latest_day = ledger.day + horizon
     total = ZERO
     for payable in ledger.payables:
@@ -581,6 +627,12 @@ def upcoming_obligations(ledger: Ledger, agent_id: str, horizon: int) -> Decimal
             continue
         if ledger.day <= loan.maturity_day <= latest_day:
             total += loan.repayment_amount
+    if include_bank_loans:
+        for bank_loan in ledger.bank_loans:
+            if bank_loan.settled or bank_loan.borrower != agent_id:
+                continue
+            if ledger.day <= bank_loan.maturity_day <= latest_day:
+                total += bank_loan.repayment_amount
     return total
 
 
@@ -604,7 +656,7 @@ def assess_non_bank_borrower(ledger: Ledger, agent_id: str, loan_amount: Decimal
 
     liquid = ledger.agent_liquid_assets(agent_id)
     receivables = quality_adjusted_receivables(ledger, agent_id, horizon)
-    obligations = upcoming_obligations(ledger, agent_id, horizon)
+    obligations = upcoming_obligations(ledger, agent_id, horizon, include_bank_loans=False)
     return (liquid + receivables - obligations) / repayment
 
 
@@ -619,13 +671,13 @@ def lender_uses_information(config: CleanLenderConfig) -> bool:
 def observe_lender_counterparty_liquidity(ledger: Ledger, config: CleanLenderConfig, agent_id: str) -> tuple[Decimal, Decimal] | None:
     if not lender_uses_information(config):
         return (
-            upcoming_obligations(ledger, agent_id, config.horizon),
+            upcoming_obligations(ledger, agent_id, config.horizon, include_bank_loans=False),
             ledger.agent_liquid_assets(agent_id),
         )
 
     if config.info_liabilities_visibility == "none":
         return None
-    upcoming_due = upcoming_obligations(ledger, agent_id, config.horizon)
+    upcoming_due = upcoming_obligations(ledger, agent_id, config.horizon, include_bank_loans=False)
 
     if config.info_cash_visibility == "none":
         liquid = ZERO
@@ -688,12 +740,29 @@ def lender_signal_default_probability(ledger: Ledger, agent_id: str) -> Decimal:
     return max(Decimal("0.01"), min(Decimal("0.99"), base_rate + Decimal("0.05")))
 
 
-def lender_loan_rate(config: CleanLenderConfig, p_default: Decimal) -> Decimal:
+def lender_loan_rate(
+    config: CleanLenderConfig,
+    p_default: Decimal,
+    *,
+    banking_config: CleanBankingConfig | None = None,
+) -> Decimal:
     if config.kappa is not None:
         risk_premium_scale = Decimal("0.1") + config.risk_aversion * Decimal("0.4")
         rate = config.profit_target + risk_premium_scale * p_default
     else:
         rate = config.base_rate + config.risk_premium_scale * p_default
+
+    if banking_config is not None:
+        from bilancio_v2.plugins.banking import bank_profile
+
+        profile = bank_profile(banking_config)
+        r_floor = profile.r_floor(banking_config.kappa)
+        omega = profile.corridor_width(banking_config.kappa)
+        p_0 = Decimal("1") / (Decimal("1") + banking_config.kappa)
+        if p_0 > ZERO:
+            rate = r_floor + omega * (p_default / p_0)
+        else:
+            rate = r_floor + omega
 
     if config.stress_risk_premium_scale > ZERO:
         denom = max(Decimal("0.01"), Decimal("1") - p_default)
