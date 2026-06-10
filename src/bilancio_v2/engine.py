@@ -6,8 +6,8 @@ the stability stop rule, and the daily invariant check — everything else
 
 Scenarios are loaded through the existing ``bilancio.config`` schema, so
 every YAML file that runs on the existing engines runs here unchanged.
-Features not yet rebuilt (dealer, rollover, jurisdictions, action specs)
-are rejected explicitly at preparation time.
+Features not yet rebuilt (dealer, jurisdictions, action specs) are
+rejected explicitly at preparation time.
 """
 
 from __future__ import annotations
