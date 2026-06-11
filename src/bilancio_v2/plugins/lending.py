@@ -22,10 +22,10 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any
 
-from bilancio.engines.clean_core_types import CleanBankingConfig, CleanLenderConfig
 from bilancio_v2.ledger import ZERO, InsufficientFundsError, Ledger, NonBankLoan
 from bilancio_v2.plugins.base import RunContext
 from bilancio_v2.plugins.settlement import pay_with_deposit
+from bilancio_v2.subsystem_config import CleanBankingConfig, CleanLenderConfig
 
 
 @dataclass(frozen=True)

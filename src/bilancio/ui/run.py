@@ -16,7 +16,7 @@ from rich.prompt import Confirm
 
 from bilancio.config import apply_to_system, load_yaml
 from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
-from bilancio.engines.clean_core_invariants import (
+from bilancio_v2.balance_invariants import (
     assert_clean_core_invariants as _assert_clean_core_invariants,
 )
 from bilancio.engines.simulation import run_day

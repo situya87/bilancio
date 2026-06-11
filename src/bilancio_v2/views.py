@@ -19,12 +19,12 @@ def balance_rows(result: Any) -> list[dict[str, Any]]:
     """Return rows shaped like ``bilancio.analysis.balances.as_rows`` for this slice."""
     state = result.state
     rows: list[dict[str, Any]] = []
-    total_assets = Counter()
-    total_liabilities = Counter()
+    total_assets: Counter[str] = Counter()
+    total_liabilities: Counter[str] = Counter()
 
     for agent_id in state.agents:
-        assets = Counter()
-        liabilities = Counter()
+        assets: Counter[str] = Counter()
+        liabilities: Counter[str] = Counter()
 
         if state.cash[agent_id]:
             assets["cash"] = state.cash[agent_id]
@@ -69,25 +69,17 @@ def balance_rows(result: Any) -> list[dict[str, Any]]:
             if loan.borrower == agent_id:
                 liabilities["bank_loan"] += loan.amount
 
-        nonfinancial_assets: defaultdict[str, dict[str, Any]] = defaultdict(
-            lambda: {"quantity": 0, "value": ZERO}
-        )
-        nonfinancial_liabilities: defaultdict[str, dict[str, Any]] = defaultdict(
-            lambda: {"quantity": 0, "value": ZERO}
-        )
+        nonfinancial_assets: defaultdict[str, dict[str, Any]] = defaultdict(lambda: {"quantity": 0, "value": ZERO})
+        nonfinancial_liabilities: defaultdict[str, dict[str, Any]] = defaultdict(lambda: {"quantity": 0, "value": ZERO})
         for obligation in state.delivery_obligations:
             if obligation.settled:
                 continue
             if obligation.creditor == agent_id:
                 nonfinancial_assets[obligation.sku]["quantity"] += obligation.quantity
-                nonfinancial_assets[obligation.sku]["value"] += (
-                    Decimal(obligation.quantity) * obligation.unit_price
-                )
+                nonfinancial_assets[obligation.sku]["value"] += Decimal(obligation.quantity) * obligation.unit_price
             if obligation.debtor == agent_id:
                 nonfinancial_liabilities[obligation.sku]["quantity"] += obligation.quantity
-                nonfinancial_liabilities[obligation.sku]["value"] += (
-                    Decimal(obligation.quantity) * obligation.unit_price
-                )
+                nonfinancial_liabilities[obligation.sku]["value"] += Decimal(obligation.quantity) * obligation.unit_price
 
         inventory: defaultdict[str, dict[str, Any]] = defaultdict(lambda: {"quantity": 0, "value": ZERO})
         for stock in state.stocks.values():
@@ -121,22 +113,10 @@ def balance_rows(result: Any) -> list[dict[str, Any]]:
                 "total_inventory_value": total_inventory_value,
                 **{f"assets_{kind}": amount for kind, amount in assets.items()},
                 **{f"liabilities_{kind}": amount for kind, amount in liabilities.items()},
-                **{
-                    f"nonfinancial_{sku}_quantity": data["quantity"]
-                    for sku, data in nonfinancial_assets.items()
-                },
-                **{
-                    f"nonfinancial_{sku}_value": data["value"]
-                    for sku, data in nonfinancial_assets.items()
-                },
-                **{
-                    f"inventory_{sku}_quantity": data["quantity"]
-                    for sku, data in inventory.items()
-                },
-                **{
-                    f"inventory_{sku}_value": data["value"]
-                    for sku, data in inventory.items()
-                },
+                **{f"nonfinancial_{sku}_quantity": data["quantity"] for sku, data in nonfinancial_assets.items()},
+                **{f"nonfinancial_{sku}_value": data["value"] for sku, data in nonfinancial_assets.items()},
+                **{f"inventory_{sku}_quantity": data["quantity"] for sku, data in inventory.items()},
+                **{f"inventory_{sku}_value": data["value"] for sku, data in inventory.items()},
             }
         )
 
@@ -155,14 +135,8 @@ def balance_rows(result: Any) -> list[dict[str, Any]]:
             "total_inventory_value": sum((entry["value"] for entry in system_inventory.values()), ZERO),
             **{f"assets_{kind}": amount for kind, amount in total_assets.items()},
             **{f"liabilities_{kind}": amount for kind, amount in total_liabilities.items()},
-            **{
-                f"inventory_{sku}_quantity": data["quantity"]
-                for sku, data in system_inventory.items()
-            },
-            **{
-                f"inventory_{sku}_value": data["value"]
-                for sku, data in system_inventory.items()
-            },
+            **{f"inventory_{sku}_quantity": data["quantity"] for sku, data in system_inventory.items()},
+            **{f"inventory_{sku}_value": data["value"] for sku, data in system_inventory.items()},
         }
     )
     return rows

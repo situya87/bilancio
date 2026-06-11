@@ -1,4 +1,4 @@
-"""Invariant checks for clean-core balance exports."""
+"""Invariant checks over exported balance rows (system-level double entry)."""
 
 from __future__ import annotations
 
@@ -17,9 +17,7 @@ def assert_clean_core_invariants(rows: list[dict[str, Any]]) -> None:
     assets = Decimal(str(system_row.get("total_financial_assets", 0)))
     liabilities = Decimal(str(system_row.get("total_financial_liabilities", 0)))
     if assets != liabilities:
-        raise ValidationError(
-            f"clean-core invariant failed: system assets {assets} != liabilities {liabilities}"
-        )
+        raise ValidationError(f"clean-core invariant failed: system assets {assets} != liabilities {liabilities}")
 
     for row in rows:
         for key, value in row.items():
@@ -29,6 +27,8 @@ def assert_clean_core_invariants(rows: list[dict[str, Any]]) -> None:
                 amount = Decimal(str(value))
                 if amount < 0:
                     agent_id = row.get("agent_id", "<unknown>")
-                    raise ValidationError(
-                        f"clean-core invariant failed: negative {key} for {agent_id}: {amount}"
-                    )
+                    raise ValidationError(f"clean-core invariant failed: negative {key} for {agent_id}: {amount}")
+
+
+# Preferred name; the historical alias is kept for the CLI import.
+assert_balance_invariants = assert_clean_core_invariants

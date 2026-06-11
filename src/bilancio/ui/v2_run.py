@@ -23,13 +23,13 @@ from bilancio.core.errors import (
     SimulationHalt,
     ValidationError,
 )
-from bilancio.engines.clean_core_compat import (
+from bilancio_v2.compat import (
     build_clean_core_banking_config,
     clean_core_auto_fallback_reason,
 )
 
-from .clean_core_display import display_clean_core_result
 from .display import show_error_panel
+from .result_display import display_clean_core_result
 
 
 def run_v2_scenario(
@@ -54,12 +54,7 @@ def run_v2_scenario(
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> None:
     """Run a scenario through the v2 kernel."""
-    from bilancio.engines.clean_core_config import (
-        clean_core_configuration_error_reason,
-        clean_core_unsupported_reason,
-    )
     from bilancio.engines.termination import StopReason
-
     from bilancio_v2 import (
         RunResult,
         prepare_scenario,
@@ -74,6 +69,10 @@ def run_v2_scenario(
     )
     from bilancio_v2.plugins.banking import finalize_banking
     from bilancio_v2.plugins.dealer import dealer_metrics_summary
+    from bilancio_v2.scenario_gates import (
+        clean_core_configuration_error_reason,
+        clean_core_unsupported_reason,
+    )
     from bilancio_v2.views import balance_rows
 
     console.print("[dim]Loading scenario...[/dim]")
@@ -81,13 +80,7 @@ def run_v2_scenario(
 
     effective_default_handling = default_handling or config.run.default_handling
     if default_handling and config.run.default_handling != default_handling:
-        config = config.model_copy(
-            update={
-                "run": config.run.model_copy(
-                    update={"default_handling": effective_default_handling}
-                )
-            }
-        )
+        config = config.model_copy(update={"run": config.run.model_copy(update={"default_handling": effective_default_handling})})
 
     configuration_error = clean_core_configuration_error_reason(config)
     if configuration_error is not None:
@@ -167,9 +160,7 @@ def run_v2_scenario(
                     progress_callback(day + 1, max_days)
                 final_day = day + 1
                 _check_daily_invariants(runtime, day)
-                console.print(
-                    f"[dim]Day {day}: {'activity' if impactful else 'quiet'}[/dim]"
-                )
+                console.print(f"[dim]Day {day}: {'activity' if impactful else 'quiet'}[/dim]")
                 if update_stability(
                     runtime,
                     day=day,
@@ -187,11 +178,7 @@ def run_v2_scenario(
                 stop_reason=(
                     StopReason.USER_STOP
                     if stopped_by_user
-                    else (
-                        StopReason.STABILITY_REACHED
-                        if reached_stable
-                        else StopReason.MAX_DAYS_REACHED
-                    )
+                    else (StopReason.STABILITY_REACHED if reached_stable else StopReason.MAX_DAYS_REACHED)
                 ),
                 stability_snapshots=tuple(stability.snapshots),
             )
@@ -274,9 +261,7 @@ def run_v2_scenario(
             dealer_metrics_path.parent.mkdir(parents=True, exist_ok=True)
             with dealer_metrics_path.open("w") as f:
                 json.dump(dealer_summary, f, indent=2)
-            console.print(
-                f"[green]OK[/green] Exported dealer metrics to {dealer_metrics_path}"
-            )
+            console.print(f"[green]OK[/green] Exported dealer metrics to {dealer_metrics_path}")
 
             if detailed_dealer_logging and not result.ledger.dealer_config.balanced_passive:
                 metrics.run_id = run_id
@@ -298,15 +283,11 @@ def run_v2_scenario(
 
                 inventory_path = out_dir / "inventory_timeseries.csv"
                 metrics.to_inventory_timeseries_csv(str(inventory_path))
-                console.print(
-                    f"[green]OK[/green] Exported inventory timeseries to {inventory_path}"
-                )
+                console.print(f"[green]OK[/green] Exported inventory timeseries to {inventory_path}")
 
                 system_state_path = out_dir / "system_state_timeseries.csv"
                 metrics.to_system_state_csv(str(system_state_path))
-                console.print(
-                    f"[green]OK[/green] Exported system state timeseries to {system_state_path}"
-                )
+                console.print(f"[green]OK[/green] Exported system state timeseries to {system_state_path}")
 
                 from bilancio.dealer.metrics import build_repayment_events
 
@@ -318,9 +299,7 @@ def run_v2_scenario(
                 )
                 repayment_events_path = out_dir / "repayment_events.csv"
                 metrics.to_repayment_events_csv(str(repayment_events_path))
-                console.print(
-                    f"[green]OK[/green] Exported repayment events to {repayment_events_path}"
-                )
+                console.print(f"[green]OK[/green] Exported repayment events to {repayment_events_path}")
 
     if html_output:
         write_html_report(
@@ -335,17 +314,13 @@ def run_v2_scenario(
         console.print(f"[green]OK[/green] Exported HTML report: {html_output}")
 
     if result.reached_stable:
-        console.print(
-            f"[green]OK[/green] System reached stable state after {result.final_day} days"
-        )
+        console.print(f"[green]OK[/green] System reached stable state after {result.final_day} days")
     elif mode == "step" and stopped_by_user:
         console.print("[yellow]WARNING[/yellow] Simulation stopped before stability")
     elif stopped_by_error:
         console.print("[yellow]WARNING[/yellow] Simulation stopped after an error")
     else:
-        console.print(
-            f"[yellow]WARNING[/yellow] Maximum days reached ({max_days}) before stability"
-        )
+        console.print(f"[yellow]WARNING[/yellow] Maximum days reached ({max_days}) before stability")
 
 
 def resolve_auto_engine(

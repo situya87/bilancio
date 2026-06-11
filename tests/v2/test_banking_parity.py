@@ -21,10 +21,9 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from bilancio.config.models import ScenarioConfig
-from bilancio.engines import clean_core
-from bilancio.engines.clean_core_types import CleanBankingConfig
 from bilancio_v2 import run_scenario
-from bilancio_v2.parity import compare_runs
+from bilancio_v2.subsystem_config import CleanBankingConfig
+from tests.v2.golden_cases import load_golden_case, v2_case_snapshot
 
 
 def base_scenario() -> ScenarioConfig:
@@ -65,6 +64,24 @@ def base_scenario() -> ScenarioConfig:
     )
 
 
+def assert_v2_self_consistent(config, banking_config=None):
+    """Run on v2 and assert the run completes with all invariants holding.
+
+    Ledger conservation invariants are enforced daily inside the engine;
+    this adds the exported-balance double-entry check. Engine refusals
+    (insufficient funds under fail-fast economics) are legitimate outcomes.
+    """
+    from bilancio.core.errors import DefaultError
+    from bilancio_v2.balance_invariants import assert_balance_invariants
+    from bilancio_v2.views import balance_rows
+
+    try:
+        result = run_scenario(config, banking_config=banking_config)
+    except (DefaultError, ValueError):
+        return
+    assert_balance_invariants(balance_rows(result))
+
+
 BANKING_CONFIGS = {
     "plain": CleanBankingConfig(kappa=Decimal("0.5")),
     "lending": CleanBankingConfig(kappa=Decimal("0.5"), enable_bank_lending=True, maturity_days=4),
@@ -91,9 +108,11 @@ BANKING_CONFIGS = {
 
 
 @pytest.mark.parametrize("name", sorted(BANKING_CONFIGS))
-def test_banking_modes_run_identically(name: str) -> None:
-    report = compare_runs(base_scenario(), banking_config=BANKING_CONFIGS[name])
-    assert report.ok, f"banking parity broken ({name}):\n" + "\n".join(report.diffs)
+def test_banking_modes_match_golden(name: str) -> None:
+    golden = load_golden_case(f"banking_{name}")
+    snapshot = v2_case_snapshot(base_scenario(), BANKING_CONFIGS[name])
+    assert snapshot["balances"] == golden["balances"], name
+    assert snapshot["events"] == golden["events"], name
 
 
 @st.composite
@@ -180,34 +199,10 @@ def banking_cases(draw: st.DrawFn) -> tuple[ScenarioConfig, CleanBankingConfig]:
     return ScenarioConfig.model_validate(config_dict), banking
 
 
-def run_legacy_banking(config: ScenarioConfig, banking: CleanBankingConfig) -> None:
-    runtime = clean_core.prepare_scenario(config, banking_config=banking)
-    result = clean_core.run_runtime_until_stable(runtime, max_days=config.run.max_days, quiet_days=config.run.quiet_days)
-    clean_core.finalize_banking_marker_events(
-        result.state,
-        final_day=result.final_day,
-        reached_stable=result.reached_stable,
-        banking_config=banking,
-    )
-
-
 @settings(max_examples=40, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(case=banking_cases())
-def test_banking_scenarios_run_identically(
+def test_banking_scenarios_self_consistent(
     case: tuple[ScenarioConfig, CleanBankingConfig],
 ) -> None:
     config, banking = case
-    legacy_err = v2_err = None
-    try:
-        run_legacy_banking(config, banking)
-    except Exception as exc:  # noqa: BLE001 — exception parity is the assertion
-        legacy_err = str(exc)
-    try:
-        run_scenario(config, banking_config=banking)
-    except Exception as exc:  # noqa: BLE001
-        v2_err = str(exc)
-    if legacy_err is not None or v2_err is not None:
-        assert legacy_err == v2_err
-        return
-    report = compare_runs(config, banking_config=banking)
-    assert report.ok, "\n".join(report.diffs)
+    assert_v2_self_consistent(config, banking)

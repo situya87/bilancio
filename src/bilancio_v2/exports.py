@@ -43,10 +43,7 @@ def write_balances_csv(result: Any, path: Path) -> None:
             "agent_kind": "system",
             "item_type": "summary",
             "item_name": "Total Equity",
-            "amount": (
-                trial_balance["total_financial_assets"]
-                - trial_balance["total_financial_liabilities"]
-            ),
+            "amount": (trial_balance["total_financial_assets"] - trial_balance["total_financial_liabilities"]),
         },
     ]
 
@@ -83,11 +80,7 @@ def write_html_report(
 
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = balance_rows(result)
-    selected_agent_ids = [
-        agent_id
-        for agent_id in (agent_ids or [])
-        if any(row["agent_id"] == agent_id for row in rows)
-    ]
+    selected_agent_ids = [agent_id for agent_id in (agent_ids or []) if any(row["agent_id"] == agent_id for row in rows)]
     display_rows = rows
     if selected_agent_ids:
         selected = set(selected_agent_ids)
@@ -96,18 +89,13 @@ def write_html_report(
     fields = [
         field
         for field in sorted({key for row in display_rows for key in row})
-        if field != "agent_id"
-        and any(row.get(field) not in (None, "", ZERO, 0) for row in display_rows)
+        if field != "agent_id" and any(row.get(field) not in (None, "", ZERO, 0) for row in display_rows)
     ]
     events_by_day: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
     for event in result.events:
         events_by_day[int(event.get("day", 0))].append(event)
 
-    status = (
-        f"Converged on day {result.final_day}"
-        if result.reached_stable
-        else f"Stopped without convergence (max_days = {max_days})"
-    )
+    status = f"Converged on day {result.final_day}" if result.reached_stable else f"Stopped without convergence (max_days = {max_days})"
 
     parts = [
         "<!doctype html>",
@@ -125,7 +113,7 @@ def write_html_report(
         "th,td{border-bottom:1px solid #e5e8ef;padding:7px 8px;text-align:left;vertical-align:top;}",
         "th{background:#f0f3f8;font-weight:650;}",
         ".num{text-align:right;font-variant-numeric:tabular-nums}.event-kind{font-weight:650}.muted{color:#667085}.day h3{margin-top:0;}",
-        "</style></head><body><div class=\"container\">",
+        '</style></head><body><div class="container">',
         "<header>",
         "<h1>Bilancio Simulation</h1>",
         f"<h2>{_escape(config.name)}</h2>",
@@ -144,13 +132,7 @@ def write_html_report(
         ]
     )
     for agent in config.agents:
-        parts.append(
-            "<tr>"
-            f"<td>{_escape(agent.id)}</td>"
-            f"<td>{_escape(agent.name)}</td>"
-            f"<td>{_escape(agent.kind)}</td>"
-            "</tr>"
-        )
+        parts.append(f"<tr><td>{_escape(agent.id)}</td><td>{_escape(agent.name)}</td><td>{_escape(agent.kind)}</td></tr>")
     parts.append("</tbody></table></section>")
 
     if t_account and selected_agent_ids:
@@ -166,9 +148,7 @@ def write_html_report(
         for agent_id, row in rows_by_agent.items():
             parts.append(f"<tr><td>{_escape(agent_id)}</td>")
             for balance_field in fields:
-                parts.append(
-                    f'<td class="num">{_escape(_display_value(row.get(balance_field, "")))}</td>'
-                )
+                parts.append(f'<td class="num">{_escape(_display_value(row.get(balance_field, "")))}</td>')
             parts.append("</tr>")
         parts.append("</tbody></table></section>")
 
@@ -179,11 +159,7 @@ def write_html_report(
             "<table><thead><tr><th>Phase</th><th>Event</th><th>Details</th></tr></thead><tbody>"
         )
         for event in events_by_day[day]:
-            details = {
-                key: value
-                for key, value in event.items()
-                if key not in {"day", "phase", "kind"}
-            }
+            details = {key: value for key, value in event.items() if key not in {"day", "phase", "kind"}}
             parts.append(
                 "<tr>"
                 f"<td>{_escape(event.get('phase', ''))}</td>"
@@ -201,11 +177,7 @@ def _render_t_account_html(state: Any, agent_id: str) -> str:
     from bilancio_v2.views import t_account_rows
 
     agent = state.agents[agent_id]
-    title = (
-        f"{agent.name} [{agent_id}] ({agent.kind})"
-        if agent.name and agent.name != agent_id
-        else f"{agent_id} ({agent.kind})"
-    )
+    title = f"{agent.name} [{agent_id}] ({agent.kind})" if agent.name and agent.name != agent_id else f"{agent_id} ({agent.kind})"
     rows = t_account_rows(state, agent_id)
     parts = [
         f"<h3>{_escape(title)}</h3>",

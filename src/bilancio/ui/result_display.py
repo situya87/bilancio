@@ -112,7 +112,7 @@ def _display_clean_core_t_accounts(
     result: Any,
     agent_ids: list[str],
 ) -> None:
-    from bilancio.engines.clean_core_views import t_account_rows
+    from bilancio_v2.views import t_account_rows
 
     state = result.state
     selected_ids = [agent_id for agent_id in agent_ids if agent_id in state.agents]

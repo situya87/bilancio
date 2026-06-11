@@ -44,23 +44,29 @@ EventJournal (events.py) ── typed, append-only, legacy-compatible dicts
   interface; the engine never special-cases one.
 - **Actions** (`actions.py`) — the public scenario vocabulary, translated
   into ledger operations with legacy-exact semantics.
-- **Parity** (`parity.py`) — runs a scenario on both engines and diffs the
-  full event stream and final balances.
+- **Parity** (`parity.py`) — snapshots a run (full event stream + final
+  balances) and diffs it against the golden oracle.
+- **Gates & subsystem configs** (`scenario_gates.py`, `subsystem_config.py`,
+  `compat.py`) — scenario support checks and runtime-config builders,
+  inherited from the (now deleted) clean-core engine.
+- **Views & exports** (`views.py`, `exports.py`, `balance_invariants.py`) —
+  balance/T-account rows, CSV/JSONL/HTML writers, and the exported-balance
+  double-entry check used by the CLI.
 
 ## Verification
 
-`tests/v2/` contains four layers:
+`tests/v2/` contains three layers:
 
-1. **Example parity** — every supported example scenario matches the
-   clean-core engine exactly (events + balances + stop behavior); scenarios
-   both engines reject must fail with the identical error; unsupported
-   subsystems are rejected explicitly, never mis-simulated.
-2. **Golden oracle** — runs captured from the existing engine and pinned as
-   JSON (`tests/v2/golden/`); catches changes that break both engines the
-   same way. Regenerate with `uv run python -m tests.v2.golden_io`.
-3. **Property-based parity** — Hypothesis generates random payment networks
-   (including default cascades) and asserts identical runs on both engines.
-4. **Unit tests** — ledger operations, invariant enforcement (including
+1. **Golden oracle** — full event-stream + balance snapshots for every
+   example scenario (`tests/v2/golden/`) and every deterministic subsystem
+   case (`tests/v2/golden_cases/`), captured while the live parity suite
+   proved v2 == clean-core, so they carry cross-engine authority.
+   Regenerating snapshots the current v2 kernel (regression pinning only).
+2. **Property-based self-consistency** — Hypothesis generates random
+   payment networks (default cascades, lender/banking/dealer configs);
+   every run must complete with the daily ledger conservation invariants
+   and the exported-balance double-entry check holding.
+3. **Unit tests** — ledger operations, invariant enforcement (including
    detection of un-audited mutations), checkpoint/rollback, settlement
    priorities and default handling.
 
@@ -90,12 +96,17 @@ makers, trading rounds via the shared matching engine, ledger-audited
 cash reconciliation) — plus the **action-specs** configurations and the
 jurisdiction-carrying scenarios clean-core accepts.
 
-**The v2 kernel's supported domain now equals the clean-core engine's by
-construction**: scenario gating reuses the clean-core gate functions, so
-both engines accept and reject exactly the same scenarios (multi-currency
-jurisdiction *semantics* remain a legacy-v1-only feature on both).
+## Status: cutover complete, clean-core deleted
 
-The remaining migration steps are consumers, not engine features: point
-the CLI/run pipeline and sweep runners at `bilancio_v2`, then delete the
-two legacy engines. The parity suite (`tests/v2/`) is the gate for both
-steps.
+The CLI and sweep pipeline run on the v2 kernel (the `--engine clean-core`
+flag value is kept for compatibility and now drives v2). The clean-core
+engine was deleted after its observable contract was pinned into the
+golden oracle; its gate functions and config builders live on in this
+package, so the supported domain is unchanged.
+
+The **legacy v1 engine remains** — deliberately. It is not a duplicate of
+v2: it uniquely implements the multi-arm balanced-dealer experiment modes
+(`lender`, `nbfi_*`, `bank_dealer*`, …) used by `bilancio sweep balanced`
+and the multi-currency jurisdiction semantics. Auto engine selection falls
+back to it exactly as before. Deleting it requires porting those modes to
+v2 plugins first — same recipe: pin goldens, port, verify.

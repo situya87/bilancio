@@ -17,14 +17,6 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from bilancio.config.models import ScenarioConfig
-from bilancio.engines.clean_core_config import (
-    build_dealer_config,
-    build_lender_config,
-    build_rating_config,
-    clean_core_configuration_error_reason,
-    clean_core_unsupported_reason,
-)
-from bilancio.engines.clean_core_types import CleanBankingConfig
 from bilancio.engines.termination import (
     DEFAULT_EVENTS,
     IMPACT_EVENTS,
@@ -50,6 +42,14 @@ from bilancio_v2.plugins.lending import LendingPhase
 from bilancio_v2.plugins.rating import RatingPhase
 from bilancio_v2.plugins.settlement import SettlementPhase
 from bilancio_v2.policy import CapabilityMatrix
+from bilancio_v2.scenario_gates import (
+    build_dealer_config,
+    build_lender_config,
+    build_rating_config,
+    clean_core_configuration_error_reason,
+    clean_core_unsupported_reason,
+)
+from bilancio_v2.subsystem_config import CleanBankingConfig
 
 
 class UnsupportedScenarioError(NotImplementedError):

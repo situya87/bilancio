@@ -28,14 +28,14 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from bilancio.engines.clean_core_types import (
+from bilancio_v2.ledger import ZERO, Ledger, Payable
+from bilancio_v2.plugins.banking import agent_deposits_total, bank_profile, bank_quote
+from bilancio_v2.plugins.base import RunContext
+from bilancio_v2.subsystem_config import (
     CleanBankingConfig,
     CleanDealerBucketConfig,
     CleanDealerConfig,
 )
-from bilancio_v2.ledger import ZERO, Ledger, Payable
-from bilancio_v2.plugins.banking import agent_deposits_total, bank_profile, bank_quote
-from bilancio_v2.plugins.base import RunContext
 
 
 @dataclass(frozen=True)

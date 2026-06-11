@@ -27,10 +27,10 @@ from bilancio.banking.pricing_kernel import (
     compute_quotes,
 )
 from bilancio.decision.profiles import BankProfile
-from bilancio.engines.clean_core_types import CleanBankingConfig
 from bilancio_v2.ledger import ZERO, BankLoan, CBLoan, Ledger, NonBankLoan
 from bilancio_v2.plugins.base import RunContext
 from bilancio_v2.plugins.lending import upcoming_obligations
+from bilancio_v2.subsystem_config import CleanBankingConfig
 
 
 class BankQuotesPhase:

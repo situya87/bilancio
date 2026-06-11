@@ -13,9 +13,9 @@ import random
 from dataclasses import dataclass
 from decimal import Decimal
 
-from bilancio.engines.clean_core_types import CleanRatingConfig
 from bilancio_v2.ledger import ZERO, Ledger
 from bilancio_v2.plugins.base import RunContext
+from bilancio_v2.subsystem_config import CleanRatingConfig
 
 
 @dataclass(frozen=True)

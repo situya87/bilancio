@@ -15,7 +15,6 @@ from collections import defaultdict
 from decimal import Decimal
 from typing import Any
 
-from bilancio.engines.clean_core_types import CleanBankingConfig
 from bilancio_v2.ledger import ZERO, Ledger
 from bilancio_v2.plugins.banking import (
     bank_profile,
@@ -24,6 +23,7 @@ from bilancio_v2.plugins.banking import (
 )
 from bilancio_v2.plugins.base import RunContext
 from bilancio_v2.plugins.lending import repay_due_non_bank_loans
+from bilancio_v2.subsystem_config import CleanBankingConfig
 
 CB_REFINANCE_RATE = Decimal("0.03")
 CB_LOAN_GRACE_DAYS = 2

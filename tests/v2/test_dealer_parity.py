@@ -16,7 +16,27 @@ from hypothesis import strategies as st
 
 from bilancio.config.models import ScenarioConfig
 from bilancio_v2 import run_scenario
-from bilancio_v2.parity import compare_runs
+from tests.v2.golden_cases import load_golden_case, v2_case_snapshot
+
+
+def assert_v2_self_consistent(config, banking_config=None):
+    """Run on v2 and assert the run completes with all invariants holding.
+
+    Ledger conservation invariants are enforced daily inside the engine;
+    this adds the exported-balance double-entry check. Engine refusals
+    (insufficient funds under fail-fast economics) are legitimate outcomes.
+    """
+    from bilancio.core.errors import DefaultError
+    from bilancio_v2 import run_scenario
+    from bilancio_v2.balance_invariants import assert_balance_invariants
+    from bilancio_v2.views import balance_rows
+
+    try:
+        result = run_scenario(config, banking_config=banking_config)
+    except (DefaultError, ValueError):
+        return
+    assert_balance_invariants(balance_rows(result))
+
 
 BUCKETS = {
     "short": {"tau_min": 1, "tau_max": 3},
@@ -81,18 +101,24 @@ def dealer_scenario(
 
 
 @pytest.mark.parametrize(
-    ("mode", "kwargs"),
+    ("mode", "kwargs", "golden_name"),
     [
-        (None, {}),  # marker mode: daily pricing snapshots, no trading
-        (None, {"risk_enabled": True}),
-        ("passive", {}),
-        ("active", {"capitalize_market_makers": True}),
-        ("active", {"capitalize_market_makers": True, "risk_enabled": True, "cash": 60}),
+        (None, {}, "dealer_marker"),  # marker mode: daily snapshots, no trading
+        (None, {"risk_enabled": True}, "dealer_marker_risk"),
+        ("passive", {}, "dealer_passive"),
+        ("active", {"capitalize_market_makers": True}, "dealer_active"),
+        (
+            "active",
+            {"capitalize_market_makers": True, "risk_enabled": True, "cash": 60},
+            "dealer_active_risk",
+        ),
     ],
 )
-def test_dealer_modes_run_identically(mode: str | None, kwargs: dict) -> None:
-    report = compare_runs(dealer_scenario(mode, **kwargs))
-    assert report.ok, f"dealer parity broken (mode={mode}):\n" + "\n".join(report.diffs)
+def test_dealer_modes_match_golden(mode: str | None, kwargs: dict, golden_name: str) -> None:
+    golden = load_golden_case(golden_name)
+    snapshot = v2_case_snapshot(dealer_scenario(mode, **kwargs), None)
+    assert snapshot["balances"] == golden["balances"], golden_name
+    assert snapshot["events"] == golden["events"], golden_name
 
 
 def test_active_dealer_actually_trades() -> None:
@@ -154,6 +180,5 @@ def dealer_cases(draw: st.DrawFn) -> ScenarioConfig:
 
 @settings(max_examples=30, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(config=dealer_cases())
-def test_dealer_scenarios_run_identically(config: ScenarioConfig) -> None:
-    report = compare_runs(config)
-    assert report.ok, "\n".join(report.diffs)
+def test_dealer_scenarios_self_consistent(config: ScenarioConfig) -> None:
+    assert_v2_self_consistent(config)

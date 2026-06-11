@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from bilancio.config.models import ScenarioConfig
-from bilancio_v2.parity import compare_runs
+from tests.v2.golden_cases import load_golden_case, v2_case_snapshot
 
 
 def rating_scenario(info_profile: str) -> ScenarioConfig:
@@ -61,6 +61,8 @@ def rating_scenario(info_profile: str) -> ScenarioConfig:
 
 
 @pytest.mark.parametrize("info_profile", ["omniscient", "realistic"])
-def test_rating_with_inventory_runs_identically(info_profile: str) -> None:
-    report = compare_runs(rating_scenario(info_profile))
-    assert report.ok, "\n".join(report.diffs)
+def test_rating_with_inventory_matches_golden(info_profile: str) -> None:
+    golden = load_golden_case(f"rating_{info_profile}")
+    snapshot = v2_case_snapshot(rating_scenario(info_profile), None)
+    assert snapshot["balances"] == golden["balances"]
+    assert snapshot["events"] == golden["events"]

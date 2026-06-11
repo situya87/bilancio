@@ -1,4 +1,4 @@
-"""Scenario support checks and config builders for the clean core."""
+"""Scenario gates and subsystem-config builders for the v2 kernel."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 from bilancio.config.models import DealerConfig, LenderScenarioConfig, ScenarioConfig
 from bilancio.core.errors import ConfigurationError
 from bilancio.decision.profiles import LenderProfile
-from bilancio.engines.clean_core_types import (
+from bilancio_v2.subsystem_config import (
     ZERO,
     CleanDealerBucketConfig,
     CleanDealerConfig,
@@ -45,10 +45,7 @@ CLEAN_CORE_LENDER_PROFILE_PARAMS = set(LenderProfile.__dataclass_fields__) - {
     "risk_assessment_params",
     "warmup_observations",
 }
-CLEAN_CORE_LENDER_ACTION_SPEC_PARAMS = (
-    (set(LenderScenarioConfig.model_fields) - {"enabled"})
-    | CLEAN_CORE_LENDER_PROFILE_PARAMS
-)
+CLEAN_CORE_LENDER_ACTION_SPEC_PARAMS = (set(LenderScenarioConfig.model_fields) - {"enabled"}) | CLEAN_CORE_LENDER_PROFILE_PARAMS
 CLEAN_CORE_NOOP_DEALER_ACTION_SPEC_MODES = {
     "nbfi_dealer",
     "bank_dealer",
@@ -82,33 +79,21 @@ def reject_unsupported_subsystems(config: ScenarioConfig) -> None:
 
 def clean_core_configuration_error_reason(config: ScenarioConfig) -> str | None:
     """Return a legacy-compatible setup error for invalid clean-core scenarios."""
-    if (
-        _action_specs_include_phase(config, "B_Dealer")
-        and not _balanced_dealer_enabled(config)
-    ):
+    if _action_specs_include_phase(config, "B_Dealer") and not _balanced_dealer_enabled(config):
         return DEALER_ACTION_SPECS_MISSING_BALANCED_DEALER_MESSAGE
     return None
 
 
 def clean_core_unsupported_reason(config: ScenarioConfig) -> str | None:
     """Return a user-facing reason when a scenario still needs the legacy engine."""
-    if (
-        config.dealer
-        and config.dealer.enabled
-        and config.balanced_dealer
-        and config.balanced_dealer.enabled
-    ):
+    if config.dealer and config.dealer.enabled and config.balanced_dealer and config.balanced_dealer.enabled:
         if (
             _action_specs_include_phase(config, "B_Dealer")
             and not _supports_clean_active_dealer(config)
             and not _supports_clean_noop_dealer_action_specs(config)
         ):
             return "clean core does not support B_Dealer action_specs yet"
-        if (
-            not config.action_specs
-            and config.balanced_dealer.mode != "passive"
-            and not _supports_clean_active_dealer(config)
-        ):
+        if not config.action_specs and config.balanced_dealer.mode != "passive" and not _supports_clean_active_dealer(config):
             return "clean core does not support balanced dealer subsystem scenarios yet"
     reason = _unsupported_action_specs_reason(config)
     if reason is not None:
@@ -131,15 +116,11 @@ def _unsupported_action_specs_reason(config: ScenarioConfig) -> str | None:
             if phase == "B2_Settlement":
                 continue
             if phase == "B_Dealer":
-                if (
-                    _supports_clean_active_dealer(config)
-                    or _supports_clean_noop_dealer_action_specs(config)
-                ):
+                if _supports_clean_active_dealer(config) or _supports_clean_noop_dealer_action_specs(config):
                     unsupported_actions = {
                         action_def.action
                         for action_def in spec.actions
-                        if action_def.phase == "B_Dealer"
-                        and action_def.action not in {"sell_ticket", "buy_ticket"}
+                        if action_def.phase == "B_Dealer" and action_def.action not in {"sell_ticket", "buy_ticket"}
                     }
                     if unsupported_actions:
                         actions = ", ".join(sorted(unsupported_actions))
@@ -148,10 +129,7 @@ def _unsupported_action_specs_reason(config: ScenarioConfig) -> str | None:
                 return "clean core does not support B_Dealer action_specs yet"
             if phase == "B_Rating":
                 if spec.information not in {"omniscient", "realistic", "blind"}:
-                    return (
-                        "clean core does not support B_Rating action_specs "
-                        f"with {spec.information!r} information yet"
-                    )
+                    return f"clean core does not support B_Rating action_specs with {spec.information!r} information yet"
                 unsupported_params = set(spec.profile_params) - CLEAN_CORE_RATING_ACTION_SPEC_PARAMS
                 if unsupported_params:
                     params = ", ".join(sorted(unsupported_params))
@@ -161,10 +139,7 @@ def _unsupported_action_specs_reason(config: ScenarioConfig) -> str | None:
                 if not _is_lender_action_spec(spec):
                     continue
                 if spec.information not in {"omniscient", "realistic", "blind"}:
-                    return (
-                        "clean core does not support B_Lending action_specs "
-                        f"with {spec.information!r} information yet"
-                    )
+                    return f"clean core does not support B_Lending action_specs with {spec.information!r} information yet"
                 unsupported_params = set(spec.profile_params) - CLEAN_CORE_LENDER_ACTION_SPEC_PARAMS
                 if unsupported_params:
                     params = ", ".join(sorted(unsupported_params))
@@ -175,18 +150,11 @@ def _unsupported_action_specs_reason(config: ScenarioConfig) -> str | None:
 
 
 def _supports_clean_active_dealer(config: ScenarioConfig) -> bool:
-    if not (
-        _balanced_dealer_enabled(config)
-        and config.balanced_dealer.mode == "active"
-    ):
+    if not (_balanced_dealer_enabled(config) and config.balanced_dealer.mode == "active"):
         return False
     if _action_specs_include_phase(config, "B_Dealer"):
         return True
-    return bool(
-        config.dealer
-        and config.dealer.enabled
-        and not config.action_specs
-    )
+    return bool(config.dealer and config.dealer.enabled and not config.action_specs)
 
 
 def _supports_clean_noop_dealer_action_specs(config: ScenarioConfig) -> bool:
@@ -232,9 +200,7 @@ def build_rating_config(config: ScenarioConfig) -> CleanRatingConfig | None:
         return None
 
     if rating.info_profile not in {"omniscient", "realistic"}:
-        raise NotImplementedError(
-            f"clean core rating slice does not support {rating.info_profile!r} rating information"
-        )
+        raise NotImplementedError(f"clean core rating slice does not support {rating.info_profile!r} rating information")
 
     return CleanRatingConfig(
         info_profile=rating.info_profile,
@@ -332,27 +298,14 @@ def build_lender_config(config: ScenarioConfig) -> CleanLenderConfig | None:
 
 def build_dealer_config(config: ScenarioConfig) -> CleanDealerConfig | None:
     dealer = config.dealer
-    if (
-        dealer is None
-        and _action_specs_include_phase(config, "B_Dealer")
-        and _balanced_dealer_enabled(config)
-    ):
+    if dealer is None and _action_specs_include_phase(config, "B_Dealer") and _balanced_dealer_enabled(config):
         dealer = DealerConfig(enabled=True)
-    if dealer is None or (
-        not dealer.enabled
-        and not _action_specs_include_phase(config, "B_Dealer")
-    ):
+    if dealer is None or (not dealer.enabled and not _action_specs_include_phase(config, "B_Dealer")):
         return None
     balanced_dealer = config.balanced_dealer
     balanced_active = _supports_clean_active_dealer(config)
     balanced_noop_action_specs = _supports_clean_noop_dealer_action_specs(config)
-    if (
-        balanced_dealer
-        and balanced_dealer.enabled
-        and config.action_specs
-        and not balanced_active
-        and not balanced_noop_action_specs
-    ):
+    if balanced_dealer and balanced_dealer.enabled and config.action_specs and not balanced_active and not balanced_noop_action_specs:
         return None
     if (
         balanced_dealer
@@ -396,37 +349,16 @@ def build_dealer_config(config: ScenarioConfig) -> CleanDealerConfig | None:
         term_strength=risk.term_strength,
         initial_prior=Decimal("0.15"),
         balanced_passive=bool(
-            balanced_dealer
-            and balanced_dealer.enabled
-            and (
-                balanced_dealer.mode == "passive"
-                or balanced_noop_action_specs
-            )
+            balanced_dealer and balanced_dealer.enabled and (balanced_dealer.mode == "passive" or balanced_noop_action_specs)
         ),
         balanced_active=balanced_active,
-        outside_mid_ratio=(
-            balanced_dealer.outside_mid_ratio
-            if balanced_dealer and balanced_dealer.enabled
-            else Decimal("1")
-        ),
+        outside_mid_ratio=(balanced_dealer.outside_mid_ratio if balanced_dealer and balanced_dealer.enabled else Decimal("1")),
         kappa=balanced_dealer.kappa if balanced_dealer and balanced_dealer.enabled else None,
         mu=balanced_dealer.mu if balanced_dealer and balanced_dealer.enabled else None,
         trading_rounds=balanced_dealer.trading_rounds if balanced_dealer and balanced_dealer.enabled else 100,
-        issuer_specific_pricing=(
-            balanced_dealer.issuer_specific_pricing
-            if balanced_dealer and balanced_dealer.enabled
-            else False
-        ),
-        dealer_concentration_limit=(
-            balanced_dealer.dealer_concentration_limit
-            if balanced_dealer and balanced_dealer.enabled
-            else ZERO
-        ),
-        spread_scale=(
-            balanced_dealer.spread_scale
-            if balanced_dealer and balanced_dealer.enabled
-            else Decimal("1")
-        ),
+        issuer_specific_pricing=(balanced_dealer.issuer_specific_pricing if balanced_dealer and balanced_dealer.enabled else False),
+        dealer_concentration_limit=(balanced_dealer.dealer_concentration_limit if balanced_dealer and balanced_dealer.enabled else ZERO),
+        spread_scale=(balanced_dealer.spread_scale if balanced_dealer and balanced_dealer.enabled else Decimal("1")),
         trader_profile=trader_profile,
         vbt_profile=vbt_profile,
     )
@@ -501,34 +433,19 @@ def _is_lender_action_spec(spec: Any) -> bool:
     return (
         spec.kind == "non_bank_lender"
         or spec.profile_type == "lender"
-        or any(
-            action_def.phase == "B_Lending" and action_def.action == "lend"
-            for action_def in spec.actions
-        )
+        or any(action_def.phase == "B_Lending" and action_def.action == "lend" for action_def in spec.actions)
     )
 
 
 def _action_specs_include_phase(config: ScenarioConfig, phase: str) -> bool:
-    return any(
-        action_def.phase == phase
-        for spec in config.action_specs or []
-        for action_def in spec.actions
-    )
+    return any(action_def.phase == phase for spec in config.action_specs or [] for action_def in spec.actions)
 
 
 def _lender_action_spec_config(action_spec: Any) -> LenderScenarioConfig:
     params = _coerce_profile_params(action_spec.profile_params)
-    profile_params = {
-        key: value
-        for key, value in params.items()
-        if key in CLEAN_CORE_LENDER_PROFILE_PARAMS
-    }
+    profile_params = {key: value for key, value in params.items() if key in CLEAN_CORE_LENDER_PROFILE_PARAMS}
 
-    scenario_params = {
-        key: value
-        for key, value in params.items()
-        if key in LenderScenarioConfig.model_fields and key != "enabled"
-    }
+    scenario_params = {key: value for key, value in params.items() if key in LenderScenarioConfig.model_fields and key != "enabled"}
     if profile_params:
         profile = LenderProfile(**profile_params)
         for key in CLEAN_CORE_LENDER_PROFILE_PARAMS:

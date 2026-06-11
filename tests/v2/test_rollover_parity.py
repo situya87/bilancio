@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from bilancio.config.models import ScenarioConfig
-from bilancio_v2.parity import compare_runs
+from tests.v2.golden_cases import load_golden_case, v2_case_snapshot
 
 
 def rollover_ring(cash_per_agent: int, default_handling: str) -> ScenarioConfig:
@@ -57,6 +57,8 @@ def rollover_ring(cash_per_agent: int, default_handling: str) -> ScenarioConfig:
         (150, "expel-agent"),  # partial rollovers (creditor can't return all)
     ],
 )
-def test_rollover_runs_identically(cash: int, default_handling: str) -> None:
-    report = compare_runs(rollover_ring(cash, default_handling))
-    assert report.ok, "\n".join(report.diffs)
+def test_rollover_matches_golden(cash: int, default_handling: str) -> None:
+    golden = load_golden_case(f"rollover_{default_handling}_{cash}")
+    snapshot = v2_case_snapshot(rollover_ring(cash, default_handling), None)
+    assert snapshot["balances"] == golden["balances"]
+    assert snapshot["events"] == golden["events"]

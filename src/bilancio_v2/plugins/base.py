@@ -16,7 +16,7 @@ from bilancio_v2.ledger import Ledger
 from bilancio_v2.policy import CapabilityMatrix
 
 if TYPE_CHECKING:
-    from bilancio.engines.clean_core_types import CleanBankingConfig
+    from bilancio_v2.subsystem_config import CleanBankingConfig
 
 
 @dataclass(frozen=True)

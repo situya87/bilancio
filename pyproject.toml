@@ -101,6 +101,12 @@ markers = [
     "regression: end-to-end simulation regression tests (run with '-m regression')",
 ]
 
+[[tool.mypy.overrides]]
+# Verbatim move of the former clean_core_config module; its dynamic
+# Optional-guard style predates the move and is pinned by the golden suite.
+module = "bilancio_v2.scenario_gates"
+disable_error_code = ["union-attr", "call-arg", "unreachable"]
+
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true

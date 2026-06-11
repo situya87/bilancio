@@ -12,7 +12,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from bilancio.config.models import ScenarioConfig
-from bilancio_v2.parity import compare_runs
+from tests.v2.test_banking_parity import assert_v2_self_consistent
 
 
 @st.composite
@@ -80,6 +80,5 @@ def scenario_configs(draw: st.DrawFn) -> ScenarioConfig:
     suppress_health_check=[HealthCheck.too_slow],
 )
 @given(config=scenario_configs())
-def test_random_scenarios_run_identically(config: ScenarioConfig) -> None:
-    report = compare_runs(config)
-    assert report.ok, "\n".join(report.diffs)
+def test_random_scenarios_self_consistent(config: ScenarioConfig) -> None:
+    assert_v2_self_consistent(config)
