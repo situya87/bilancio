@@ -1,6 +1,6 @@
 # Bilancio Codebase Documentation
 
-Generated: 2026-03-11 03:25:35 UTC | Branch: main | Commit: 3c8a88ab
+Generated: 2026-06-11 01:00:57 UTC | Branch: main | Commit: 280db5da
 
 This document contains the complete codebase structure and content for LLM ingestion.
 
@@ -2527,6 +2527,7 @@ This document contains the complete codebase structure and content for LLM inges
 │       ├── sasa_scenario.yaml
 │       ├── simple_bank.yaml
 │       ├── simple_dealer.yaml
+│       ├── simple_dealer_demo_n_3_kappa_0_5_c_1_mu_0.yaml
 │       ├── simple_nbfi.yaml
 │       ├── two_banks_interbank.yaml
 │       └── two_jurisdictions.yaml
@@ -31809,6 +31810,7 @@ This document contains the complete codebase structure and content for LLM inges
 │   ├── check_quality.sh
 │   ├── check_test_antipatterns.py
 │   ├── generate_codebase_markdown.py
+│   ├── generate_presentation_notebook.py
 │   ├── modal_wrapper.py
 │   ├── regression_fingerprints.json
 │   ├── run_abm_modeling_benchmark.py
@@ -31833,269 +31835,299 @@ This document contains the complete codebase structure and content for LLM inges
 │   ├── run_simulation_efficiency_benchmark.py
 │   ├── run_stochastic_robustness_benchmark.py
 │   ├── run_stylized_facts_benchmark.py
-│   └── run_treatment_deltas.py
+│   ├── run_treatment_deltas.py
+│   ├── sweep_analysis_charts.py
+│   └── sweep_analysis_report.py
 ├── src
-│   └── bilancio
+│   ├── bilancio
+│   │   ├── __init__.py
+│   │   ├── analysis
+│   │   │   ├── __init__.py
+│   │   │   ├── balances.py
+│   │   │   ├── beliefs.py
+│   │   │   ├── comprehensive_report.py
+│   │   │   ├── contagion.py
+│   │   │   ├── convergence.py
+│   │   │   ├── convergence_dashboard.py
+│   │   │   ├── credit_creation.py
+│   │   │   ├── cross_sweep.py
+│   │   │   ├── cross_sweep_network.py
+│   │   │   ├── dealer_usage_summary.py
+│   │   │   ├── funding_chains.py
+│   │   │   ├── intermediary_frontier.py
+│   │   │   ├── intermediary_support_tuning.py
+│   │   │   ├── loaders.py
+│   │   │   ├── mechanism_activity.py
+│   │   │   ├── metrics.py
+│   │   │   ├── metrics_computer.py
+│   │   │   ├── network.py
+│   │   │   ├── network_analysis.py
+│   │   │   ├── notebook_generator.py
+│   │   │   ├── post_sweep.py
+│   │   │   ├── pricing_analysis.py
+│   │   │   ├── report.py
+│   │   │   ├── strategy_outcomes.py
+│   │   │   ├── treynor_viz.py
+│   │   │   ├── visualization
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── balances.py
+│   │   │   │   ├── common.py
+│   │   │   │   ├── events.py
+│   │   │   │   ├── phases.py
+│   │   │   │   └── run_comparison.py
+│   │   │   └── visualization_phases.py
+│   │   ├── banking
+│   │   │   ├── __init__.py
+│   │   │   ├── day_runner.py
+│   │   │   ├── pricing_kernel.py
+│   │   │   ├── reserve_projection.py
+│   │   │   ├── sandbox.py
+│   │   │   ├── state.py
+│   │   │   ├── ticket_processor.py
+│   │   │   └── types.py
+│   │   ├── cloud
+│   │   │   ├── __init__.py
+│   │   │   ├── config.py
+│   │   │   ├── modal_app.py
+│   │   │   ├── proxy_patch.py
+│   │   │   └── sweep_trigger.py
+│   │   ├── config
+│   │   │   ├── __init__.py
+│   │   │   ├── apply.py
+│   │   │   ├── loaders.py
+│   │   │   └── models.py
+│   │   ├── core
+│   │   │   ├── __init__.py
+│   │   │   ├── atomic.py
+│   │   │   ├── atomic_tx.py
+│   │   │   ├── errors.py
+│   │   │   ├── events.py
+│   │   │   ├── ids.py
+│   │   │   ├── invariants.py
+│   │   │   ├── performance.py
+│   │   │   ├── time.py
+│   │   │   └── undo_log.py
+│   │   ├── dealer
+│   │   │   ├── __init__.py
+│   │   │   ├── assertions.py
+│   │   │   ├── bank_dealer_simulation.py
+│   │   │   ├── bank_integration.py
+│   │   │   ├── bridge.py
+│   │   │   ├── events.py
+│   │   │   ├── kernel.py
+│   │   │   ├── kernel_native.py
+│   │   │   ├── metrics.py
+│   │   │   ├── models.py
+│   │   │   ├── priors.py
+│   │   │   ├── report.py
+│   │   │   ├── risk_assessment.py
+│   │   │   ├── simulation.py
+│   │   │   └── trading.py
+│   │   ├── decision
+│   │   │   ├── __init__.py
+│   │   │   ├── action_spec.py
+│   │   │   ├── activities.py
+│   │   │   ├── activity.py
+│   │   │   ├── adaptive.py
+│   │   │   ├── factories.py
+│   │   │   ├── intentions.py
+│   │   │   ├── presets.py
+│   │   │   ├── profile_factory.py
+│   │   │   ├── profiles.py
+│   │   │   ├── protocols.py
+│   │   │   ├── risk_assessment.py
+│   │   │   └── valuers.py
+│   │   ├── domain
+│   │   │   ├── __init__.py
+│   │   │   ├── agent.py
+│   │   │   ├── agents
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── bank.py
+│   │   │   │   ├── central_bank.py
+│   │   │   │   ├── dealer.py
+│   │   │   │   ├── firm.py
+│   │   │   │   ├── household.py
+│   │   │   │   ├── non_bank_lender.py
+│   │   │   │   ├── rating_agency.py
+│   │   │   │   ├── treasury.py
+│   │   │   │   └── vbt.py
+│   │   │   ├── goods.py
+│   │   │   ├── instruments
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── bank_loan.py
+│   │   │   │   ├── base.py
+│   │   │   │   ├── cb_loan.py
+│   │   │   │   ├── contract.py
+│   │   │   │   ├── credit.py
+│   │   │   │   ├── delivery.py
+│   │   │   │   ├── interbank_loan.py
+│   │   │   │   ├── means_of_payment.py
+│   │   │   │   ├── non_bank_loan.py
+│   │   │   │   └── policy.py
+│   │   │   ├── jurisdiction.py
+│   │   │   └── policy.py
+│   │   ├── engines
+│   │   │   ├── __init__.py
+│   │   │   ├── bank_interest.py
+│   │   │   ├── bank_lending.py
+│   │   │   ├── banking_subsystem.py
+│   │   │   ├── clearing.py
+│   │   │   ├── dealer_integration.py
+│   │   │   ├── dealer_sync.py
+│   │   │   ├── dealer_trades.py
+│   │   │   ├── dealer_wiring.py
+│   │   │   ├── interbank.py
+│   │   │   ├── lending.py
+│   │   │   ├── matching.py
+│   │   │   ├── rating.py
+│   │   │   ├── settlement.py
+│   │   │   ├── simulation.py
+│   │   │   ├── simulation_result.py
+│   │   │   ├── state.py
+│   │   │   ├── system.py
+│   │   │   └── termination.py
+│   │   ├── experiments
+│   │   │   ├── __init__.py
+│   │   │   ├── balanced_comparison.py
+│   │   │   ├── bank_comparison.py
+│   │   │   ├── comparison.py
+│   │   │   ├── nbfi_comparison.py
+│   │   │   ├── ring.py
+│   │   │   ├── sampling
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── frontier.py
+│   │   │   │   ├── generic.py
+│   │   │   │   ├── grid.py
+│   │   │   │   └── lhs.py
+│   │   │   └── sweep_analysis.py
+│   │   ├── export
+│   │   │   ├── __init__.py
+│   │   │   └── writers.py
+│   │   ├── information
+│   │   │   ├── __init__.py
+│   │   │   ├── channels.py
+│   │   │   ├── estimates.py
+│   │   │   ├── hierarchy.py
+│   │   │   ├── levels.py
+│   │   │   ├── noise.py
+│   │   │   ├── presets.py
+│   │   │   ├── profile.py
+│   │   │   ├── service.py
+│   │   │   └── views.py
+│   │   ├── jobs
+│   │   │   ├── __init__.py
+│   │   │   ├── job_id.py
+│   │   │   ├── manager.py
+│   │   │   ├── models.py
+│   │   │   └── supabase_store.py
+│   │   ├── ops
+│   │   │   ├── __init__.py
+│   │   │   ├── aliases.py
+│   │   │   ├── banking.py
+│   │   │   ├── cashflows.py
+│   │   │   ├── jurisdiction.py
+│   │   │   ├── primitives.py
+│   │   │   └── primitives_stock.py
+│   │   ├── provenance.py
+│   │   ├── runners
+│   │   │   ├── __init__.py
+│   │   │   ├── cloud_executor.py
+│   │   │   ├── local_executor.py
+│   │   │   ├── models.py
+│   │   │   ├── protocols.py
+│   │   │   └── retry.py
+│   │   ├── scenarios
+│   │   │   ├── __init__.py
+│   │   │   ├── protocol.py
+│   │   │   ├── registry.py
+│   │   │   ├── ring
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── compiler.py
+│   │   │   │   ├── plugin.py
+│   │   │   │   └── topology.py
+│   │   │   ├── ring_explorer.py
+│   │   │   ├── sweep_diagnostics.py
+│   │   │   └── viability.py
+│   │   ├── specification
+│   │   │   ├── __init__.py
+│   │   │   ├── current_system.py
+│   │   │   ├── models.py
+│   │   │   ├── registry.py
+│   │   │   ├── trade_viability.py
+│   │   │   └── validators.py
+│   │   ├── stats
+│   │   │   ├── __init__.py
+│   │   │   ├── analyzer.py
+│   │   │   ├── bootstrap.py
+│   │   │   ├── cell.py
+│   │   │   ├── effect_size.py
+│   │   │   ├── sensitivity.py
+│   │   │   ├── significance.py
+│   │   │   └── types.py
+│   │   ├── storage
+│   │   │   ├── __init__.py
+│   │   │   ├── artifact_loaders.py
+│   │   │   ├── file_store.py
+│   │   │   ├── modal_artifact_loader.py
+│   │   │   ├── models.py
+│   │   │   ├── protocols.py
+│   │   │   ├── supabase_client.py
+│   │   │   └── supabase_registry.py
+│   │   └── ui
+│   │       ├── __init__.py
+│   │       ├── assets
+│   │       │   └── export.css
+│   │       ├── cli
+│   │       │   ├── __init__.py
+│   │       │   ├── __main__.py
+│   │       │   ├── _common.py
+│   │       │   ├── _sweep_balanced.py
+│   │       │   ├── _sweep_misc.py
+│   │       │   ├── _sweep_post.py
+│   │       │   ├── _sweep_ring.py
+│   │       │   ├── jobs.py
+│   │       │   ├── run.py
+│   │       │   ├── sweep.py
+│   │       │   ├── treynor.py
+│   │       │   ├── utils.py
+│   │       │   └── volume.py
+│   │       ├── display.py
+│   │       ├── html_export.py
+│   │       ├── render
+│   │       │   ├── __init__.py
+│   │       │   ├── formatters.py
+│   │       │   ├── models.py
+│   │       │   └── rich_builders.py
+│   │       ├── result_display.py
+│   │       ├── run.py
+│   │       ├── settings.py
+│   │       ├── sweep_setup.py
+│   │       ├── v2_run.py
+│   │       └── wizard.py
+│   └── bilancio_v2
+│       ├── README.md
 │       ├── __init__.py
-│       ├── analysis
+│       ├── actions.py
+│       ├── balance_invariants.py
+│       ├── compat.py
+│       ├── engine.py
+│       ├── events.py
+│       ├── exports.py
+│       ├── ledger.py
+│       ├── parity.py
+│       ├── plugins
 │       │   ├── __init__.py
-│       │   ├── balances.py
-│       │   ├── beliefs.py
-│       │   ├── comprehensive_report.py
-│       │   ├── contagion.py
-│       │   ├── convergence.py
-│       │   ├── convergence_dashboard.py
-│       │   ├── credit_creation.py
-│       │   ├── cross_sweep.py
-│       │   ├── cross_sweep_network.py
-│       │   ├── dealer_usage_summary.py
-│       │   ├── funding_chains.py
-│       │   ├── intermediary_frontier.py
-│       │   ├── intermediary_support_tuning.py
-│       │   ├── loaders.py
-│       │   ├── mechanism_activity.py
-│       │   ├── metrics.py
-│       │   ├── metrics_computer.py
-│       │   ├── network.py
-│       │   ├── network_analysis.py
-│       │   ├── notebook_generator.py
-│       │   ├── post_sweep.py
-│       │   ├── pricing_analysis.py
-│       │   ├── report.py
-│       │   ├── strategy_outcomes.py
-│       │   ├── treynor_viz.py
-│       │   ├── visualization
-│       │   │   ├── __init__.py
-│       │   │   ├── balances.py
-│       │   │   ├── common.py
-│       │   │   ├── events.py
-│       │   │   ├── phases.py
-│       │   │   └── run_comparison.py
-│       │   └── visualization_phases.py
-│       ├── banking
-│       │   ├── __init__.py
-│       │   ├── day_runner.py
-│       │   ├── pricing_kernel.py
-│       │   ├── reserve_projection.py
-│       │   ├── sandbox.py
-│       │   ├── state.py
-│       │   ├── ticket_processor.py
-│       │   └── types.py
-│       ├── cloud
-│       │   ├── __init__.py
-│       │   ├── config.py
-│       │   ├── modal_app.py
-│       │   ├── proxy_patch.py
-│       │   └── sweep_trigger.py
-│       ├── config
-│       │   ├── __init__.py
-│       │   ├── apply.py
-│       │   ├── loaders.py
-│       │   └── models.py
-│       ├── core
-│       │   ├── __init__.py
-│       │   ├── atomic.py
-│       │   ├── atomic_tx.py
-│       │   ├── errors.py
-│       │   ├── events.py
-│       │   ├── ids.py
-│       │   ├── invariants.py
-│       │   ├── performance.py
-│       │   ├── time.py
-│       │   └── undo_log.py
-│       ├── dealer
-│       │   ├── __init__.py
-│       │   ├── assertions.py
-│       │   ├── bank_dealer_simulation.py
-│       │   ├── bank_integration.py
-│       │   ├── bridge.py
-│       │   ├── events.py
-│       │   ├── kernel.py
-│       │   ├── kernel_native.py
-│       │   ├── metrics.py
-│       │   ├── models.py
-│       │   ├── priors.py
-│       │   ├── report.py
-│       │   ├── risk_assessment.py
-│       │   ├── simulation.py
-│       │   └── trading.py
-│       ├── decision
-│       │   ├── __init__.py
-│       │   ├── action_spec.py
-│       │   ├── activities.py
-│       │   ├── activity.py
-│       │   ├── adaptive.py
-│       │   ├── factories.py
-│       │   ├── intentions.py
-│       │   ├── presets.py
-│       │   ├── profile_factory.py
-│       │   ├── profiles.py
-│       │   ├── protocols.py
-│       │   ├── risk_assessment.py
-│       │   └── valuers.py
-│       ├── domain
-│       │   ├── __init__.py
-│       │   ├── agent.py
-│       │   ├── agents
-│       │   │   ├── __init__.py
-│       │   │   ├── bank.py
-│       │   │   ├── central_bank.py
-│       │   │   ├── dealer.py
-│       │   │   ├── firm.py
-│       │   │   ├── household.py
-│       │   │   ├── non_bank_lender.py
-│       │   │   ├── rating_agency.py
-│       │   │   ├── treasury.py
-│       │   │   └── vbt.py
-│       │   ├── goods.py
-│       │   ├── instruments
-│       │   │   ├── __init__.py
-│       │   │   ├── bank_loan.py
-│       │   │   ├── base.py
-│       │   │   ├── cb_loan.py
-│       │   │   ├── contract.py
-│       │   │   ├── credit.py
-│       │   │   ├── delivery.py
-│       │   │   ├── interbank_loan.py
-│       │   │   ├── means_of_payment.py
-│       │   │   ├── non_bank_loan.py
-│       │   │   └── policy.py
-│       │   ├── jurisdiction.py
-│       │   └── policy.py
-│       ├── engines
-│       │   ├── __init__.py
-│       │   ├── bank_interest.py
-│       │   ├── bank_lending.py
-│       │   ├── banking_subsystem.py
-│       │   ├── clearing.py
-│       │   ├── dealer_integration.py
-│       │   ├── dealer_sync.py
-│       │   ├── dealer_trades.py
-│       │   ├── dealer_wiring.py
+│       │   ├── banking.py
+│       │   ├── base.py
+│       │   ├── dealer.py
 │       │   ├── interbank.py
 │       │   ├── lending.py
-│       │   ├── matching.py
 │       │   ├── rating.py
-│       │   ├── settlement.py
-│       │   ├── simulation.py
-│       │   ├── simulation_result.py
-│       │   ├── state.py
-│       │   ├── system.py
-│       │   └── termination.py
-│       ├── experiments
-│       │   ├── __init__.py
-│       │   ├── balanced_comparison.py
-│       │   ├── bank_comparison.py
-│       │   ├── comparison.py
-│       │   ├── nbfi_comparison.py
-│       │   ├── ring.py
-│       │   ├── sampling
-│       │   │   ├── __init__.py
-│       │   │   ├── frontier.py
-│       │   │   ├── generic.py
-│       │   │   ├── grid.py
-│       │   │   └── lhs.py
-│       │   └── sweep_analysis.py
-│       ├── export
-│       │   ├── __init__.py
-│       │   └── writers.py
-│       ├── information
-│       │   ├── __init__.py
-│       │   ├── channels.py
-│       │   ├── estimates.py
-│       │   ├── hierarchy.py
-│       │   ├── levels.py
-│       │   ├── noise.py
-│       │   ├── presets.py
-│       │   ├── profile.py
-│       │   ├── service.py
-│       │   └── views.py
-│       ├── jobs
-│       │   ├── __init__.py
-│       │   ├── job_id.py
-│       │   ├── manager.py
-│       │   ├── models.py
-│       │   └── supabase_store.py
-│       ├── ops
-│       │   ├── __init__.py
-│       │   ├── aliases.py
-│       │   ├── banking.py
-│       │   ├── cashflows.py
-│       │   ├── jurisdiction.py
-│       │   ├── primitives.py
-│       │   └── primitives_stock.py
-│       ├── provenance.py
-│       ├── runners
-│       │   ├── __init__.py
-│       │   ├── cloud_executor.py
-│       │   ├── local_executor.py
-│       │   ├── models.py
-│       │   ├── protocols.py
-│       │   └── retry.py
-│       ├── scenarios
-│       │   ├── __init__.py
-│       │   ├── protocol.py
-│       │   ├── registry.py
-│       │   ├── ring
-│       │   │   ├── __init__.py
-│       │   │   ├── compiler.py
-│       │   │   ├── plugin.py
-│       │   │   └── topology.py
-│       │   ├── ring_explorer.py
-│       │   ├── sweep_diagnostics.py
-│       │   └── viability.py
-│       ├── specification
-│       │   ├── __init__.py
-│       │   ├── current_system.py
-│       │   ├── models.py
-│       │   ├── registry.py
-│       │   ├── trade_viability.py
-│       │   └── validators.py
-│       ├── stats
-│       │   ├── __init__.py
-│       │   ├── analyzer.py
-│       │   ├── bootstrap.py
-│       │   ├── cell.py
-│       │   ├── effect_size.py
-│       │   ├── sensitivity.py
-│       │   ├── significance.py
-│       │   └── types.py
-│       ├── storage
-│       │   ├── __init__.py
-│       │   ├── artifact_loaders.py
-│       │   ├── file_store.py
-│       │   ├── modal_artifact_loader.py
-│       │   ├── models.py
-│       │   ├── protocols.py
-│       │   ├── supabase_client.py
-│       │   └── supabase_registry.py
-│       └── ui
-│           ├── __init__.py
-│           ├── assets
-│           │   └── export.css
-│           ├── cli
-│           │   ├── __init__.py
-│           │   ├── _common.py
-│           │   ├── _sweep_balanced.py
-│           │   ├── _sweep_misc.py
-│           │   ├── _sweep_post.py
-│           │   ├── _sweep_ring.py
-│           │   ├── jobs.py
-│           │   ├── run.py
-│           │   ├── sweep.py
-│           │   ├── utils.py
-│           │   └── volume.py
-│           ├── display.py
-│           ├── html_export.py
-│           ├── render
-│           │   ├── __init__.py
-│           │   ├── formatters.py
-│           │   ├── models.py
-│           │   └── rich_builders.py
-│           ├── run.py
-│           ├── settings.py
-│           ├── sweep_setup.py
-│           └── wizard.py
+│       │   └── settlement.py
+│       ├── policy.py
+│       ├── scenario_gates.py
+│       ├── subsystem_config.py
+│       └── views.py
 ├── supabase
 │   ├── .temp
 │   │   ├── cli-latest
@@ -32133,6 +32165,7 @@ This document contains the complete codebase structure and content for LLM inges
     │   ├── test_phase6_analysis.py
     │   ├── test_phases_viz.py
     │   ├── test_post_sweep.py
+    │   ├── test_post_sweep_run_contracts.py
     │   ├── test_report_aggregate.py
     │   ├── test_report_coverage.py
     │   ├── test_run_comparison.py
@@ -32159,6 +32192,7 @@ This document contains the complete codebase structure and content for LLM inges
     │   ├── conftest.py
     │   ├── test_analysis_manifest.py
     │   ├── test_benchmark_contracts.py
+    │   ├── test_benchmark_entrypoints.py
     │   └── test_performance.py
     ├── cloud
     │   ├── __init__.py
@@ -32166,6 +32200,7 @@ This document contains the complete codebase structure and content for LLM inges
     │   ├── test_cloud_performance_roundtrip.py
     │   ├── test_modal_app_unit.py
     │   ├── test_modal_artifact_loader.py
+    │   ├── test_proxy_patch.py
     │   └── test_sweep_trigger_unit.py
     ├── config
     │   ├── test_apply.py
@@ -32356,6 +32391,7 @@ This document contains the complete codebase structure and content for LLM inges
     │   ├── test_cli_integration.py
     │   ├── test_cli_jobs.py
     │   ├── test_cli_run_coverage.py
+    │   ├── test_cli_scenario_characterization.py
     │   ├── test_cli_sweep.py
     │   ├── test_cli_treynor.py
     │   ├── test_cli_volume.py
@@ -32370,42 +32406,86 @@ This document contains the complete codebase structure and content for LLM inges
     │   ├── test_settings.py
     │   ├── test_sweep_setup.py
     │   └── test_wizard_coverage.py
-    └── unit
-        ├── test_action_spec.py
-        ├── test_balanced_comparison_result.py
-        ├── test_balances.py
-        ├── test_banking_mode.py
-        ├── test_banking_subsystem_fixes.py
-        ├── test_borrower_assessment.py
-        ├── test_buy_controls.py
-        ├── test_cb_corridor.py
-        ├── test_channels.py
-        ├── test_decision_protocols.py
-        ├── test_domain_system.py
-        ├── test_equalize_capacity.py
-        ├── test_estimate_provenance.py
-        ├── test_estimates.py
-        ├── test_generic_sampling.py
-        ├── test_information.py
-        ├── test_information_hierarchy.py
-        ├── test_intermediary_losses.py
-        ├── test_jobs.py
-        ├── test_jurisdiction.py
-        ├── test_nbfi_belief_tracker.py
-        ├── test_nonbank_lender.py
-        ├── test_payable_default_loss.py
-        ├── test_rating_agency.py
-        ├── test_reserves.py
-        ├── test_scenario_plugin.py
-        ├── test_settle_obligation.py
-        ├── test_simulator_bridge.py
-        ├── test_simulator_snapshot.py
-        ├── test_stats.py
-        ├── test_sweep_analysis.py
-        ├── test_trade_viability.py
-        └── test_vbt_forward_stress.py
+    ├── unit
+    │   ├── test_action_spec.py
+    │   ├── test_balanced_comparison_result.py
+    │   ├── test_balances.py
+    │   ├── test_banking_mode.py
+    │   ├── test_banking_subsystem_fixes.py
+    │   ├── test_borrower_assessment.py
+    │   ├── test_buy_controls.py
+    │   ├── test_cb_corridor.py
+    │   ├── test_channels.py
+    │   ├── test_decision_protocols.py
+    │   ├── test_domain_system.py
+    │   ├── test_equalize_capacity.py
+    │   ├── test_estimate_provenance.py
+    │   ├── test_estimates.py
+    │   ├── test_generic_sampling.py
+    │   ├── test_information.py
+    │   ├── test_information_hierarchy.py
+    │   ├── test_intermediary_losses.py
+    │   ├── test_jobs.py
+    │   ├── test_jurisdiction.py
+    │   ├── test_nbfi_belief_tracker.py
+    │   ├── test_nonbank_lender.py
+    │   ├── test_payable_default_loss.py
+    │   ├── test_rating_agency.py
+    │   ├── test_reserves.py
+    │   ├── test_scenario_plugin.py
+    │   ├── test_settle_obligation.py
+    │   ├── test_simulator_bridge.py
+    │   ├── test_simulator_snapshot.py
+    │   ├── test_stats.py
+    │   ├── test_sweep_analysis.py
+    │   ├── test_trade_viability.py
+    │   └── test_vbt_forward_stress.py
+    └── v2
+        ├── __init__.py
+        ├── golden
+        │   ├── default_handling_demo.json
+        │   ├── firm_delivery.json
+        │   ├── interbank_netting.json
+        │   ├── intraday_netting.json
+        │   ├── payment_demo.json
+        │   ├── rich_simulation.json
+        │   ├── ring_with_action_specs.json
+        │   ├── sasa_scenario.json
+        │   ├── simple_bank.json
+        │   ├── simple_nbfi.json
+        │   ├── two_banks_interbank.json
+        │   └── two_jurisdictions.json
+        ├── golden_cases
+        │   ├── banking_adaptive_corridor.json
+        │   ├── banking_cb_freeze.json
+        │   ├── banking_coverage_gate.json
+        │   ├── banking_lending.json
+        │   ├── banking_plain.json
+        │   ├── dealer_active.json
+        │   ├── dealer_active_risk.json
+        │   ├── dealer_marker.json
+        │   ├── dealer_marker_risk.json
+        │   ├── dealer_passive.json
+        │   ├── rating_omniscient.json
+        │   ├── rating_realistic.json
+        │   ├── rollover_expel-agent_100.json
+        │   ├── rollover_expel-agent_150.json
+        │   ├── rollover_expel-agent_300.json
+        │   └── rollover_fail-fast_300.json
+        ├── golden_cases.py
+        ├── golden_io.py
+        ├── test_banking_parity.py
+        ├── test_dealer_parity.py
+        ├── test_golden.py
+        ├── test_ledger.py
+        ├── test_parity_examples.py
+        ├── test_property_parity.py
+        ├── test_property_parity_lender.py
+        ├── test_rating_parity.py
+        ├── test_rollover_parity.py
+        └── test_settlement.py
 
-6896 directories, 25499 files
+6901 directories, 25574 files
 
 ```
 
@@ -39073,6 +39153,157 @@ Complete git history from oldest to newest:
   ---------
   Co-authored-by: Claude Opus 4.6 <noreply@anthropic.com>
 
+- **b76202a8** (2026-03-11) by github-actions[bot]
+  chore(docs): update codebase_for_llm.md
+
+- **280db5da** (2026-06-11) by situya87
+  Rebuild the simulation kernel (bilancio_v2): event-journaled ledger, plugin phases, full cutover (#168)
+  * feat: wire --topologies CLI option to balanced sweep command
+  The balanced runner already had topology support in the source code
+  (Plan 055) but the CLI option was missing from _sweep_balanced.py.
+  Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+  * feat: add bilancio_v2 — event-journaled, plugin-based kernel rebuild (slice 1)
+  Ground-up rebuild of the simulation kernel around a single audited ledger
+  (no shadow state or sync functions), a data-driven capability policy (no
+  isinstance dispatch), and phases as plugins. Runs the existing YAML schema
+  unchanged and reproduces the clean-core engine event-for-event.
+  Scope: payment/settlement core — cash/reserves/deposits, payables,
+  deliveries, CB loans with refinancing, interbank netting, fail-fast and
+  expel-agent default handling (partial settlement, pro-rata recovery,
+  write-offs, receivable reassignment), scheduled actions, stability stop.
+  Dealer/lender/rating/banking/rollover/jurisdictions are rejected
+  explicitly until rebuilt as plugins.
+  Verification (tests/v2, 36 tests):
+  - exact event+balance parity with clean-core on all 9 supported example
+    scenarios; identical failure on 3 dealer scenarios both engines reject
+  - golden oracle JSONs captured from the existing engine
+  - Hypothesis property-based parity on random payment networks
+  - ledger unit tests incl. invariant detection of un-audited mutations
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * feat(v2): port rating agency and non-bank lender as phase plugins (slice 2)
+  Adds RatingPhase and LendingPhase to the v2 kernel, plus NonBankLoan
+  ledger operations (silent-disbursal semantics preserved), Phase C loan
+  servicing, and loan handling in default cascades (creditor weights,
+  pro-rata recovery, write-offs). The journal now supports phase-less
+  informational events to match the legacy subsystem event shape.
+  Lender coverage: kappa-aware and signal-based pricing, information
+  visibility models with seeded noise, exposure/concentration/coverage/
+  expected-loss screens, preventive lending, ranking modes, stop-loss,
+  adaptive capital conservation. Rating coverage: deterministic sampling,
+  omniscient/realistic profiles, rating registry feeding lender signals.
+  Verification: simple_nbfi.yaml now in exact event+balance parity (golden
+  captured); new Hypothesis property suite over random lender/rating
+  configs; deterministic rating+inventory parity tests; a 150-scenario
+  stress sweep confirmed parity across every lender event path (creations,
+  repayments, defaults, all rejection types, preventive loans). 40 v2
+  tests + 1,910 existing tests pass; ruff and mypy clean.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * feat(v2): support payable rollover (slice 3)
+  Settled payables are refinanced past the latest open maturity with the
+  settlement cash returned creditor→debtor (deposit first, then cash), and
+  the stability rule switches to consecutive default-free days, matching
+  clean-core Plan 024 semantics. Rollover payables append silently —
+  observable only through PayableRolledOver/RolloverPartial.
+  Verification: deterministic parity scenarios (perpetual rollover, partial
+  rollover, rollover interrupted by default cascades, fail-fast) plus
+  rollover randomized into the base Hypothesis property suite.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * chore: add src to pytest pythonpath; fix stale v2 engine docstring
+  Makes the test suite independent of the editable install's .pth file,
+  which macOS file flags can render invisible to Python (site skips
+  hidden .pth files since 3.11).
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * feat(v2): port banking subsystem as phase plugins (slice 4)
+  Adds BankQuotesPhase and BankLendingPhase plus banking integration across
+  the kernel: pricing-kernel bank quotes with reserve-path forecasts, bank
+  lending via deposit credit creation, routed deposit payments (cheapest-
+  rate drain, best-rate receive), corridor-priced lender rates, CB loan
+  refinance and the CB lending freeze (bank defaults, resolution with
+  pro-rata reserve distribution to surviving banks or as cash, deposit
+  write-offs), bank loan servicing with cross-bank reserve settlement,
+  end-of-run loan winddown and final CB settlement, and the interbank
+  auction record. Bank loans now participate in expulsion cascades
+  (creditor weights + write-offs) — a gap found by Hypothesis.
+  The cash-conservation invariant gains a reserves-to-cash conversion term
+  for bank-resolution payouts. The event journal accepts payload-supplied
+  "day" keys (legacy freeze events carry one).
+  Verification: 5 deterministic banking-mode parity tests, a Hypothesis
+  property suite over randomized banking configs (with identical-error
+  parity for insolvent runs), and a 120-trial stress sweep covering every
+  banking event path with zero mismatches. 50 v2 + 1,910 existing tests
+  pass; ruff and mypy clean.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * feat(v2): port dealer subsystem; v2 domain now equals clean-core (slice 5)
+  Adds DealerPhase covering all three dealer modes: marker (daily pricing
+  snapshots from the shared kernel), balanced passive (equity baseline,
+  PnL at export), and balanced active — payables become tickets, per-bucket
+  market makers quote via the shared pricing kernel, and trading rounds run
+  through the same DealerSubsystem/TradeExecutor/matching machinery as the
+  existing engine. Subsystem working state reconciles with the ledger at
+  the legacy sync points; the CashMinted/CashRetired reconciliation flows
+  through audited ledger ops so conservation invariants keep holding.
+  Settlement feeds the dealer risk-history; the lender signal chain
+  consults the dealer risk assessor and kappa priors.
+  Scenario gating now reuses clean_core_unsupported_reason and
+  clean_core_configuration_error_reason, making the v2 supported domain
+  equal clean-core's by construction. That brings action-specs scenarios
+  (ring_with_action_specs) and jurisdiction-carrying scenarios
+  (two_jurisdictions) into full event+balance parity with no extra code —
+  all 12 runnable example scenarios now pass exact parity and the 3
+  fail-fast dealer-generator examples fail identically.
+  Verification: deterministic 5-case dealer mode matrix, a non-vacuous-
+  trading guard, Hypothesis property suite, and stress sweeps (100 mixed
+  dealer/banking/lender trials + 80 capitalized active-trading trials)
+  with zero mismatches. 59 v2 + 1,910 existing tests pass; ruff/mypy clean.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * feat(v2): cut the CLI and sweep pipeline over to the v2 kernel (steps 1+2)
+  Adds bilancio_v2.views (balance/T-account rows) and bilancio_v2.exports
+  (balances CSV, events JSONL, HTML report) — near-verbatim ports of the
+  clean-core modules, which were already duck-typed against a state
+  protocol the v2 Ledger satisfies field-for-field. RunResult gains a
+  .state alias and run_until_stable a progress_callback.
+  ui/v2_run.py replaces the clean-core CLI runner (same flags, same
+  output, same auto-fallback to the legacy v1 engine outside the rebuilt
+  domain); ui/run.py dispatch now routes the "clean-core" engine choice to
+  the v2 kernel.
+  Validation: all 622 UI tests pass unchanged — including the 5.1k-line
+  CLI scenario characterization suite — and the full repo suite (6,629)
+  stays green. A local ring sweep A/B (same seeds, v2 vs pre-cutover
+  clean-core) produced identical aggregated metrics and byte-identical
+  per-run events.jsonl and balances.csv.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * chore: commit previously-untracked clean-core engine and working tree state
+  The clean-core engine (engines/clean_core_*.py), its CLI runner, several
+  scripts, examples, and test modules existed only as untracked files in
+  the working tree — the committed history predates them, so the rebuild
+  branch was not self-contained (bilancio_v2 imports clean_core_config/
+  types/compat). This commit records the full src/tests/scripts/examples
+  working state so the branch builds and tests stand alone.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * feat(v2)!: delete the clean-core engine; goldens become the oracle (step 3)
+  Deletes the 21 clean_core_* engine modules, the clean-core CLI runner,
+  and their direct test files. The pieces v2 reuses move into the package:
+  scenario gates and subsystem-config builders (scenario_gates.py,
+  subsystem_config.py, compat.py) and the exported-balance invariant check
+  (balance_invariants.py). ui/clean_core_display.py becomes
+  ui/result_display.py.
+  Before deletion, every deterministic parity case (rollover, rating,
+  banking, dealer matrices — 16 cases) was pinned into golden snapshots
+  (tests/v2/golden_cases/) while the live parity suite proved v2 ==
+  clean-core, so the goldens carry cross-engine authority. tests/v2 now
+  compares v2 against the goldens; the Hypothesis suites assert
+  self-consistency (run completion + conservation invariants + exported-
+  balance double entry).
+  The legacy v1 engine is deliberately retained: it uniquely implements
+  the multi-arm balanced-dealer experiment modes used by `sweep balanced`
+  and multi-currency jurisdiction semantics; auto engine selection falls
+  back to it exactly as before.
+  Gate: 6,487 + 60 benchmark tests pass; ruff/mypy clean; a post-deletion
+  local ring sweep reproduces the pre-deletion metrics exactly.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  ---------
+  Co-authored-by: Claude Opus 4.6 <noreply@anthropic.com>
+
 ---
 
 ## Source Code (src/bilancio)
@@ -43980,6 +44211,7 @@ def reconstruct_network_snapshots(
     active_payables: dict[str, dict] = {}   # payable_id -> edge dict
     active_bank_loans: dict[str, dict] = {}  # loan_id -> edge dict
     active_cb_loans: dict[str, dict] = {}    # loan_id -> edge dict
+    active_nbfi_loans: dict[str, dict] = {}  # loan_id -> edge dict
     agents: dict[str, dict] = {}             # id -> {id, name, kind}
     defaulted_agents: set[str] = set()
     cash: dict[str, int] = {}                # agent_id -> cash amount
@@ -43994,10 +44226,12 @@ def reconstruct_network_snapshots(
             return "bank"
         if aid in ("cb", "central_bank", "CB"):
             return "central_bank"
-        if aid.startswith("D") and len(aid) <= 3:
+        if aid.startswith("dealer") or (aid.startswith("D") and len(aid) <= 3):
             return "dealer"
-        if aid.startswith("VBT"):
+        if aid.startswith("VBT") or aid.startswith("vbt"):
             return "vbt"
+        if aid == "lender" or aid.startswith("lender") or aid.startswith("nbfi"):
+            return "lender"
         return "firm"
 
     # Group events by day
@@ -44075,6 +44309,11 @@ def reconstruct_network_snapshots(
                 if pid in active_payables and new_holder:
                     _ensure_agent(new_holder, _agent_kind(new_holder))
                     active_payables[pid]["source"] = new_holder
+                    # Retype the claim while a dealer warehouses it, so the
+                    # dealer's inventory is visually distinct from firm-to-firm debt.
+                    active_payables[pid]["instrument_type"] = (
+                        "dealer_ticket" if _agent_kind(new_holder) == "dealer" else "payable"
+                    )
 
             # --- Bank loans ---
             elif kind == "BankLoanIssued":
@@ -44114,6 +44353,26 @@ def reconstruct_network_snapshots(
                 lid = e.get("loan_id", "")
                 active_cb_loans.pop(lid, None)
 
+            # --- NBFI (non-bank) loans ---
+            elif kind == "NonBankLoanCreated":
+                lid = e.get("loan_id", "")
+                lender = e.get("lender_id", "lender")
+                borrower = e.get("borrower_id", "")
+                if lid and borrower:
+                    _ensure_agent(lender, "lender")
+                    _ensure_agent(borrower, _agent_kind(borrower))
+                    active_nbfi_loans[lid] = {
+                        "source": lender,
+                        "target": borrower,
+                        "amount": int(e.get("amount", 0)),
+                        "instrument_type": "nbfi_loan",
+                        "contract_id": lid,
+                    }
+
+            elif kind in ("NonBankLoanRepaid", "NonBankLoanDefaulted"):
+                lid = e.get("loan_id", "")
+                active_nbfi_loans.pop(lid, None)
+
             # --- Agent defaults ---
             elif kind == "AgentDefaulted":
                 aid = e.get("agent", e.get("frm", ""))
@@ -44134,6 +44393,7 @@ def reconstruct_network_snapshots(
             list(active_payables.values())
             + list(active_bank_loans.values())
             + list(active_cb_loans.values())
+            + list(active_nbfi_loans.values())
         )
 
         snapshots.append({
@@ -44200,6 +44460,7 @@ def generate_network_animation_html(
       'bank_loan': '#3b82f6',
       'cb_loan': '#7c3aed',
       'dealer_ticket': '#ec4899',
+      'nbfi_loan': '#16a34a',
       'cash': '#10b981',
       'bank_deposit': '#06b6d4',
       'reserve_deposit': '#8b5cf6'
@@ -44211,6 +44472,7 @@ def generate_network_animation_html(
       'firm': '#f59e0b',
       'dealer': '#ec4899',
       'vbt': '#a855f7',
+      'lender': '#16a34a',
       'household': '#10b981'
     }};
 
@@ -61287,14 +61549,24 @@ def save_run_to_supabase(
             "error": error,
         }
 
-        # Add parameters
-        param_columns = {"kappa", "concentration", "mu", "outside_mid_ratio", "seed", "regime"}
+        # Add parameters and provenance metadata.
+        param_columns = {
+            "kappa",
+            "concentration",
+            "mu",
+            "outside_mid_ratio",
+            "seed",
+            "regime",
+            "performance_config",
+        }
         for param, value in params.items():
             if param in param_columns:
                 if param == "seed":
                     runs_row[param] = int(value) if value is not None else None
                 elif param == "regime":
                     runs_row[param] = value
+                elif param == "performance_config":
+                    runs_row[param] = value or None
                 else:
                     runs_row[param] = (
                         float(value) if isinstance(value, int | float | str) else value
@@ -61413,6 +61685,7 @@ def run_simulation(
     scenario_path.write_text(yaml.dump(scenario_config, default_flow_style=False))
 
     # Extract run parameters from options for Supabase
+    perf_dict = options.get("performance")
     run_params = {
         "kappa": options.get("kappa"),
         "concentration": options.get("concentration"),
@@ -61420,6 +61693,7 @@ def run_simulation(
         "outside_mid_ratio": options.get("outside_mid_ratio"),
         "seed": options.get("seed"),
         "regime": options.get("regime", ""),
+        "performance_config": perf_dict,
     }
 
     try:
@@ -61427,7 +61701,6 @@ def run_simulation(
         from bilancio.ui.run import run_scenario
 
         # Deserialize performance config if present
-        perf_dict = options.get("performance")
         performance = None
         if perf_dict:
             from bilancio.core.performance import PerformanceConfig
@@ -94968,6 +95241,48 @@ class BalancedComparisonRunner:
             )
         return defs
 
+    def _experiment_design(self) -> dict[str, Any]:
+        """Return the baseline/treatment contract emitted with summary artifacts."""
+        optional_arms = []
+        if self.config.enable_lender:
+            optional_arms.append("lender")
+        if self.config.enable_dealer_lender:
+            optional_arms.append("dealer_lender")
+        deprecated_mixed_arms = []
+        if self.config.enable_bank_passive:
+            deprecated_mixed_arms.append("bank_passive")
+        if self.config.enable_bank_dealer:
+            deprecated_mixed_arms.append("bank_dealer")
+        if self.config.enable_bank_dealer_nbfi:
+            deprecated_mixed_arms.append("bank_dealer_nbfi")
+
+        return {
+            "mode": "legacy_balanced_dealer",
+            "comparison": "dealer_trading",
+            "baseline_arm": "passive",
+            "baseline_phase": "balanced_passive",
+            "treatment_arm": "active",
+            "treatment_phase": "balanced_active",
+            "effect_metric": "trading_effect",
+            "effect_formula": "delta_passive - delta_active",
+            "shared_controls": [
+                "same_seed",
+                "same_topology",
+                "same_parameter_cell",
+                "same_initial_balance_sheet",
+            ],
+            "legacy_mixed_mode": bool(optional_arms or deprecated_mixed_arms),
+            "optional_arms": optional_arms,
+            "deprecated_mixed_arms": deprecated_mixed_arms,
+            "clean_replacements": {
+                "bank_passive": "bilancio sweep bank",
+                "bank_dealer": "bilancio sweep bank",
+                "bank_dealer_nbfi": "bilancio sweep bank",
+                "lender": "bilancio sweep nbfi",
+                "dealer_lender": "split into bilancio sweep balanced and bilancio sweep nbfi",
+            },
+        }
+
     def _build_result_from_summaries(
         self,
         arm_summaries: dict[str, RingRunSummary],
@@ -95544,7 +95859,11 @@ class BalancedComparisonRunner:
                                     if completed >= self.config.n_replicates:
                                         continue
 
-                                    rep_label = f" rep {completed + rep + 1}/{self.config.n_replicates}" if self.config.n_replicates > 1 else ""
+                                    rep_label = (
+                                        f" rep {completed + rep + 1}/{self.config.n_replicates}"
+                                        if self.config.n_replicates > 1
+                                        else ""
+                                    )
 
                                     # Progress and ETA
                                     if completed_this_run > 0:
@@ -95560,7 +95879,10 @@ class BalancedComparisonRunner:
 
                                     topo_str = f", topo={topology_label}" if topology_label != "ring" else ""
                                     print(
-                                        f"{progress_str} Running{rep_label}: κ={kappa}, c={concentration}, μ={mu}, ρ={outside_mid_ratio}{topo_str}",
+                                        (
+                                            f"{progress_str} Running{rep_label}: κ={kappa}, "
+                                            f"c={concentration}, μ={mu}, ρ={outside_mid_ratio}{topo_str}"
+                                        ),
                                         flush=True,
                                     )
 
@@ -96658,6 +96980,7 @@ class BalancedComparisonRunner:
             worsened = 0
 
         summary = {
+            "experiment_design": self._experiment_design(),
             "total_pairs": len(self.comparison_results),
             "completed_pairs": len(completed),
             "mean_delta_passive": mean_delta_passive,
@@ -97374,6 +97697,26 @@ class BankComparisonRunner:
             ("lend", "bank_lend", "_get_lend_runner", "bank_lend"),
         ]
 
+    def _experiment_design(self) -> dict[str, Any]:
+        """Return the baseline/treatment contract emitted with summary artifacts."""
+        return {
+            "mode": "clean_causal",
+            "comparison": "bank_lending",
+            "baseline_arm": "idle",
+            "baseline_phase": "bank_idle",
+            "treatment_arm": "lend",
+            "treatment_phase": "bank_lend",
+            "effect_metric": "bank_lending_effect",
+            "effect_formula": "delta_idle - delta_lend",
+            "shared_controls": [
+                "same_seed",
+                "same_topology",
+                "same_parameter_cell",
+                "same_deposit_mop_infrastructure",
+            ],
+            "legacy_mixed_mode": False,
+        }
+
     def _build_result_from_summaries(
         self,
         arm_summaries: dict[str, RingRunSummary],
@@ -97711,14 +98054,24 @@ class BankComparisonRunner:
                                     if completed_this_run > 0:
                                         elapsed = time.time() - self._start_time
                                         avg_time = elapsed / completed_this_run
-                                        eta = avg_time * (remaining * self.config.n_replicates * len(self.config.topologies) - completed_this_run)
-                                        progress_str = f"[{combo_idx}/{total_combos}] ({completed_this_run} done) ETA: {self._format_time(eta)}"
+                                        remaining_runs = (
+                                            remaining * self.config.n_replicates * len(self.config.topologies)
+                                            - completed_this_run
+                                        )
+                                        eta = avg_time * remaining_runs
+                                        progress_str = (
+                                            f"[{combo_idx}/{total_combos}] ({completed_this_run} done) "
+                                            f"ETA: {self._format_time(eta)}"
+                                        )
                                     else:
                                         progress_str = f"[{combo_idx}/{total_combos}]"
 
                                     topo_str = f", topo={topology_label}" if topology_label != "ring" else ""
                                     print(
-                                        f"{progress_str} Running{rep_label}: k={kappa}, c={concentration}, mu={mu}, rho={outside_mid_ratio}{topo_str}",
+                                        (
+                                            f"{progress_str} Running{rep_label}: k={kappa}, "
+                                            f"c={concentration}, mu={mu}, rho={outside_mid_ratio}{topo_str}"
+                                        ),
                                         flush=True,
                                     )
 
@@ -97963,6 +98316,7 @@ class BankComparisonRunner:
             bank_defaults_lend = []
 
         summary = {
+            "experiment_design": self._experiment_design(),
             "total_combos": len(self.comparison_results),
             "completed_combos": len(completed),
             "mean_delta_idle": mean_delta_idle,
@@ -99296,6 +99650,26 @@ class NBFIComparisonRunner:
             ("lend", "nbfi_lend", "_get_lend_runner", "nbfi_lend"),
         ]
 
+    def _experiment_design(self) -> dict[str, Any]:
+        """Return the baseline/treatment contract emitted with summary artifacts."""
+        return {
+            "mode": "clean_causal",
+            "comparison": "nbfi_lending",
+            "baseline_arm": "idle",
+            "baseline_phase": "nbfi_idle",
+            "treatment_arm": "lend",
+            "treatment_phase": "nbfi_lend",
+            "effect_metric": "lending_effect",
+            "effect_formula": "delta_idle - delta_lend",
+            "shared_controls": [
+                "same_seed",
+                "same_topology",
+                "same_parameter_cell",
+                "same_vbt_dealer_passive_infrastructure",
+            ],
+            "legacy_mixed_mode": False,
+        }
+
     def _build_result_from_summaries(
         self,
         arm_summaries: dict[str, RingRunSummary],
@@ -99583,14 +99957,24 @@ class NBFIComparisonRunner:
                                     if completed_this_run > 0:
                                         elapsed = time.time() - self._start_time
                                         avg_time = elapsed / completed_this_run
-                                        eta = avg_time * (remaining * self.config.n_replicates * len(self.config.topologies) - completed_this_run)
-                                        progress_str = f"[{combo_idx}/{total_combos}] ({completed_this_run} done) ETA: {self._format_time(eta)}"
+                                        remaining_runs = (
+                                            remaining * self.config.n_replicates * len(self.config.topologies)
+                                            - completed_this_run
+                                        )
+                                        eta = avg_time * remaining_runs
+                                        progress_str = (
+                                            f"[{combo_idx}/{total_combos}] ({completed_this_run} done) "
+                                            f"ETA: {self._format_time(eta)}"
+                                        )
                                     else:
                                         progress_str = f"[{combo_idx}/{total_combos}]"
 
                                     topo_str = f", topo={topology_label}" if topology_label != "ring" else ""
                                     print(
-                                        f"{progress_str} Running{rep_label}: k={kappa}, c={concentration}, mu={mu}, rho={outside_mid_ratio}{topo_str}",
+                                        (
+                                            f"{progress_str} Running{rep_label}: k={kappa}, "
+                                            f"c={concentration}, mu={mu}, rho={outside_mid_ratio}{topo_str}"
+                                        ),
                                         flush=True,
                                     )
 
@@ -99801,6 +100185,7 @@ class NBFIComparisonRunner:
             worsened = 0
 
         summary = {
+            "experiment_design": self._experiment_design(),
             "total_combos": len(self.comparison_results),
             "completed_combos": len(completed),
             "mean_delta_idle": mean_delta_idle,
@@ -105213,6 +105598,7 @@ class SupabaseJobStore:
                 "outside_mid_ratios": [str(r) for r in job.config.outside_mid_ratios],
                 "seeds": job.config.seeds,
                 "cloud": job.config.cloud,
+                "performance": job.config.performance,
                 # Optional fields
                 "notes": job.notes,
                 "error": job.error,
@@ -105413,6 +105799,7 @@ class SupabaseJobStore:
             outside_mid_ratios=outside_mid_ratios,
             maturity_days=row.get("maturity_days") or 5,
             seeds=seeds,
+            performance=row.get("performance") or {},
         )
 
         # Parse timestamps
@@ -115323,7 +115710,15 @@ class SupabaseRegistryStore:
     """
 
     # Parameter fields that map directly to runs table columns
-    RUNS_PARAM_COLUMNS = {"kappa", "concentration", "mu", "outside_mid_ratio", "seed", "regime"}
+    RUNS_PARAM_COLUMNS = {
+        "kappa",
+        "concentration",
+        "mu",
+        "outside_mid_ratio",
+        "seed",
+        "regime",
+        "performance_config",
+    }
 
     # Metric fields that map directly to metrics table columns
     METRICS_COLUMNS = {
@@ -115770,6 +116165,22 @@ __all__ = ["cli", "main"]
 
 ---
 
+### 📄 src/bilancio/ui/cli/__main__.py
+
+```python
+"""Module entrypoint for ``python -m bilancio.ui.cli``."""
+
+from __future__ import annotations
+
+from . import main
+
+if __name__ == "__main__":
+    main()
+
+```
+
+---
+
 ### 📄 src/bilancio/ui/cli/_common.py
 
 ```python
@@ -116005,13 +116416,13 @@ def _deps() -> Any:
 @click.option(
     "--enable-lender/--no-lender",
     default=False,
-    help="Enable third comparison arm with non-bank lender",
+    help="[DEPRECATED: use 'bilancio sweep nbfi'] Enable third comparison arm with non-bank lender",
 )
 @click.option("--lender-share", type=Decimal, default=Decimal("0.10"), help="Lender capital share")
 @click.option(
     "--enable-dealer-lender/--no-dealer-lender",
     default=False,
-    help="Enable fourth arm with dealer trading and non-bank lending",
+    help="[DEPRECATED: split into 'bilancio sweep balanced' and 'bilancio sweep nbfi'] Enable dealer+NBFI arm",
 )
 @click.option(
     "--enable-bank-passive/--no-bank-passive",
@@ -116266,6 +116677,12 @@ def _deps() -> Any:
     default=None,
     help="Load preset YAML to override defaults",
 )
+@click.option(
+    "--topologies",
+    type=str,
+    default="ring",
+    help="Comma-separated topology specs (e.g. 'ring,k_regular:4,erdos_renyi:0.1')",
+)
 def sweep_balanced(
     out_dir: Path,
     n_agents: int,
@@ -116354,6 +116771,7 @@ def sweep_balanced(
     adaptive_convex_spreads: bool | None,
     adapt: str,
     preset: Path | None,
+    topologies: str,
 ) -> None:
     """Run balanced C vs D comparison experiments."""
     deps = _deps()
@@ -116379,6 +116797,21 @@ def sweep_balanced(
     out_dir = Path(out_dir)
     if job_id is None:
         job_id = deps.generate_job_id()
+
+    if enable_lender or enable_dealer_lender:
+        click.echo(
+            "Warning: balanced NBFI mixed arms are deprecated; use "
+            "'bilancio sweep nbfi' for clean NBFI lending experiments."
+        )
+    if enable_bank_passive or enable_bank_dealer or enable_bank_dealer_nbfi:
+        click.echo(
+            "Warning: balanced banking arms are deprecated; use "
+            "'bilancio sweep bank' for clean bank lending experiments."
+        )
+
+    from bilancio.scenarios.ring.topology import parse_topology_string
+
+    parsed_topologies = [parse_topology_string(t.strip()) for t in topologies.split(",")]
 
     performance_flags: dict[str, object] = {}
     if perf_preset:
@@ -116532,6 +116965,7 @@ def sweep_balanced(
         adapt=adapt,
         adaptive_overrides=adaptive_overrides,
         performance=performance.to_dict() if performance else {},
+        topologies=parsed_topologies,
     )
 
     runner = BalancedComparisonRunner(config, out_dir, executor=executor, job_id=job_id)
@@ -118569,6 +119003,13 @@ from ._common import CLI_HANDLED_ERRORS, console, exit_with_panel
     default=None,
     help="Default-handling mode (override scenario setting)",
 )
+@click.option(
+    "--engine",
+    type=click.Choice(["legacy", "clean-core", "auto"]),
+    default="auto",
+    show_default=True,
+    help="Simulation engine to use; auto selects clean-core when compatible",
+)
 def run(
     scenario_file: Path,
     mode: str,
@@ -118582,6 +119023,7 @@ def run(
     html: Path | None,
     t_account: bool,
     default_handling: str | None,
+    engine: str,
 ) -> None:
     """Run a Bilancio simulation scenario.
 
@@ -118614,6 +119056,7 @@ def run(
             html_output=html,
             t_account=t_account,
             default_handling=default_handling,
+            engine=engine,
         )
 
     except FileNotFoundError as e:
@@ -118885,6 +119328,73 @@ __all__ = [
     "RingSweepRunner",
     "sweep",
 ]
+
+```
+
+---
+
+### 📄 src/bilancio/ui/cli/treynor.py
+
+```python
+"""CLI command for Treynor pricing visualizations."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import click
+
+from .utils import console
+
+
+@click.command()
+@click.option(
+    "--run-dir",
+    required=True,
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to a single run output directory.",
+)
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    type=click.Path(dir_okay=False),
+    help="Output HTML file path. Defaults to <run-dir>/treynor_dashboard.html.",
+)
+def treynor(run_dir: str, output: str | None) -> None:
+    """Generate interactive Treynor pricing diagrams from a simulation run.
+
+    Reads dealer_state.csv and/or bank_state.csv from the run directory
+    and produces an HTML dashboard with static pricing diagrams and
+    day-by-day animations.
+
+    Example:
+
+        bilancio treynor --run-dir out/runs/my_run
+        bilancio treynor --run-dir out/runs/my_run -o temp/treynor.html
+    """
+    from bilancio.analysis.treynor_viz import build_treynor_dashboard
+
+    run_path = Path(run_dir)
+    html = build_treynor_dashboard(run_path)
+
+    if output is None:
+        output_path = run_path / "treynor_dashboard.html"
+    else:
+        output_path = Path(output)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html)
+    console.print(f"[green]OK[/green] Treynor dashboard written to {output_path}")
+
+    # Try to open in browser
+    import webbrowser
+
+    try:
+        webbrowser.open(f"file://{output_path.resolve()}")
+        console.print("[dim]Opened in browser[/dim]")
+    except OSError:
+        pass
 
 ```
 
@@ -121245,6 +121755,301 @@ def convert_raw_events_to_day_view(raw_events: list[dict[str, Any]], day: int) -
 
 ---
 
+### 📄 src/bilancio/ui/result_display.py
+
+```python
+"""Console display helpers for clean-core scenario runs."""
+
+from __future__ import annotations
+
+from collections import Counter, defaultdict
+from decimal import Decimal
+from typing import Any
+
+from rich.console import Console
+from rich.table import Table
+
+from bilancio.analysis.visualization import display_events_tables_by_phase_renderables
+
+
+def display_clean_core_result(
+    console: Console,
+    result: Any,
+    rows: list[dict[str, Any]],
+    *,
+    show: str,
+    agent_ids: list[str] | None,
+    t_account: bool = False,
+) -> None:
+    """Display clean-core CLI output with the same high-level knobs as legacy runs."""
+    if show == "none":
+        return
+
+    if agent_ids is None:
+        _display_clean_core_trial_balance(console, rows)
+    elif t_account:
+        _display_clean_core_t_accounts(console, result, agent_ids)
+    else:
+        _display_clean_core_agent_balances(console, rows, agent_ids)
+
+    _display_clean_core_events(console, result.events, show)
+
+
+def _display_clean_core_trial_balance(
+    console: Console,
+    rows: list[dict[str, Any]],
+) -> None:
+    system_row = next((row for row in rows if row.get("agent_id") == "SYSTEM"), None)
+    if system_row is None:
+        return
+
+    assets = Decimal(str(system_row.get("total_financial_assets", 0)))
+    liabilities = Decimal(str(system_row.get("total_financial_liabilities", 0)))
+    diff = abs(assets - liabilities)
+
+    table = Table(
+        title="System Trial Balance (clean-core)",
+        show_header=True,
+        header_style="bold",
+    )
+    table.add_column("Metric")
+    table.add_column("Value", justify="right")
+    table.add_row("Total Assets", _format_clean_core_amount(assets))
+    table.add_row("Total Liabilities", _format_clean_core_amount(liabilities))
+    table.add_row("Total Equity", _format_clean_core_amount(assets - liabilities))
+    table.add_row(
+        "Status",
+        (
+            "[green]OK Balanced[/green]"
+            if diff < Decimal("0.01")
+            else f"[red]Imbalanced ({diff})[/red]"
+        ),
+    )
+    console.print()
+    console.print(table)
+
+
+def _display_clean_core_agent_balances(
+    console: Console,
+    rows: list[dict[str, Any]],
+    agent_ids: list[str],
+) -> None:
+    table = Table(
+        title="Final Balances (clean-core)",
+        show_header=True,
+        header_style="bold",
+    )
+    table.add_column("Agent")
+    table.add_column("Assets", justify="right")
+    table.add_column("Liabilities", justify="right")
+    table.add_column("Net", justify="right")
+    table.add_column("Breakdown")
+
+    row_by_agent = {str(row.get("agent_id")): row for row in rows}
+    selected_rows = [
+        row_by_agent[agent_id] for agent_id in agent_ids if agent_id in row_by_agent
+    ]
+    if not selected_rows:
+        console.print("\n[bold]Balances:[/bold]")
+        console.print("  - No active agents to display")
+        return
+
+    for row in selected_rows:
+        table.add_row(
+            str(row["agent_id"]),
+            _format_clean_core_amount(row.get("total_financial_assets", 0)),
+            _format_clean_core_amount(row.get("total_financial_liabilities", 0)),
+            _format_clean_core_amount(row.get("net_financial", 0)),
+            _clean_core_balance_breakdown(row),
+        )
+
+    console.print()
+    console.print(table)
+
+
+def _display_clean_core_t_accounts(
+    console: Console,
+    result: Any,
+    agent_ids: list[str],
+) -> None:
+    from bilancio_v2.views import t_account_rows
+
+    state = result.state
+    selected_ids = [agent_id for agent_id in agent_ids if agent_id in state.agents]
+    console.print("\n[bold]Balances:[/bold]")
+    if not selected_ids:
+        console.print("  - No active agents to display")
+        return
+
+    for agent_id in selected_ids:
+        rows = t_account_rows(state, agent_id)
+        agent = state.agents[agent_id]
+        title = (
+            f"{agent.name} [{agent_id}] ({agent.kind})"
+            if agent.name and agent.name != agent_id
+            else f"{agent_id} ({agent.kind})"
+        )
+        table = Table(
+            title=f"{title} (clean-core)",
+            show_header=True,
+            header_style="bold",
+            show_lines=True,
+        )
+        table.add_column("Name", style="green")
+        table.add_column("Qty", style="green", justify="right")
+        table.add_column("Value", style="green", justify="right")
+        table.add_column("Counterparty", style="green")
+        table.add_column("Maturity", style="green", justify="right")
+        table.add_column("Name", style="red")
+        table.add_column("Qty", style="red", justify="right")
+        table.add_column("Value", style="red", justify="right")
+        table.add_column("Counterparty", style="red")
+        table.add_column("Maturity", style="red", justify="right")
+        asset_rows = rows["assets"]
+        liability_rows = rows["liabs"]
+        for index in range(max(len(asset_rows), len(liability_rows), 1)):
+            asset_row = asset_rows[index] if index < len(asset_rows) else None
+            liability_row = liability_rows[index] if index < len(liability_rows) else None
+            table.add_row(
+                *_clean_core_t_account_cells(asset_row),
+                *_clean_core_t_account_cells(liability_row),
+            )
+        console.print(table)
+        console.print()
+
+
+def _clean_core_t_account_cells(
+    row: dict[str, Any] | None,
+) -> tuple[str, str, str, str, str]:
+    if row is None:
+        return ("", "", "", "", "")
+    quantity = row.get("quantity")
+    return (
+        str(row.get("name") or ""),
+        f"{quantity:,}" if quantity is not None else "-",
+        _format_clean_core_amount(row.get("value_minor")),
+        str(row.get("counterparty_name") or "-"),
+        str(row.get("maturity") or "-"),
+    )
+
+
+def _display_clean_core_events(
+    console: Console,
+    events: list[dict[str, Any]],
+    show: str,
+) -> None:
+    if not events:
+        return
+
+    if show == "summary":
+        table = Table(
+            title="Event Summary (clean-core)",
+            show_header=True,
+            header_style="bold",
+        )
+        table.add_column("Event")
+        table.add_column("Count", justify="right")
+        for kind, count in sorted(
+            Counter(str(event.get("kind", "Unknown")) for event in events).items()
+        ):
+            table.add_row(kind, str(count))
+        console.print()
+        console.print(table)
+        return
+
+    if show == "table":
+        _display_clean_core_event_tables(console, events)
+        return
+
+    table = Table(title="Events (clean-core)", show_header=True, header_style="bold")
+    table.add_column("Day", justify="right")
+    table.add_column("Phase")
+    table.add_column("Kind")
+    table.add_column("Details")
+    for event in events:
+        table.add_row(
+            str(event.get("day", "")),
+            str(event.get("phase", "")),
+            str(event.get("kind", "Unknown")),
+            _clean_core_event_details(event),
+        )
+    console.print()
+    console.print(table)
+
+
+def _display_clean_core_event_tables(
+    console: Console,
+    events: list[dict[str, Any]],
+) -> None:
+    console.print()
+    console.print("[bold]Events (clean-core):[/bold]")
+
+    setup_events = [event for event in events if event.get("phase") == "setup"]
+    if setup_events:
+        for renderable in display_events_tables_by_phase_renderables(setup_events, day=0):
+            console.print(renderable)
+
+    events_by_day: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
+    for event in events:
+        if event.get("phase") == "setup":
+            continue
+        try:
+            day = int(event.get("day", 0))
+        except (TypeError, ValueError):
+            day = 0
+        events_by_day[day].append(event)
+
+    for day in sorted(events_by_day):
+        for renderable in display_events_tables_by_phase_renderables(
+            events_by_day[day],
+            day=day,
+        ):
+            console.print(renderable)
+
+
+def _clean_core_balance_breakdown(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key, value in sorted(row.items()):
+        if not key.startswith(("assets_", "liabilities_", "inventory_", "nonfinancial_")):
+            continue
+        if Decimal(str(value or 0)) == 0:
+            continue
+        parts.append(f"{key}={_format_clean_core_amount(value)}")
+    return "; ".join(parts)
+
+
+def _clean_core_event_details(event: dict[str, Any]) -> str:
+    detail_items = []
+    for key, value in event.items():
+        if key in {"kind", "day", "phase"}:
+            continue
+        detail_items.append(f"{key}={_format_clean_core_detail_value(value)}")
+    return ", ".join(detail_items)
+
+
+def _format_clean_core_detail_value(value: Any) -> str:
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return (
+            "{"
+            + ", ".join(
+                f"{k}: {_format_clean_core_detail_value(v)}" for k, v in value.items()
+            )
+            + "}"
+        )
+    if isinstance(value, list):
+        return "[" + ", ".join(_format_clean_core_detail_value(item) for item in value) + "]"
+    return str(value)
+
+
+def _format_clean_core_amount(value: Any) -> str:
+    return f"{Decimal(str(value or 0)):,.2f}"
+
+```
+
+---
+
 ### 📄 src/bilancio/ui/run.py
 
 ```python
@@ -121266,10 +122071,19 @@ from rich.prompt import Confirm
 
 from bilancio.config import apply_to_system, load_yaml
 from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
+from bilancio_v2.balance_invariants import (
+    assert_clean_core_invariants as _assert_clean_core_invariants,
+)
 from bilancio.engines.simulation import run_day
 from bilancio.engines.system import System
 from bilancio.export.writers import write_balances_csv, write_events_jsonl
 
+from .v2_run import (
+    resolve_auto_engine as _resolve_auto_engine_impl,
+)
+from .v2_run import (
+    run_v2_scenario as _run_clean_core_scenario_impl,
+)
 from .display import (
     show_day_summary_renderable,
     show_error_panel,
@@ -121307,6 +122121,55 @@ def _filter_active_agent_ids(system: System, agent_ids: list[str] | None) -> lis
     return active_ids
 
 
+def _run_clean_core_scenario(
+    *,
+    path: Path,
+    mode: str,
+    max_days: int,
+    quiet_days: int,
+    show: str,
+    check_invariants: str,
+    export: dict[str, str] | None,
+    html_output: Path | None,
+    agent_ids: list[str] | None,
+    default_handling: str | None,
+    t_account: bool = False,
+    detailed_dealer_logging: bool = False,
+    run_id: str = "",
+    regime: str = "",
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> None:
+    """Run a scenario through the rebuilt clean core."""
+    _run_clean_core_scenario_impl(
+        console=console,
+        invariant_checker=_assert_clean_core_invariants,
+        confirm_ask=Confirm.ask,
+        path=path,
+        mode=mode,
+        max_days=max_days,
+        quiet_days=quiet_days,
+        show=show,
+        check_invariants=check_invariants,
+        export=export,
+        html_output=html_output,
+        agent_ids=agent_ids,
+        default_handling=default_handling,
+        t_account=t_account,
+        detailed_dealer_logging=detailed_dealer_logging,
+        run_id=run_id,
+        regime=regime,
+        progress_callback=progress_callback,
+    )
+
+
+def _resolve_auto_engine(
+    path: Path,
+    default_handling: str | None,
+) -> str:
+    """Choose clean-core when the scenario is in the rebuilt compatibility slice."""
+    return _resolve_auto_engine_impl(path, default_handling, console=console)
+
+
 def run_scenario(
     path: Path,
     mode: str = "until_stable",
@@ -121324,6 +122187,7 @@ def run_scenario(
     regime: str = "",
     progress_callback: Callable[[int, int], None] | None = None,
     performance: PerformanceConfig | None = None,
+    engine: str = "auto",
 ) -> None:
     """Run a Bilancio simulation scenario.
 
@@ -121340,6 +122204,35 @@ def run_scenario(
         progress_callback: Optional callback(current_day, max_days) for progress tracking
         performance: Optional performance tuning configuration
     """
+    if engine == "auto":
+        engine = _resolve_auto_engine(
+            path,
+            default_handling,
+        )
+
+    if engine == "clean-core":
+        _run_clean_core_scenario(
+            path=path,
+            mode=mode,
+            max_days=max_days,
+            quiet_days=quiet_days,
+            show=show,
+            check_invariants=check_invariants,
+            export=export,
+            html_output=html_output,
+            agent_ids=agent_ids,
+            default_handling=default_handling,
+            t_account=t_account,
+            detailed_dealer_logging=detailed_dealer_logging,
+            run_id=run_id,
+            regime=regime,
+            progress_callback=progress_callback,
+        )
+        return
+
+    if engine != "legacy":
+        raise ValueError(f"Unknown simulation engine: {engine}")
+
     # Load configuration
     console.print("[dim]Loading scenario...[/dim]")
     config = load_yaml(path)
@@ -123336,6 +124229,352 @@ def run_post_sweep_questionnaire(
         treynor_kappas=treynor_kappas,
         kappas=kappas,
     )
+
+```
+
+---
+
+### 📄 src/bilancio/ui/v2_run.py
+
+```python
+"""CLI orchestration for v2-kernel scenario runs.
+
+Drop-in replacement for the clean-core runner: the v2 kernel reproduces the
+clean-core engine event-for-event (see ``tests/v2``), so the CLI surface —
+including the ``--engine clean-core`` flag value and all output — is
+unchanged. Auto mode still falls back to the legacy v1 engine for scenario
+features outside the rebuilt domain.
+"""
+
+from __future__ import annotations
+
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from rich.console import Console
+
+from bilancio.config import load_yaml
+from bilancio.core.errors import (
+    ConfigurationError,
+    DefaultError,
+    SimulationHalt,
+    ValidationError,
+)
+from bilancio_v2.compat import (
+    build_clean_core_banking_config,
+    clean_core_auto_fallback_reason,
+)
+
+from .display import show_error_panel
+from .result_display import display_clean_core_result
+
+
+def run_v2_scenario(
+    *,
+    console: Console,
+    invariant_checker: Callable[[list[dict[str, Any]]], None],
+    confirm_ask: Callable[..., bool],
+    path: Path,
+    mode: str,
+    max_days: int,
+    quiet_days: int,
+    show: str,
+    check_invariants: str,
+    export: dict[str, str] | None,
+    html_output: Path | None,
+    agent_ids: list[str] | None,
+    default_handling: str | None,
+    t_account: bool = False,
+    detailed_dealer_logging: bool = False,
+    run_id: str = "",
+    regime: str = "",
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> None:
+    """Run a scenario through the v2 kernel."""
+    from bilancio.engines.termination import StopReason
+    from bilancio_v2 import (
+        RunResult,
+        prepare_scenario,
+        run_day,
+        run_until_stable,
+    )
+    from bilancio_v2.engine import StabilityTracker, update_stability
+    from bilancio_v2.exports import (
+        write_balances_csv,
+        write_events_jsonl,
+        write_html_report,
+    )
+    from bilancio_v2.plugins.banking import finalize_banking
+    from bilancio_v2.plugins.dealer import dealer_metrics_summary
+    from bilancio_v2.scenario_gates import (
+        clean_core_configuration_error_reason,
+        clean_core_unsupported_reason,
+    )
+    from bilancio_v2.views import balance_rows
+
+    console.print("[dim]Loading scenario...[/dim]")
+    config = load_yaml(path)
+
+    effective_default_handling = default_handling or config.run.default_handling
+    if default_handling and config.run.default_handling != default_handling:
+        config = config.model_copy(update={"run": config.run.model_copy(update={"default_handling": effective_default_handling})})
+
+    configuration_error = clean_core_configuration_error_reason(config)
+    if configuration_error is not None:
+        show_error_panel(
+            error=ConfigurationError(configuration_error),
+            phase="setup",
+            context={"scenario": config.name, "engine": "clean-core"},
+        )
+        sys.exit(1)
+
+    unsupported_reason = clean_core_unsupported_reason(config)
+    if unsupported_reason is not None:
+        show_error_panel(
+            error=NotImplementedError(unsupported_reason),
+            phase="setup",
+            context={"scenario": config.name, "engine": "clean-core"},
+        )
+        sys.exit(1)
+    try:
+        from bilancio.config.apply import validate_scheduled_aliases
+
+        validate_scheduled_aliases(config)
+    except ValueError as e:
+        show_error_panel(
+            error=e,
+            phase="setup",
+            context={"scenario": config.name, "engine": "clean-core"},
+        )
+        sys.exit(1)
+
+    if export is None:
+        export = {}
+    if not export.get("balances_csv") and config.run.export.balances_csv:
+        export["balances_csv"] = config.run.export.balances_csv
+    if not export.get("events_jsonl") and config.run.export.events_jsonl:
+        export["events_jsonl"] = config.run.export.events_jsonl
+
+    if agent_ids is None and config.run.show.balances:
+        agent_ids = config.run.show.balances
+
+    console.print(f"[bold]Scenario:[/bold] {config.name}")
+    console.print(f"[dim]Default handling mode: {effective_default_handling}[/dim]")
+    console.print("[dim]Engine: clean-core[/dim]")
+    banking_config = build_clean_core_banking_config(path)
+
+    stopped_by_user = False
+    stopped_by_error = False
+    runtime: Any | None = None
+
+    def _check_daily_invariants(runtime: Any, day: int) -> None:
+        if check_invariants == "daily":
+            invariant_checker(
+                balance_rows(
+                    RunResult(
+                        ledger=runtime.ledger,
+                        final_day=day + 1,
+                        reached_stable=False,
+                        stop_reason=StopReason.MAX_DAYS_REACHED,
+                    )
+                )
+            )
+
+    try:
+        if mode == "step":
+            runtime = prepare_scenario(config, banking_config=banking_config)
+            stability = StabilityTracker()
+            reached_stable = False
+            final_day = 0
+            for day in range(max_days):
+                console.print()
+                if not confirm_ask(f"[cyan]Run day {day + 1}?[/cyan]", default=True):
+                    console.print("[yellow]Simulation stopped by user[/yellow]")
+                    stopped_by_user = True
+                    break
+                impactful = run_day(runtime, day)
+                if progress_callback:
+                    progress_callback(day + 1, max_days)
+                final_day = day + 1
+                _check_daily_invariants(runtime, day)
+                console.print(f"[dim]Day {day}: {'activity' if impactful else 'quiet'}[/dim]")
+                if update_stability(
+                    runtime,
+                    day=day,
+                    impactful=impactful,
+                    quiet_days=quiet_days,
+                    tracker=stability,
+                ):
+                    reached_stable = True
+                    console.print("[green]OK[/green] System reached stable state")
+                    break
+            result = RunResult(
+                ledger=runtime.ledger,
+                final_day=final_day,
+                reached_stable=reached_stable,
+                stop_reason=(
+                    StopReason.USER_STOP
+                    if stopped_by_user
+                    else (StopReason.STABILITY_REACHED if reached_stable else StopReason.MAX_DAYS_REACHED)
+                ),
+                stability_snapshots=tuple(stability.snapshots),
+            )
+        else:
+            runtime = prepare_scenario(config, banking_config=banking_config)
+            result = run_until_stable(
+                runtime,
+                max_days=max_days,
+                quiet_days=quiet_days,
+                progress_callback=progress_callback,
+                day_callback=_check_daily_invariants,
+            )
+            finalize_banking(
+                result.ledger,
+                final_day=result.final_day,
+                reached_stable=result.reached_stable,
+                banking_config=banking_config,
+            )
+    except (ConfigurationError, DefaultError, SimulationHalt) as e:
+        show_error_panel(
+            error=e,
+            phase="setup" if runtime is None else "simulation",
+            context={"scenario": config.name, "engine": "clean-core"},
+        )
+        if runtime is None:
+            sys.exit(1)
+        stopped_by_error = True
+        result = RunResult(
+            ledger=runtime.ledger,
+            final_day=runtime.ledger.day,
+            reached_stable=False,
+            stop_reason=StopReason.FATAL_ERROR,
+        )
+
+    try:
+        rows = balance_rows(result)
+        if check_invariants != "none":
+            invariant_checker(rows)
+    except ValidationError as e:
+        show_error_panel(
+            error=e,
+            phase="simulation",
+            context={"scenario": config.name, "engine": "clean-core"},
+        )
+        sys.exit(1)
+
+    display_clean_core_result(
+        console,
+        result,
+        rows,
+        show=show,
+        agent_ids=agent_ids,
+        t_account=t_account,
+    )
+
+    if export.get("balances_csv"):
+        export_path = Path(export["balances_csv"])
+        write_balances_csv(result, export_path)
+        console.print(f"[green]OK[/green] Exported balances to {export_path}")
+
+    if export.get("events_jsonl"):
+        export_path = Path(export["events_jsonl"])
+        write_events_jsonl(result, export_path)
+        console.print(f"[green]OK[/green] Exported events to {export_path}")
+
+    if result.ledger.dealer_metrics is not None:
+        dealer_metrics_path = None
+        if export.get("events_jsonl"):
+            dealer_metrics_path = Path(export["events_jsonl"]).parent / "dealer_metrics.json"
+        elif export.get("balances_csv"):
+            dealer_metrics_path = Path(export["balances_csv"]).parent / "dealer_metrics.json"
+
+        if dealer_metrics_path:
+            import json
+
+            metrics = result.ledger.dealer_metrics
+            dealer_summary = dealer_metrics_summary(result.ledger)
+            if dealer_summary is None:
+                dealer_summary = metrics.summary()
+            dealer_metrics_path.parent.mkdir(parents=True, exist_ok=True)
+            with dealer_metrics_path.open("w") as f:
+                json.dump(dealer_summary, f, indent=2)
+            console.print(f"[green]OK[/green] Exported dealer metrics to {dealer_metrics_path}")
+
+            if detailed_dealer_logging and not result.ledger.dealer_config.balanced_passive:
+                metrics.run_id = run_id
+                metrics.regime = regime
+                for trade in metrics.trades:
+                    trade.run_id = run_id
+                    trade.regime = regime
+                for snap in metrics.dealer_snapshots:
+                    snap.run_id = run_id
+                    snap.regime = regime
+                for snap in metrics.system_state_snapshots:
+                    snap.run_id = run_id
+                    snap.regime = regime
+
+                out_dir = dealer_metrics_path.parent
+                trades_path = out_dir / "trades.csv"
+                metrics.to_trade_log_csv(str(trades_path))
+                console.print(f"[green]OK[/green] Exported trades to {trades_path}")
+
+                inventory_path = out_dir / "inventory_timeseries.csv"
+                metrics.to_inventory_timeseries_csv(str(inventory_path))
+                console.print(f"[green]OK[/green] Exported inventory timeseries to {inventory_path}")
+
+                system_state_path = out_dir / "system_state_timeseries.csv"
+                metrics.to_system_state_csv(str(system_state_path))
+                console.print(f"[green]OK[/green] Exported system state timeseries to {system_state_path}")
+
+                from bilancio.dealer.metrics import build_repayment_events
+
+                metrics.repayment_events = build_repayment_events(
+                    event_log=result.events,
+                    trades=metrics.trades,
+                    run_id=run_id,
+                    regime=regime,
+                )
+                repayment_events_path = out_dir / "repayment_events.csv"
+                metrics.to_repayment_events_csv(str(repayment_events_path))
+                console.print(f"[green]OK[/green] Exported repayment events to {repayment_events_path}")
+
+    if html_output:
+        write_html_report(
+            result,
+            config,
+            html_output,
+            max_days=max_days,
+            quiet_days=quiet_days,
+            agent_ids=agent_ids,
+            t_account=t_account,
+        )
+        console.print(f"[green]OK[/green] Exported HTML report: {html_output}")
+
+    if result.reached_stable:
+        console.print(f"[green]OK[/green] System reached stable state after {result.final_day} days")
+    elif mode == "step" and stopped_by_user:
+        console.print("[yellow]WARNING[/yellow] Simulation stopped before stability")
+    elif stopped_by_error:
+        console.print("[yellow]WARNING[/yellow] Simulation stopped after an error")
+    else:
+        console.print(f"[yellow]WARNING[/yellow] Maximum days reached ({max_days}) before stability")
+
+
+def resolve_auto_engine(
+    path: Path,
+    default_handling: str | None,
+    *,
+    console: Console,
+) -> str:
+    """Choose the v2 kernel when the scenario is in the rebuilt domain."""
+    reason = clean_core_auto_fallback_reason(path, default_handling)
+    if reason is None:
+        return "clean-core"
+
+    console.print(f"[dim]Engine: legacy (auto fallback: {reason})[/dim]")
+    return "legacy"
 
 ```
 
@@ -132121,9 +133360,7 @@ def _minimal_csv_content(
         kappas = [0.25, 0.5, 1.0, 2.0, 4.0]
     lines = [COMPARISON_HEADER.strip()]
     for k in kappas:
-        lines.append(
-            f"{k},1,0,0.9,42,0.3,0.2,0.7,0.8,0.1,passive_run_{k},active_run_{k}"
-        )
+        lines.append(f"{k},1,0,0.9,42,0.3,0.2,0.7,0.8,0.1,passive_run_{k},active_run_{k}")
     return "\n".join(lines) + "\n"
 
 
@@ -132288,25 +133525,17 @@ class TestOutputDirCreation:
     def test_default_output_dir(self, sweep_dir: Path):
         """When output_dir=None, analysis creates aggregate/analysis/."""
         # We need to mock the analysis functions to avoid plotly
-        with patch(
-            "bilancio.analysis.post_sweep._run_narrative"
-        ) as mock_narrative:
-            mock_narrative.return_value = (
-                sweep_dir / "aggregate" / "analysis" / "narrative_report.html"
-            )
+        with patch("bilancio.analysis.post_sweep._run_narrative") as mock_narrative:
+            mock_narrative.return_value = sweep_dir / "aggregate" / "analysis" / "narrative_report.html"
             run_post_sweep_analysis(sweep_dir, "dealer", ["narrative"])
             # The output_dir should have been created
             assert (sweep_dir / "aggregate" / "analysis").is_dir()
 
     def test_custom_output_dir(self, sweep_dir: Path):
         custom_out = sweep_dir / "custom_output" / "deep"
-        with patch(
-            "bilancio.analysis.post_sweep._run_narrative"
-        ) as mock_narrative:
+        with patch("bilancio.analysis.post_sweep._run_narrative") as mock_narrative:
             mock_narrative.return_value = custom_out / "narrative_report.html"
-            run_post_sweep_analysis(
-                sweep_dir, "dealer", ["narrative"], output_dir=custom_out
-            )
+            run_post_sweep_analysis(sweep_dir, "dealer", ["narrative"], output_dir=custom_out)
             assert custom_out.is_dir()
 
 
@@ -132318,11 +133547,7 @@ class TestOutputDirCreation:
 class TestCsvLoading:
     def test_read_csv(self, tmp_path: Path):
         csv_path = tmp_path / "test.csv"
-        csv_path.write_text(
-            "kappa,delta_passive,delta_active\n"
-            "0.5,0.3,0.2\n"
-            "1.0,0.1,0.05\n"
-        )
+        csv_path.write_text("kappa,delta_passive,delta_active\n0.5,0.3,0.2\n1.0,0.1,0.05\n")
         rows = _read_csv(csv_path)
         assert len(rows) == 2
         assert rows[0]["kappa"] == "0.5"
@@ -132336,9 +133561,7 @@ class TestCsvLoading:
 
     def test_auto_detect_kappas_picks_min_median_max(self, tmp_path: Path):
         csv_path = tmp_path / "c.csv"
-        csv_path.write_text(
-            _minimal_csv_content(kappas=[0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0])
-        )
+        csv_path.write_text(_minimal_csv_content(kappas=[0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]))
         result = _auto_detect_kappas(csv_path, n=3)
         assert 0.1 in result  # min
         assert 8.0 in result  # max
@@ -132398,37 +133621,25 @@ class TestDrilldownsOutput:
     def test_drilldowns_dispatched(self, sweep_dir: Path):
         """Verify that run_post_sweep_analysis dispatches drilldowns correctly."""
         out_dir = sweep_dir / "output"
-        with patch(
-            "bilancio.analysis.post_sweep._run_drilldowns"
-        ) as mock_dd:
+        with patch("bilancio.analysis.post_sweep._run_drilldowns") as mock_dd:
             mock_dd.return_value = out_dir / "drilldown_dashboard.html"
-            results = run_post_sweep_analysis(
-                sweep_dir, "dealer", ["drilldowns"], output_dir=out_dir
-            )
+            results = run_post_sweep_analysis(sweep_dir, "dealer", ["drilldowns"], output_dir=out_dir)
             assert mock_dd.called
             assert "drilldowns" in results
 
     def test_treatment_deltas_dispatched(self, sweep_dir: Path):
         out_dir = sweep_dir / "output"
-        with patch(
-            "bilancio.analysis.post_sweep._run_treatment_deltas"
-        ) as mock_td:
+        with patch("bilancio.analysis.post_sweep._run_treatment_deltas") as mock_td:
             mock_td.return_value = out_dir / "treatment_deltas_dashboard.html"
-            results = run_post_sweep_analysis(
-                sweep_dir, "dealer", ["deltas"], output_dir=out_dir
-            )
+            results = run_post_sweep_analysis(sweep_dir, "dealer", ["deltas"], output_dir=out_dir)
             assert mock_td.called
             assert "deltas" in results
 
     def test_dynamics_dispatched(self, sweep_dir: Path):
         out_dir = sweep_dir / "output"
-        with patch(
-            "bilancio.analysis.post_sweep._run_dynamics"
-        ) as mock_dyn:
+        with patch("bilancio.analysis.post_sweep._run_dynamics") as mock_dyn:
             mock_dyn.return_value = out_dir / "dynamics_dashboard.html"
-            results = run_post_sweep_analysis(
-                sweep_dir, "dealer", ["dynamics"], output_dir=out_dir
-            )
+            results = run_post_sweep_analysis(sweep_dir, "dealer", ["dynamics"], output_dir=out_dir)
             assert mock_dyn.called
             assert "dynamics" in results
 
@@ -132479,6 +133690,7 @@ class TestAllNanData:
         # float("nan") parses successfully but is NaN
         assert result is not None
         import math
+
         assert math.isnan(result)
 
     def test_narrative_with_empty_effects_hits_zero_division(self, tmp_path: Path):
@@ -132541,9 +133753,7 @@ class TestAnalysisDispatching:
             patch("bilancio.analysis.post_sweep._run_narrative") as mock_nr,
         ):
             mock_nr.return_value = out_dir / "narrative_report.html"
-            run_post_sweep_analysis(
-                sweep_dir, "dealer", ["narrative"], output_dir=out_dir
-            )
+            run_post_sweep_analysis(sweep_dir, "dealer", ["narrative"], output_dir=out_dir)
             assert mock_nr.called
             assert not mock_dd.called
             assert not mock_td.called
@@ -132552,13 +133762,9 @@ class TestAnalysisDispatching:
     def test_failed_analysis_logged_not_raised(self, sweep_dir: Path):
         """If an analysis function raises, it is logged but not re-raised."""
         out_dir = sweep_dir / "output"
-        with patch(
-            "bilancio.analysis.post_sweep._run_drilldowns"
-        ) as mock_dd:
+        with patch("bilancio.analysis.post_sweep._run_drilldowns") as mock_dd:
             mock_dd.side_effect = RuntimeError("No runs found")
-            results = run_post_sweep_analysis(
-                sweep_dir, "dealer", ["drilldowns"], output_dir=out_dir
-            )
+            results = run_post_sweep_analysis(sweep_dir, "dealer", ["drilldowns"], output_dir=out_dir)
             # drilldowns should NOT appear in results because it failed
             assert "drilldowns" not in results
 
@@ -132575,9 +133781,18 @@ class TestComparisonCsvLoading:
         assert len(rows) == 5
         # Check all expected columns are present
         expected_cols = {
-            "kappa", "concentration", "mu", "outside_mid_ratio", "seed",
-            "delta_passive", "delta_active", "phi_passive", "phi_active",
-            "trading_effect", "passive_run_id", "active_run_id",
+            "kappa",
+            "concentration",
+            "mu",
+            "outside_mid_ratio",
+            "seed",
+            "delta_passive",
+            "delta_active",
+            "phi_passive",
+            "phi_active",
+            "trading_effect",
+            "passive_run_id",
+            "active_run_id",
         }
         assert expected_cols.issubset(set(rows[0].keys()))
 
@@ -132672,9 +133887,7 @@ class TestBankSweepIntegration:
     def test_kappas_auto_detected_with_explicit_list(self, sweep_dir: Path):
         """run_post_sweep_analysis uses provided kappas instead of auto-detect."""
         out_dir = sweep_dir / "output"
-        with patch(
-            "bilancio.analysis.post_sweep._run_narrative"
-        ) as mock_nr:
+        with patch("bilancio.analysis.post_sweep._run_narrative") as mock_nr:
             mock_nr.return_value = out_dir / "narrative_report.html"
             run_post_sweep_analysis(
                 sweep_dir,
@@ -133001,6 +134214,184 @@ class TestBankNarrativeGoldenOutput:
         assert "Executive Summary" in content
         assert "Effect by Liquidity Level" in content
         assert "Key Findings" in content
+
+```
+
+---
+
+### 🧪 tests/analysis/test_post_sweep_run_contracts.py
+
+```python
+"""Run-level contract tests for bilancio.analysis.post_sweep.
+
+Test intent:
+- Keep run aggregation outputs stable for downstream dashboards.
+- Verify analysis helper failures degrade to empty structures instead of
+  interrupting report generation.
+- Pin treatment-delta report sections that compare defaults, credit, funding,
+  network structure, and loss metrics.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+from bilancio.analysis.post_sweep import (
+    _analyse_run,
+    _resolve_sweep_paths,
+    _run_treatment_deltas,
+)
+
+
+class TestRunAnalysisContract:
+    def test_analyse_run_aggregates_core_and_loss_metrics(self, tmp_path: Path):
+        """_analyse_run should normalize analysis helper outputs into dashboard-ready data."""
+        run_dir = tmp_path / "run_a"
+        out_dir = run_dir / "out"
+        out_dir.mkdir(parents=True)
+        (out_dir / "dealer_metrics.json").write_text(json.dumps({"dealer_pnl": -7}))
+        (run_dir / "scenario.yaml").write_text("version: 1\nname: fixture\n")
+        events = [{"kind": "DealerTrade", "day": 1}, {"kind": "PayableDefaulted", "day": 2}]
+
+        with (
+            patch("bilancio.analysis.default_counts_by_type", return_value={"primary": 1, "secondary": 1, "total": 2}),
+            patch("bilancio.analysis.contagion_by_day", return_value={2: 1}),
+            patch("bilancio.analysis.credit_created_by_type", return_value={"bank": 120}),
+            patch("bilancio.analysis.credit_destroyed_by_type", return_value={"payable": 30}),
+            patch("bilancio.analysis.net_credit_impulse", return_value=90),
+            patch(
+                "bilancio.analysis.cash_inflows_by_source",
+                return_value={"A": {"cash": 5}, "B": {"cash": 2, "bank": 3}},
+            ),
+            patch("bilancio.analysis.trade_prices_by_day", return_value={1: [{"side": "buy", "price_ratio": 0.91}]}),
+            patch("bilancio.analysis.trade_volume_by_day", return_value={1: 4}),
+            patch("bilancio.analysis.bid_ask_spread_by_day", return_value={1: 0.04}),
+            patch("bilancio.analysis.node_degree", return_value={"A": {"out_degree": 2}}),
+            patch(
+                "bilancio.analysis.systemic_importance",
+                return_value=[{"agent_id": "A", "total_obligations": 10, "betweenness": 0.5, "score": 0.7}],
+            ),
+            patch(
+                "bilancio.analysis.report.compute_run_level_metrics",
+                return_value={
+                    "payable_default_loss": 11,
+                    "deposit_loss_gross": 4,
+                    "nbfi_loan_loss": 2,
+                    "bank_credit_loss": 3,
+                    "cb_backstop_loss": 5,
+                },
+            ),
+            patch(
+                "bilancio.analysis.report.compute_intermediary_losses",
+                return_value={"dealer_vbt_loss": 7, "intermediary_loss_total": 17},
+            ),
+            patch("bilancio.analysis.report.extract_initial_capitals", return_value={"dealer": 100}),
+        ):
+            result = _analyse_run(events, "dealer", is_treatment=True, run_dir=run_dir)
+
+        assert result["n_events"] == 2
+        assert result["default_counts"] == {"primary": 1, "secondary": 1, "total": 2}
+        assert result["credit_created"] == {"bank": 120.0}
+        assert result["credit_destroyed"] == {"payable": 30.0}
+        assert result["net_credit_impulse"] == 90.0
+        assert result["funding_mix"] == {"cash": 7.0, "bank": 3.0}
+        assert result["trade_prices_by_day"] == {1: [{"side": "buy", "price_ratio": 0.91}]}
+        assert result["trade_volume_by_day"] == {1: 4}
+        assert result["bid_ask_spread_by_day"] == {1: 0.04}
+        assert result["node_degrees"] == {"A": {"out_degree": 2}}
+        assert result["systemic_importance"] == [{"agent_id": "A", "total_obligations": 10.0, "betweenness": 0.5, "score": 0.7}]
+        assert result["loss_metrics"] == {
+            "payable_default_loss": 11,
+            "deposit_loss_gross": 4,
+            "total_loss": 15,
+            "nbfi_loan_loss": 2,
+            "bank_credit_loss": 3,
+            "cb_backstop_loss": 5,
+            "dealer_vbt_loss": 7,
+            "intermediary_loss_total": 17,
+            "system_loss": 32,
+        }
+        assert result["intermediary_losses"] == {"dealer_vbt_loss": 7, "intermediary_loss_total": 17}
+        assert result["initial_capitals"] == {"dealer": 100}
+
+    def test_analyse_run_degrades_to_empty_structures_on_helper_errors(self):
+        events = [{"kind": "bad"}]
+        with (
+            patch("bilancio.analysis.default_counts_by_type", side_effect=KeyError("boom")),
+            patch("bilancio.analysis.contagion_by_day", side_effect=ValueError("boom")),
+            patch("bilancio.analysis.credit_created_by_type", side_effect=TypeError("boom")),
+            patch("bilancio.analysis.credit_destroyed_by_type", side_effect=TypeError("boom")),
+            patch("bilancio.analysis.net_credit_impulse", side_effect=ValueError("boom")),
+            patch("bilancio.analysis.cash_inflows_by_source", side_effect=KeyError("boom")),
+            patch("bilancio.analysis.node_degree", side_effect=ValueError("boom")),
+            patch("bilancio.analysis.systemic_importance", side_effect=TypeError("boom")),
+        ):
+            result = _analyse_run(events, "nbfi", is_treatment=False)
+
+        assert result["default_counts"] == {"primary": 0, "secondary": 0, "total": 0}
+        assert result["contagion_by_day"] == {}
+        assert result["credit_created"] == {}
+        assert result["credit_destroyed"] == {}
+        assert result["net_credit_impulse"] == 0.0
+        assert result["funding_mix"] == {}
+        assert result["node_degrees"] == {}
+        assert result["systemic_importance"] == []
+        assert result["trade_prices_by_day"] == {}
+        assert result["loss_metrics"] == {}
+
+
+class TestTreatmentDeltaGoldenOutput:
+    def test_treatment_delta_dashboard_includes_loss_sections(self, tmp_path: Path):
+        agg = tmp_path / "aggregate"
+        agg.mkdir()
+        (agg / "comparison.csv").write_text(
+            "kappa,concentration,mu,outside_mid_ratio,seed,"
+            "delta_passive,delta_active,passive_run_id,active_run_id,"
+            "system_loss_pct_passive,system_loss_pct_active,"
+            "total_loss_pct_passive,total_loss_pct_active,"
+            "intermediary_loss_pct_passive,intermediary_loss_pct_active,"
+            "loss_capital_ratio_passive,loss_capital_ratio_active,"
+            "system_loss_trading_effect\n"
+            "0.5,1,0.5,0.9,42,0.30,0.10,passive_a,active_a,"
+            "0.40,0.20,0.35,0.12,0.05,0.08,0.20,0.32,0.20\n"
+        )
+        for arm, run_id in (("active", "active_a"), ("passive", "passive_a")):
+            out_dir = tmp_path / arm / "runs" / run_id / "out"
+            out_dir.mkdir(parents=True)
+            (out_dir / "events.jsonl").write_text('{"kind": "PhaseA", "day": 0}\n')
+
+        out_dir = tmp_path / "analysis"
+        out_dir.mkdir()
+        treatment_result = {
+            "default_counts": {"primary": 1, "secondary": 0, "total": 1},
+            "net_credit_impulse": 120,
+            "funding_mix": {"bank": 30},
+            "node_degrees": {"A": {"out_degree": 2}},
+        }
+        baseline_result = {
+            "default_counts": {"primary": 2, "secondary": 1, "total": 3},
+            "net_credit_impulse": 20,
+            "funding_mix": {"bank": 10, "cash": 5},
+            "node_degrees": {"A": {"out_degree": 1}},
+        }
+
+        with patch(
+            "bilancio.analysis.post_sweep._analyse_run",
+            side_effect=[treatment_result, baseline_result],
+        ):
+            output = _run_treatment_deltas(_resolve_sweep_paths(tmp_path, "dealer"), [0.5], out_dir)
+
+        html = output.read_text()
+        assert "Dealer Treatment Deltas" in html
+        assert "System Loss Comparison" in html
+        assert "Loss Attribution" in html
+        assert "Delta-Based vs Loss-Based Treatment Effect" in html
+        assert "loss_capital" in html
+        assert "Loss/capital ratio shows" in html
+        assert "Treatment minus baseline comparison across" in html
+        assert "<td>0.5</td><td>-2</td><td>-1</td><td>-1</td>" in html
 
 ```
 
@@ -141726,6 +143117,23 @@ from pathlib import Path
 import pytest
 
 
+def _load_scientific_benchmark_module():
+    import importlib.util
+    import sys
+
+    repo_root = Path(__file__).resolve().parents[2]
+    scripts_dir = str(repo_root / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    spec = importlib.util.spec_from_file_location(
+        "scientific_benchmark",
+        repo_root / "scripts" / "run_scientific_comparison_benchmark.py",
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 class TestAnalysisManifestSchema:
     """Verify the analysis manifest JSON is valid."""
 
@@ -141766,42 +143174,141 @@ class TestRequiredReplicates:
         z_a = norm.ppf(0.975)  # ~1.96
         z_b = norm.ppf(0.80)  # ~0.84
         expected = math.ceil((z_a + z_b) ** 2 * 2 * 0.01 / 0.05 ** 2)
-        # Import the function from the benchmark script
-        import importlib.util
-        import sys
-
-        scripts_dir = str(Path(__file__).resolve().parents[2] / "scripts")
-        if scripts_dir not in sys.path:
-            sys.path.insert(0, scripts_dir)
-        spec = importlib.util.spec_from_file_location(
-            "scientific_benchmark",
-            Path(__file__).resolve().parents[2]
-            / "scripts"
-            / "run_scientific_comparison_benchmark.py",
-        )
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+        mod = _load_scientific_benchmark_module()
         result = mod._compute_required_replicates(0.05, 0.05, 0.80, 0.01)
         assert result == expected
 
     def test_minimum_two_replicates(self) -> None:
-        import importlib.util
-        import sys
-
-        scripts_dir = str(Path(__file__).resolve().parents[2] / "scripts")
-        if scripts_dir not in sys.path:
-            sys.path.insert(0, scripts_dir)
-        spec = importlib.util.spec_from_file_location(
-            "scientific_benchmark",
-            Path(__file__).resolve().parents[2]
-            / "scripts"
-            / "run_scientific_comparison_benchmark.py",
-        )
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+        mod = _load_scientific_benchmark_module()
         # With very large MDE and small variance, should still return >= 2
         result = mod._compute_required_replicates(10.0, 0.05, 0.80, 0.001)
         assert result >= 2
+
+
+class TestBenchmarkReportProvenance:
+    """Verify scientific benchmark reports expose manifest and power assumptions."""
+
+    @pytest.fixture
+    def manifest(self) -> dict:
+        return {
+            "version": "1.0",
+            "primary_endpoints": [
+                {
+                    "metric": "delta_total",
+                    "label": "Default rate",
+                    "direction": "lower_is_better",
+                    "mde": 0.05,
+                    "alpha": 0.05,
+                    "power": 0.80,
+                },
+                {
+                    "metric": "phi_total",
+                    "label": "Clearing rate",
+                    "direction": "higher_is_better",
+                    "mde": 0.05,
+                    "alpha": 0.05,
+                    "power": 0.80,
+                },
+            ],
+            "hypothesis_families": [
+                {
+                    "name": "trading_effect",
+                    "endpoints": ["delta_total", "phi_total"],
+                    "multiple_testing": "benjamini_hochberg",
+                    "alpha": 0.05,
+                }
+            ],
+            "design": {
+                "type": "paired",
+                "control": "passive",
+                "treatment": "active",
+                "pairing_key": ["kappa", "concentration", "mu", "seed"],
+            },
+        }
+
+    @pytest.fixture
+    def records(self) -> list[dict]:
+        return [
+            {
+                "delta_passive": 0.40,
+                "delta_active": 0.35,
+                "phi_passive": 0.10,
+                "phi_active": 0.15,
+            },
+            {
+                "delta_passive": 0.45,
+                "delta_active": 0.38,
+                "phi_passive": 0.12,
+                "phi_active": 0.16,
+            },
+            {
+                "delta_passive": 0.30,
+                "delta_active": 0.25,
+                "phi_passive": 0.20,
+                "phi_active": 0.26,
+            },
+        ]
+
+    def test_power_plan_covers_every_primary_endpoint(
+        self, manifest: dict, records: list[dict]
+    ) -> None:
+        mod = _load_scientific_benchmark_module()
+        plan = mod._build_power_plan(manifest, records, min_replicates=4)
+
+        assert {endpoint["metric"] for endpoint in plan["endpoints"]} == {
+            "delta_total",
+            "phi_total",
+        }
+        for endpoint in plan["endpoints"]:
+            assert endpoint["mde"] == 0.05
+            assert endpoint["alpha"] == 0.05
+            assert endpoint["power"] == 0.80
+            assert endpoint["required_replicates"] >= 2
+            assert endpoint["available"] is True
+
+    def test_power_plan_marks_unknown_manifest_endpoint_unavailable(
+        self, manifest: dict, records: list[dict]
+    ) -> None:
+        mod = _load_scientific_benchmark_module()
+        manifest["primary_endpoints"].append(
+            {"metric": "missing_metric", "mde": 0.05, "alpha": 0.05, "power": 0.80}
+        )
+
+        plan = mod._build_power_plan(manifest, records, min_replicates=4)
+        missing = next(
+            endpoint for endpoint in plan["endpoints"] if endpoint["metric"] == "missing_metric"
+        )
+
+        assert plan["valid"] is False
+        assert missing["available"] is False
+        assert missing["passes"] is False
+
+    def test_zero_observed_variance_uses_minimum_replicate_floor(self) -> None:
+        mod = _load_scientific_benchmark_module()
+
+        assert mod._endpoint_variance([0.05, 0.05, 0.05]) == 0
+        assert mod._compute_required_replicates(
+            mde=0.05,
+            alpha=0.05,
+            power=0.80,
+            variance=0,
+        ) == 2
+
+    def test_markdown_lines_include_manifest_and_power_contract(
+        self, manifest: dict, records: list[dict], tmp_path: Path
+    ) -> None:
+        mod = _load_scientific_benchmark_module()
+        plan = mod._build_power_plan(manifest, records, min_replicates=4)
+
+        manifest_lines = mod._manifest_detail_lines(manifest, tmp_path / "manifest.json")
+        power_lines = mod._power_plan_detail_lines(plan)
+
+        manifest_text = "\n".join(manifest_lines)
+        power_text = "\n".join(power_lines)
+        assert "primary_endpoint=delta_total mde=0.05 alpha=0.05 power=0.8" in manifest_text
+        assert "hypothesis_family=trading_effect" in manifest_text
+        assert "multiple_testing=benjamini_hochberg" in manifest_text
+        assert "endpoint=phi_total mde=0.05 alpha=0.05 power=0.8" in power_text
 
 ```
 
@@ -141818,6 +143325,7 @@ to ensure stable contracts for benchmark scoring, grading, and reporting.
 
 from __future__ import annotations
 
+import json
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -141970,6 +143478,119 @@ class TestReportDict:
         assert len(result["critical_failures"]) == 1
         assert result["critical_failures"][0]["code"] == "G2"
 
+    def test_operational_budget_gate_added_for_registered_benchmark(self, monkeypatch):
+        monkeypatch.setattr(benchmark_utils, "current_peak_memory_mb", lambda: 128.0)
+
+        result = benchmark_utils.report_dict(
+            benchmark_name="Regression Benchmark",
+            target_score=80.0,
+            total_score=85.0,
+            status="PASS",
+            meets_target=True,
+            base_grade="B",
+            grade="B",
+            elapsed_seconds=1.0,
+            categories=[],
+            critical_checks=[],
+        )
+
+        assert result["status"] == "PASS"
+        assert result["operational_budget"]["all_ok"] is True
+        assert result["operational_budget"]["wall_time_budget_seconds"] == 120.0
+        assert result["operational_budget"]["memory_budget_mb"] == 1024.0
+        assert any(
+            check["code"] == "operational::within_budget"
+            for check in result["critical_checks"]
+        )
+
+    def test_operational_budget_failure_fails_report_status(self, monkeypatch):
+        monkeypatch.setattr(benchmark_utils, "current_peak_memory_mb", lambda: 128.0)
+
+        result = benchmark_utils.report_dict(
+            benchmark_name="Regression Benchmark",
+            target_score=80.0,
+            total_score=85.0,
+            status="PASS",
+            meets_target=True,
+            base_grade="A",
+            grade="A",
+            elapsed_seconds=999.0,
+            categories=[],
+            critical_checks=[],
+        )
+
+        assert result["status"] == "FAIL"
+        assert result["grade"] == "C"
+        assert result["operational_budget"]["wall_time_ok"] is False
+        assert result["critical_failures"] == [
+            {
+                "code": "operational::within_budget",
+                "passed": False,
+                "message": (
+                    "wall_time=999.0s/120.0s, memory=128.0MB/1024.0MB, "
+                    "cloud_cost=None/None"
+                ),
+            }
+        ]
+
+
+# ---------------------------------------------------------------------------
+# benchmark provenance helpers
+# ---------------------------------------------------------------------------
+
+class TestBenchmarkProvenance:
+    def test_dependency_lock_fingerprints_hashes_known_files(self, tmp_path):
+        (tmp_path / "uv.lock").write_text("version = 1\n", encoding="utf-8")
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
+
+        result = benchmark_utils.dependency_lock_fingerprints(tmp_path)
+
+        assert set(result) == {"uv.lock", "pyproject.toml"}
+        assert all(len(value) == 64 for value in result.values())
+
+    def test_build_benchmark_provenance_contract(self, tmp_path):
+        (tmp_path / "uv.lock").write_text("version = 1\n", encoding="utf-8")
+        config = {"grid": {"kappa": [0.5]}, "replicates": 2}
+        seed_map = {"cell=0|rep=0": 7001}
+
+        result = benchmark_utils.build_benchmark_provenance(
+            benchmark_name="test-bench",
+            config=config,
+            seed_map=seed_map,
+            cwd=tmp_path,
+        )
+
+        assert result["schema_version"] == 1
+        assert result["benchmark"] == "test-bench"
+        assert "sha" in result["git"]
+        assert result["dependencies"]["lockfiles"].keys() == {"uv.lock"}
+        assert result["runtime"]["python_version"]
+        assert result["config"] == config
+        assert len(result["config_hash"]) == 64
+        assert result["seed_map"] == seed_map
+
+    def test_write_reports_emits_provenance_sidecar(self, tmp_path):
+        report = {
+            "benchmark": "test-bench",
+            "target_score": 80.0,
+            "benchmark_config": {"replicates": 2},
+            "seed_map": {"rep=0": 42},
+        }
+        out_json = tmp_path / "report.json"
+        out_md = tmp_path / "report.md"
+
+        benchmark_utils.write_reports(report, "# Report\n", out_json, out_md)
+
+        written_report = json.loads(out_json.read_text(encoding="utf-8"))
+        provenance_path = Path(written_report["provenance_manifest_path"])
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+
+        assert out_md.read_text(encoding="utf-8") == "# Report\n"
+        assert provenance_path.name == "report_provenance.json"
+        assert provenance["benchmark"] == "test-bench"
+        assert provenance["config"] == {"replicates": 2}
+        assert provenance["seed_map"] == {"rep=0": 42}
+
 
 # ---------------------------------------------------------------------------
 # build_markdown_report()
@@ -142039,6 +143660,22 @@ class TestCheckOperationalBudget:
         )
         assert result["wall_time_ok"] is False
         assert result["memory_ok"] is False
+        assert result["all_ok"] is False
+
+    def test_cloud_cost_over_budget_fails(self):
+        result = benchmark_utils.check_operational_budget(
+            elapsed_seconds=100.0,
+            peak_memory_mb=512.0,
+            wall_time_budget_seconds=300.0,
+            memory_budget_mb=2048.0,
+            cloud_cost_usd=0.02,
+            cloud_cost_budget_usd=0.01,
+        )
+        assert result["wall_time_ok"] is True
+        assert result["memory_ok"] is True
+        assert result["cloud_cost_ok"] is False
+        assert result["cloud_cost_usd"] == 0.02
+        assert result["cloud_cost_budget_usd"] == 0.01
         assert result["all_ok"] is False
 
 
@@ -142125,6 +143762,196 @@ class TestCountHouseholds:
     def test_empty_system_returns_zero(self):
         system = System()
         assert benchmark_sim_utils.count_households(system) == 0
+
+```
+
+---
+
+### 🧪 tests/benchmark/test_benchmark_entrypoints.py
+
+```python
+"""Entrypoint contract tests for benchmark scripts.
+
+Test intent:
+- Ensure every benchmark script used as a quality gate can run from its public
+  CLI entrypoint.
+- Pin the JSON, Markdown, critical-gate, and provenance sidecar contracts.
+- Catch report schema drift before benchmark artifacts are used for governance.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+BENCHMARK_ENTRYPOINTS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    (
+        "scientific_comparison",
+        "scripts/run_scientific_comparison_benchmark.py",
+        (
+            "--replicates",
+            "2",
+            "--n-bootstrap",
+            "20",
+            "--max-days",
+            "8",
+            "--artifacts-dir",
+            "{tmp}/scientific_artifacts",
+        ),
+    ),
+    ("regression", "scripts/run_regression_benchmark.py", ()),
+    ("failure_mode", "scripts/run_failure_mode_benchmark.py", ()),
+    (
+        "metamorphic_behavior",
+        "scripts/run_metamorphic_behavior_benchmark.py",
+        (),
+    ),
+    (
+        "long_horizon_drift",
+        "scripts/run_long_horizon_drift_benchmark.py",
+        ("--days", "20", "--window", "5"),
+    ),
+    (
+        "local_cloud_parity",
+        "scripts/run_local_cloud_parity_benchmark.py",
+        (),
+    ),
+    (
+        "failure_injection_integration",
+        "scripts/run_failure_injection_integration_benchmark.py",
+        (),
+    ),
+    (
+        "compile_apply_equivalence",
+        "scripts/run_compile_apply_equivalence_benchmark.py",
+        (),
+    ),
+    ("plugin_contract", "scripts/run_plugin_contract_benchmark.py", ()),
+)
+
+
+def _format_args(args: Sequence[str], tmp_path: Path) -> list[str]:
+    return [arg.format(tmp=tmp_path) for arg in args]
+
+
+def _run_benchmark_entrypoint(
+    script: str,
+    *,
+    extra_args: Sequence[str],
+    out_json: Path,
+    out_md: Path,
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    pythonpath_parts = [str(PROJECT_ROOT / "src"), str(PROJECT_ROOT / "scripts")]
+    if existing_pythonpath:
+        pythonpath_parts.append(existing_pythonpath)
+    env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+
+    return subprocess.run(
+        [
+            sys.executable,
+            script,
+            *extra_args,
+            "--out-json",
+            str(out_json),
+            "--out-md",
+            str(out_md),
+        ],
+        cwd=PROJECT_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+
+
+def _assert_report_schema(report: dict[str, Any], *, out_json: Path) -> None:
+    required = {
+        "benchmark",
+        "target_score",
+        "total_score",
+        "status",
+        "grade",
+        "categories",
+        "critical_checks",
+        "critical_failures",
+        "generated_at_utc",
+        "provenance_manifest_path",
+    }
+    assert required.issubset(report), sorted(required - set(report))
+    assert isinstance(report["benchmark"], str) and report["benchmark"]
+    assert isinstance(report["total_score"], int | float)
+    assert 0 <= float(report["total_score"]) <= 100
+    assert report["status"] == "PASS"
+    assert isinstance(report["categories"], list) and report["categories"]
+    assert isinstance(report["critical_checks"], list) and report["critical_checks"]
+    assert isinstance(report["critical_failures"], list)
+
+    for category in report["categories"]:
+        assert {"name", "max_points", "earned_points", "details"}.issubset(category)
+        assert isinstance(category["name"], str) and category["name"]
+        assert isinstance(category["max_points"], int | float)
+        assert isinstance(category["earned_points"], int | float)
+        assert isinstance(category["details"], dict)
+
+    for check in report["critical_checks"]:
+        assert {"code", "passed", "message"}.issubset(check)
+        assert isinstance(check["code"], str) and check["code"]
+        assert isinstance(check["passed"], bool)
+        assert isinstance(check["message"], str)
+
+    provenance_path = Path(report["provenance_manifest_path"])
+    if not provenance_path.is_absolute():
+        provenance_path = out_json.parent / provenance_path
+    assert provenance_path.exists()
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    assert provenance["benchmark"] == report["benchmark"]
+    assert "config_hash" in provenance
+    assert "runtime" in provenance
+
+
+@pytest.mark.parametrize(
+    ("name", "script", "extra_args"),
+    BENCHMARK_ENTRYPOINTS,
+    ids=[case[0] for case in BENCHMARK_ENTRYPOINTS],
+)
+def test_benchmark_entrypoint_report_contract(
+    tmp_path: Path,
+    name: str,
+    script: str,
+    extra_args: tuple[str, ...],
+) -> None:
+    out_json = tmp_path / f"{name}.json"
+    out_md = tmp_path / f"{name}.md"
+    result = _run_benchmark_entrypoint(
+        script,
+        extra_args=_format_args(extra_args, tmp_path),
+        out_json=out_json,
+        out_md=out_md,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert out_json.exists()
+    assert out_md.exists()
+
+    report = json.loads(out_json.read_text(encoding="utf-8"))
+    _assert_report_schema(report, out_json=out_json)
+
+    markdown = out_md.read_text(encoding="utf-8")
+    assert report["benchmark"] in markdown
+    assert "Critical Gates" in markdown
 
 ```
 
@@ -143002,6 +144829,7 @@ _mock_modal.Secret = MagicMock()
 # Patch before importing modal_app
 sys.modules.setdefault("modal", _mock_modal)
 
+from bilancio.cloud import modal_app as modal_app_module  # noqa: E402
 from bilancio.cloud.modal_app import (  # noqa: E402
     SupabaseCredentialsError,
     _compute_dealer_vbt_loss,
@@ -143010,6 +144838,7 @@ from bilancio.cloud.modal_app import (  # noqa: E402
 )
 
 # Retrieve the raw decorated functions
+_raw_run_simulation = _captured_decorated_fns["run_simulation"]
 _raw_compute_aggregate_metrics = _captured_decorated_fns["compute_aggregate_metrics"]
 _raw_health_check = _captured_decorated_fns["health_check"]
 
@@ -143143,17 +144972,39 @@ class TestComputeMetricsFromEvents:
         _write_events(p, _minimal_settlement_events())
         result = compute_metrics_from_events(str(p))
         expected_keys = {
-            "delta_total", "phi_total", "time_to_stability", "max_G_t",
-            "alpha_1", "Mpeak_1", "v_1", "HHIplus_1",
-            "n_defaults", "cascade_fraction",
-            "cb_loans_created_count", "cb_interest_total_paid",
-            "cb_loans_outstanding_pre_final", "bank_defaults_final",
-            "cb_reserves_initial", "cb_reserves_final", "cb_reserve_destruction_pct",
-            "delta_bank", "deposit_loss_gross", "deposit_loss_pct",
-            "total_deposits_created", "bank_obligations_created", "bank_writeoffs",
-            "payable_default_loss", "total_loss", "total_loss_pct", "S_total",
-            "nbfi_loan_loss", "bank_credit_loss", "cb_backstop_loss",
-            "dealer_vbt_loss", "intermediary_loss_total", "raw_metrics",
+            "delta_total",
+            "phi_total",
+            "time_to_stability",
+            "max_G_t",
+            "alpha_1",
+            "Mpeak_1",
+            "v_1",
+            "HHIplus_1",
+            "n_defaults",
+            "cascade_fraction",
+            "cb_loans_created_count",
+            "cb_interest_total_paid",
+            "cb_loans_outstanding_pre_final",
+            "bank_defaults_final",
+            "cb_reserves_initial",
+            "cb_reserves_final",
+            "cb_reserve_destruction_pct",
+            "delta_bank",
+            "deposit_loss_gross",
+            "deposit_loss_pct",
+            "total_deposits_created",
+            "bank_obligations_created",
+            "bank_writeoffs",
+            "payable_default_loss",
+            "total_loss",
+            "total_loss_pct",
+            "S_total",
+            "nbfi_loan_loss",
+            "bank_credit_loss",
+            "cb_backstop_loss",
+            "dealer_vbt_loss",
+            "intermediary_loss_total",
+            "raw_metrics",
         }
         assert expected_keys.issubset(set(result.keys()))
 
@@ -143254,7 +145105,14 @@ class TestSaveRunToSupabase:
                 job_id="job_001",
                 status="completed",
                 metrics={"delta_total": None, "phi_total": None},
-                params={"kappa": 0.5, "concentration": 1.0, "mu": 0.0, "seed": 42, "regime": "passive"},
+                params={
+                    "kappa": 0.5,
+                    "concentration": 1.0,
+                    "mu": 0.0,
+                    "seed": 42,
+                    "regime": "passive",
+                    "performance_config": {"preset": "fast", "fast_atomic": True},
+                },
                 execution_time_ms=2000,
                 modal_call_id="mc-456",
                 modal_volume_path="exp/runs/test_003",
@@ -143271,6 +145129,7 @@ class TestSaveRunToSupabase:
         assert row["mu"] == 0.0
         assert row["seed"] == 42
         assert row["regime"] == "passive"
+        assert row["performance_config"] == {"preset": "fast", "fast_atomic": True}
 
     @pytest.mark.usefixtures("_supabase_env")
     def test_metrics_mapping(self) -> None:
@@ -143352,7 +145211,84 @@ class TestSaveRunToSupabase:
 
 
 # ---------------------------------------------------------------------------
-# 4. compute_aggregate_metrics  (5 tests)
+# 4. run_simulation  (2 tests)
+# ---------------------------------------------------------------------------
+
+
+class TestRunSimulation:
+    """Tests for run_simulation request-path success and failure handling."""
+
+    def test_success_returns_artifacts_metrics_and_persists_run(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(modal_app_module, "RESULTS_MOUNT_PATH", str(tmp_path))
+        modal_app_module.modal.current_function_call_id.return_value = "call-success"
+        modal_app_module.results_volume.commit.reset_mock()
+
+        def fake_run_scenario(**kwargs):
+            export = kwargs["export"]
+            with open(export["events_jsonl"], "w") as fh:
+                fh.write('{"kind": "PhaseA", "day": 0}\n')
+            with open(export["balances_csv"], "w") as fh:
+                fh.write("agent_id,asset,liability,equity\n")
+            kwargs["html_output"].write_text("<html></html>")
+
+        metrics = {"delta_total": 0.1, "phi_total": 0.9, "raw_metrics": {}}
+        with (
+            patch("bilancio.ui.run.run_scenario", side_effect=fake_run_scenario) as run_mock,
+            patch.object(modal_app_module, "compute_metrics_from_events", return_value=metrics) as metrics_mock,
+            patch.object(modal_app_module, "save_run_to_supabase", return_value=True) as save_mock,
+        ):
+            result = _raw_run_simulation(
+                scenario_config={"version": 1, "name": "cloud fixture"},
+                run_id="run-success",
+                experiment_id="exp-success",
+                options={"mode": "until_stable", "max_days": 3, "quiet_days": 1},
+                job_id="job-success",
+            )
+
+        assert result["status"] == "completed"
+        assert result["storage_base"] == "exp-success/runs/run-success"
+        assert result["artifacts"]["events_jsonl"] == "out/events.jsonl"
+        assert result["metrics"] == metrics
+        assert result["modal_call_id"] == "call-success"
+        run_mock.assert_called_once()
+        metrics_mock.assert_called_once()
+        save_mock.assert_called_once()
+        assert save_mock.call_args.kwargs["status"] == "completed"
+        modal_app_module.results_volume.commit.assert_called_once()
+        assert (tmp_path / "exp-success" / "runs" / "run-success" / "scenario.yaml").exists()
+
+    def test_failure_returns_error_and_records_failed_run(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(modal_app_module, "RESULTS_MOUNT_PATH", str(tmp_path))
+        modal_app_module.modal.current_function_call_id.return_value = "call-failed"
+        modal_app_module.results_volume.commit.reset_mock()
+
+        with (
+            patch("bilancio.ui.run.run_scenario", side_effect=ValueError("bad scenario")),
+            patch.object(modal_app_module, "save_run_to_supabase", return_value=True) as save_mock,
+        ):
+            result = _raw_run_simulation(
+                scenario_config={"version": 1, "name": "bad cloud fixture"},
+                run_id="run-failed",
+                experiment_id="exp-failed",
+                options={"mode": "until_stable", "max_days": 3},
+                job_id="job-failed",
+            )
+
+        assert result["status"] == "failed"
+        assert result["storage_base"] == "exp-failed/runs/run-failed"
+        assert result["artifacts"] == {}
+        assert result["metrics"] == {}
+        assert result["error"] == "bad scenario"
+        assert result["modal_call_id"] == "call-failed"
+        save_mock.assert_called_once()
+        assert save_mock.call_args.kwargs["status"] == "failed"
+        assert save_mock.call_args.kwargs["error"] == "bad scenario"
+        modal_app_module.results_volume.commit.assert_called_once()
+        assert (tmp_path / "exp-failed" / "runs" / "run-failed" / "scenario.yaml").exists()
+
+
+# ---------------------------------------------------------------------------
+# 5. compute_aggregate_metrics  (5 tests)
 #
 # The raw function was captured from the mock decorator into
 # _raw_compute_aggregate_metrics.
@@ -143391,14 +145327,22 @@ class TestComputeAggregateMetrics:
 
         rows = [
             {
-                "run_id": "rp", "kappa": 0.5, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 42,
+                "run_id": "rp",
+                "kappa": 0.5,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 42,
                 "regime": "passive",
                 "metrics": [{"delta_total": 0.3, "phi_total": 0.7}],
             },
             {
-                "run_id": "ra", "kappa": 0.5, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 42,
+                "run_id": "ra",
+                "kappa": 0.5,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 42,
                 "regime": "active",
                 "metrics": [{"delta_total": 0.1, "phi_total": 0.9}],
             },
@@ -143419,14 +145363,22 @@ class TestComputeAggregateMetrics:
 
         rows = [
             {
-                "run_id": "p1", "kappa": 1.0, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 42,
+                "run_id": "p1",
+                "kappa": 1.0,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 42,
                 "regime": "passive",
                 "metrics": [{"delta_total": 0.4, "phi_total": 0.6}],
             },
             {
-                "run_id": "a1", "kappa": 1.0, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 42,
+                "run_id": "a1",
+                "kappa": 1.0,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 42,
                 "regime": "active",
                 "metrics": [{"delta_total": 0.15, "phi_total": 0.85}],
             },
@@ -143463,14 +145415,22 @@ class TestComputeAggregateMetrics:
 
         rows = [
             {
-                "run_id": "p2", "kappa": 0.5, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 7,
+                "run_id": "p2",
+                "kappa": 0.5,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 7,
                 "regime": "passive",
                 "metrics": [{"delta_total": 0.2, "phi_total": 0.8}],
             },
             {
-                "run_id": "a2", "kappa": 0.5, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 7,
+                "run_id": "a2",
+                "kappa": 0.5,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 7,
                 "regime": "active",
                 "metrics": [{"delta_total": 0.05, "phi_total": 0.95}],
             },
@@ -143487,7 +145447,7 @@ class TestComputeAggregateMetrics:
 
 
 # ---------------------------------------------------------------------------
-# 5. health_check  (2 tests)
+# 6. health_check  (2 tests)
 # ---------------------------------------------------------------------------
 
 
@@ -143643,6 +145603,121 @@ class TestModalVolumeArtifactLoader:
         # Directory should still exist but be empty
         assert cache_dir.exists()
         assert list(cache_dir.iterdir()) == []
+
+```
+
+---
+
+### 🧪 tests/cloud/test_proxy_patch.py
+
+```python
+"""Unit tests for Modal proxy patch behavior."""
+
+from __future__ import annotations
+
+import asyncio
+import socket
+import ssl
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
+
+from bilancio.cloud import proxy_patch
+
+
+def test_should_use_proxy_requires_proxy_url_and_ca(monkeypatch) -> None:
+    monkeypatch.delenv("https_proxy", raising=False)
+    monkeypatch.delenv("HTTPS_PROXY", raising=False)
+    monkeypatch.setattr(proxy_patch.os.path, "exists", lambda _path: True)
+    assert proxy_patch._should_use_proxy() is False
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
+    monkeypatch.setattr(proxy_patch.os.path, "exists", lambda path: path == proxy_patch.PROXY_CA_CERT)
+    assert proxy_patch._should_use_proxy() is True
+
+    monkeypatch.setattr(proxy_patch.os.path, "exists", lambda _path: False)
+    assert proxy_patch._should_use_proxy() is False
+
+
+def test_create_proxy_ssl_context_loads_custom_ca(monkeypatch) -> None:
+    context = MagicMock(spec=ssl.SSLContext)
+    monkeypatch.setattr(proxy_patch.ssl, "create_default_context", MagicMock(return_value=context))
+
+    assert proxy_patch._create_proxy_ssl_context() is context
+    context.load_verify_locations.assert_called_once_with(proxy_patch.PROXY_CA_CERT)
+
+
+def test_apply_proxy_patch_patches_channel_and_modal_http_client(monkeypatch) -> None:
+    original = proxy_patch.grpclib.client.Channel._create_connection
+    try:
+        monkeypatch.setattr(
+            proxy_patch.grpclib.client.Channel,
+            "_create_connection",
+            proxy_patch._original_create_connection,
+        )
+        http_patch = MagicMock()
+        monkeypatch.setattr(proxy_patch, "_patch_modal_http_client", http_patch)
+
+        proxy_patch.apply_proxy_patch()
+
+        assert proxy_patch.is_patched() is True
+        http_patch.assert_called_once_with()
+    finally:
+        proxy_patch.grpclib.client.Channel._create_connection = original
+
+
+def test_proxied_create_connection_delegates_without_proxy(monkeypatch) -> None:
+    async def fake_original(self):
+        return {"delegated": self}
+
+    target = object()
+    monkeypatch.setattr(proxy_patch, "_should_use_proxy", lambda: False)
+    monkeypatch.setattr(proxy_patch, "_original_create_connection", fake_original)
+
+    assert asyncio.run(proxy_patch._proxied_create_connection(target)) == {"delegated": target}
+
+
+def test_proxied_create_connection_closes_socket_on_connect_failure(monkeypatch) -> None:
+    class FakeSocket:
+        def __init__(self, *_args, **_kwargs):
+            self.closed = False
+
+        def setblocking(self, _flag):
+            return None
+
+        def close(self):
+            self.closed = True
+
+    fake_socket = FakeSocket()
+
+    class FakeLoop:
+        async def sock_connect(self, sock, address):
+            assert sock is fake_socket
+            assert address == ("proxy.example", 8080)
+
+        async def sock_sendall(self, sock, payload):
+            assert sock is fake_socket
+            assert b"CONNECT modal.example:443 HTTP/1.1" in payload
+
+        async def sock_recv(self, sock, _size):
+            assert sock is fake_socket
+            return b"HTTP/1.1 403 Forbidden\r\n\r\n"
+
+    monkeypatch.setattr(proxy_patch, "_should_use_proxy", lambda: True)
+    monkeypatch.setenv("HTTPS_PROXY", "http://user:pass@proxy.example:8080")
+    monkeypatch.setattr(asyncio, "get_event_loop", MagicMock(return_value=FakeLoop()))
+
+    channel = SimpleNamespace(_host="modal.example", _port=443, _ssl=True)
+
+    async def exercise_proxy_failure() -> None:
+        monkeypatch.setattr(socket, "socket", MagicMock(return_value=fake_socket))
+        with pytest.raises(ConnectionError, match="Proxy CONNECT failed"):
+            await proxy_patch._proxied_create_connection(channel)
+
+    asyncio.run(exercise_proxy_failure())
+
+    assert fake_socket.closed is True
 
 ```
 
@@ -147584,6 +149659,9 @@ from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.system import System
 from bilancio.scenarios.ring_explorer import compile_ring_explorer
 
+DETERMINISTIC_SEED = 42
+ALTERNATE_DETERMINISTIC_SEED = 99
+
 # ---------------------------------------------------------------------------
 # Shared factory functions (importable by any test module)
 # ---------------------------------------------------------------------------
@@ -147655,7 +149733,7 @@ def create_dealer_config() -> DealerRingConfig:
     """Standard dealer configuration for testing.
 
     Uses DEFAULT_BUCKETS (short/mid/long), with standard anchors,
-    25% dealer share, 50% VBT share, seed=42.
+    25% dealer share, 50% VBT share, and the shared deterministic seed.
     """
     return DealerRingConfig(
         ticket_size=Decimal(1),
@@ -147670,13 +149748,25 @@ def create_dealer_config() -> DealerRingConfig:
         phi_M=Decimal("0.1"),
         phi_O=Decimal("0.1"),
         clip_nonneg_B=True,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
 
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def deterministic_seed() -> int:
+    """Primary fixed seed for deterministic simulation/regression tests."""
+    return DETERMINISTIC_SEED
+
+
+@pytest.fixture
+def alternate_deterministic_seed() -> int:
+    """Secondary fixed seed for tests that must prove seed sensitivity."""
+    return ALTERNATE_DETERMINISTIC_SEED
 
 
 @pytest.fixture
@@ -175961,28 +178051,9 @@ Targets uncovered lines:
 - Lines 815-853: compute_passive_pnl
 """
 
-import random
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
-import pytest
-
-from bilancio.dealer.kernel import KernelParams, recompute_dealer_state
-from bilancio.dealer.metrics import RunMetrics
-from bilancio.dealer.models import (
-    DEFAULT_BUCKETS,
-    BucketConfig,
-    DealerState,
-    Ticket,
-    TraderState,
-    VBTState,
-)
-from bilancio.dealer.simulation import DealerRingConfig
-from bilancio.decision.profiles import TraderProfile, VBTProfile
-from bilancio.domain.agents.central_bank import CentralBank
-from bilancio.domain.agents.household import Household
-from bilancio.domain.instruments.base import InstrumentKind
-from bilancio.domain.instruments.credit import Payable
+from bilancio.dealer.models import DEFAULT_BUCKETS, Ticket, TraderState
 from bilancio.engines.dealer_integration import (
     DealerSubsystem,
     _assign_bucket,
@@ -175993,65 +178064,7 @@ from bilancio.engines.dealer_integration import (
     run_dealer_trading_phase,
     sync_dealer_to_system,
 )
-from bilancio.engines.system import System
-
-
-# ── Helpers ────────────────────────────────────────────────────────
-
-
-def _make_system_with_payables() -> System:
-    """Create a system with 3 households, cash, and payables."""
-    sys = System()
-    cb = CentralBank(id="CB1", name="CB", kind="central_bank")
-    h1 = Household(id="H1", name="H1", kind="household")
-    h2 = Household(id="H2", name="H2", kind="household")
-    h3 = Household(id="H3", name="H3", kind="household")
-    sys.add_agent(cb)
-    sys.add_agent(h1)
-    sys.add_agent(h2)
-    sys.add_agent(h3)
-    sys.mint_cash("H1", 100)
-    sys.mint_cash("H2", 100)
-    sys.mint_cash("H3", 100)
-
-    p1 = Payable(
-        id=sys.new_contract_id("P"), kind=InstrumentKind.PAYABLE,
-        amount=50, denom="X", asset_holder_id="H2",
-        liability_issuer_id="H1", due_day=sys.state.day + 2,
-    )
-    sys.add_contract(p1)
-    p2 = Payable(
-        id=sys.new_contract_id("P"), kind=InstrumentKind.PAYABLE,
-        amount=30, denom="X", asset_holder_id="H3",
-        liability_issuer_id="H2", due_day=sys.state.day + 5,
-    )
-    sys.add_contract(p2)
-    p3 = Payable(
-        id=sys.new_contract_id("P"), kind=InstrumentKind.PAYABLE,
-        amount=20, denom="X", asset_holder_id="H1",
-        liability_issuer_id="H3", due_day=sys.state.day + 10,
-    )
-    sys.add_contract(p3)
-    return sys
-
-
-def _make_dealer_config() -> DealerRingConfig:
-    return DealerRingConfig(
-        ticket_size=Decimal(1),
-        buckets=list(DEFAULT_BUCKETS),
-        dealer_share=Decimal("0.25"),
-        vbt_share=Decimal("0.50"),
-        vbt_anchors={
-            "short": (Decimal("1.0"), Decimal("0.20")),
-            "mid": (Decimal("1.0"), Decimal("0.30")),
-            "long": (Decimal("1.0"), Decimal("0.40")),
-        },
-        phi_M=Decimal("0.1"),
-        phi_O=Decimal("0.1"),
-        clip_nonneg_B=True,
-        seed=42,
-    )
-
+from tests.conftest import create_dealer_config, create_test_system_with_payables
 
 # ── Tests ──────────────────────────────────────────────────────────
 
@@ -176079,8 +178092,14 @@ class TestPruneIneligibleTraders:
         t2 = TraderState(agent_id="H2", cash=Decimal("100"), tickets_owned=[], obligations=[])
         # Trader with tickets
         ticket = Ticket(
-            id="T1", issuer_id="H1", owner_id="H3", face=Decimal("10"),
-            maturity_day=5, remaining_tau=5, bucket_id="short", serial=0,
+            id="T1",
+            issuer_id="H1",
+            owner_id="H3",
+            face=Decimal("10"),
+            maturity_day=5,
+            remaining_tau=5,
+            bucket_id="short",
+            serial=0,
         )
         t3 = TraderState(agent_id="H3", cash=Decimal("0"), tickets_owned=[ticket], obligations=[])
         sub.traders = {"H1": t1, "H2": t2, "H3": t3}
@@ -176094,8 +178113,8 @@ class TestPruneIneligibleTraders:
 class TestComputePassivePnl:
     def test_passive_pnl_basic(self):
         """Compute PnL for passive dealer entities."""
-        sys = _make_system_with_payables()
-        config = _make_dealer_config()
+        sys = create_test_system_with_payables()
+        config = create_dealer_config()
         subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
         subsystem.enabled = False
 
@@ -176112,8 +178131,8 @@ class TestComputePassivePnl:
 
     def test_passive_pnl_zero_initial_equity(self):
         """When initial equity is 0, return is 0."""
-        sys = _make_system_with_payables()
-        config = _make_dealer_config()
+        sys = create_test_system_with_payables()
+        config = create_dealer_config()
         subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
         subsystem.enabled = False
 
@@ -176128,8 +178147,8 @@ class TestComputePassivePnl:
 class TestDirtyBucketRecompute:
     def test_dirty_bucket_only_recomputes_dirty(self):
         """With dirty_bucket_recompute, only dirty buckets are recomputed."""
-        sys = _make_system_with_payables()
-        config = _make_dealer_config()
+        sys = create_test_system_with_payables()
+        config = create_dealer_config()
         subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
         subsystem.dirty_bucket_recompute = True
         subsystem.trading_rounds = 2  # 2 rounds
@@ -176142,8 +178161,8 @@ class TestDirtyBucketRecompute:
 class TestIncrementalIntentions:
     def test_incremental_intentions_enabled(self):
         """With incremental_intentions, intention cache is used."""
-        sys = _make_system_with_payables()
-        config = _make_dealer_config()
+        sys = create_test_system_with_payables()
+        config = create_dealer_config()
         subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
         subsystem.incremental_intentions = True
         subsystem.trading_rounds = 2
@@ -176156,11 +178175,11 @@ class TestIncrementalIntentions:
 
 class TestGetAgentCash:
     def test_nonexistent_agent(self):
-        sys = _make_system_with_payables()
+        sys = create_test_system_with_payables()
         assert _get_agent_cash(sys, "nonexistent") == Decimal(0)
 
     def test_agent_with_cash(self):
-        sys = _make_system_with_payables()
+        sys = create_test_system_with_payables()
         cash = _get_agent_cash(sys, "H1")
         assert cash == Decimal(100)
 
@@ -176168,12 +178187,12 @@ class TestGetAgentCash:
 class TestSyncDealerToSystem:
     def test_full_sync_no_error(self):
         """Full sync after trading phase should not raise."""
-        sys = _make_system_with_payables()
-        config = _make_dealer_config()
+        sys = create_test_system_with_payables()
+        config = create_dealer_config()
         subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
 
         # Run one trading phase
-        events = run_dealer_trading_phase(subsystem, sys, current_day=0)
+        run_dealer_trading_phase(subsystem, sys, current_day=0)
         # Sync back
         sync_dealer_to_system(subsystem, sys)
 
@@ -176187,8 +178206,8 @@ class TestMatchingOrderUrgency:
     """Test that matching_order='urgency' doesn't crash."""
 
     def test_urgency_matching(self):
-        sys = _make_system_with_payables()
-        config = _make_dealer_config()
+        sys = create_test_system_with_payables()
+        config = create_dealer_config()
         subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
         subsystem.matching_order = "urgency"
         subsystem.trading_rounds = 1
@@ -189936,6 +191955,7 @@ Tests cover:
 from __future__ import annotations
 
 import csv
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -190635,6 +192655,49 @@ class TestWriteComparisonCSV:
         assert rows[0]["seed"] == "2"
         assert rows[1]["seed"] == "3"
 
+    def test_summary_includes_legacy_dealer_design(self, tmp_path: Path):
+        """summary.json declares the balanced passive/active contrast."""
+        cfg = BalancedComparisonConfig()
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [
+            _make_result(delta_passive=Decimal("0.6"), delta_active=Decimal("0.4")),
+        ]
+
+        runner._write_summary_json()
+
+        summary = json.loads((tmp_path / "aggregate" / "summary.json").read_text())
+        design = summary["experiment_design"]
+        assert design["mode"] == "legacy_balanced_dealer"
+        assert design["comparison"] == "dealer_trading"
+        assert design["baseline_arm"] == "passive"
+        assert design["treatment_arm"] == "active"
+        assert design["effect_metric"] == "trading_effect"
+        assert design["effect_formula"] == "delta_passive - delta_active"
+        assert design["legacy_mixed_mode"] is False
+
+    def test_summary_marks_deprecated_mixed_bank_arms(self, tmp_path: Path):
+        """summary.json identifies deprecated mixed banking arms and replacements."""
+        cfg = BalancedComparisonConfig(
+            enable_bank_passive=True,
+            enable_bank_dealer=True,
+            enable_bank_dealer_nbfi=True,
+        )
+        with pytest.warns(DeprecationWarning):
+            runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [_make_result()]
+
+        runner._write_summary_json()
+
+        summary = json.loads((tmp_path / "aggregate" / "summary.json").read_text())
+        design = summary["experiment_design"]
+        assert design["legacy_mixed_mode"] is True
+        assert design["deprecated_mixed_arms"] == [
+            "bank_passive",
+            "bank_dealer",
+            "bank_dealer_nbfi",
+        ]
+        assert design["clean_replacements"]["bank_dealer"] == "bilancio sweep bank"
+
     def test_csv_includes_lender_fields(self, tmp_path: Path):
         """CSV includes lender fields when a result has lender data."""
         cfg = BalancedComparisonConfig()
@@ -191296,6 +193359,7 @@ Tests cover:
 from __future__ import annotations
 
 import csv
+import json
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
@@ -191906,7 +193970,36 @@ class TestWriteComparisonCSV:
 
 
 # =============================================================================
-# 9. _get_performance
+# 9. _write_summary_json
+# =============================================================================
+
+
+class TestWriteSummaryJSON:
+    """Tests for BankComparisonRunner._write_summary_json."""
+
+    def test_summary_includes_clean_causal_design(self, tmp_path: Path):
+        """summary.json declares the bank baseline, treatment, and effect formula."""
+        config = BankComparisonConfig()
+        runner = BankComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [
+            _make_result(delta_idle=Decimal("0.6"), delta_lend=Decimal("0.4")),
+        ]
+
+        runner._write_summary_json()
+
+        summary = json.loads((tmp_path / "aggregate" / "summary.json").read_text())
+        design = summary["experiment_design"]
+        assert design["mode"] == "clean_causal"
+        assert design["comparison"] == "bank_lending"
+        assert design["baseline_arm"] == "idle"
+        assert design["treatment_arm"] == "lend"
+        assert design["effect_metric"] == "bank_lending_effect"
+        assert design["effect_formula"] == "delta_idle - delta_lend"
+        assert design["legacy_mixed_mode"] is False
+
+
+# =============================================================================
+# 10. _get_performance
 # =============================================================================
 
 
@@ -191932,7 +194025,7 @@ class TestGetPerformance:
 
 
 # =============================================================================
-# 10. Result with None optional fields
+# 11. Result with None optional fields
 # =============================================================================
 
 
@@ -192561,6 +194654,7 @@ Tests cover:
 from __future__ import annotations
 
 import csv
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -193103,7 +195197,36 @@ class TestWriteComparisonCSV:
 
 
 # =============================================================================
-# 8. Config serialization round-trip
+# 8. _write_summary_json
+# =============================================================================
+
+
+class TestWriteSummaryJSON:
+    """Tests for NBFIComparisonRunner._write_summary_json."""
+
+    def test_summary_includes_clean_causal_design(self, tmp_path: Path):
+        """summary.json declares the NBFI baseline, treatment, and effect formula."""
+        config = NBFIComparisonConfig()
+        runner = NBFIComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [
+            _make_result(delta_idle=Decimal("0.6"), delta_lend=Decimal("0.4")),
+        ]
+
+        runner._write_summary_json()
+
+        summary = json.loads((tmp_path / "aggregate" / "summary.json").read_text())
+        design = summary["experiment_design"]
+        assert design["mode"] == "clean_causal"
+        assert design["comparison"] == "nbfi_lending"
+        assert design["baseline_arm"] == "idle"
+        assert design["treatment_arm"] == "lend"
+        assert design["effect_metric"] == "lending_effect"
+        assert design["effect_formula"] == "delta_idle - delta_lend"
+        assert design["legacy_mixed_mode"] is False
+
+
+# =============================================================================
+# 9. Config serialization round-trip
 # =============================================================================
 
 
@@ -199200,10 +201323,10 @@ from bilancio.config.models import (
     RiskAssessmentConfig,
 )
 from bilancio.decision.adaptive import build_adaptive_overrides
-from bilancio.domain.agents.central_bank import CentralBank
-from bilancio.experiments.ring import RingSweepRunner
 from bilancio.decision.profiles import BankProfile, LenderProfile, TraderProfile, VBTProfile
 from bilancio.decision.risk_assessment import RiskAssessmentParams
+from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.experiments.ring import RingSweepRunner
 from bilancio.ui.run import run_scenario
 
 # ── Shared helpers ──────────────────────────────────────────────────
@@ -199642,6 +201765,7 @@ class TestRunLevelPresetPipeline:
             max_days=2,
             quiet_days=1,
             show="none",
+            engine="legacy",
         )
         assert observed, "Expected wrapped run_day to capture runtime flags"
         return observed
@@ -201582,8 +203706,6 @@ References:
 
 from decimal import Decimal
 
-from bilancio.dealer.models import DEFAULT_BUCKETS
-from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.domain.agents import Bank, CentralBank, Household
 from bilancio.domain.agents.firm import Firm
 from bilancio.domain.agents.non_bank_lender import NonBankLender
@@ -201596,25 +203718,7 @@ from bilancio.engines.dealer_integration import (
 from bilancio.engines.lending import LendingConfig
 from bilancio.engines.simulation import run_day
 from bilancio.engines.system import System
-
-
-def _make_dealer_config() -> DealerRingConfig:
-    """Standard dealer configuration for tests."""
-    return DealerRingConfig(
-        ticket_size=Decimal(1),
-        buckets=list(DEFAULT_BUCKETS),
-        dealer_share=Decimal("0.25"),
-        vbt_share=Decimal("0.50"),
-        vbt_anchors={
-            "short": (Decimal("1.0"), Decimal("0.20")),
-            "mid": (Decimal("1.0"), Decimal("0.30")),
-            "long": (Decimal("1.0"), Decimal("0.40")),
-        },
-        phi_M=Decimal("0.1"),
-        phi_O=Decimal("0.1"),
-        clip_nonneg_B=True,
-        seed=42,
-    )
+from tests.conftest import create_dealer_config
 
 
 def _total_agent_cash(system: System, agent_id: str) -> Decimal:
@@ -201716,7 +203820,7 @@ def test_lending_then_disabled_dealer_preserves_cash():
     sys.state.lender_config = LendingConfig()
 
     # Initialize dealer subsystem (disabled)
-    config = _make_dealer_config()
+    config = create_dealer_config()
     subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
     sys.state.dealer_subsystem = subsystem
     subsystem.enabled = False
@@ -201744,8 +203848,7 @@ def test_lending_then_disabled_dealer_preserves_cash():
         # The loan amount was added; F01 may have also paid settlements on day 0
         # but the payable is due on day 2, so no settlement should occur yet.
         assert f01_cash_after > f01_cash_before, (
-            f"F01 received a loan but cash did not increase: "
-            f"before={f01_cash_before}, after={f01_cash_after}"
+            f"F01 received a loan but cash did not increase: before={f01_cash_before}, after={f01_cash_after}"
         )
         # Lender should have less cash (transferred to borrower)
         assert nbl_cash_after < nbl_cash_before, "NonBankLender cash should decrease after lending"
@@ -201763,8 +203866,7 @@ def test_lending_then_disabled_dealer_preserves_cash():
     # The only source of new cash is CB minting during run_day (e.g., reserve interest).
     # Allow for small CB corridor adjustments.
     assert total_cash_after == total_cash_before, (
-        f"Total system cash changed unexpectedly: "
-        f"before={total_cash_before}, after={total_cash_after}"
+        f"Total system cash changed unexpectedly: before={total_cash_before}, after={total_cash_after}"
     )
 
 
@@ -201833,7 +203935,7 @@ def test_lending_effect_is_nonzero_in_nbfi_mode():
     )
 
     # Initialize dealer subsystem (disabled -- NBFI-only mode)
-    config = _make_dealer_config()
+    config = create_dealer_config()
     subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
     sys.state.dealer_subsystem = subsystem
     subsystem.enabled = False
@@ -203091,6 +205193,7 @@ def _make_job(
             outside_mid_ratios=[Decimal("0.9")],
             maturity_days=10,
             seeds=[42, 99],
+            performance={"preset": "fast", "fast_atomic": True},
         ),
         run_ids=["run-a", "run-b"],
         completed_at=completed_at,
@@ -203115,6 +205218,7 @@ def _make_db_row(**overrides: object) -> dict:
         "outside_mid_ratios": ["0.9"],
         "seeds": [42, 99],
         "cloud": True,
+        "performance": {"preset": "fast", "fast_atomic": True},
         "completed_at": "2025-01-15T10:45:00+00:00",
         "notes": "a test note",
         "error": None,
@@ -203155,6 +205259,7 @@ class TestSaveJob:
         assert data["sweep_type"] == "balanced"
         assert data["n_agents"] == 100
         assert data["cloud"] is True
+        assert data["performance"] == {"preset": "fast", "fast_atomic": True}
         assert data["notes"] == "a test note"
         assert data["total_runs"] == 2
         assert data["completed_runs"] == 2  # status is COMPLETED
@@ -203239,6 +205344,7 @@ class TestGetJob:
         assert job.config.concentrations == [Decimal("1")]
         assert job.config.mus == [Decimal("0")]
         assert job.config.cloud is True
+        assert job.config.performance == {"preset": "fast", "fast_atomic": True}
         assert job.config.maturity_days == 10
         assert job.completed_at is not None
         assert job.notes == "a test note"
@@ -204527,11 +206633,21 @@ only semantics-preserving optimizations differ.
 
 Also includes determinism tests (seed stability, golden snapshots) and
 native-vs-Python backend parity checks.
+
+Test intent:
+- Enforce that semantics-preserving performance options do not change critical
+  simulation outputs under fixed seeds.
+- Guard deterministic event fingerprints for the regression scenarios that
+  define the supported optimization surface.
+- Document which options are intentionally semantics-changing instead of
+  silently treating them as equivalent.
 """
 
 from __future__ import annotations
 
 import copy
+import json
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -204545,6 +206661,7 @@ from bilancio.core.performance import _BOOL_FLAGS, SEMANTICS_PRESERVING, Perform
 from bilancio.engines.simulation import run_until_stable
 from bilancio.engines.system import System
 from bilancio.scenarios.ring.compiler import compile_ring_explorer
+from tests.conftest import ALTERNATE_DETERMINISTIC_SEED, DETERMINISTIC_SEED
 
 try:
     from bilancio.dealer.kernel_native import NATIVE_AVAILABLE
@@ -204595,14 +206712,37 @@ def _scenario_to_system(scenario: dict[str, Any]) -> System:
     return system
 
 
+_GENERATED_ID_RE = re.compile(r"^[A-Z]+_[0-9a-f]{8,}$")
+
+
+def _normalize_for_fingerprint(value: Any) -> Any:
+    """Normalize event values for deterministic JSON fingerprinting."""
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): _normalize_for_fingerprint(v) for k, v in sorted(value.items())}
+    if isinstance(value, list | tuple):
+        return [_normalize_for_fingerprint(v) for v in value]
+    if isinstance(value, str) and _GENERATED_ID_RE.match(value):
+        prefix = value.split("_", 1)[0]
+        return f"{prefix}#"
+    return value
+
+
+def _event_fingerprint(events: list[dict[str, Any]]) -> tuple[str, ...]:
+    """Return a deterministic event-stream fingerprint."""
+    return tuple(json.dumps(_normalize_for_fingerprint(event), sort_keys=True) for event in events)
+
+
 def _run_ring(
     preset: str,
-    seed: int = 42,
+    seed: int = DETERMINISTIC_SEED,
     n_agents: int = 10,
     kappa: str = "1",
     concentration: str = "1",
     mu: str = "0",
     maturity_days: int = 5,
+    include_event_fingerprint: bool = False,
     **perf_overrides: Any,
 ) -> dict[str, Any]:
     """Run a ring simulation and return metrics.
@@ -204634,14 +206774,21 @@ def _run_ring(
     events = system.state.events
     result = compute_day_metrics(events=events, balances_rows=None, day_list=None)
     summary = summarize_day_metrics(result["day_metrics"])
-    return {
+    metrics = {
         "delta_total": summary.get("delta_total"),
         "phi_total": summary.get("phi_total"),
         "max_day": summary.get("max_day"),
     }
+    if include_event_fingerprint:
+        metrics["event_fingerprint"] = _event_fingerprint(events)
+    return metrics
 
 
-def _run_small_ring(preset: str, seed: int = 42, **perf_overrides: Any) -> dict[str, Any]:
+def _run_small_ring(
+    preset: str,
+    seed: int = DETERMINISTIC_SEED,
+    **perf_overrides: Any,
+) -> dict[str, Any]:
     """Run a small (n=10, kappa=1) ring simulation and return metrics.
 
     Convenience wrapper around ``_run_ring`` for backward compatibility
@@ -204651,9 +206798,7 @@ def _run_small_ring(preset: str, seed: int = 42, **perf_overrides: Any) -> dict[
 
 
 # -- Boolean flags that are semantics-preserving (suitable for parametrize) --
-_SEMANTICS_PRESERVING_BOOL_FLAGS = sorted(
-    flag for flag in _BOOL_FLAGS if flag in SEMANTICS_PRESERVING
-)
+_SEMANTICS_PRESERVING_BOOL_FLAGS = sorted(flag for flag in _BOOL_FLAGS if flag in SEMANTICS_PRESERVING)
 
 
 @pytest.mark.regression
@@ -204704,15 +206849,13 @@ class TestSeedDeterminism:
 
     def test_same_seed_same_config_produces_identical_results(self) -> None:
         """Three consecutive runs with identical seed + config must produce identical metrics."""
-        results = [_run_small_ring("compatible", seed=42) for _ in range(3)]
+        results = [_run_small_ring("compatible", seed=DETERMINISTIC_SEED) for _ in range(3)]
         for i in range(1, 3):
             assert results[0]["delta_total"] == results[i]["delta_total"], (
-                f"Run 0 vs run {i}: delta_total differs: "
-                f"{results[0]['delta_total']} != {results[i]['delta_total']}"
+                f"Run 0 vs run {i}: delta_total differs: {results[0]['delta_total']} != {results[i]['delta_total']}"
             )
             assert results[0]["phi_total"] == results[i]["phi_total"], (
-                f"Run 0 vs run {i}: phi_total differs: "
-                f"{results[0]['phi_total']} != {results[i]['phi_total']}"
+                f"Run 0 vs run {i}: phi_total differs: {results[0]['phi_total']} != {results[i]['phi_total']}"
             )
 
     def test_different_seeds_produce_different_results(self) -> None:
@@ -204721,13 +206864,15 @@ class TestSeedDeterminism:
         Uses kappa=0.5 with n=20 so defaults are likely and the Dirichlet
         draw creates meaningful variation between seeds.
         """
-        run_42 = _run_ring("compatible", seed=42, n_agents=20, kappa="0.5")
-        run_99 = _run_ring("compatible", seed=99, n_agents=20, kappa="0.5")
-        # At least one metric should differ between different seeds
-        differs = (
-            run_42["delta_total"] != run_99["delta_total"]
-            or run_42["phi_total"] != run_99["phi_total"]
+        run_42 = _run_ring("compatible", seed=DETERMINISTIC_SEED, n_agents=20, kappa="0.5")
+        run_99 = _run_ring(
+            "compatible",
+            seed=ALTERNATE_DETERMINISTIC_SEED,
+            n_agents=20,
+            kappa="0.5",
         )
+        # At least one metric should differ between different seeds
+        differs = run_42["delta_total"] != run_99["delta_total"] or run_42["phi_total"] != run_99["phi_total"]
         assert differs, (
             f"Seeds 42 and 99 produced identical results (n=20, kappa=0.5). "
             f"seed=42: delta={run_42['delta_total']}, phi={run_42['phi_total']}; "
@@ -204745,12 +206890,10 @@ class TestSemanticsPreservingFlags:
         baseline = _run_small_ring("compatible")
         toggled = _run_small_ring("compatible", **{flag: True})
         assert baseline["delta_total"] == toggled["delta_total"], (
-            f"delta_total differs with {flag}=True: "
-            f"baseline={baseline['delta_total']}, toggled={toggled['delta_total']}"
+            f"delta_total differs with {flag}=True: baseline={baseline['delta_total']}, toggled={toggled['delta_total']}"
         )
         assert baseline["phi_total"] == toggled["phi_total"], (
-            f"phi_total differs with {flag}=True: "
-            f"baseline={baseline['phi_total']}, toggled={toggled['phi_total']}"
+            f"phi_total differs with {flag}=True: baseline={baseline['phi_total']}, toggled={toggled['phi_total']}"
         )
 
     def test_all_semantics_preserving_flags_combined(self) -> None:
@@ -204759,13 +206902,36 @@ class TestSemanticsPreservingFlags:
         all_flags = dict.fromkeys(_SEMANTICS_PRESERVING_BOOL_FLAGS, True)
         combined = _run_small_ring("compatible", **all_flags)
         assert baseline["delta_total"] == combined["delta_total"], (
-            f"delta_total differs with all flags on: "
-            f"baseline={baseline['delta_total']}, combined={combined['delta_total']}"
+            f"delta_total differs with all flags on: baseline={baseline['delta_total']}, combined={combined['delta_total']}"
         )
         assert baseline["phi_total"] == combined["phi_total"], (
-            f"phi_total differs with all flags on: "
-            f"baseline={baseline['phi_total']}, combined={combined['phi_total']}"
+            f"phi_total differs with all flags on: baseline={baseline['phi_total']}, combined={combined['phi_total']}"
         )
+
+
+@pytest.mark.regression
+class TestSemanticsPreservingEventFingerprint:
+    """Semantics-preserving flags must keep the normalized event stream identical."""
+
+    @pytest.mark.parametrize("flag", _SEMANTICS_PRESERVING_BOOL_FLAGS)
+    def test_each_semantics_preserving_flag_preserves_event_stream(self, flag: str) -> None:
+        baseline = _run_small_ring("compatible", include_event_fingerprint=True)
+        toggled = _run_small_ring(
+            "compatible",
+            include_event_fingerprint=True,
+            **{flag: True},
+        )
+        assert baseline["event_fingerprint"] == toggled["event_fingerprint"], f"event stream differs with {flag}=True"
+
+    def test_all_semantics_preserving_flags_preserve_event_stream(self) -> None:
+        baseline = _run_small_ring("compatible", include_event_fingerprint=True)
+        all_flags = dict.fromkeys(_SEMANTICS_PRESERVING_BOOL_FLAGS, True)
+        combined = _run_small_ring(
+            "compatible",
+            include_event_fingerprint=True,
+            **all_flags,
+        )
+        assert baseline["event_fingerprint"] == combined["event_fingerprint"]
 
 
 @pytest.mark.regression
@@ -204778,12 +206944,10 @@ class TestNativeBackendParity:
         python_metrics = _run_small_ring("compatible", dealer_backend="python")
         native_metrics = _run_small_ring("compatible", dealer_backend="native")
         assert python_metrics["delta_total"] == native_metrics["delta_total"], (
-            f"delta_total differs: python={python_metrics['delta_total']}, "
-            f"native={native_metrics['delta_total']}"
+            f"delta_total differs: python={python_metrics['delta_total']}, native={native_metrics['delta_total']}"
         )
         assert python_metrics["phi_total"] == native_metrics["phi_total"], (
-            f"phi_total differs: python={python_metrics['phi_total']}, "
-            f"native={native_metrics['phi_total']}"
+            f"phi_total differs: python={python_metrics['phi_total']}, native={native_metrics['phi_total']}"
         )
 
 
@@ -204803,7 +206967,7 @@ class TestGoldenMetricSnapshot:
         reassignment now runs unconditionally on agent default, not only
         when rollover_enabled=True. This slightly changes the default cascade.
         """
-        metrics = _run_small_ring("compatible", seed=42)
+        metrics = _run_small_ring("compatible", seed=DETERMINISTIC_SEED)
         expected_delta = Decimal("0.6633366633366633366633366633")
         expected_phi = Decimal("0.3366633366633366633366633367")
         assert metrics["delta_total"] == expected_delta, (
@@ -204824,7 +206988,10 @@ class TestGoldenMetricSnapshot:
         reassignment now runs unconditionally on agent default.
         """
         metrics = _run_ring(
-            "compatible", seed=42, n_agents=20, kappa="0.5",
+            "compatible",
+            seed=DETERMINISTIC_SEED,
+            n_agents=20,
+            kappa="0.5",
         )
         expected_delta = Decimal("0.8262179809141135107985936715")
         expected_phi = Decimal("0.1737820190858864892014063285")
@@ -204864,8 +207031,6 @@ from decimal import Decimal
 
 import pytest
 
-from bilancio.dealer.models import DEFAULT_BUCKETS
-from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.decision.profiles import BankProfile
 from bilancio.domain.agents import Bank, CentralBank, Household
 from bilancio.domain.agents.non_bank_lender import NonBankLender
@@ -204877,6 +207042,7 @@ from bilancio.engines.lending import LendingConfig
 from bilancio.engines.simulation import run_until_stable
 from bilancio.engines.system import System
 from bilancio.ops.banking import deposit_cash
+from tests.conftest import DETERMINISTIC_SEED, create_dealer_config
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -204888,7 +207054,7 @@ def build_ring_system(
     cash_per_agent=50,
     payable_amount=100,
     maturity_days=5,
-    seed=42,
+    seed=DETERMINISTIC_SEED,
     default_mode="expel-agent",
 ):
     """Build a ring of n Household agents with payables.
@@ -204952,12 +207118,12 @@ def build_banking_ring_system(
     cash_per_agent=50,
     payable_amount=100,
     maturity_days=5,
-    seed=42,
     n_banks=2,
     kappa=Decimal("0.5"),
     credit_risk_loading=Decimal("0.5"),
     max_borrower_risk=Decimal("0.4"),
     reserve_multiplier=10,
+    seed=DETERMINISTIC_SEED,
     default_mode="expel-agent",
 ):
     """Build a ring with N banks and households deposited round-robin.
@@ -205058,7 +207224,7 @@ def test_lending_effect_is_nonzero():
         cash_per_agent=80,
         payable_amount=100,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
 
     # Add a well-capitalised non-bank lender
@@ -205103,7 +207269,7 @@ def test_trading_effect_is_reasonable():
         cash_per_agent=50,
         payable_amount=100,
         maturity_days=maturity,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys_passive, max_days=15)
     defaults_passive = count_defaults(sys_passive)
@@ -205114,23 +207280,9 @@ def test_trading_effect_is_reasonable():
         cash_per_agent=50,
         payable_amount=100,
         maturity_days=maturity,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
-    dealer_config = DealerRingConfig(
-        ticket_size=Decimal(1),
-        buckets=list(DEFAULT_BUCKETS),
-        dealer_share=Decimal("0.25"),
-        vbt_share=Decimal("0.50"),
-        vbt_anchors={
-            "short": (Decimal("1.0"), Decimal("0.20")),
-            "mid": (Decimal("1.0"), Decimal("0.30")),
-            "long": (Decimal("1.0"), Decimal("0.40")),
-        },
-        phi_M=Decimal("0.1"),
-        phi_O=Decimal("0.1"),
-        clip_nonneg_B=True,
-        seed=42,
-    )
+    dealer_config = create_dealer_config()
     subsystem = initialize_dealer_subsystem(sys_active, dealer_config, current_day=0)
     sys_active.state.dealer_subsystem = subsystem
     run_until_stable(sys_active, max_days=15, enable_dealer=True)
@@ -205139,8 +207291,7 @@ def test_trading_effect_is_reasonable():
     # Trading effect: difference in default fractions
     trading_effect = (defaults_passive - defaults_active) / n
     assert -0.5 <= trading_effect <= 0.5, (
-        f"Trading effect {trading_effect:.3f} out of bounds. "
-        f"Passive defaults={defaults_passive}, active defaults={defaults_active}"
+        f"Trading effect {trading_effect:.3f} out of bounds. Passive defaults={defaults_passive}, active defaults={defaults_active}"
     )
 
 
@@ -205163,7 +207314,7 @@ def test_defaults_increase_with_lower_kappa():
         cash_per_agent=30,
         payable_amount=payable,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys_low_kappa, max_days=15)
     defaults_low_kappa = count_defaults(sys_low_kappa)
@@ -205174,19 +207325,16 @@ def test_defaults_increase_with_lower_kappa():
         cash_per_agent=200,
         payable_amount=payable,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys_high_kappa, max_days=15)
     defaults_high_kappa = count_defaults(sys_high_kappa)
 
     assert defaults_low_kappa >= defaults_high_kappa, (
-        f"Monotonicity violated: kappa=0.3 had {defaults_low_kappa} defaults "
-        f"but kappa=2.0 had {defaults_high_kappa} defaults"
+        f"Monotonicity violated: kappa=0.3 had {defaults_low_kappa} defaults but kappa=2.0 had {defaults_high_kappa} defaults"
     )
     # Also verify high kappa actually has zero or very few defaults
-    assert defaults_high_kappa <= 2, (
-        f"kappa=2.0 should have very few defaults, got {defaults_high_kappa}"
-    )
+    assert defaults_high_kappa <= 2, f"kappa=2.0 should have very few defaults, got {defaults_high_kappa}"
 
 
 @pytest.mark.regression
@@ -205202,7 +207350,7 @@ def test_system_invariants_after_simulation():
         cash_per_agent=100,
         payable_amount=100,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys, max_days=15)
 
@@ -205231,7 +207379,7 @@ def test_nbfi_creates_loans_when_shortfalls_exist():
         cash_per_agent=20,
         payable_amount=100,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
 
     lender = NonBankLender(id="NBFI1", name="Non-Bank Lender")
@@ -205295,9 +207443,7 @@ def test_bank_lending_restricted_at_low_kappa():
 
     # Low kappa means some agents must default
     defaults = count_defaults(sys)
-    assert defaults >= 1, (
-        f"Expected at least 1 default at kappa=0.3, got {defaults}"
-    )
+    assert defaults >= 1, f"Expected at least 1 default at kappa=0.3, got {defaults}"
 
     # System invariants must still hold
     sys.assert_invariants()
@@ -205325,10 +207471,7 @@ def test_cb_backstop_bounded_at_low_kappa():
     run_until_stable(sys, max_days=15, enable_banking=True, enable_bank_lending=True)
 
     cb_loan_count = sys.state.cb_loans_created_count
-    assert cb_loan_count <= n, (
-        f"CB backstop created {cb_loan_count} loans for {n} agents — "
-        f"should be bounded by system size (max {n})"
-    )
+    assert cb_loan_count <= n, f"CB backstop created {cb_loan_count} loans for {n} agents — should be bounded by system size (max {n})"
 
 
 @pytest.mark.regression
@@ -205353,10 +207496,7 @@ def test_settlement_forecast_nonzero_with_cross_bank_payables():
     # Day 1: some payables are due — forecast should show cross-bank flows
     forecasts = subsystem.compute_settlement_forecasts(sys, current_day=1)
     has_nonzero = any(abs(v) > 0 for v in forecasts.values())
-    assert has_nonzero, (
-        f"Settlement forecast returned all zeros with 2 banks and "
-        f"cross-bank payables: {forecasts}"
-    )
+    assert has_nonzero, f"Settlement forecast returned all zeros with 2 banks and cross-bank payables: {forecasts}"
 
     # After refreshing quotes, at least one bank should have projected
     # reserves below its initial level (settlement drain reduces the path)
@@ -205366,20 +207506,16 @@ def test_settlement_forecast_nonzero_with_cross_bank_payables():
         initial_reserves[bank_id] = sum(
             sys.state.contracts[cid].amount
             for cid in agent.asset_ids
-            if cid in sys.state.contracts
-            and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
+            if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
         )
 
     subsystem.refresh_all_quotes(sys, current_day=1)
 
-    has_lower_projection = any(
-        subsystem.banks[bid].min_projected_reserves < initial_reserves[bid]
-        for bid in subsystem.banks
-    )
+    has_lower_projection = any(subsystem.banks[bid].min_projected_reserves < initial_reserves[bid] for bid in subsystem.banks)
     assert has_lower_projection, (
         f"No bank has min_projected_reserves < initial reserves after "
         f"settlement forecast. Projections: "
-        f"{({bid: subsystem.banks[bid].min_projected_reserves for bid in subsystem.banks})}, "
+        f"{ ({bid: subsystem.banks[bid].min_projected_reserves for bid in subsystem.banks}) }, "
         f"Initial: {initial_reserves}"
     )
 
@@ -205403,7 +207539,7 @@ def test_banking_differs_from_passive():
         cash_per_agent=cash,
         payable_amount=payable,
         maturity_days=maturity,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys_passive, max_days=15)
     defaults_passive = count_defaults(sys_passive)
@@ -205416,9 +207552,7 @@ def test_banking_differs_from_passive():
         maturity_days=maturity,
         kappa=Decimal("0.5"),
     )
-    run_until_stable(
-        sys_banking, max_days=15, enable_banking=True, enable_bank_lending=True
-    )
+    run_until_stable(sys_banking, max_days=15, enable_banking=True, enable_bank_lending=True)
     defaults_banking = count_defaults(sys_banking)
 
     # Banking run must have at least 1 loan issued
@@ -205431,9 +207565,7 @@ def test_banking_differs_from_passive():
     # Outcomes must differ: either defaults differ or CB usage differs
     cb_loans_passive = count_events(sys_passive, "CBLoanCreated")
     cb_loans_banking = sys_banking.state.cb_loans_created_count
-    outcomes_differ = (defaults_passive != defaults_banking) or (
-        cb_loans_passive != cb_loans_banking
-    )
+    outcomes_differ = (defaults_passive != defaults_banking) or (cb_loans_passive != cb_loans_banking)
     assert outcomes_differ, (
         f"Banking arm produced identical outcomes to passive: "
         f"defaults={defaults_passive}, CB loans passive={cb_loans_passive}, "
@@ -205454,7 +207586,7 @@ def test_stylized_fact_liquidity_shortfall_produces_defaults():
         cash_per_agent=20,
         payable_amount=100,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys, max_days=10)
 
@@ -205470,7 +207602,7 @@ def test_stylized_fact_nbfi_credit_supply_emits_loans():
         cash_per_agent=20,
         payable_amount=100,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
 
     lender = NonBankLender(id="NBFI1", name="Non-Bank Lender")
@@ -211016,6 +213148,7 @@ def _make_entry(
         "seed": 42,
         "regime": "passive",
         "outside_mid_ratio": Decimal("0.9"),
+        "performance_config": {"preset": "fast", "fast_atomic": True},
         "extra_param": "ignored_by_runs_table",
     }
     metrics = {}
@@ -211060,6 +213193,7 @@ def _make_db_row(**overrides: object) -> dict:
         "seed": 42,
         "regime": "passive",
         "outside_mid_ratio": 0.9,
+        "performance_config": {"preset": "fast", "fast_atomic": True},
         "error": None,
         "modal_volume_path": "test-experiment/runs/balanced_passive_abc123",
         "metrics": [
@@ -211442,6 +213576,7 @@ class TestBuildRunsRow:
         assert row["mu"] == float(Decimal("0"))
         assert row["seed"] == 42
         assert row["regime"] == "passive"
+        assert row["performance_config"] == {"preset": "fast", "fast_atomic": True}
         # Non-param-column parameters should NOT appear
         assert "extra_param" not in row
 
@@ -211568,6 +213703,10 @@ class TestRowToEntry:
         assert entry.parameters["kappa"] == 0.5
         assert entry.parameters["seed"] == 42
         assert entry.parameters["regime"] == "passive"
+        assert entry.parameters["performance_config"] == {
+            "preset": "fast",
+            "fast_atomic": True,
+        }
         # Metrics from raw_metrics
         assert entry.metrics["delta_total"] == 0.15
         assert entry.metrics["custom"] == "value"
@@ -213929,6 +216068,5124 @@ class TestAnalyzeCommand:
 
 ---
 
+### 🧪 tests/ui/test_cli_scenario_characterization.py
+
+```python
+"""Characterization tests for public scenario CLI behavior.
+
+These tests intentionally pin the observable scenario contract used by the
+examples: CLI invocation, exported event stream, and final balance CSV values.
+They are a parity harness for future core rewrites.
+
+Test intent:
+- Keep the public `bilancio run` CLI compatible with existing scenario YAML.
+- Verify clean-core, legacy, and auto engine routing preserve exported artifacts.
+- Catch user-visible regressions in CSV, JSONL, HTML, display, and invariant
+  behavior before scenario changes reach users.
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+import os
+import subprocess
+import sys
+from collections import Counter
+from decimal import Decimal
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+from click.testing import CliRunner
+
+from bilancio.config.models import RingExplorerGeneratorConfig
+from bilancio.scenarios.ring.compiler import (
+    _to_yaml_ready,
+    compile_ring_explorer_balanced,
+)
+from bilancio.ui.cli import cli
+
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+EXAMPLES_DIR = PROJECT_ROOT / "examples" / "scenarios"
+EXERCISE_SCENARIOS_DIR = PROJECT_ROOT / "examples" / "exercise_scenarios" / "yaml"
+KALECKI_SCENARIOS_DIR = PROJECT_ROOT / "examples" / "kalecki"
+TRACKED_EXAMPLE_SCENARIOS = (
+    "default_handling_demo.yaml",
+    "firm_delivery.yaml",
+    "interbank_netting.yaml",
+    "intraday_netting.yaml",
+    "kalecki_with_dealer.yaml",
+    "payment_demo.yaml",
+    "rich_simulation.yaml",
+    "ring_with_action_specs.yaml",
+    "sasa_scenario.yaml",
+    "simple_bank.yaml",
+    "simple_dealer.yaml",
+    "simple_nbfi.yaml",
+    "two_banks_interbank.yaml",
+    "two_jurisdictions.yaml",
+)
+TRACKED_EXERCISE_SCENARIOS = (
+    "ex1_cash_for_goods.yaml",
+    "ex2_two_firms_cash_purchase.yaml",
+    "ex3_iou_assignment.yaml",
+    "ex4_generic_claim_transfer.yaml",
+    "ex5_deferred_exchange.yaml",
+    "ex6_goods_now_cash_later.yaml",
+    "ex7_cash_now_goods_later.yaml",
+)
+TRACKED_KALECKI_SCENARIOS = ("kalecki_ring_baseline.yaml",)
+
+
+def _run_scenario_with_exports(
+    tmp_path: Path,
+    scenario_name: str,
+    *,
+    max_days: int = 5,
+    engine: str | None = "legacy",
+    scenarios_dir: Path = EXAMPLES_DIR,
+    require_stable: bool = True,
+) -> tuple[str, list[dict[str, Any]], dict[str, dict[str, str]]]:
+    engine_label = engine or "default"
+    balances_path = tmp_path / f"{engine_label}.{scenario_name}.balances.csv"
+    events_path = tmp_path / f"{engine_label}.{scenario_name}.events.jsonl"
+    args = [
+        "run",
+        str(scenarios_dir / scenario_name),
+        "--max-days",
+        str(max_days),
+        "--quiet-days",
+        "2",
+        "--check-invariants",
+        "daily",
+        "--show",
+        "summary",
+        "--export-balances",
+        str(balances_path),
+        "--export-events",
+        str(events_path),
+    ]
+    if engine is not None:
+        args[2:2] = ["--engine", engine]
+
+    runner = CliRunner()
+    result = runner.invoke(cli, args)
+
+    assert result.exit_code == 0, result.output
+    if require_stable:
+        assert "OK System reached stable state" in result.output
+    assert balances_path.exists()
+    assert events_path.exists()
+
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    balance_rows = _read_balance_export(balances_path)
+
+    return result.output, events, balance_rows
+
+
+def _read_balance_export(path: Path) -> dict[str, dict[str, str]]:
+    with path.open(newline="") as f:
+        return {row["agent_id"]: row for row in csv.DictReader(f) if row["agent_id"] != "SYSTEM"}
+
+
+def _assert_balance_exports_match(
+    legacy_balances: dict[str, dict[str, str]],
+    clean_balances: dict[str, dict[str, str]],
+) -> None:
+    assert clean_balances.keys() == legacy_balances.keys()
+    for agent_id, legacy_row in legacy_balances.items():
+        clean_row = clean_balances[agent_id]
+        for field in set(legacy_row) | set(clean_row):
+            if field == "agent_id":
+                continue
+            assert _amount(clean_row, field) == _amount(legacy_row, field), (agent_id, field)
+
+
+def _amount(row: dict[str, str], field: str) -> Decimal:
+    value = row.get(field, "")
+    return Decimal(value or "0")
+
+
+def _event_exists(events: list[dict[str, Any]], **expected: Any) -> bool:
+    return any(all(event.get(key) == value for key, value in expected.items()) for event in events)
+
+
+def _active_dealer_action_specs_scenario(
+    *,
+    mode: str = "active",
+    n_banks: int = 0,
+) -> dict[str, Any]:
+    config = RingExplorerGeneratorConfig.model_validate(
+        {
+            "version": 1,
+            "generator": "ring_explorer_v1",
+            "name_prefix": "Active Dealer Characterization",
+            "params": {
+                "n_agents": 3,
+                "seed": 123,
+                "kappa": "0.5",
+                "Q_total": "300",
+                "liquidity": {"allocation": {"mode": "uniform"}},
+                "inequality": {
+                    "scheme": "dirichlet",
+                    "concentration": "1.0",
+                    "monotonicity": "0",
+                },
+                "maturity": {"days": 2, "mode": "lead_lag", "mu": "0"},
+            },
+            "compile": {"emit_yaml": False},
+        }
+    )
+    return _to_yaml_ready(
+        compile_ring_explorer_balanced(
+            config,
+            mode=mode,
+            n_banks=n_banks,
+            emit_action_specs=True,
+            kappa=Decimal("0.5"),
+        )
+    )
+
+
+def _active_dealer_generated_combo_scenario(
+    *,
+    generated_mode: str,
+    n_banks: int,
+    enable_bank_lending: bool,
+    enable_lender: bool,
+) -> dict[str, Any]:
+    agents: list[dict[str, str]] = [
+        {"id": "CB", "kind": "central_bank", "name": "Central Bank"},
+        {"id": "H1", "kind": "household", "name": "H1"},
+        {"id": "H2", "kind": "household", "name": "H2"},
+        {"id": "dealer_short", "kind": "household", "name": "Dealer Short"},
+        {"id": "vbt_short", "kind": "household", "name": "VBT Short"},
+    ]
+    initial_actions: list[dict[str, dict[str, Any]]] = [
+        {"mint_cash": {"to": "H1", "amount": 20}},
+        {"mint_cash": {"to": "H2", "amount": 20}},
+        {"mint_cash": {"to": "dealer_short", "amount": 20}},
+        {"mint_cash": {"to": "vbt_short", "amount": 20}},
+    ]
+    balanced_config: dict[str, Any] = {
+        "mode": generated_mode,
+        "n_banks": n_banks,
+        "kappa": "1.0",
+        "maturity_days": 5,
+        "Q_total": 50,
+        "enable_banking": n_banks > 0,
+        "enable_bank_lending": enable_bank_lending,
+        "trader_bank_assignments": {"H1": ["B1", "B2"], "H2": ["B2", "B1"]},
+    }
+    if n_banks:
+        agents[1:1] = [
+            {"id": "B1", "kind": "bank", "name": "Bank One"},
+            {"id": "B2", "kind": "bank", "name": "Bank Two"},
+        ]
+        initial_actions.extend(
+            [
+                {"mint_reserves": {"to": "B1", "amount": 1000}},
+                {"mint_reserves": {"to": "B2", "amount": 1000}},
+                {"deposit_cash": {"customer": "H1", "bank": "B1", "amount": 20}},
+                {"deposit_cash": {"customer": "H2", "bank": "B2", "amount": 20}},
+            ]
+        )
+    if enable_lender:
+        agents.append({"id": "lender", "kind": "non_bank_lender", "name": "Lender"})
+        initial_actions.append({"mint_cash": {"to": "lender", "amount": 100}})
+        balanced_config["enable_lender"] = True
+
+    initial_actions.extend(
+        [
+            {
+                "create_payable": {
+                    "from": "H1",
+                    "to": "H2",
+                    "amount": 35,
+                    "due_day": 2,
+                    "maturity_distance": 2,
+                }
+            },
+            {
+                "create_payable": {
+                    "from": "H2",
+                    "to": "H1",
+                    "amount": 15,
+                    "due_day": 1,
+                    "maturity_distance": 1,
+                }
+            },
+        ]
+    )
+
+    scenario: dict[str, Any] = {
+        "version": 1,
+        "name": f"Active Dealer {generated_mode}",
+        "agents": agents,
+        "initial_actions": initial_actions,
+        "dealer": {
+            "enabled": True,
+            "ticket_size": 1,
+            "buckets": {
+                "short": {"tau_min": 1, "tau_max": 3, "M": "1.0", "O": "0.20"},
+                "mid": {"tau_min": 4, "tau_max": 8, "M": "1.0", "O": "0.30"},
+                "long": {"tau_min": 9, "tau_max": 999, "M": "1.0", "O": "0.40"},
+            },
+            "dealer_share": "0.05",
+            "vbt_share": "0.20",
+        },
+        "balanced_dealer": {
+            "enabled": True,
+            "mode": "active",
+            "face_value": 1,
+            "outside_mid_ratio": "0.75",
+            "rollover_enabled": False,
+        },
+        "_balanced_config": balanced_config,
+        "run": {
+            "mode": "until_stable",
+            "default_handling": "fail-fast",
+            "rollover_enabled": False,
+            "quiet_days": 1,
+            "show": {"events": "summary"},
+        },
+    }
+    if enable_lender:
+        scenario["lender"] = {
+            "enabled": True,
+            "base_rate": "0.05",
+            "risk_premium_scale": "0.20",
+            "max_single_exposure": "1.0",
+            "max_total_exposure": "1.0",
+            "maturity_days": 3,
+            "kappa": "1.0",
+            "min_coverage_ratio": "0",
+        }
+    return scenario
+
+
+def _normalize_unstable_contract_ids(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized = []
+    for event in events:
+        item = dict(event)
+        if "loan_id" in item:
+            item["loan_id"] = "<loan>"
+        if "reserve_id" in item:
+            item["reserve_id"] = "<reserve>"
+        if "instr_id" in item:
+            item["instr_id"] = "<instrument>"
+        if "contract_id" in item:
+            item["contract_id"] = "<contract>"
+        normalized.append(item)
+    return normalized
+
+
+UNSTABLE_EVENT_ID_FIELDS = {
+    "cash_piece_ids",
+    "contract_id",
+    "deposit_id",
+    "id",
+    "instr_id",
+    "keep",
+    "loan_id",
+    "new_id",
+    "new_payable",
+    "obligation_id",
+    "old_payable",
+    "original_id",
+    "payable_id",
+    "pid",
+    "removed",
+    "reserve_id",
+    "stock_id",
+    "ticket_id",
+    "trigger_contract",
+}
+
+
+def _strip_unstable_event_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _strip_unstable_event_fields(item)
+            for key, item in value.items()
+            if key not in UNSTABLE_EVENT_ID_FIELDS
+        }
+    if isinstance(value, list):
+        return [_strip_unstable_event_fields(item) for item in value]
+    return value
+
+
+def _assert_event_exports_match(
+    legacy_events: list[dict[str, Any]],
+    clean_events: list[dict[str, Any]],
+    *,
+    ordered: bool = True,
+) -> None:
+    clean_normalized = [_strip_unstable_event_fields(event) for event in clean_events]
+    legacy_normalized = [_strip_unstable_event_fields(event) for event in legacy_events]
+    if ordered:
+        assert clean_normalized == legacy_normalized
+        return
+
+    def signature(event: dict[str, Any]) -> str:
+        return json.dumps(event, sort_keys=True)
+
+    assert Counter(signature(event) for event in clean_normalized) == Counter(
+        signature(event) for event in legacy_normalized
+    )
+
+
+def _cash_fragment_normalized_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    pending_cash_transfer: dict[str, Any] | None = None
+    pending_cash_key: tuple[Any, ...] | None = None
+
+    def flush_pending() -> None:
+        nonlocal pending_cash_transfer, pending_cash_key
+        if pending_cash_transfer is not None:
+            normalized.append(pending_cash_transfer)
+            pending_cash_transfer = None
+            pending_cash_key = None
+
+    for raw_event in events:
+        event = _strip_unstable_event_fields(raw_event)
+        if event.get("kind") == "InstrumentMerged":
+            continue
+        if event.get("kind") != "CashTransferred":
+            flush_pending()
+            normalized.append(event)
+            continue
+
+        cash_key = (
+            event.get("day"),
+            event.get("phase"),
+            event.get("frm"),
+            event.get("to"),
+        )
+        if pending_cash_transfer is None or pending_cash_key != cash_key:
+            flush_pending()
+            pending_cash_transfer = dict(event)
+            pending_cash_key = cash_key
+            continue
+
+        amount = Decimal(str(pending_cash_transfer["amount"])) + Decimal(str(event["amount"]))
+        pending_cash_transfer["amount"] = int(amount) if amount == amount.to_integral_value() else str(amount)
+
+    flush_pending()
+    return normalized
+
+
+def test_documented_module_entrypoint_validates_scenario() -> None:
+    """The documented ``python -m bilancio.ui.cli`` invocation remains supported."""
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    src_path = str(PROJECT_ROOT / "src")
+    env["PYTHONPATH"] = src_path if not existing_pythonpath else f"{src_path}{os.pathsep}{existing_pythonpath}"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bilancio.ui.cli",
+            "validate",
+            str(EXAMPLES_DIR / "sasa_scenario.yaml"),
+        ],
+        cwd=PROJECT_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Configuration is valid" in result.stdout
+
+
+@pytest.mark.parametrize("scenario_name", TRACKED_EXAMPLE_SCENARIOS)
+def test_tracked_example_scenarios_validate(scenario_name: str) -> None:
+    """Every checked-in example scenario remains loadable and applicable."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["validate", str(EXAMPLES_DIR / scenario_name)])
+
+    assert result.exit_code == 0, result.output
+    assert "Configuration is valid" in result.output
+
+
+@pytest.mark.parametrize("scenario_name", ("sasa_scenario.yaml", "firm_delivery.yaml"))
+def test_clean_core_cli_engine_matches_legacy_exports(tmp_path: Path, scenario_name: str) -> None:
+    """The opt-in clean-core CLI path preserves event payloads and balance exports."""
+    _, legacy_events, legacy_balances = _run_scenario_with_exports(
+        tmp_path,
+        scenario_name,
+        max_days=8,
+        engine="legacy",
+    )
+    output, clean_events, clean_balances = _run_scenario_with_exports(
+        tmp_path,
+        scenario_name,
+        max_days=8,
+        engine="clean-core",
+    )
+
+    assert "Engine: clean-core" in output
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(legacy_balances, clean_balances)
+
+
+@pytest.mark.parametrize("scenario_name", ("simple_dealer.yaml", "kalecki_with_dealer.yaml"))
+def test_clean_core_cli_engine_matches_legacy_exports_for_defaulting_generator_examples(
+    tmp_path: Path,
+    scenario_name: str,
+) -> None:
+    _, legacy_events, legacy_balances = _run_scenario_with_exports(
+        tmp_path,
+        scenario_name,
+        max_days=10,
+        engine="legacy",
+        require_stable=False,
+    )
+    output, clean_events, clean_balances = _run_scenario_with_exports(
+        tmp_path,
+        scenario_name,
+        max_days=10,
+        engine="clean-core",
+        require_stable=False,
+    )
+
+    assert "Engine: clean-core" in output
+    assert "Insufficient funds to settle payable" in output
+    assert "Simulation stopped after an error" in output
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(legacy_balances, clean_balances)
+
+
+def test_clean_core_cli_engine_matches_legacy_claim_transfer_exports(tmp_path: Path) -> None:
+    """The opt-in clean-core CLI path preserves claim-transfer scenario exports."""
+    _, legacy_events, legacy_balances = _run_scenario_with_exports(
+        tmp_path,
+        "ex3_iou_assignment.yaml",
+        max_days=8,
+        engine="legacy",
+        scenarios_dir=EXERCISE_SCENARIOS_DIR,
+    )
+    output, clean_events, clean_balances = _run_scenario_with_exports(
+        tmp_path,
+        "ex3_iou_assignment.yaml",
+        max_days=8,
+        engine="clean-core",
+        scenarios_dir=EXERCISE_SCENARIOS_DIR,
+    )
+
+    assert "Engine: clean-core" in output
+    assert "ClaimTransferred" in {event["kind"] for event in clean_events}
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(legacy_balances, clean_balances)
+
+
+def test_clean_core_cli_engine_matches_legacy_nbfi_exports(tmp_path: Path) -> None:
+    """The opt-in clean-core CLI path preserves the cash-only NBFI example."""
+    _, legacy_events, legacy_balances = _run_scenario_with_exports(
+        tmp_path,
+        "simple_nbfi.yaml",
+        max_days=10,
+        engine="legacy",
+    )
+    output, clean_events, clean_balances = _run_scenario_with_exports(
+        tmp_path,
+        "simple_nbfi.yaml",
+        max_days=10,
+        engine="clean-core",
+    )
+
+    assert "Engine: clean-core" in output
+    assert "NonBankLoanCreated" in {event["kind"] for event in clean_events}
+    _assert_event_exports_match(legacy_events, clean_events, ordered=False)
+    _assert_balance_exports_match(legacy_balances, clean_balances)
+
+
+@pytest.mark.parametrize("scenario_name", TRACKED_EXERCISE_SCENARIOS)
+def test_clean_core_cli_engine_matches_legacy_exercise_exports(
+    tmp_path: Path,
+    scenario_name: str,
+) -> None:
+    _, legacy_events, legacy_balances = _run_scenario_with_exports(
+        tmp_path,
+        scenario_name,
+        max_days=10,
+        engine="legacy",
+        scenarios_dir=EXERCISE_SCENARIOS_DIR,
+    )
+    output, clean_events, clean_balances = _run_scenario_with_exports(
+        tmp_path,
+        scenario_name,
+        max_days=10,
+        engine="clean-core",
+        scenarios_dir=EXERCISE_SCENARIOS_DIR,
+    )
+
+    assert "Engine: clean-core" in output
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(legacy_balances, clean_balances)
+
+
+@pytest.mark.parametrize("scenario_name", TRACKED_KALECKI_SCENARIOS)
+def test_clean_core_cli_engine_matches_legacy_kalecki_exports(
+    tmp_path: Path,
+    scenario_name: str,
+) -> None:
+    _, legacy_events, legacy_balances = _run_scenario_with_exports(
+        tmp_path,
+        scenario_name,
+        max_days=10,
+        engine="legacy",
+        scenarios_dir=KALECKI_SCENARIOS_DIR,
+    )
+    output, clean_events, clean_balances = _run_scenario_with_exports(
+        tmp_path,
+        scenario_name,
+        max_days=10,
+        engine="clean-core",
+        scenarios_dir=KALECKI_SCENARIOS_DIR,
+    )
+
+    assert "Engine: clean-core" in output
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(legacy_balances, clean_balances)
+
+
+def test_auto_engine_uses_clean_core_for_supported_scenario(tmp_path: Path) -> None:
+    output, auto_events, auto_balances = _run_scenario_with_exports(
+        tmp_path,
+        "simple_nbfi.yaml",
+        max_days=10,
+        engine="auto",
+    )
+    _, clean_events, clean_balances = _run_scenario_with_exports(
+        tmp_path,
+        "simple_nbfi.yaml",
+        max_days=10,
+        engine="clean-core",
+    )
+
+    assert "Engine: clean-core" in output
+    _assert_event_exports_match(clean_events, auto_events)
+    _assert_balance_exports_match(clean_balances, auto_balances)
+
+
+def test_default_cli_engine_uses_auto_clean_core_for_supported_scenario(tmp_path: Path) -> None:
+    output, default_events, default_balances = _run_scenario_with_exports(
+        tmp_path,
+        "simple_nbfi.yaml",
+        max_days=10,
+        engine=None,
+    )
+    _, clean_events, clean_balances = _run_scenario_with_exports(
+        tmp_path,
+        "simple_nbfi.yaml",
+        max_days=10,
+        engine="clean-core",
+    )
+
+    assert "Engine: clean-core" in output
+    _assert_event_exports_match(clean_events, default_events)
+    _assert_balance_exports_match(clean_balances, default_balances)
+
+
+def test_auto_engine_uses_clean_core_for_direct_dealer_marker(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "dealer_direct.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Direct Dealer Smoke
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+dealer:
+  enabled: true
+run:
+  mode: until_stable
+  default_handling: fail-fast
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--agents",
+            "H1,H2",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    assert "SubphaseB_Dealer" in result.output
+
+
+def test_default_cli_engine_uses_clean_core_for_direct_dealer_marker(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "dealer_direct_default.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Direct Dealer Default Smoke
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+dealer:
+  enabled: true
+run:
+  mode: until_stable
+  default_handling: fail-fast
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--agents",
+            "H1,H2",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    assert "SubphaseB_Dealer" in result.output
+
+
+def test_auto_engine_uses_clean_core_for_generator_dealer_scenarios(tmp_path: Path) -> None:
+    runner = CliRunner()
+    legacy_events_path = tmp_path / "legacy_generator_dealer" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_generator_dealer" / "balances.csv"
+    auto_events_path = tmp_path / "auto_generator_dealer" / "events.jsonl"
+    auto_balances_path = tmp_path / "auto_generator_dealer" / "balances.csv"
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_dealer.yaml"),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_dealer.yaml"),
+            "--engine",
+            "auto",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(auto_events_path),
+            "--export-balances",
+            str(auto_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    auto_events = [json.loads(line) for line in auto_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, auto_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(auto_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_balanced_dealer_metadata(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "balanced_dealer_auto.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Balanced Dealer Auto Fallback
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+balanced_dealer:
+  enabled: true
+run:
+  mode: until_stable
+  default_handling: fail-fast
+""",
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "legacy.balances.csv"
+    clean_events_path = tmp_path / "clean.events.jsonl"
+    clean_balances_path = tmp_path / "clean.balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--agents",
+            "H1,H2",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--agents",
+            "H1,H2",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_clean_core_engine_supports_direct_dealer_marker_and_metrics(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "dealer_direct_clean_core.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Direct Dealer Clean Core Guard
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+dealer:
+  enabled: true
+run:
+  mode: until_stable
+  default_handling: fail-fast
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_events_path = tmp_path / "legacy" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy" / "balances.csv"
+    clean_events_path = tmp_path / "clean" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean" / "balances.csv"
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    assert "SubphaseB_Dealer" in [event["kind"] for event in clean_events]
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    clean_metrics = json.loads((clean_events_path.parent / "dealer_metrics.json").read_text())
+    assert clean_metrics == legacy_metrics
+    assert clean_metrics["total_trades"] == 0
+    assert "Traceback" not in result.output
+
+
+def test_clean_core_engine_accepts_balanced_dealer_metadata(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "balanced_dealer_clean_core.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Balanced Dealer Clean Core Guard
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+balanced_dealer:
+  enabled: true
+run:
+  mode: until_stable
+  default_handling: fail-fast
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "OK System reached stable state" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_clean_core_engine_matches_legacy_balanced_dealer_passive_metrics(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "balanced_dealer_passive.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Balanced Passive Direct
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+  - id: dealer_short
+    kind: household
+    name: Dealer Short
+  - id: vbt_short
+    kind: household
+    name: VBT Short
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: dealer_short, amount: 25}
+  - mint_cash: {to: vbt_short, amount: 50}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+  - create_payable: {from: H1, to: dealer_short, amount: 25, due_day: 1}
+  - create_payable: {from: H1, to: vbt_short, amount: 50, due_day: 1}
+dealer:
+  enabled: true
+  ticket_size: 1
+  dealer_share: "0.05"
+  vbt_share: "0.20"
+balanced_dealer:
+  enabled: true
+  mode: passive
+  face_value: 1
+  outside_mid_ratio: "0.75"
+  vbt_share_per_bucket: "0.20"
+  dealer_share_per_bucket: "0.05"
+  rollover_enabled: false
+run:
+  mode: until_stable
+  default_handling: expel-agent
+""",
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy_passive" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_passive" / "balances.csv"
+    clean_events_path = tmp_path / "clean_passive" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean_passive" / "balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    clean_metrics = json.loads((clean_events_path.parent / "dealer_metrics.json").read_text())
+    assert clean_metrics == legacy_metrics
+    assert clean_metrics["total_trades"] == 0
+    assert clean_metrics["dealer_total_pnl"] == 24.3625
+
+
+def test_clean_core_engine_matches_legacy_active_dealer_action_specs(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "active_dealer_action_specs.yaml"
+    scenario_path.write_text(
+        yaml.safe_dump(_active_dealer_action_specs_scenario(), sort_keys=False),
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy_active" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_active" / "balances.csv"
+    clean_events_path = tmp_path / "clean_active" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean_active" / "balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    clean_metrics = json.loads((clean_events_path.parent / "dealer_metrics.json").read_text())
+    assert clean_metrics == legacy_metrics
+    assert clean_metrics["total_trades"] == 5
+    assert clean_metrics["total_buy_trades"] == 5
+    assert clean_metrics["interior_trades"] == 3
+    assert clean_metrics["passthrough_trades"] == 2
+
+
+def test_clean_core_engine_matches_legacy_action_specs_with_default_dealer_config(
+    tmp_path: Path,
+) -> None:
+    scenario = _active_dealer_action_specs_scenario()
+    scenario.pop("dealer", None)
+    scenario_path = tmp_path / "active_dealer_action_specs_default_dealer.yaml"
+    scenario_path.write_text(
+        yaml.safe_dump(scenario, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy_default_dealer" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_default_dealer" / "balances.csv"
+    clean_events_path = tmp_path / "clean_default_dealer" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean_default_dealer" / "balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    clean_metrics = json.loads((clean_events_path.parent / "dealer_metrics.json").read_text())
+    assert clean_metrics == legacy_metrics
+    assert clean_metrics["total_trades"] == 5
+
+
+def test_clean_core_engine_matches_legacy_active_dealer_sell_trade(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "active_dealer_sell_trade.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Active Dealer Sell Smoke
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+  - id: dealer_short
+    kind: household
+    name: Dealer Short
+  - id: vbt_short
+    kind: household
+    name: VBT Short
+initial_actions:
+  - mint_cash: {to: H1, amount: 20}
+  - mint_cash: {to: dealer_short, amount: 20}
+  - mint_cash: {to: vbt_short, amount: 20}
+  - create_payable: {from: H1, to: H2, amount: 10, due_day: 2, maturity_distance: 2}
+  - create_payable: {from: H2, to: H1, amount: 15, due_day: 1, maturity_distance: 1}
+dealer:
+  enabled: true
+  ticket_size: 1
+  buckets:
+    short: {tau_min: 1, tau_max: 3, M: "1.0", O: "0.20"}
+    mid: {tau_min: 4, tau_max: 8, M: "1.0", O: "0.30"}
+    long: {tau_min: 9, tau_max: 999, M: "1.0", O: "0.40"}
+  dealer_share: "0.05"
+  vbt_share: "0.20"
+balanced_dealer:
+  enabled: true
+  mode: active
+  face_value: 1
+  outside_mid_ratio: "0.75"
+  rollover_enabled: false
+action_specs:
+  - kind: household
+    profile_type: trader
+    profile_params:
+      buy_reserve_fraction: "1.0"
+      trading_motive: liquidity_only
+    actions:
+      - {action: settle, phase: B2_Settlement}
+      - {action: sell_ticket, phase: B_Dealer}
+      - {action: buy_ticket, phase: B_Dealer}
+run:
+  mode: until_stable
+  default_handling: fail-fast
+  rollover_enabled: false
+""",
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy_sell" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_sell" / "balances.csv"
+    clean_events_path = tmp_path / "clean_sell" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean_sell" / "balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "1",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "1",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    clean_metrics = json.loads((clean_events_path.parent / "dealer_metrics.json").read_text())
+    assert clean_metrics == legacy_metrics
+    assert clean_metrics["total_trades"] == 1
+    assert clean_metrics["total_sell_trades"] == 1
+    assert clean_metrics["liquidity_driven_sales"] == 1
+
+
+def test_clean_core_engine_matches_legacy_active_dealer_multiday_default_metrics(
+    tmp_path: Path,
+) -> None:
+    scenario_path = tmp_path / "active_dealer_multiday_default.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Active Dealer Multi Day Default Metrics
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+  - id: dealer_short
+    kind: household
+    name: Dealer Short
+  - id: vbt_short
+    kind: household
+    name: VBT Short
+initial_actions:
+  - mint_cash: {to: H1, amount: 20}
+  - mint_cash: {to: dealer_short, amount: 20}
+  - mint_cash: {to: vbt_short, amount: 20}
+  - create_payable: {from: H1, to: H2, amount: 10, due_day: 2, maturity_distance: 2}
+  - create_payable: {from: H2, to: H1, amount: 15, due_day: 1, maturity_distance: 1}
+dealer:
+  enabled: true
+  ticket_size: 1
+  buckets:
+    short: {tau_min: 1, tau_max: 3, M: "1.0", O: "0.20"}
+    mid: {tau_min: 4, tau_max: 8, M: "1.0", O: "0.30"}
+    long: {tau_min: 9, tau_max: 999, M: "1.0", O: "0.40"}
+  dealer_share: "0.05"
+  vbt_share: "0.20"
+balanced_dealer:
+  enabled: true
+  mode: active
+  face_value: 1
+  outside_mid_ratio: "0.75"
+  rollover_enabled: false
+action_specs:
+  - kind: household
+    profile_type: trader
+    profile_params:
+      buy_reserve_fraction: "1.0"
+      trading_motive: liquidity_only
+    actions:
+      - {action: settle, phase: B2_Settlement}
+      - {action: sell_ticket, phase: B_Dealer}
+      - {action: buy_ticket, phase: B_Dealer}
+run:
+  mode: until_stable
+  default_handling: expel-agent
+  rollover_enabled: false
+""",
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy_multiday_default" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_multiday_default" / "balances.csv"
+    clean_events_path = tmp_path / "clean_multiday_default" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean_multiday_default" / "balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "2",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "2",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    assert "ObligationDefaulted" in [event["kind"] for event in clean_events]
+    assert "PayableSettled" in [event["kind"] for event in clean_events]
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    clean_metrics = json.loads((clean_events_path.parent / "dealer_metrics.json").read_text())
+    assert clean_metrics == legacy_metrics
+    assert clean_metrics["vbt_mid_final"] == {"long": 0.25, "mid": 0.25, "short": 0.25}
+
+
+def test_clean_core_engine_matches_legacy_active_dealer_sell_passthrough(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "active_dealer_sell_passthrough.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Active Dealer Sell Passthrough Smoke
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+  - id: dealer_short
+    kind: household
+    name: Dealer Short
+  - id: vbt_short
+    kind: household
+    name: VBT Short
+initial_actions:
+  - mint_cash: {to: H1, amount: 20}
+  - mint_cash: {to: vbt_short, amount: 30}
+  - create_payable: {from: H1, to: H2, amount: 10, due_day: 2, maturity_distance: 2}
+  - create_payable: {from: H2, to: H1, amount: 15, due_day: 1, maturity_distance: 1}
+  - create_payable: {from: H1, to: dealer_short, amount: 1, due_day: 2, maturity_distance: 2}
+dealer:
+  enabled: true
+  ticket_size: 1
+  buckets:
+    short: {tau_min: 1, tau_max: 3, M: "1.0", O: "0.20"}
+    mid: {tau_min: 4, tau_max: 8, M: "1.0", O: "0.30"}
+    long: {tau_min: 9, tau_max: 999, M: "1.0", O: "0.40"}
+  dealer_share: "0.05"
+  vbt_share: "0.20"
+balanced_dealer:
+  enabled: true
+  mode: active
+  face_value: 1
+  outside_mid_ratio: "0.75"
+  rollover_enabled: false
+action_specs:
+  - kind: household
+    profile_type: trader
+    profile_params:
+      buy_reserve_fraction: "1.0"
+      trading_motive: liquidity_only
+    actions:
+      - {action: settle, phase: B2_Settlement}
+      - {action: sell_ticket, phase: B_Dealer}
+      - {action: buy_ticket, phase: B_Dealer}
+run:
+  mode: until_stable
+  default_handling: fail-fast
+  rollover_enabled: false
+""",
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy_sell_passthrough" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_sell_passthrough" / "balances.csv"
+    clean_events_path = tmp_path / "clean_sell_passthrough" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean_sell_passthrough" / "balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "1",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "1",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    clean_metrics = json.loads((clean_events_path.parent / "dealer_metrics.json").read_text())
+    assert clean_metrics == legacy_metrics
+    assert clean_metrics["total_trades"] == 2
+    assert clean_metrics["total_sell_trades"] == 1
+    assert clean_metrics["passthrough_trades"] == 1
+
+
+def test_clean_core_engine_matches_legacy_direct_balanced_active_dealer(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "direct_balanced_active_dealer.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Direct Balanced Active Dealer Smoke
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+  - id: dealer_short
+    kind: household
+    name: Dealer Short
+  - id: vbt_short
+    kind: household
+    name: VBT Short
+initial_actions:
+  - mint_cash: {to: H1, amount: 20}
+  - mint_cash: {to: dealer_short, amount: 20}
+  - mint_cash: {to: vbt_short, amount: 20}
+  - create_payable: {from: H1, to: H2, amount: 10, due_day: 2, maturity_distance: 2}
+  - create_payable: {from: H2, to: H1, amount: 15, due_day: 1, maturity_distance: 1}
+dealer:
+  enabled: true
+  ticket_size: 1
+  buckets:
+    short: {tau_min: 1, tau_max: 3, M: "1.0", O: "0.20"}
+    mid: {tau_min: 4, tau_max: 8, M: "1.0", O: "0.30"}
+    long: {tau_min: 9, tau_max: 999, M: "1.0", O: "0.40"}
+  dealer_share: "0.05"
+  vbt_share: "0.20"
+balanced_dealer:
+  enabled: true
+  mode: active
+  face_value: 1
+  outside_mid_ratio: "0.75"
+  rollover_enabled: false
+run:
+  mode: until_stable
+  default_handling: fail-fast
+  rollover_enabled: false
+""",
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy_direct_active" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_direct_active" / "balances.csv"
+    clean_events_path = tmp_path / "clean_direct_active" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean_direct_active" / "balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "1",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "1",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    clean_metrics = json.loads((clean_events_path.parent / "dealer_metrics.json").read_text())
+    assert clean_metrics == legacy_metrics
+    assert clean_metrics["total_trades"] == 2
+    assert clean_metrics["total_sell_trades"] == 1
+    assert clean_metrics["total_buy_trades"] == 1
+
+
+def test_auto_engine_uses_clean_core_for_active_dealer_with_passive_banking(
+    tmp_path: Path,
+) -> None:
+    scenario_path = tmp_path / "active_dealer_passive_banking.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Active Dealer Passive Banking
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: B2
+    kind: bank
+    name: Bank Two
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+  - id: dealer_short
+    kind: household
+    name: Dealer Short
+  - id: vbt_short
+    kind: household
+    name: VBT Short
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_reserves: {to: B2, amount: 1000}
+  - mint_cash: {to: H1, amount: 20}
+  - mint_cash: {to: H2, amount: 20}
+  - mint_cash: {to: dealer_short, amount: 20}
+  - mint_cash: {to: vbt_short, amount: 20}
+  - deposit_cash: {customer: H1, bank: B1, amount: 20}
+  - deposit_cash: {customer: H2, bank: B2, amount: 20}
+  - create_payable: {from: H1, to: H2, amount: 10, due_day: 2, maturity_distance: 2}
+  - create_payable: {from: H2, to: H1, amount: 15, due_day: 1, maturity_distance: 1}
+dealer:
+  enabled: true
+  ticket_size: 1
+  buckets:
+    short: {tau_min: 1, tau_max: 3, M: "1.0", O: "0.20"}
+    mid: {tau_min: 4, tau_max: 8, M: "1.0", O: "0.30"}
+    long: {tau_min: 9, tau_max: 999, M: "1.0", O: "0.40"}
+  dealer_share: "0.05"
+  vbt_share: "0.20"
+balanced_dealer:
+  enabled: true
+  mode: active
+  face_value: 1
+  outside_mid_ratio: "0.75"
+  rollover_enabled: false
+_balanced_config:
+  mode: active
+  n_banks: 2
+  kappa: "1.0"
+  maturity_days: 5
+  Q_total: 25
+  enable_banking: true
+  enable_bank_lending: false
+  trader_bank_assignments:
+    H1: [B1, B2]
+    H2: [B2, B1]
+run:
+  mode: until_stable
+  default_handling: fail-fast
+  rollover_enabled: false
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy_active_banking" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_active_banking" / "balances.csv"
+    clean_events_path = tmp_path / "clean_active_banking" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean_active_banking" / "balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "2",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "2",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    clean_metrics = json.loads((clean_events_path.parent / "dealer_metrics.json").read_text())
+    assert clean_metrics == legacy_metrics
+
+
+def test_auto_engine_uses_clean_core_for_active_dealer_with_bank_lending(
+    tmp_path: Path,
+) -> None:
+    scenario_path = tmp_path / "active_dealer_bank_lending.yaml"
+    scenario_path.write_text(
+        yaml.safe_dump(
+            _active_dealer_generated_combo_scenario(
+                generated_mode="bank_dealer",
+                n_banks=2,
+                enable_bank_lending=True,
+                enable_lender=False,
+            ),
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy_active_bank_lending" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_active_bank_lending" / "balances.csv"
+    clean_events_path = tmp_path / "clean_active_bank_lending" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean_active_bank_lending" / "balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    clean_kinds = {event["kind"] for event in clean_events}
+    _assert_event_exports_match(legacy_events, clean_events)
+    assert "BankLoanIssued" in clean_kinds
+    assert "BankLoanRepaid" in clean_kinds
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    clean_metrics = json.loads((clean_events_path.parent / "dealer_metrics.json").read_text())
+    assert clean_metrics == legacy_metrics
+
+
+@pytest.mark.parametrize(
+    ("generated_mode", "n_banks", "enable_bank_lending", "enable_lender"),
+    (
+        ("active", 0, False, True),
+        ("active", 2, True, False),
+        ("active", 2, True, True),
+        ("nbfi_dealer", 0, False, True),
+        ("bank_dealer", 2, True, True),
+        ("bank_dealer_nbfi", 2, True, True),
+    ),
+)
+def test_auto_engine_uses_clean_core_for_active_dealer_with_nbfi(
+    tmp_path: Path,
+    generated_mode: str,
+    n_banks: int,
+    enable_bank_lending: bool,
+    enable_lender: bool,
+) -> None:
+    scenario_path = tmp_path / f"active_dealer_{generated_mode}.yaml"
+    scenario_path.write_text(
+        yaml.safe_dump(
+            _active_dealer_generated_combo_scenario(
+                generated_mode=generated_mode,
+                n_banks=n_banks,
+                enable_bank_lending=enable_bank_lending,
+                enable_lender=enable_lender,
+            ),
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / f"legacy_{generated_mode}" / "events.jsonl"
+    legacy_balances_path = tmp_path / f"legacy_{generated_mode}" / "balances.csv"
+    auto_events_path = tmp_path / f"auto_{generated_mode}" / "events.jsonl"
+    auto_balances_path = tmp_path / f"auto_{generated_mode}" / "balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    auto_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(auto_events_path),
+            "--export-balances",
+            str(auto_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert auto_result.exit_code == 0, auto_result.output
+    assert "Engine: clean-core" in auto_result.output
+    assert "auto fallback" not in auto_result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    auto_events = [json.loads(line) for line in auto_events_path.read_text().splitlines()]
+    auto_kinds = {event["kind"] for event in auto_events}
+    assert _cash_fragment_normalized_events(auto_events) == _cash_fragment_normalized_events(
+        legacy_events
+    )
+    if enable_lender:
+        assert {"NonBankLoanCreated", "NonBankLoanRepaid"} <= auto_kinds
+    if enable_bank_lending:
+        assert {"BankLoanIssued", "BankLoanRepaid"} <= auto_kinds
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(auto_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    auto_metrics = json.loads((auto_events_path.parent / "dealer_metrics.json").read_text())
+    assert auto_metrics == legacy_metrics
+
+
+def test_auto_engine_uses_clean_core_for_generated_balanced_active_dealer(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_balanced_active_auto.yaml"
+    scenario_path.write_text(
+        yaml.safe_dump(_active_dealer_action_specs_scenario(), sort_keys=False),
+        encoding="utf-8",
+    )
+    legacy_events_path = tmp_path / "generated_active_legacy" / "events.jsonl"
+    legacy_balances_path = tmp_path / "generated_active_legacy" / "balances.csv"
+    auto_events_path = tmp_path / "generated_active_auto" / "events.jsonl"
+    auto_balances_path = tmp_path / "generated_active_auto" / "balances.csv"
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    auto_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(auto_events_path),
+            "--export-balances",
+            str(auto_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert auto_result.exit_code == 0, auto_result.output
+    assert "Engine: clean-core" in auto_result.output
+    assert "auto fallback" not in auto_result.output
+
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    auto_events = [json.loads(line) for line in auto_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, auto_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(auto_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    auto_metrics = json.loads((auto_events_path.parent / "dealer_metrics.json").read_text())
+    assert auto_metrics == legacy_metrics
+
+
+@pytest.mark.parametrize(
+    ("generated_mode", "n_banks"),
+    (
+        ("nbfi_dealer", 0),
+        ("bank_dealer", 1),
+        ("bank_dealer_nbfi", 1),
+    ),
+)
+def test_auto_engine_uses_clean_core_for_generated_noop_dealer_action_specs(
+    tmp_path: Path,
+    generated_mode: str,
+    n_banks: int,
+) -> None:
+    scenario_path = tmp_path / f"generated_{generated_mode}_auto.yaml"
+    scenario_path.write_text(
+        yaml.safe_dump(
+            _active_dealer_action_specs_scenario(mode=generated_mode, n_banks=n_banks),
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    legacy_events_path = tmp_path / f"generated_{generated_mode}_legacy" / "events.jsonl"
+    legacy_balances_path = tmp_path / f"generated_{generated_mode}_legacy" / "balances.csv"
+    auto_events_path = tmp_path / f"generated_{generated_mode}_auto" / "events.jsonl"
+    auto_balances_path = tmp_path / f"generated_{generated_mode}_auto" / "balances.csv"
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    auto_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(auto_events_path),
+            "--export-balances",
+            str(auto_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert auto_result.exit_code == 0, auto_result.output
+    assert "Engine: clean-core" in auto_result.output
+    assert "auto fallback" not in auto_result.output
+
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    auto_events = [json.loads(line) for line in auto_events_path.read_text().splitlines()]
+    event_kinds = {event["kind"] for event in auto_events}
+    _assert_event_exports_match(legacy_events, auto_events)
+    assert "SubphaseB_Dealer" in event_kinds
+    if "nbfi" in generated_mode:
+        assert "SubphaseB_Lending" in event_kinds
+    if "bank" in generated_mode:
+        assert "SubphaseB_BankLending" in event_kinds
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(auto_balances_path),
+    )
+    legacy_metrics = json.loads((legacy_events_path.parent / "dealer_metrics.json").read_text())
+    auto_metrics = json.loads((auto_events_path.parent / "dealer_metrics.json").read_text())
+    assert auto_metrics == legacy_metrics
+
+
+def test_clean_core_engine_rejects_dealer_action_specs_without_traceback(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "dealer_action_specs_clean_core.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Dealer Action Specs Clean Core Guard
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: H1
+  - id: H2
+    kind: household
+    name: H2
+action_specs:
+  - kind: household
+    profile_type: trader
+    actions:
+      - {action: sell_ticket, phase: B_Dealer}
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+run:
+  mode: until_stable
+  default_handling: fail-fast
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Type: ConfigurationError" in result.output
+    assert "action_specs request B_Dealer phase" in result.output
+    assert "Unexpected error" not in result.output
+    assert "Traceback" not in result.output
+
+
+def test_auto_engine_uses_clean_core_for_action_specs_lending_phase(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "action_specs_lending.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Action Specs Lending Smoke
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+  - id: lender
+    kind: non_bank_lender
+    name: Lender
+action_specs:
+  - kind: non_bank_lender
+    profile_type: lender
+    actions:
+      - {action: lend, phase: B_Lending}
+    information: omniscient
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: lender, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 115, due_day: 1}
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "2",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "NonBankLoanCreated" in result.output
+
+
+def test_auto_engine_uses_clean_core_for_realistic_lending_action_specs(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "realistic_action_specs_lending.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Realistic Action Specs Lending Smoke
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+  - id: lender
+    kind: non_bank_lender
+    name: Lender
+action_specs:
+  - kind: non_bank_lender
+    profile_type: lender
+    actions:
+      - {action: lend, phase: B_Lending}
+    information: realistic
+    profile_params:
+      kappa: "0.5"
+      risk_aversion: "0.3"
+      planning_horizon: 5
+      profit_target: "0.05"
+      max_loan_maturity: 3
+      min_coverage_ratio: "0"
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: lender, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 115, due_day: 1}
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "2",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    assert "NonBankLoanCreated" in result.output
+
+
+def test_clean_core_engine_runs_realistic_lending_action_specs(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "realistic_action_specs_lending_clean_core.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Realistic Action Specs Lending Clean Core Guard
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+  - id: lender
+    kind: non_bank_lender
+    name: Lender
+action_specs:
+  - kind: non_bank_lender
+    profile_type: lender
+    actions:
+      - {action: lend, phase: B_Lending}
+    information: realistic
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: lender, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 115, due_day: 1}
+run:
+  mode: until_stable
+  quiet_days: 1
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "2",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "NonBankLoanCreated" in result.output
+    assert "Unexpected error" not in result.output
+    assert "Traceback" not in result.output
+
+
+def test_auto_engine_uses_clean_core_for_blind_lending_action_specs(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "blind_action_specs_lending.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Blind Action Specs Lending Smoke
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+  - id: lender
+    kind: non_bank_lender
+    name: Lender
+action_specs:
+  - kind: non_bank_lender
+    profile_type: lender
+    actions:
+      - {action: lend, phase: B_Lending}
+    information: blind
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: lender, amount: 1000}
+  - create_payable: {from: H1, to: H2, amount: 115, due_day: 1}
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "2",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "NonBankLoanCreated" in result.output
+
+
+def test_auto_engine_uses_clean_core_for_action_specs_rating_phase(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "action_specs_rating.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Action Specs Rating Smoke
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: Household One
+  - id: RA
+    kind: rating_agency
+    name: Rating Agency
+action_specs:
+  - kind: rating_agency
+    profile_type: rating
+    actions:
+      - {action: rate, phase: B_Rating}
+    information: omniscient
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "2",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "RatingsPublished" in result.output
+
+
+def test_auto_engine_uses_clean_core_for_unbanked_payee_deposit_settlement(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "unbanked_payee_deposit_settlement.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Unbanked Payee Deposit Settlement
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "IntraBankPayment" in result.output
+    assert "PayableSettled" in result.output
+
+
+def test_auto_engine_keeps_clean_core_for_noop_banking_flag(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "noop_banking_flag.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: No-op Banking Flag
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_cash: {to: H1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+run:
+  mode: until_stable
+  quiet_days: 1
+  enable_banking: true
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "PayableSettled" in result.output
+
+
+def test_auto_engine_uses_clean_core_for_single_bank_generated_banking_config(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_banking.yaml"
+    legacy_events_path = tmp_path / "generated_banking.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_banking.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_banking.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_banking.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Banking Config
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+_balanced_config:
+  n_banks: 1
+  kappa: "1.0"
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    event_kinds = [event["kind"] for event in clean_events]
+    assert event_kinds == [event["kind"] for event in legacy_events]
+    assert "SubphaseB_BankQuotes" in event_kinds
+    assert "SubphaseC_InterbankAuction" in event_kinds
+    assert "InterbankAuction" in event_kinds
+    auction = next(event for event in clean_events if event["kind"] == "InterbankAuction")
+    legacy_auction = next(event for event in legacy_events if event["kind"] == "InterbankAuction")
+    assert "phase" not in auction
+    assert auction == legacy_auction
+    assert event_kinds[-1] == "CBFinalSettlementEnd"
+    assert clean_events[-1] == legacy_events[-1]
+    assert clean_events[-1]["cb_loans_outstanding_post_final"] == 0
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_two_bank_generated_banking_config(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_two_bank.yaml"
+    legacy_events_path = tmp_path / "generated_two_bank.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_two_bank.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_two_bank.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_two_bank.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Two Bank Config
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: B2
+    kind: bank
+    name: Bank Two
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_reserves: {to: B2, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: H2, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - deposit_cash: {customer: H2, bank: B2, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+_balanced_config:
+  n_banks: 2
+  kappa: "1.0"
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_auctions = [event for event in legacy_events if event["kind"] == "InterbankAuction"]
+    clean_auctions = [event for event in clean_events if event["kind"] == "InterbankAuction"]
+    assert clean_auctions == legacy_auctions
+    assert any(event["kind"] == "InterbankCleared" for event in clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_adaptive_generated_banking_config(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_adaptive_banking.yaml"
+    legacy_events_path = tmp_path / "generated_adaptive_banking.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_adaptive_banking.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_adaptive_banking.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_adaptive_banking.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Adaptive Banking Config
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: B2
+    kind: bank
+    name: Bank Two
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_reserves: {to: B2, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: H2, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - deposit_cash: {customer: H2, bank: B2, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+_balanced_config:
+  n_banks: 2
+  kappa: "0.5"
+  adaptive_corridor: true
+  mu: "0.4"
+  concentration: "0.8"
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_auctions = [event for event in legacy_events if event["kind"] == "InterbankAuction"]
+    clean_auctions = [event for event in clean_events if event["kind"] == "InterbankAuction"]
+    assert clean_auctions == legacy_auctions
+    assert clean_auctions
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_generated_banking_static_cb_loan(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_banking_static_cb_loan.yaml"
+    legacy_events_path = tmp_path / "generated_banking_static_cb_loan.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_banking_static_cb_loan.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_banking_static_cb_loan.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_banking_static_cb_loan.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Banking Static CB Loan
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 200}
+  - mint_cash: {to: H1, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+  - create_cb_loan: {bank: B1, amount: 100, rate: "0.03", issuance_day: 10, alias: CBL1}
+_balanced_config:
+  n_banks: 1
+  kappa: "1.0"
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_cb_events = [event for event in legacy_events if event["kind"].startswith("CB")]
+    clean_cb_events = [event for event in clean_events if event["kind"].startswith("CB")]
+    assert _normalize_unstable_contract_ids(clean_cb_events) == _normalize_unstable_contract_ids(
+        legacy_cb_events
+    )
+    assert clean_cb_events[-1]["loans_repaid"] == 1
+    assert clean_cb_events[-1]["cb_loans_outstanding_post_final"] == -100
+    assert clean_cb_events[-1]["cb_reserves_final"] == 97
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_generated_banking_cb_loan_default(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_banking_cb_loan_default.yaml"
+    legacy_events_path = tmp_path / "generated_banking_cb_loan_default.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_banking_cb_loan_default.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_banking_cb_loan_default.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_banking_cb_loan_default.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Banking CB Loan Default
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 50}
+  - mint_cash: {to: H1, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+  - create_cb_loan: {bank: B1, amount: 100, rate: "0.03", issuance_day: 10, alias: CBL1}
+_balanced_config:
+  n_banks: 1
+  kappa: "1.0"
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_resolution_events = legacy_events[legacy_events.index(next(
+        event for event in legacy_events if event["kind"] == "CBFinalSettlementStart"
+    )) :]
+    clean_resolution_events = clean_events[clean_events.index(next(
+        event for event in clean_events if event["kind"] == "CBFinalSettlementStart"
+    )) :]
+    assert _normalize_unstable_contract_ids(clean_resolution_events) == (
+        _normalize_unstable_contract_ids(legacy_resolution_events)
+    )
+    assert clean_events[-1]["bank_defaults"] == 1
+    assert clean_events[-1]["loans_written_off"] == 1
+    assert clean_events[-1]["cb_reserves_final"] == 0
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_multi_key_generated_bank_lending_actions(
+    tmp_path: Path,
+) -> None:
+    scenario_path = tmp_path / "generated_bank_lending_noop.yaml"
+    legacy_events_path = tmp_path / "generated_bank_lending_noop.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_bank_lending_noop.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_bank_lending_noop.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_bank_lending_noop.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Bank Lending Noop
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - unknown_dynamic: {ignored: true}
+    mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+_balanced_config:
+  n_banks: 1
+  kappa: "1.0"
+  enable_bank_lending: true
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    assert "SubphaseB_BankLending" in {event["kind"] for event in clean_events}
+    assert not any(event["kind"].startswith("BankLoan") for event in clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_generated_bank_lending_that_issues_and_defaults_loan(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_bank_lending_active.yaml"
+    legacy_events_path = tmp_path / "generated_bank_lending_active.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_bank_lending_active.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_bank_lending_active.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_bank_lending_active.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Bank Lending Active
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 150, due_day: 1}
+_balanced_config:
+  n_banks: 1
+  kappa: "1.0"
+  enable_bank_lending: true
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    assert any(event["kind"] == "BankLoanIssued" for event in clean_events)
+    assert any(event["kind"] == "BankLoanDefault" for event in clean_events)
+    legacy_bank_events = [
+        event for event in legacy_events if event["kind"].startswith("BankLoan")
+    ]
+    clean_bank_events = [
+        event for event in clean_events if event["kind"].startswith("BankLoan")
+    ]
+    assert _normalize_unstable_contract_ids(clean_bank_events) == _normalize_unstable_contract_ids(
+        legacy_bank_events
+    )
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_generated_bank_lending_that_repays_loan(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_bank_lending_repaid.yaml"
+    legacy_events_path = tmp_path / "generated_bank_lending_repaid.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_bank_lending_repaid.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_bank_lending_repaid.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_bank_lending_repaid.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Bank Lending Repaid
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 150, due_day: 1}
+  - create_payable: {from: H2, to: H1, amount: 60, due_day: 2}
+_balanced_config:
+  n_banks: 1
+  kappa: "1.0"
+  enable_bank_lending: true
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "6",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "6",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_bank_events = [
+        event for event in legacy_events if event["kind"].startswith("BankLoan")
+    ]
+    clean_bank_events = [
+        event for event in clean_events if event["kind"].startswith("BankLoan")
+    ]
+    assert _normalize_unstable_contract_ids(clean_bank_events) == _normalize_unstable_contract_ids(
+        legacy_bank_events
+    )
+    assert any(event["kind"] == "BankLoanRepaid" for event in clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_two_bank_generated_bank_lending_default(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_two_bank_lending_default.yaml"
+    legacy_events_path = tmp_path / "generated_two_bank_lending_default.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_two_bank_lending_default.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_two_bank_lending_default.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_two_bank_lending_default.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Two Bank Lending Default
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: B2
+    kind: bank
+    name: Bank Two
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_reserves: {to: B2, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: H2, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - deposit_cash: {customer: H2, bank: B2, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 150, due_day: 1}
+_balanced_config:
+  n_banks: 2
+  kappa: "1.0"
+  enable_bank_lending: true
+  maturity_days: 5
+  Q_total: 50
+  trader_bank_assignments:
+    H1: [B1, B2]
+    H2: [B2, B1]
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_bank_events = [
+        event for event in legacy_events if event["kind"].startswith("BankLoan")
+    ]
+    clean_bank_events = [
+        event for event in clean_events if event["kind"].startswith("BankLoan")
+    ]
+    assert _normalize_unstable_contract_ids(clean_bank_events) == _normalize_unstable_contract_ids(
+        legacy_bank_events
+    )
+    assert any(event["kind"] == "ClientPayment" for event in clean_events)
+    assert any(event["kind"] == "InterbankCleared" for event in clean_events)
+    assert any(event["kind"] == "BankLoanDefault" for event in clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_generated_bank_lending_with_reserve_transfer(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_bank_lending_reserve_transfer.yaml"
+    legacy_events_path = tmp_path / "generated_bank_lending_reserve_transfer.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_bank_lending_reserve_transfer.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_bank_lending_reserve_transfer.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_bank_lending_reserve_transfer.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Bank Lending Reserve Transfer
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: B2
+    kind: bank
+    name: Bank Two
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_reserves: {to: B2, amount: 1000}
+  - transfer_reserves: {from_bank: B1, to_bank: B2, amount: 10}
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: H2, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - deposit_cash: {customer: H2, bank: B2, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 150, due_day: 1}
+_balanced_config:
+  n_banks: 2
+  kappa: "1.0"
+  enable_bank_lending: true
+  maturity_days: 5
+  Q_total: 50
+  trader_bank_assignments:
+    H1: [B1, B2]
+    H2: [B2, B1]
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events, ordered=False)
+    legacy_bank_events = [
+        event for event in legacy_events if event["kind"].startswith("BankLoan")
+    ]
+    clean_bank_events = [
+        event for event in clean_events if event["kind"].startswith("BankLoan")
+    ]
+    assert _normalize_unstable_contract_ids(clean_bank_events) == _normalize_unstable_contract_ids(
+        legacy_bank_events
+    )
+    assert any(event["kind"] == "ReservesTransferred" for event in clean_events)
+    assert any(event["kind"] == "BankLoanIssued" for event in clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_two_bank_generated_bank_lending_repaid(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_two_bank_lending_repaid.yaml"
+    legacy_events_path = tmp_path / "generated_two_bank_lending_repaid.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_two_bank_lending_repaid.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_two_bank_lending_repaid.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_two_bank_lending_repaid.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Two Bank Lending Repaid
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: B2
+    kind: bank
+    name: Bank Two
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_reserves: {to: B2, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: H2, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - deposit_cash: {customer: H2, bank: B2, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 150, due_day: 1}
+  - create_payable: {from: H2, to: H1, amount: 60, due_day: 2}
+_balanced_config:
+  n_banks: 2
+  kappa: "1.0"
+  enable_bank_lending: true
+  maturity_days: 5
+  Q_total: 50
+  trader_bank_assignments:
+    H1: [B1, B2]
+    H2: [B2, B1]
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "6",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "6",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_bank_events = [
+        event for event in legacy_events if event["kind"].startswith("BankLoan")
+    ]
+    clean_bank_events = [
+        event for event in clean_events if event["kind"].startswith("BankLoan")
+    ]
+    assert _normalize_unstable_contract_ids(clean_bank_events) == _normalize_unstable_contract_ids(
+        legacy_bank_events
+    )
+    assert any(event["kind"] == "BankLoanRepaid" for event in clean_events)
+    assert any(
+        event["kind"] == "ClientPayment"
+        and event.get("payer_bank") != event.get("payee_bank")
+        for event in clean_events
+    )
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_generated_bank_lending_coverage_rejection(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_bank_lending_coverage.yaml"
+    legacy_events_path = tmp_path / "generated_bank_lending_coverage.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_bank_lending_coverage.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_bank_lending_coverage.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_bank_lending_coverage.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Bank Lending Coverage Rejection
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: H2, amount: 60}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - deposit_cash: {customer: H2, bank: B1, amount: 60}
+  - create_payable: {from: H2, to: H1, amount: 60, due_day: 1}
+  - create_payable: {from: H1, to: H2, amount: 150, due_day: 1}
+_balanced_config:
+  n_banks: 1
+  kappa: "1.0"
+  enable_bank_lending: true
+  min_coverage_ratio: "0.5"
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_rejections = [
+        event for event in legacy_events if event["kind"] == "BankLoanRejectedCoverage"
+    ]
+    clean_rejections = [
+        event for event in clean_events if event["kind"] == "BankLoanRejectedCoverage"
+    ]
+    assert clean_rejections == legacy_rejections
+    assert not any(event["kind"].startswith("BankLoanIssued") for event in clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_generated_bank_lending_credit_risk_loading(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_bank_lending_credit_risk.yaml"
+    legacy_events_path = tmp_path / "generated_bank_lending_credit_risk.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_bank_lending_credit_risk.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_bank_lending_credit_risk.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_bank_lending_credit_risk.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Bank Lending Credit Risk
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 150, due_day: 1}
+_balanced_config:
+  n_banks: 1
+  kappa: "1.0"
+  enable_bank_lending: true
+  credit_risk_loading: "0.5"
+  max_borrower_risk: "1.0"
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_bank_events = [
+        event for event in legacy_events if event["kind"].startswith("BankLoan")
+    ]
+    clean_bank_events = [
+        event for event in clean_events if event["kind"].startswith("BankLoan")
+    ]
+    assert _normalize_unstable_contract_ids(clean_bank_events) == _normalize_unstable_contract_ids(
+        legacy_bank_events
+    )
+    issued = next(event for event in clean_bank_events if event["kind"] == "BankLoanIssued")
+    assert Decimal(str(issued["rate"])) > Decimal("0")
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_generated_bank_lending_rationing(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_bank_lending_rationing.yaml"
+    legacy_events_path = tmp_path / "generated_bank_lending_rationing.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_bank_lending_rationing.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_bank_lending_rationing.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_bank_lending_rationing.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Bank Lending Rationing
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: H2, amount: 60}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - deposit_cash: {customer: H2, bank: B1, amount: 60}
+  - create_payable: {from: H2, to: H1, amount: 60, due_day: 1}
+  - create_payable: {from: H1, to: H2, amount: 150, due_day: 1}
+_balanced_config:
+  n_banks: 1
+  kappa: "1.0"
+  enable_bank_lending: true
+  credit_risk_loading: "0.5"
+  max_borrower_risk: "0.10"
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "4",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_rationed = [
+        event for event in legacy_events if event["kind"] == "BankLoanRationed"
+    ]
+    clean_rationed = [
+        event for event in clean_events if event["kind"] == "BankLoanRationed"
+    ]
+    assert clean_rationed == legacy_rationed
+    assert not any(event["kind"] == "BankLoanIssued" for event in clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_generated_bank_lending_cb_cutoff(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_bank_lending_cb_cutoff.yaml"
+    legacy_events_path = tmp_path / "generated_bank_lending_cb_cutoff.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_bank_lending_cb_cutoff.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_bank_lending_cb_cutoff.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_bank_lending_cb_cutoff.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Bank Lending CB Cutoff
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H2, amount: 150}
+  - deposit_cash: {customer: H2, bank: B1, amount: 150}
+  - create_payable: {from: H1, to: H2, amount: 100, due_day: 1}
+_balanced_config:
+  n_banks: 1
+  kappa: "0.5"
+  enable_bank_lending: true
+  maturity_days: 2
+  cb_lending_cutoff_day: 1
+  Q_total: 50
+run:
+  mode: until_stable
+  default_handling: expel-agent
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    assert [event for event in clean_events if event["kind"] == "CBLendingFreezeActivated"] == [
+        event for event in legacy_events if event["kind"] == "CBLendingFreezeActivated"
+    ]
+    assert not any(event["kind"] == "CBLendingFreezeStability" for event in clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_generated_bank_lending_scheduled_payable(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_bank_lending_scheduled_payable.yaml"
+    legacy_events_path = tmp_path / "generated_bank_lending_scheduled_payable.legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "generated_bank_lending_scheduled_payable.legacy.balances.csv"
+    clean_events_path = tmp_path / "generated_bank_lending_scheduled_payable.clean.events.jsonl"
+    clean_balances_path = tmp_path / "generated_bank_lending_scheduled_payable.clean.balances.csv"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Bank Lending Scheduled Payable
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - mint_cash: {to: H2, amount: 1}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - deposit_cash: {customer: H2, bank: B1, amount: 1}
+  - create_payable: {from: H2, to: H1, amount: 1, due_day: 1}
+scheduled_actions:
+  - day: 1
+    action:
+      create_payable: {from: H1, to: H2, amount: 150, due_day: 1}
+_balanced_config:
+  n_banks: 1
+  kappa: "1.0"
+  enable_bank_lending: true
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  default_handling: expel-agent
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "5",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    legacy_bank_events = [
+        event for event in legacy_events if event["kind"].startswith("BankLoan")
+    ]
+    clean_bank_events = [
+        event for event in clean_events if event["kind"].startswith("BankLoan")
+    ]
+    assert _normalize_unstable_contract_ids(clean_bank_events) == _normalize_unstable_contract_ids(
+        legacy_bank_events
+    )
+    assert any(event["kind"] == "BankLoanIssued" and event["day"] == 1 for event in clean_bank_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_auto_engine_uses_clean_core_for_mismatched_generated_banking_config(
+    tmp_path: Path,
+) -> None:
+    scenario_path = tmp_path / "generated_mismatched_banks.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Mismatched Bank Config
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+_balanced_config:
+  n_banks: 2
+  kappa: "1.0"
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    legacy_events_path = tmp_path / "legacy.events.jsonl"
+    legacy_balances_path = tmp_path / "legacy.balances.csv"
+    clean_events_path = tmp_path / "clean.events.jsonl"
+    clean_balances_path = tmp_path / "clean.balances.csv"
+    runner = CliRunner()
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "auto",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "auto fallback" not in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_clean_core_engine_accepts_mismatched_generated_banking_config(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "generated_banking_clean_core.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Generated Banking Clean Core Guard
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: B1
+    kind: bank
+    name: Bank One
+  - id: H1
+    kind: household
+    name: Household One
+  - id: H2
+    kind: household
+    name: Household Two
+initial_actions:
+  - mint_reserves: {to: B1, amount: 1000}
+  - mint_cash: {to: H1, amount: 100}
+  - deposit_cash: {customer: H1, bank: B1, amount: 100}
+  - create_payable: {from: H1, to: H2, amount: 50, due_day: 1}
+_balanced_config:
+  n_banks: 2
+  kappa: "1.0"
+  maturity_days: 5
+  Q_total: 50
+run:
+  mode: until_stable
+  quiet_days: 1
+  show:
+    events: summary
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(scenario_path),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "3",
+            "--quiet-days",
+            "1",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "OK System reached stable state" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_default_cli_engine_uses_clean_core_for_t_account_display() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_bank.yaml"),
+            "--max-days",
+            "3",
+            "--show",
+            "summary",
+            "--t-account",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Engine: clean-core" in result.output
+    assert "Smith Family [H1]" in result.output
+    assert "bank_deposit" in result.output
+
+
+def test_clean_core_cli_engine_writes_html_report(tmp_path: Path) -> None:
+    html_path = tmp_path / "clean_core.html"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_nbfi.yaml"),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "10",
+            "--html",
+            str(html_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Exported HTML report" in result.output
+    assert html_path.exists()
+    html = html_path.read_text(encoding="utf-8")
+    assert "Bilancio Simulation" in html
+    assert "NBFI Lending Demo" in html
+    assert "NonBankLoanCreated" in html
+
+
+def test_clean_core_cli_engine_html_respects_agents_filter(tmp_path: Path) -> None:
+    html_path = tmp_path / "filtered.html"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_nbfi.yaml"),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "10",
+            "--agents",
+            "H2,lender",
+            "--html",
+            str(html_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    html = html_path.read_text(encoding="utf-8")
+    final_balances = html.split("<section><h2>Final Balances</h2>", maxsplit=1)[1].split("</section>", maxsplit=1)[0]
+    assert "<td>H2</td>" in final_balances
+    assert "<td>lender</td>" in final_balances
+    assert "<td>H3</td>" not in final_balances
+    assert "<td>SYSTEM</td>" not in final_balances
+
+
+def test_clean_core_cli_engine_html_respects_t_account(tmp_path: Path) -> None:
+    html_path = tmp_path / "t_account.html"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_bank.yaml"),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "5",
+            "--agents",
+            "H1",
+            "--t-account",
+            "--html",
+            str(html_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    html = html_path.read_text(encoding="utf-8")
+    assert "Final T-Accounts" in html
+    assert "Smith Family [H1] (household)" in html
+    assert "bank_deposit" in html
+    assert "First National Bank [B1]" in html
+
+
+def test_clean_core_cli_engine_summary_respects_agents_filter() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_nbfi.yaml"),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "10",
+            "--agents",
+            "H2,lender",
+            "--show",
+            "summary",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Final Balances (clean-core)" in result.output
+    balances_section = result.output.split("Final Balances (clean-core)", maxsplit=1)[1].split(
+        "Event Summary",
+        maxsplit=1,
+    )[0]
+    assert "H2" in balances_section
+    assert "lender" in balances_section
+    assert "H3" not in balances_section
+    assert "Event Summary (clean-core)" in result.output
+    assert "NonBankLoanCreated" in result.output
+
+
+def test_clean_core_cli_engine_table_show_prints_events() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_bank.yaml"),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "5",
+            "--show",
+            "table",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Final Balances (clean-core)" in result.output
+    assert "Events (clean-core)" in result.output
+    assert "Setup (Day 0)" in result.output
+    assert "Phase B" in result.output
+    assert "Phase C" in result.output
+    assert "PayableSettled" in result.output
+
+
+def test_clean_core_cli_engine_supports_step_mode(tmp_path: Path) -> None:
+    events_path = tmp_path / "step.events.jsonl"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_bank.yaml"),
+            "--engine",
+            "clean-core",
+            "--mode",
+            "step",
+            "--max-days",
+            "3",
+            "--export-events",
+            str(events_path),
+        ],
+        input="y\nn\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Run day 1?" in result.output
+    assert "Simulation stopped by user" in result.output
+    assert "Simulation stopped before stability" in result.output
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    assert "PhaseA" in {event["kind"] for event in events}
+
+
+def test_clean_core_cli_engine_exports_after_default_errors_without_traceback(
+    tmp_path: Path,
+) -> None:
+    runner = CliRunner()
+    legacy_events_path = tmp_path / "legacy_default_error" / "events.jsonl"
+    legacy_balances_path = tmp_path / "legacy_default_error" / "balances.csv"
+    clean_events_path = tmp_path / "clean_default_error" / "events.jsonl"
+    clean_balances_path = tmp_path / "clean_default_error" / "balances.csv"
+    legacy_result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_dealer.yaml"),
+            "--engine",
+            "legacy",
+            "--max-days",
+            "10",
+            "--show",
+            "summary",
+            "--export-events",
+            str(legacy_events_path),
+            "--export-balances",
+            str(legacy_balances_path),
+        ],
+    )
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "simple_dealer.yaml"),
+            "--engine",
+            "clean-core",
+            "--max-days",
+            "10",
+            "--show",
+            "summary",
+            "--export-events",
+            str(clean_events_path),
+            "--export-balances",
+            str(clean_balances_path),
+        ],
+    )
+
+    assert legacy_result.exit_code == 0, legacy_result.output
+    assert result.exit_code == 0, result.output
+    assert "Insufficient funds to settle payable" in result.output
+    assert "Simulation stopped after an error" in result.output
+    assert "Traceback" not in result.output
+    legacy_events = [json.loads(line) for line in legacy_events_path.read_text().splitlines()]
+    clean_events = [json.loads(line) for line in clean_events_path.read_text().splitlines()]
+    _assert_event_exports_match(legacy_events, clean_events)
+    _assert_balance_exports_match(
+        _read_balance_export(legacy_balances_path),
+        _read_balance_export(clean_balances_path),
+    )
+
+
+def test_clean_core_cli_engine_preflights_scheduled_aliases(tmp_path: Path) -> None:
+    scenario_path = tmp_path / "bad_alias.yaml"
+    scenario_path.write_text(
+        """
+version: 1
+name: Bad Alias
+agents:
+  - {id: F1, kind: firm, name: Firm One}
+  - {id: F2, kind: firm, name: Firm Two}
+initial_actions: []
+scheduled_actions:
+  - day: 1
+    action:
+      transfer_claim: {contract_alias: GHOST, to_agent: F1}
+run:
+  mode: until_stable
+  max_days: 2
+  quiet_days: 1
+""".lstrip()
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["run", str(scenario_path), "--engine", "clean-core"])
+
+    assert result.exit_code == 1
+    assert "unknown alias 'GHOST'" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_clean_core_cli_engine_honors_default_handling_override() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "run",
+            str(EXAMPLES_DIR / "default_handling_demo.yaml"),
+            "--engine",
+            "clean-core",
+            "--default-handling",
+            "fail-fast",
+            "--max-days",
+            "5",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Default handling mode: fail-fast" in result.output
+    assert "Insufficient funds to settle payable" in result.output
+    assert "Simulation stopped after an error" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_simple_bank_cli_export_contract(tmp_path: Path) -> None:
+    """The one-bank example settles the household payable inside one bank."""
+    output, events, balances = _run_scenario_with_exports(tmp_path, "simple_bank.yaml")
+
+    assert "Simple Banking System" in output
+    assert len(events) == 28
+    assert Counter(event["kind"] for event in events) == Counter(
+        {
+            "PhaseA": 4,
+            "PhaseB": 4,
+            "SubphaseB1": 4,
+            "SubphaseB2": 4,
+            "PhaseC": 4,
+            "CashMinted": 2,
+            "CashDeposited": 2,
+            "ReservesMinted": 1,
+            "PayableCreated": 1,
+            "IntraBankPayment": 1,
+            "PayableSettled": 1,
+        }
+    )
+    assert _event_exists(events, kind="IntraBankPayment", day=1, payer="H1", payee="H2", bank="B1", amount=500)
+    assert _event_exists(events, kind="PayableSettled", day=1, debtor="H1", creditor="H2", amount=500)
+
+    assert _amount(balances["CB"], "liabilities_cash") == Decimal("3500")
+    assert _amount(balances["CB"], "liabilities_reserve_deposit") == Decimal("10000")
+    assert _amount(balances["B1"], "assets_cash") == Decimal("2800")
+    assert _amount(balances["B1"], "assets_reserve_deposit") == Decimal("10000")
+    assert _amount(balances["B1"], "liabilities_bank_deposit") == Decimal("2800")
+    assert _amount(balances["H1"], "assets_bank_deposit") == Decimal("1300")
+    assert _amount(balances["H1"], "assets_cash") == Decimal("200")
+    assert _amount(balances["H2"], "assets_bank_deposit") == Decimal("1500")
+    assert _amount(balances["H2"], "assets_cash") == Decimal("500")
+
+
+def test_sasa_scenario_cli_export_contract(tmp_path: Path) -> None:
+    """The two-bank example splits payment across cash and interbank settlement."""
+    output, events, balances = _run_scenario_with_exports(tmp_path, "sasa_scenario.yaml")
+
+    assert "sasa_scenario" in output
+    assert len(events) == 33
+    assert Counter(event["kind"] for event in events) == Counter(
+        {
+            "PhaseA": 4,
+            "PhaseB": 4,
+            "SubphaseB1": 4,
+            "SubphaseB2": 4,
+            "PhaseC": 4,
+            "ReservesMinted": 2,
+            "CashMinted": 2,
+            "CashDeposited": 2,
+            "PayableCreated": 1,
+            "CashTransferred": 1,
+            "ClientPayment": 1,
+            "PayableSettled": 1,
+            "ReservesTransferred": 1,
+            "InstrumentMerged": 1,
+            "InterbankCleared": 1,
+        }
+    )
+    assert _event_exists(events, kind="CashTransferred", day=1, frm="FIRM_A", to="FIRM_B", amount=100)
+    assert _event_exists(
+        events,
+        kind="ClientPayment",
+        day=1,
+        payer="FIRM_A",
+        payer_bank="BANK_A",
+        payee="FIRM_B",
+        payee_bank="BANK_B",
+        amount=50,
+    )
+    assert _event_exists(events, kind="ReservesTransferred", day=1, frm="BANK_A", to="BANK_B", amount=50)
+    assert _event_exists(events, kind="InterbankCleared", day=1, debtor_bank="BANK_A", creditor_bank="BANK_B", amount=50)
+
+    assert _amount(balances["BANK_A"], "assets_reserve_deposit") == Decimal("950")
+    assert _amount(balances["BANK_A"], "liabilities_bank_deposit") == Decimal("50")
+    assert _amount(balances["BANK_B"], "assets_reserve_deposit") == Decimal("1050")
+    assert _amount(balances["BANK_B"], "liabilities_bank_deposit") == Decimal("150")
+    assert _amount(balances["FIRM_A"], "assets_bank_deposit") == Decimal("50")
+    assert _amount(balances["FIRM_A"], "total_financial_liabilities") == Decimal("0")
+    assert _amount(balances["FIRM_B"], "assets_bank_deposit") == Decimal("150")
+    assert _amount(balances["FIRM_B"], "assets_cash") == Decimal("100")
+
+
+def test_interbank_netting_cli_export_contract(tmp_path: Path) -> None:
+    """The interbank example clears only the daily net reserve positions."""
+    output, events, balances = _run_scenario_with_exports(tmp_path, "interbank_netting.yaml")
+
+    assert "Interbank Netting Example" in output
+    assert len(events) == 59
+    assert Counter(event["kind"] for event in events) == Counter(
+        {
+            "PhaseA": 5,
+            "PhaseB": 5,
+            "SubphaseB1": 5,
+            "SubphaseB2": 5,
+            "PhaseC": 5,
+            "CashDeposited": 4,
+            "CashMinted": 4,
+            "ClientPayment": 6,
+            "PayableCreated": 6,
+            "PayableSettled": 6,
+            "ReservesMinted": 2,
+            "ReservesTransferred": 2,
+            "InterbankCleared": 2,
+            "InstrumentMerged": 2,
+        }
+    )
+    assert _event_exists(events, kind="InterbankCleared", day=1, debtor_bank="B1", creditor_bank="B2", amount=700)
+    assert _event_exists(events, kind="InterbankCleared", day=2, debtor_bank="B2", creditor_bank="B1", amount=600)
+    assert _event_exists(events, kind="ReservesTransferred", day=1, frm="B1", to="B2", amount=700)
+    assert _event_exists(events, kind="ReservesTransferred", day=2, frm="B2", to="B1", amount=600)
+
+    assert _amount(balances["B1"], "assets_reserve_deposit") == Decimal("9900")
+    assert _amount(balances["B1"], "liabilities_bank_deposit") == Decimal("8900")
+    assert _amount(balances["B2"], "assets_reserve_deposit") == Decimal("10100")
+    assert _amount(balances["B2"], "liabilities_bank_deposit") == Decimal("9100")
+    assert _amount(balances["H1"], "assets_bank_deposit") == Decimal("5000")
+    assert _amount(balances["H2"], "assets_bank_deposit") == Decimal("4800")
+    assert _amount(balances["H3"], "assets_bank_deposit") == Decimal("3900")
+    assert _amount(balances["H4"], "assets_bank_deposit") == Decimal("4300")
+
+
+def test_firm_delivery_cli_export_contract(tmp_path: Path) -> None:
+    """The delivery example settles goods and matching payables over three days."""
+    output, events, balances = _run_scenario_with_exports(tmp_path, "firm_delivery.yaml", max_days=8)
+
+    assert "Firm with Delivery Obligations" in output
+    assert len(events) == 65
+    assert Counter(event["kind"] for event in events) == Counter(
+        {
+            "PhaseA": 6,
+            "PhaseB": 6,
+            "SubphaseB1": 6,
+            "SubphaseB2": 6,
+            "PhaseC": 6,
+            "CashDeposited": 4,
+            "CashMinted": 4,
+            "DeliveryObligationCancelled": 3,
+            "DeliveryObligationCreated": 3,
+            "DeliveryObligationSettled": 3,
+            "IntraBankPayment": 3,
+            "PayableCreated": 3,
+            "PayableSettled": 3,
+            "ReservesMinted": 1,
+            "StockCreated": 2,
+            "StockSplit": 3,
+            "StockTransferred": 3,
+        }
+    )
+    assert _event_exists(events, kind="StockTransferred", day=1, frm="F1", to="H1", sku="WIDGET", qty=10)
+    assert _event_exists(events, kind="StockTransferred", day=2, frm="F1", to="F2", sku="WIDGET", qty=20)
+    assert _event_exists(events, kind="StockTransferred", day=3, frm="F2", to="H2", sku="GADGET", qty=5)
+    assert _event_exists(events, kind="PayableSettled", day=1, debtor="H1", creditor="F1", amount=250)
+    assert _event_exists(events, kind="PayableSettled", day=2, debtor="F2", creditor="F1", amount=500)
+    assert _event_exists(events, kind="PayableSettled", day=3, debtor="H2", creditor="F2", amount=500)
+
+    assert _amount(balances["H1"], "inventory_WIDGET_quantity") == Decimal("10")
+    assert _amount(balances["H1"], "inventory_WIDGET_value") == Decimal("250.0")
+    assert _amount(balances["H2"], "inventory_GADGET_quantity") == Decimal("5")
+    assert _amount(balances["H2"], "inventory_GADGET_value") == Decimal("500.0")
+    assert _amount(balances["F1"], "inventory_WIDGET_quantity") == Decimal("70")
+    assert _amount(balances["F1"], "assets_bank_deposit") == Decimal("8750")
+    assert _amount(balances["F2"], "inventory_WIDGET_quantity") == Decimal("20")
+    assert _amount(balances["F2"], "inventory_GADGET_quantity") == Decimal("45")
+    assert _amount(balances["F2"], "assets_bank_deposit") == Decimal("6000")
+
+
+def test_intraday_netting_cli_export_contract(tmp_path: Path) -> None:
+    """The intraday example preserves gross mutual cash flows and goods exchange."""
+    output, events, balances = _run_scenario_with_exports(tmp_path, "intraday_netting.yaml", max_days=8)
+
+    assert "Intraday Netting Example" in output
+    assert len(events) == 58
+    assert Counter(event["kind"] for event in events) == Counter(
+        {
+            "PhaseA": 5,
+            "PhaseB": 5,
+            "SubphaseB1": 5,
+            "SubphaseB2": 5,
+            "PhaseC": 5,
+            "CashDeposited": 3,
+            "CashMinted": 3,
+            "CashTransferred": 3,
+            "DeliveryObligationCancelled": 2,
+            "DeliveryObligationCreated": 2,
+            "DeliveryObligationSettled": 2,
+            "InstrumentMerged": 2,
+            "IntraBankPayment": 1,
+            "PayableCreated": 4,
+            "PayableSettled": 4,
+            "ReservesMinted": 1,
+            "StockCreated": 2,
+            "StockSplit": 2,
+            "StockTransferred": 2,
+        }
+    )
+    assert _event_exists(events, kind="CashTransferred", day=1, frm="F1", to="F2", amount=2000)
+    assert _event_exists(events, kind="CashTransferred", day=1, frm="F2", to="F1", amount=1500)
+    assert _event_exists(events, kind="StockTransferred", day=2, frm="F1", to="F2", sku="WIDGET", qty=10)
+    assert _event_exists(events, kind="StockTransferred", day=2, frm="F2", to="F1", sku="GADGET", qty=15)
+
+    assert _amount(balances["F1"], "assets_bank_deposit") == Decimal("8500")
+    assert _amount(balances["F1"], "assets_cash") == Decimal("1500")
+    assert _amount(balances["F1"], "inventory_WIDGET_quantity") == Decimal("90")
+    assert _amount(balances["F1"], "inventory_GADGET_quantity") == Decimal("15")
+    assert _amount(balances["F2"], "assets_bank_deposit") == Decimal("8000")
+    assert _amount(balances["F2"], "assets_cash") == Decimal("2200")
+    assert _amount(balances["F2"], "inventory_GADGET_quantity") == Decimal("85")
+    assert _amount(balances["F2"], "inventory_WIDGET_quantity") == Decimal("10")
+    assert _amount(balances["H1"], "assets_bank_deposit") == Decimal("3500")
+    assert _amount(balances["H1"], "assets_cash") == Decimal("1300")
+
+
+def test_two_jurisdictions_cli_export_contract(tmp_path: Path) -> None:
+    """The jurisdiction example loads config and settles the cross-firm payable."""
+    output, events, balances = _run_scenario_with_exports(tmp_path, "two_jurisdictions.yaml", max_days=8)
+
+    assert "Two-Jurisdiction Banking System" in output
+    assert len(events) == 38
+    assert Counter(event["kind"] for event in events) == Counter(
+        {
+            "PhaseA": 6,
+            "PhaseB": 6,
+            "SubphaseB1": 6,
+            "SubphaseB2": 6,
+            "PhaseC": 6,
+            "CashMinted": 2,
+            "ReservesMinted": 2,
+            "PayableCreated": 1,
+            "CashTransferred": 1,
+            "PayableSettled": 1,
+            "InstrumentMerged": 1,
+        }
+    )
+    assert _event_exists(events, kind="CashTransferred", day=3, frm="F_US", to="F_EU", amount=1000)
+    assert _event_exists(events, kind="PayableSettled", day=3, debtor="F_US", creditor="F_EU", amount=1000)
+
+    assert _amount(balances["CB_US"], "liabilities_cash") == Decimal("9000")
+    assert _amount(balances["CB_US"], "liabilities_reserve_deposit") == Decimal("18000")
+    assert _amount(balances["CB_EU"], "net_financial") == Decimal("0")
+    assert _amount(balances["B_US"], "assets_reserve_deposit") == Decimal("10000")
+    assert _amount(balances["B_EU"], "assets_reserve_deposit") == Decimal("8000")
+    assert _amount(balances["F_US"], "assets_cash") == Decimal("4000")
+    assert _amount(balances["F_EU"], "assets_cash") == Decimal("5000")
+
+```
+
+---
+
 ### 🧪 tests/ui/test_cli_sweep.py
 
 ```python
@@ -214213,6 +221470,7 @@ class TestSweepBalancedExecution:
         )
 
         assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        assert "balanced NBFI mixed arms are deprecated" in result.output
         # Verify BalancedComparisonRunner.__init__ received a config with enable_lender=True
         init_call = mock_runner_init.call_args
         config_arg = init_call[1].get("config") or init_call[0][0]
@@ -214881,6 +222139,7 @@ class TestSweepBalancedAdditionalParams:
         )
 
         assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        assert "balanced banking arms are deprecated" in result.output
         init_call = mock_runner_init.call_args
         config_arg = init_call[1].get("config") or init_call[0][0]
         assert config_arg.enable_bank_passive is True
@@ -218601,6 +225860,7 @@ _filter_active_agent_ids, and related helpers.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -218614,7 +225874,6 @@ from bilancio.ui.run import (
     run_step_mode,
     run_until_stable_mode,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers: minimal YAML scenario builders
@@ -218695,8 +225954,10 @@ class TestFilterActiveAgentIds:
 
     def test_mixed_agents(self):
         """Mix of active, defaulted, and missing."""
-        active = MagicMock(); active.defaulted = False
-        defaulted = MagicMock(); defaulted.defaulted = True
+        active = MagicMock()
+        active.defaulted = False
+        defaulted = MagicMock()
+        defaulted.defaulted = True
 
         def get_agent(aid):
             return {"H1": active, "H2": defaulted}.get(aid)
@@ -218712,6 +225973,16 @@ class TestFilterActiveAgentIds:
 # ---------------------------------------------------------------------------
 
 class TestRunScenarioUntilStable:
+
+    def test_programmatic_default_engine_uses_clean_core_when_supported(self, tmp_path):
+        """run_scenario() defaults to auto and selects clean-core for compatible scenarios."""
+        scenario = _simple_bank_yaml()
+        path = _write_scenario(tmp_path, scenario)
+
+        with patch("bilancio.ui.run._run_clean_core_scenario") as clean_core_run:
+            run_scenario(path, mode="until_stable", max_days=5, quiet_days=1)
+
+        clean_core_run.assert_called_once()
 
     def test_basic_until_stable(self, tmp_path):
         """Run a minimal scenario in until_stable mode to completion."""
@@ -218736,10 +226007,13 @@ class TestRunScenarioUntilStable:
         """check_invariants='daily' exercises the daily invariant check path."""
         scenario = _simple_bank_yaml()
         path = _write_scenario(tmp_path, scenario)
-        run_scenario(
-            path, mode="until_stable", max_days=5, quiet_days=1,
-            check_invariants="daily",
-        )
+        with patch("bilancio.ui.run._assert_clean_core_invariants") as assert_invariants:
+            run_scenario(
+                path, mode="until_stable", max_days=5, quiet_days=1,
+                check_invariants="daily",
+            )
+
+        assert assert_invariants.call_count >= 2
 
     def test_check_invariants_none(self, tmp_path):
         """check_invariants='none' skips setup invariant check."""
@@ -218768,6 +226042,76 @@ class TestRunScenarioUntilStable:
         for day, mx in calls:
             assert 1 <= day <= 5
             assert mx == 5
+
+    def test_progress_callback_runs_on_programmatic_clean_core_default(self, tmp_path):
+        """Auto mode keeps clean-core when progress callbacks are requested."""
+        scenario = _simple_bank_yaml()
+        path = _write_scenario(tmp_path, scenario)
+        events_path = tmp_path / "events.jsonl"
+        calls = []
+
+        def cb(current: int, total: int) -> None:
+            calls.append((current, total))
+
+        run_scenario(
+            path,
+            mode="until_stable",
+            max_days=5,
+            quiet_days=1,
+            show="none",
+            progress_callback=cb,
+            export={"events_jsonl": str(events_path)},
+        )
+
+        assert calls
+        assert calls == [(1, 5), (2, 5), (3, 5)]
+        events = [json.loads(line) for line in events_path.read_text().splitlines()]
+        assert {event["kind"] for event in events} >= {"PhaseA", "PayableSettled"}
+
+    def test_performance_config_keeps_programmatic_default_on_clean_core(self, tmp_path):
+        """PerformanceConfig is accepted as no-op for clean-core-compatible scenarios."""
+        from bilancio.core.performance import PerformanceConfig
+
+        scenario = _simple_bank_yaml()
+        path = _write_scenario(tmp_path, scenario)
+
+        with patch("bilancio.ui.run._run_clean_core_scenario") as clean_core_run:
+            run_scenario(
+                path,
+                mode="until_stable",
+                max_days=5,
+                quiet_days=1,
+                performance=PerformanceConfig.create("fast"),
+            )
+
+        clean_core_run.assert_called_once()
+
+    def test_detailed_dealer_logging_keeps_programmatic_default_without_dealer(self, tmp_path):
+        """Detailed dealer logging only matters when a dealer subsystem exists."""
+        scenario = _simple_bank_yaml()
+        path = _write_scenario(tmp_path, scenario)
+
+        with patch("bilancio.ui.run._run_clean_core_scenario") as clean_core_run:
+            run_scenario(
+                path,
+                mode="until_stable",
+                max_days=5,
+                quiet_days=1,
+                detailed_dealer_logging=True,
+            )
+
+        clean_core_run.assert_called_once()
+
+    def test_estimate_logging_keeps_programmatic_default_on_clean_core(self, tmp_path):
+        """Rating estimate logging is supported by the clean-core default path."""
+        scenario = _simple_bank_yaml()
+        scenario["run"]["estimate_logging"] = True
+        path = _write_scenario(tmp_path, scenario)
+
+        with patch("bilancio.ui.run._run_clean_core_scenario") as clean_core_run:
+            run_scenario(path, mode="until_stable", max_days=5, quiet_days=1)
+
+        clean_core_run.assert_called_once()
 
     def test_default_handling_override(self, tmp_path):
         """CLI default_handling override replaces config value."""
@@ -219509,7 +226853,7 @@ class TestCBLendingCutoff:
         system = System(default_mode="fail-fast")
         apply_to_system(config, system)
 
-        result = run_until_stable_mode(
+        run_until_stable_mode(
             system=system,
             max_days=5,
             quiet_days=1,
@@ -219686,7 +227030,7 @@ class TestStepModeCBLendingCutoff:
 
         with patch("bilancio.ui.run.Confirm") as MockConfirm:
             MockConfirm.ask = mock_confirm
-            result = run_step_mode(
+            run_step_mode(
                 system=system,
                 max_days=5,
                 show="none",
@@ -219788,9 +227132,6 @@ class TestDealerMetricsExportMocked:
 
         events_path = str(tmp_path / "out" / "events.jsonl")
 
-        # Patch apply_to_system to inject our pre-configured system
-        original_apply = None
-
         def patched_apply(config, sys_obj):
             """Copy our mock dealer subsystem onto the new system."""
             from bilancio.config import apply_to_system as real_apply
@@ -219800,9 +227141,8 @@ class TestDealerMetricsExportMocked:
         with patch("bilancio.ui.run.apply_to_system", side_effect=patched_apply):
             run_scenario(
                 path, mode="until_stable", max_days=3, quiet_days=1,
-                export={"events_jsonl": events_path}, show="none",
+                export={"events_jsonl": events_path}, show="none", engine="legacy",
             )
-        import json
         dealer_metrics_path = tmp_path / "out" / "dealer_metrics.json"
         assert dealer_metrics_path.exists()
         data = json.loads(dealer_metrics_path.read_text())
@@ -219823,9 +227163,8 @@ class TestDealerMetricsExportMocked:
             with patch("bilancio.engines.dealer_integration.compute_passive_pnl", return_value={"passive_pnl": -5}):
                 run_scenario(
                     path, mode="until_stable", max_days=3, quiet_days=1,
-                    export={"balances_csv": csv_path}, show="none",
+                    export={"balances_csv": csv_path}, show="none", engine="legacy",
                 )
-        import json
         dealer_metrics_path = tmp_path / "out" / "dealer_metrics.json"
         assert dealer_metrics_path.exists()
         data = json.loads(dealer_metrics_path.read_text())
@@ -219851,6 +227190,7 @@ class TestDealerMetricsExportMocked:
                     detailed_dealer_logging=True,
                     run_id="test-run-123",
                     regime="active",
+                    engine="legacy",
                 )
 
         # Verify the CSV export methods were called
@@ -219890,7 +227230,7 @@ class TestStepModeBankingStabilityFreeze:
 
         with patch("bilancio.ui.run.Confirm") as MockConfirm:
             MockConfirm.ask = mock_confirm
-            result = run_step_mode(
+            run_step_mode(
                 system=system,
                 max_days=10,
                 show="none",
@@ -234567,8 +241907,1211 @@ class TestVBTProfileDefaults:
 
 ---
 
+### 🧪 tests/v2/__init__.py
+
+```python
+
+```
+
+---
+
+### 🧪 tests/v2/golden_cases.py
+
+```python
+"""Golden snapshots for the deterministic parity cases.
+
+Captured immediately before the clean-core engine's deletion, while the
+live parity suite proved v2 == clean-core on every one of these cases —
+so the snapshots carry cross-engine authority. They pin the observable
+contract (full event stream + final balances) for the rollover, rating,
+banking, and dealer test scenarios. Regenerating later snapshots v2
+itself (regression pinning only).
+
+Regenerate with:  uv run python -m tests.v2.golden_cases
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+GOLDEN_CASE_DIR = Path(__file__).resolve().parent / "golden_cases"
+
+
+def case_specs() -> dict[str, tuple[Any, Any]]:
+    """All deterministic parity cases: name -> (ScenarioConfig, banking_config)."""
+    from tests.v2.test_banking_parity import BANKING_CONFIGS, base_scenario
+    from tests.v2.test_dealer_parity import dealer_scenario
+    from tests.v2.test_rating_parity import rating_scenario
+    from tests.v2.test_rollover_parity import rollover_ring
+
+    cases: dict[str, tuple[Any, Any]] = {}
+    for cash, default_handling in [
+        (300, "fail-fast"),
+        (300, "expel-agent"),
+        (100, "expel-agent"),
+        (150, "expel-agent"),
+    ]:
+        cases[f"rollover_{default_handling}_{cash}"] = (
+            rollover_ring(cash, default_handling),
+            None,
+        )
+    for profile in ["omniscient", "realistic"]:
+        cases[f"rating_{profile}"] = (rating_scenario(profile), None)
+    for name, banking in BANKING_CONFIGS.items():
+        cases[f"banking_{name}"] = (base_scenario(), banking)
+    cases["dealer_marker"] = (dealer_scenario(None), None)
+    cases["dealer_marker_risk"] = (dealer_scenario(None, risk_enabled=True), None)
+    cases["dealer_passive"] = (dealer_scenario("passive"), None)
+    cases["dealer_active"] = (dealer_scenario("active", capitalize_market_makers=True), None)
+    cases["dealer_active_risk"] = (
+        dealer_scenario("active", capitalize_market_makers=True, risk_enabled=True, cash=60),
+        None,
+    )
+    return cases
+
+
+def golden_case_path(name: str) -> Path:
+    return GOLDEN_CASE_DIR / f"{name}.json"
+
+
+def load_golden_case(name: str) -> dict[str, Any]:
+    return json.loads(golden_case_path(name).read_text())
+
+
+def v2_case_snapshot(config: Any, banking_config: Any) -> dict[str, Any]:
+    from bilancio_v2 import run_scenario
+    from bilancio_v2.parity import _v2_balances
+    from tests.v2.golden_io import run_snapshot
+
+    result = run_scenario(config, banking_config=banking_config)
+    return run_snapshot(result.events, _v2_balances(result))
+
+
+def capture_all() -> None:
+    GOLDEN_CASE_DIR.mkdir(exist_ok=True)
+    for name, (config, banking_config) in case_specs().items():
+        snapshot = v2_case_snapshot(config, banking_config)
+        golden_case_path(name).write_text(json.dumps(snapshot, indent=1) + "\n")
+        print(f"captured {name}: {len(snapshot['events'])} events")
+
+
+if __name__ == "__main__":
+    capture_all()
+
+```
+
+---
+
+### 🧪 tests/v2/golden_io.py
+
+```python
+"""Golden-file capture and loading for the example-scenario oracle.
+
+The golden files were originally captured from the clean-core engine while
+the live parity suite proved v2 == clean-core, so they carry cross-engine
+authority. Regenerating (``uv run python -m tests.v2.golden_io``) snapshots
+the current v2 kernel — regression pinning only — so regenerate only from a
+commit whose behavior you trust.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from bilancio_v2.parity import run_snapshot  # noqa: F401  (re-exported for tests)
+
+GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
+SCENARIO_DIR = Path(__file__).resolve().parents[2] / "examples" / "scenarios"
+
+
+def golden_path(name: str) -> Path:
+    return GOLDEN_DIR / f"{name}.json"
+
+
+def load_golden(name: str) -> dict[str, Any]:
+    return json.loads(golden_path(name).read_text())
+
+
+def capture_all() -> None:
+    from bilancio_v2 import load_scenario
+    from bilancio_v2.parity import snapshot_run
+    from tests.v2.test_parity_examples import SUPPORTED
+
+    GOLDEN_DIR.mkdir(exist_ok=True)
+    for name in SUPPORTED:
+        config = load_scenario(SCENARIO_DIR / f"{name}.yaml")
+        snapshot = snapshot_run(config)
+        golden_path(name).write_text(json.dumps(snapshot, indent=1) + "\n")
+        print(f"captured {name}: {len(snapshot['events'])} events")
+
+
+if __name__ == "__main__":
+    capture_all()
+
+```
+
+---
+
+### 🧪 tests/v2/test_banking_parity.py
+
+```python
+"""Parity for the banking subsystem (slice 4).
+
+Banking is configured via ``CleanBankingConfig`` (built by sweep runners /
+generator metadata, not the YAML schema), so the oracle runs both engines
+in-process with the same config object, mirroring the CLI sequence:
+prepare → run until stable → end-of-run banking shutdown.
+
+Covers bank quotes/lending, routed deposits, CB refinance and lending
+freeze (bank defaults + resolution + deposit write-offs), loan winddown,
+final CB settlement, and the interbank auction record. Scenarios where the
+engines refuse the run (insolvent interbank transfer) must refuse with the
+same error.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+
+from bilancio.config.models import ScenarioConfig
+from bilancio_v2 import run_scenario
+from bilancio_v2.subsystem_config import CleanBankingConfig
+from tests.v2.golden_cases import load_golden_case, v2_case_snapshot
+
+
+def base_scenario() -> ScenarioConfig:
+    agents = [
+        {"id": "CB", "kind": "central_bank", "name": "CB"},
+        {"id": "B1", "kind": "bank", "name": "B1"},
+        {"id": "B2", "kind": "bank", "name": "B2"},
+    ] + [{"id": f"H{i}", "kind": "household", "name": f"H{i}"} for i in range(4)]
+    actions: list[dict] = [
+        {"mint_reserves": {"to": "B1", "amount": 2000}},
+        {"mint_reserves": {"to": "B2", "amount": 2000}},
+    ]
+    for i in range(4):
+        actions += [
+            {"mint_cash": {"to": f"H{i}", "amount": 500}},
+            {
+                "deposit_cash": {
+                    "customer": f"H{i}",
+                    "bank": "B1" if i % 2 == 0 else "B2",
+                    "amount": 400,
+                }
+            },
+        ]
+    actions += [
+        {"create_payable": {"from": "H0", "to": "H1", "amount": 350, "due_day": 1}},
+        {"create_payable": {"from": "H1", "to": "H2", "amount": 600, "due_day": 2}},
+        {"create_payable": {"from": "H2", "to": "H3", "amount": 450, "due_day": 2}},
+        {"create_payable": {"from": "H3", "to": "H0", "amount": 700, "due_day": 3}},
+    ]
+    return ScenarioConfig.model_validate(
+        {
+            "version": 1,
+            "name": "banking-parity",
+            "agents": agents,
+            "initial_actions": actions,
+            "run": {"max_days": 15, "quiet_days": 2, "default_handling": "expel-agent"},
+        }
+    )
+
+
+def assert_v2_self_consistent(config, banking_config=None):
+    """Run on v2 and assert the run completes with all invariants holding.
+
+    Ledger conservation invariants are enforced daily inside the engine;
+    this adds the exported-balance double-entry check. Engine refusals
+    (insufficient funds under fail-fast economics) are legitimate outcomes.
+    """
+    from bilancio.core.errors import DefaultError
+    from bilancio_v2.balance_invariants import assert_balance_invariants
+    from bilancio_v2.views import balance_rows
+
+    try:
+        result = run_scenario(config, banking_config=banking_config)
+    except (DefaultError, ValueError):
+        return
+    assert_balance_invariants(balance_rows(result))
+
+
+BANKING_CONFIGS = {
+    "plain": CleanBankingConfig(kappa=Decimal("0.5")),
+    "lending": CleanBankingConfig(kappa=Decimal("0.5"), enable_bank_lending=True, maturity_days=4),
+    "coverage_gate": CleanBankingConfig(
+        kappa=Decimal("1"),
+        enable_bank_lending=True,
+        maturity_days=3,
+        min_coverage_ratio=Decimal("0.5"),
+    ),
+    "cb_freeze": CleanBankingConfig(
+        kappa=Decimal("0.5"),
+        enable_bank_lending=True,
+        maturity_days=4,
+        cb_lending_cutoff_day=3,
+    ),
+    "adaptive_corridor": CleanBankingConfig(
+        kappa=Decimal("0.8"),
+        adaptive_corridor=True,
+        enable_bank_lending=True,
+        maturity_days=5,
+        credit_risk_loading=Decimal("0.1"),
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(BANKING_CONFIGS))
+def test_banking_modes_match_golden(name: str) -> None:
+    golden = load_golden_case(f"banking_{name}")
+    snapshot = v2_case_snapshot(base_scenario(), BANKING_CONFIGS[name])
+    assert snapshot["balances"] == golden["balances"], name
+    assert snapshot["events"] == golden["events"], name
+
+
+@st.composite
+def banking_cases(draw: st.DrawFn) -> tuple[ScenarioConfig, CleanBankingConfig]:
+    n_banks = draw(st.integers(min_value=1, max_value=3))
+    n_customers = draw(st.integers(min_value=3, max_value=6))
+    banks = [f"B{j}" for j in range(n_banks)]
+    customers = [f"H{i}" for i in range(n_customers)]
+    agents = (
+        [{"id": "CB", "kind": "central_bank", "name": "CB"}]
+        + [{"id": bank, "kind": "bank", "name": bank} for bank in banks]
+        + [{"id": c, "kind": draw(st.sampled_from(["household", "firm"])), "name": c} for c in customers]
+    )
+    has_lender = draw(st.booleans())
+    if has_lender:
+        agents.append({"id": "LENDER", "kind": "non_bank_lender", "name": "Lender"})
+
+    actions: list[dict] = []
+    for bank in banks:
+        # Sometimes under-reserve banks to force CB refinance / freeze paths.
+        actions.append({"mint_reserves": {"to": bank, "amount": draw(st.sampled_from([100, 400, 2000]))}})
+        if draw(st.booleans()):
+            actions.append(
+                {
+                    "create_cb_loan": {
+                        "bank": bank,
+                        "amount": draw(st.integers(100, 600)),
+                        "rate": "0.03",
+                    }
+                }
+            )
+    if has_lender:
+        actions.append({"mint_cash": {"to": "LENDER", "amount": draw(st.integers(100, 600))}})
+    for customer in customers:
+        cash = draw(st.integers(min_value=0, max_value=400))
+        if cash:
+            actions.append({"mint_cash": {"to": customer, "amount": cash}})
+            deposit = draw(st.integers(min_value=0, max_value=cash))
+            if deposit:
+                actions.append(
+                    {
+                        "deposit_cash": {
+                            "customer": customer,
+                            "bank": draw(st.sampled_from(banks)),
+                            "amount": deposit,
+                        }
+                    }
+                )
+    for _ in range(draw(st.integers(min_value=2, max_value=8))):
+        debtor, creditor = draw(st.lists(st.sampled_from(customers), min_size=2, max_size=2, unique=True))
+        actions.append(
+            {
+                "create_payable": {
+                    "from": debtor,
+                    "to": creditor,
+                    "amount": draw(st.integers(50, 700)),
+                    "due_day": draw(st.integers(1, 5)),
+                }
+            }
+        )
+
+    config_dict: dict = {
+        "version": 1,
+        "name": "banking-property",
+        "agents": agents,
+        "initial_actions": actions,
+        "run": {"max_days": 14, "quiet_days": 2, "default_handling": "expel-agent"},
+    }
+    if has_lender:
+        lender: dict = {"enabled": True, "maturity_days": draw(st.integers(1, 3)), "horizon": 3}
+        if draw(st.booleans()):
+            lender["kappa"] = "0.5"
+        config_dict["lender"] = lender
+
+    banking = CleanBankingConfig(
+        kappa=Decimal(draw(st.sampled_from(["0.3", "0.5", "1"]))),
+        adaptive_corridor=draw(st.booleans()),
+        enable_bank_lending=draw(st.booleans()),
+        maturity_days=draw(st.integers(2, 6)),
+        credit_risk_loading=Decimal(draw(st.sampled_from(["0", "0.1"]))),
+        min_coverage_ratio=Decimal(draw(st.sampled_from(["0", "0.5"]))),
+        cb_lending_cutoff_day=draw(st.sampled_from([None, 2, 4])),
+    )
+    return ScenarioConfig.model_validate(config_dict), banking
+
+
+@settings(max_examples=40, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+@given(case=banking_cases())
+def test_banking_scenarios_self_consistent(
+    case: tuple[ScenarioConfig, CleanBankingConfig],
+) -> None:
+    config, banking = case
+    assert_v2_self_consistent(config, banking)
+
+```
+
+---
+
+### 🧪 tests/v2/test_dealer_parity.py
+
+```python
+"""Parity for the dealer subsystem (slice 5): marker, passive, and active.
+
+The active dealer reuses the shared trading machinery (DealerSubsystem,
+TradeExecutor, matching engine) on both engines, so parity hinges on the
+surrounding state reconciliation: ticket ingestion/maturity, payable
+ownership sync, and the cash reconciliation (CashMinted/CashRetired)
+points. Market makers are capitalized via initial mints so trading rounds
+actually execute.
+"""
+
+from __future__ import annotations
+
+import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+
+from bilancio.config.models import ScenarioConfig
+from bilancio_v2 import run_scenario
+from tests.v2.golden_cases import load_golden_case, v2_case_snapshot
+
+
+def assert_v2_self_consistent(config, banking_config=None):
+    """Run on v2 and assert the run completes with all invariants holding.
+
+    Ledger conservation invariants are enforced daily inside the engine;
+    this adds the exported-balance double-entry check. Engine refusals
+    (insufficient funds under fail-fast economics) are legitimate outcomes.
+    """
+    from bilancio.core.errors import DefaultError
+    from bilancio_v2 import run_scenario
+    from bilancio_v2.balance_invariants import assert_balance_invariants
+    from bilancio_v2.views import balance_rows
+
+    try:
+        result = run_scenario(config, banking_config=banking_config)
+    except (DefaultError, ValueError):
+        return
+    assert_balance_invariants(balance_rows(result))
+
+
+BUCKETS = {
+    "short": {"tau_min": 1, "tau_max": 3},
+    "mid": {"tau_min": 4, "tau_max": 8},
+    "long": {"tau_min": 9, "tau_max": 999},
+}
+
+
+def dealer_scenario(
+    mode: str | None,
+    *,
+    n_agents: int = 6,
+    cash: int = 120,
+    amount: int = 200,
+    capitalize_market_makers: bool = False,
+    risk_enabled: bool = False,
+    trading_rounds: int = 10,
+) -> ScenarioConfig:
+    agents = [{"id": "CB", "kind": "central_bank", "name": "CB"}] + [
+        {"id": f"H{i}", "kind": "household", "name": f"H{i}"} for i in range(n_agents)
+    ]
+    actions: list[dict] = []
+    if capitalize_market_makers:
+        for bucket in BUCKETS:
+            actions.append({"mint_cash": {"to": f"dealer_{bucket}", "amount": 800}})
+            actions.append({"mint_cash": {"to": f"vbt_{bucket}", "amount": 1500}})
+    actions += [{"mint_cash": {"to": f"H{i}", "amount": cash}} for i in range(n_agents)]
+    for i in range(n_agents):
+        actions.append(
+            {
+                "create_payable": {
+                    "from": f"H{i}",
+                    "to": f"H{(i + 1) % n_agents}",
+                    "amount": amount,
+                    "due_day": 2 + (i % 4),
+                    "maturity_distance": 2 + (i % 4),
+                }
+            }
+        )
+    config: dict = {
+        "version": 1,
+        "name": f"dealer-{mode}",
+        "agents": agents,
+        "initial_actions": actions,
+        "dealer": {
+            "enabled": True,
+            "ticket_size": "100",
+            "buckets": BUCKETS,
+            "risk_assessment": {"enabled": risk_enabled},
+        },
+        "run": {"max_days": 12, "quiet_days": 2, "default_handling": "expel-agent"},
+    }
+    if mode is not None:
+        config["balanced_dealer"] = {
+            "enabled": True,
+            "mode": mode,
+            "face_value": "100",
+            "kappa": "0.5",
+            "trading_rounds": trading_rounds,
+        }
+    return ScenarioConfig.model_validate(config)
+
+
+@pytest.mark.parametrize(
+    ("mode", "kwargs", "golden_name"),
+    [
+        (None, {}, "dealer_marker"),  # marker mode: daily snapshots, no trading
+        (None, {"risk_enabled": True}, "dealer_marker_risk"),
+        ("passive", {}, "dealer_passive"),
+        ("active", {"capitalize_market_makers": True}, "dealer_active"),
+        (
+            "active",
+            {"capitalize_market_makers": True, "risk_enabled": True, "cash": 60},
+            "dealer_active_risk",
+        ),
+    ],
+)
+def test_dealer_modes_match_golden(mode: str | None, kwargs: dict, golden_name: str) -> None:
+    golden = load_golden_case(golden_name)
+    snapshot = v2_case_snapshot(dealer_scenario(mode, **kwargs), None)
+    assert snapshot["balances"] == golden["balances"], golden_name
+    assert snapshot["events"] == golden["events"], golden_name
+
+
+def test_active_dealer_actually_trades() -> None:
+    """Guard against vacuous parity: capitalized market makers must trade."""
+    result = run_scenario(dealer_scenario("active", capitalize_market_makers=True, cash=60))
+    kinds = {event["kind"] for event in result.events}
+    assert "ClaimTransferredDealer" in kinds or "CashRetired" in kinds
+
+
+@st.composite
+def dealer_cases(draw: st.DrawFn) -> ScenarioConfig:
+    n_agents = draw(st.integers(min_value=4, max_value=8))
+    mode = draw(st.sampled_from(["active", "active", "passive", None]))
+    agents = [{"id": "CB", "kind": "central_bank", "name": "CB"}] + [
+        {"id": f"H{i}", "kind": "household", "name": f"H{i}"} for i in range(n_agents)
+    ]
+    actions: list[dict] = []
+    if mode == "active":
+        for bucket in BUCKETS:
+            actions.append({"mint_cash": {"to": f"dealer_{bucket}", "amount": draw(st.integers(200, 1500))}})
+            actions.append({"mint_cash": {"to": f"vbt_{bucket}", "amount": draw(st.integers(500, 3000))}})
+    for i in range(n_agents):
+        actions.append({"mint_cash": {"to": f"H{i}", "amount": draw(st.integers(20, 150))}})
+    for i in range(n_agents):
+        actions.append(
+            {
+                "create_payable": {
+                    "from": f"H{i}",
+                    "to": f"H{(i + 1) % n_agents}",
+                    "amount": draw(st.integers(100, 400)),
+                    "due_day": draw(st.integers(2, 7)),
+                }
+            }
+        )
+    config: dict = {
+        "version": 1,
+        "name": "dealer-property",
+        "agents": agents,
+        "initial_actions": actions,
+        "dealer": {
+            "enabled": True,
+            "ticket_size": "100",
+            "buckets": BUCKETS,
+            "risk_assessment": {"enabled": draw(st.booleans())},
+        },
+        "run": {"max_days": 14, "quiet_days": 2, "default_handling": "expel-agent"},
+    }
+    if mode is not None:
+        config["balanced_dealer"] = {
+            "enabled": True,
+            "mode": mode,
+            "face_value": "100",
+            "kappa": draw(st.sampled_from(["0.3", "0.5", "1"])),
+            "trading_rounds": draw(st.sampled_from([5, 20, 100])),
+            "issuer_specific_pricing": draw(st.booleans()),
+        }
+    return ScenarioConfig.model_validate(config)
+
+
+@settings(max_examples=30, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+@given(config=dealer_cases())
+def test_dealer_scenarios_self_consistent(config: ScenarioConfig) -> None:
+    assert_v2_self_consistent(config)
+
+```
+
+---
+
+### 🧪 tests/v2/test_golden.py
+
+```python
+"""The v2 kernel must match golden runs captured from the existing engine.
+
+Unlike the live parity tests (which compare both engines at HEAD), the
+goldens pin the contract at capture time — they catch the failure mode
+where a change breaks *both* engines in the same way.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from bilancio_v2 import load_scenario, run_scenario
+from bilancio_v2.parity import _v2_balances
+from tests.v2.golden_io import SCENARIO_DIR, golden_path, load_golden, run_snapshot
+from tests.v2.test_parity_examples import SUPPORTED
+
+
+@pytest.mark.parametrize("name", SUPPORTED)
+def test_v2_matches_golden(name: str) -> None:
+    if not golden_path(name).exists():
+        pytest.fail(f"missing golden file for {name}; regenerate with `uv run python -m tests.v2.golden_io`")
+    config = load_scenario(SCENARIO_DIR / f"{name}.yaml")
+    result = run_scenario(config)
+    snapshot = run_snapshot(result.events, _v2_balances(result))
+    golden = load_golden(name)
+    assert snapshot["balances"] == golden["balances"], f"balances diverged for {name}"
+    assert snapshot["events"] == golden["events"], f"event stream diverged for {name}"
+
+```
+
+---
+
+### 🧪 tests/v2/test_ledger.py
+
+```python
+"""Unit tests for the v2 ledger: audited operations and invariants."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+
+from bilancio_v2.ledger import InsufficientFundsError, InvariantViolation, Ledger
+
+
+def make_ledger() -> Ledger:
+    ledger = Ledger()
+    ledger.register_agent("CB", "central_bank", "Central Bank")
+    ledger.register_agent("BANK", "bank", "Bank")
+    ledger.register_agent("ALICE", "household", "Alice")
+    ledger.register_agent("BOB", "household", "Bob")
+    return ledger
+
+
+def test_mint_and_transfer_cash_conserves_total() -> None:
+    ledger = make_ledger()
+    ledger.mint_cash("ALICE", Decimal(1000))
+    ledger.transfer_cash("ALICE", "BOB", Decimal(400))
+    assert ledger.cash["ALICE"] == Decimal(600)
+    assert ledger.cash["BOB"] == Decimal(400)
+    ledger.check_invariants()
+
+
+def test_transfer_more_than_balance_fails() -> None:
+    ledger = make_ledger()
+    ledger.mint_cash("ALICE", Decimal(100))
+    with pytest.raises(InsufficientFundsError):
+        ledger.transfer_cash("ALICE", "BOB", Decimal(101))
+
+
+def test_deposit_and_withdraw_round_trip() -> None:
+    ledger = make_ledger()
+    ledger.mint_cash("ALICE", Decimal(500))
+    ledger.deposit_cash("ALICE", "BANK", Decimal(300))
+    assert ledger.deposits[("ALICE", "BANK")] == Decimal(300)
+    assert ledger.cash["ALICE"] == Decimal(200)
+    assert ledger.cash["BANK"] == Decimal(300)
+    ledger.withdraw_cash("ALICE", "BANK", Decimal(300))
+    assert ledger.deposits[("ALICE", "BANK")] == Decimal(0)
+    assert ledger.cash["ALICE"] == Decimal(500)
+    ledger.check_invariants()
+
+
+def test_every_operation_is_journaled() -> None:
+    ledger = make_ledger()
+    ledger.mint_cash("ALICE", Decimal(500))
+    ledger.deposit_cash("ALICE", "BANK", Decimal(300))
+    kinds = [event.kind for event in ledger.journal]
+    assert kinds == ["CashMinted", "CashDeposited"]
+
+
+def test_checkpoint_rolls_back_balances_and_journal() -> None:
+    ledger = make_ledger()
+    ledger.mint_cash("ALICE", Decimal(500))
+    checkpoint = ledger.checkpoint()
+    ledger.transfer_cash("ALICE", "BOB", Decimal(200))
+    ledger.deposit_cash("ALICE", "BANK", Decimal(100))
+    ledger.restore(checkpoint)
+    assert ledger.cash["ALICE"] == Decimal(500)
+    assert ledger.cash["BOB"] == Decimal(0)
+    assert ledger.deposits[("ALICE", "BANK")] == Decimal(0)
+    assert [event.kind for event in ledger.journal] == ["CashMinted"]
+    ledger.check_invariants()
+
+
+def test_invariant_catches_unaudited_mutation() -> None:
+    ledger = make_ledger()
+    ledger.mint_cash("ALICE", Decimal(500))
+    ledger.cash["ALICE"] += Decimal(1)  # corrupt state behind the ledger's back
+    with pytest.raises(InvariantViolation):
+        ledger.check_invariants()
+
+
+def test_reserves_track_cb_outstanding() -> None:
+    ledger = make_ledger()
+    ledger.mint_reserves("BANK", Decimal(10_000))
+    assert ledger.cb_reserves_outstanding == Decimal(10_000)
+    ledger.check_invariants()
+    ledger.reserves["BANK"] -= Decimal(5)  # corrupt
+    with pytest.raises(InvariantViolation):
+        ledger.check_invariants()
+
+```
+
+---
+
+### 🧪 tests/v2/test_parity_examples.py
+
+```python
+"""Example-scenario oracle: the v2 kernel must match the golden snapshots.
+
+The goldens were captured while live parity against the clean-core engine
+held (event-for-event, balance-for-balance), so they carry cross-engine
+authority. Scenarios the engine refuses must refuse with the pinned error.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from bilancio.core.errors import DefaultError
+from bilancio_v2 import load_scenario, run_scenario
+
+SCENARIO_DIR = Path(__file__).resolve().parents[2] / "examples" / "scenarios"
+
+# Full-run parity against goldens (see test_golden.py for the comparison).
+SUPPORTED = [
+    "default_handling_demo",
+    "firm_delivery",
+    "interbank_netting",
+    "intraday_netting",
+    "payment_demo",
+    "rich_simulation",
+    "ring_with_action_specs",
+    "sasa_scenario",
+    "simple_bank",
+    "simple_nbfi",
+    "two_banks_interbank",
+    "two_jurisdictions",
+]
+
+# Failure parity: fail-fast shortfalls in liquidity-stressed rings whose
+# dealer config the generator drops. Error messages pinned while the
+# clean-core engine raised the identical errors.
+FAIL_IDENTICALLY = {
+    "kalecki_with_dealer": "Insufficient funds to settle payable PAY_9: 251 still owed",
+    "simple_dealer": "Insufficient funds to settle payable PAY_5: 144 still owed",
+    "simple_dealer_demo_n_3_kappa_0_5_c_1_mu_0": ("Insufficient funds to settle payable PAY_5: 144 still owed"),
+}
+
+
+def _scenario(name: str):
+    return load_scenario(SCENARIO_DIR / f"{name}.yaml")
+
+
+def test_example_scenarios_are_classified() -> None:
+    known = {*SUPPORTED, *FAIL_IDENTICALLY}
+    on_disk = {path.stem for path in SCENARIO_DIR.glob("*.yaml")}
+    assert on_disk == known, (
+        f"examples/scenarios changed — classify new scenarios into SUPPORTED/FAIL_IDENTICALLY: {sorted(on_disk ^ known)}"
+    )
+
+
+@pytest.mark.parametrize("name", sorted(FAIL_IDENTICALLY))
+def test_failure_parity(name: str) -> None:
+    with pytest.raises(DefaultError) as exc:
+        run_scenario(_scenario(name))
+    assert str(exc.value) == FAIL_IDENTICALLY[name]
+
+```
+
+---
+
+### 🧪 tests/v2/test_property_parity.py
+
+```python
+"""Property-based parity: random scenarios must run identically on both engines.
+
+Hypothesis generates random payment networks (banks, households, firms,
+deposits, payables — including ones designed to default) and asserts the v2
+kernel reproduces the clean-core engine event-for-event, including default
+cascades, pro-rata recovery, and receivable reassignment.
+"""
+
+from __future__ import annotations
+
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+
+from bilancio.config.models import ScenarioConfig
+from tests.v2.test_banking_parity import assert_v2_self_consistent
+
+
+@st.composite
+def scenario_configs(draw: st.DrawFn) -> ScenarioConfig:
+    n_customers = draw(st.integers(min_value=2, max_value=6))
+    customers = [f"A{i}" for i in range(n_customers)]
+    kinds = [draw(st.sampled_from(["household", "firm"])) for _ in range(n_customers)]
+
+    agents = [
+        {"id": "CB", "kind": "central_bank", "name": "Central Bank"},
+        {"id": "B1", "kind": "bank", "name": "Bank One"},
+        {"id": "B2", "kind": "bank", "name": "Bank Two"},
+    ] + [{"id": customer, "kind": kind, "name": customer} for customer, kind in zip(customers, kinds, strict=False)]
+
+    actions: list[dict] = [
+        {"mint_reserves": {"to": "B1", "amount": 10_000}},
+        {"mint_reserves": {"to": "B2", "amount": 10_000}},
+    ]
+    for customer in customers:
+        cash = draw(st.integers(min_value=0, max_value=1_000))
+        if cash:
+            actions.append({"mint_cash": {"to": customer, "amount": cash}})
+            deposit = draw(st.integers(min_value=0, max_value=cash))
+            if deposit:
+                bank = draw(st.sampled_from(["B1", "B2"]))
+                actions.append({"deposit_cash": {"customer": customer, "bank": bank, "amount": deposit}})
+
+    n_payables = draw(st.integers(min_value=1, max_value=8))
+    for _ in range(n_payables):
+        debtor, creditor = draw(st.lists(st.sampled_from(customers), min_size=2, max_size=2, unique=True))
+        # Amounts above the endowment ceiling force defaults and exercise
+        # expulsion, pro-rata recovery, and receivable reassignment.
+        amount = draw(st.integers(min_value=1, max_value=1_500))
+        due_day = draw(st.integers(min_value=1, max_value=5))
+        actions.append(
+            {
+                "create_payable": {
+                    "from": debtor,
+                    "to": creditor,
+                    "amount": amount,
+                    "due_day": due_day,
+                }
+            }
+        )
+
+    return ScenarioConfig.model_validate(
+        {
+            "version": 1,
+            "name": "property-parity",
+            "agents": agents,
+            "initial_actions": actions,
+            "run": {
+                "max_days": 15,
+                "quiet_days": 2,
+                "default_handling": "expel-agent",
+                "rollover_enabled": draw(st.booleans()),
+            },
+        }
+    )
+
+
+@settings(
+    max_examples=40,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+@given(config=scenario_configs())
+def test_random_scenarios_self_consistent(config: ScenarioConfig) -> None:
+    assert_v2_self_consistent(config)
+
+```
+
+---
+
+### 🧪 tests/v2/test_property_parity_lender.py
+
+```python
+"""Property-based parity for the lender/rating slice.
+
+Random payment networks with a non-bank lender (kappa-aware or signal-based
+pricing, optional preventive lending, varied information visibility) and an
+optional rating agency must run identically on both engines — including
+seeded-noise observations, loan decision events, loan servicing, and default
+cascades through outstanding loans.
+"""
+
+from __future__ import annotations
+
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+
+from bilancio.config.models import ScenarioConfig
+from tests.v2.test_banking_parity import assert_v2_self_consistent
+
+
+@st.composite
+def lender_scenario_configs(draw: st.DrawFn) -> ScenarioConfig:
+    n_customers = draw(st.integers(min_value=3, max_value=6))
+    customers = [f"A{i}" for i in range(n_customers)]
+
+    agents = [
+        {"id": "CB", "kind": "central_bank", "name": "Central Bank"},
+        {"id": "LENDER", "kind": "non_bank_lender", "name": "Lender"},
+    ] + [
+        {
+            "id": customer,
+            "kind": draw(st.sampled_from(["household", "firm"])),
+            "name": customer,
+        }
+        for customer in customers
+    ]
+    if draw(st.booleans()):
+        agents.append({"id": "RATER", "kind": "rating_agency", "name": "Rating Agency"})
+
+    actions: list[dict] = [{"mint_cash": {"to": "LENDER", "amount": draw(st.integers(100, 1_000))}}]
+    for customer in customers:
+        cash = draw(st.integers(min_value=0, max_value=300))
+        if cash:
+            actions.append({"mint_cash": {"to": customer, "amount": cash}})
+
+    # Ring-ish payables, sized to create genuine shortfalls the lender can fill.
+    n_payables = draw(st.integers(min_value=2, max_value=8))
+    for _ in range(n_payables):
+        debtor, creditor = draw(st.lists(st.sampled_from(customers), min_size=2, max_size=2, unique=True))
+        actions.append(
+            {
+                "create_payable": {
+                    "from": debtor,
+                    "to": creditor,
+                    "amount": draw(st.integers(min_value=50, max_value=500)),
+                    "due_day": draw(st.integers(min_value=1, max_value=4)),
+                }
+            }
+        )
+
+    lender: dict = {
+        "enabled": True,
+        "maturity_days": draw(st.integers(min_value=1, max_value=4)),
+        "horizon": draw(st.integers(min_value=1, max_value=5)),
+        "max_single_exposure": "0.4",
+        "max_total_exposure": "0.9",
+        "ranking_mode": draw(st.sampled_from(["profit", "cascade", "blended"])),
+        "info_cash_visibility": draw(st.sampled_from(["perfect", "noisy", "none"])),
+        "info_history_visibility": draw(st.sampled_from(["perfect", "noisy", "none"])),
+        "max_loans_per_borrower_per_day": draw(st.sampled_from([0, 1])),
+        "marginal_relief_min_ratio": draw(st.sampled_from(["0", "2.0"])),
+        "daily_expected_loss_budget_ratio": draw(st.sampled_from(["0", "0.02"])),
+        "min_coverage_ratio": draw(st.sampled_from(["0", "0.5"])),
+        "coverage_mode": draw(st.sampled_from(["gate", "graduated"])),
+    }
+    if draw(st.booleans()):
+        lender["kappa"] = "0.5"
+        lender["preventive_lending"] = draw(st.booleans())
+        lender["maturity_matching"] = draw(st.booleans())
+
+    config: dict = {
+        "version": 1,
+        "name": "lender-property-parity",
+        "agents": agents,
+        "initial_actions": actions,
+        "lender": lender,
+        "run": {
+            "max_days": 12,
+            "quiet_days": 2,
+            "default_handling": "expel-agent",
+        },
+    }
+    if any(agent["kind"] == "rating_agency" for agent in agents):
+        config["rating_agency"] = {
+            "enabled": True,
+            "info_profile": draw(st.sampled_from(["omniscient", "realistic"])),
+            "coverage_fraction": draw(st.sampled_from(["0.5", "0.8", "1.0"])),
+        }
+
+    return ScenarioConfig.model_validate(config)
+
+
+@settings(
+    max_examples=40,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+@given(config=lender_scenario_configs())
+def test_lender_scenarios_self_consistent(config: ScenarioConfig) -> None:
+    assert_v2_self_consistent(config)
+
+```
+
+---
+
+### 🧪 tests/v2/test_rating_parity.py
+
+```python
+"""Deterministic parity scenarios for the rating agency slice.
+
+Covers interactions the random corpus is unlikely to hit: stock inventory
+and delivery obligations feeding the rating balance-sheet score, the
+realistic (seeded-noise) information profile, and the lender pricing off
+the published rating registry (signal-based mode, no kappa).
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from bilancio.config.models import ScenarioConfig
+from tests.v2.golden_cases import load_golden_case, v2_case_snapshot
+
+
+def rating_scenario(info_profile: str) -> ScenarioConfig:
+    return ScenarioConfig.model_validate(
+        {
+            "version": 1,
+            "name": f"rating-{info_profile}",
+            "agents": [
+                {"id": "CB", "kind": "central_bank", "name": "CB"},
+                {"id": "RATER", "kind": "rating_agency", "name": "Rater"},
+                {"id": "LENDER", "kind": "non_bank_lender", "name": "Lender"},
+                {"id": "F1", "kind": "firm", "name": "Firm 1"},
+                {"id": "F2", "kind": "firm", "name": "Firm 2"},
+                {"id": "H1", "kind": "household", "name": "House 1"},
+            ],
+            "initial_actions": [
+                {"mint_cash": {"to": "LENDER", "amount": 400}},
+                {"mint_cash": {"to": "F1", "amount": 80}},
+                {"mint_cash": {"to": "F2", "amount": 120}},
+                {"mint_cash": {"to": "H1", "amount": 50}},
+                # Stock + delivery obligations enter the rating balance sheet.
+                {"create_stock": {"owner": "F1", "sku": "WIDGET", "quantity": 10, "unit_price": 25}},
+                {
+                    "create_delivery_obligation": {
+                        "from": "F1",
+                        "to": "F2",
+                        "sku": "WIDGET",
+                        "quantity": 4,
+                        "unit_price": 25,
+                        "due_day": 2,
+                    }
+                },
+                {"create_payable": {"from": "F1", "to": "F2", "amount": 150, "due_day": 2}},
+                {"create_payable": {"from": "F2", "to": "H1", "amount": 200, "due_day": 3}},
+                {"create_payable": {"from": "H1", "to": "F1", "amount": 180, "due_day": 3}},
+            ],
+            "rating_agency": {
+                "enabled": True,
+                "info_profile": info_profile,
+                "coverage_fraction": "1.0",
+            },
+            # Signal-based lender (no kappa): prices off the rating registry.
+            "lender": {"enabled": True, "maturity_days": 2, "horizon": 3},
+            "run": {"max_days": 10, "quiet_days": 2, "default_handling": "expel-agent"},
+        }
+    )
+
+
+@pytest.mark.parametrize("info_profile", ["omniscient", "realistic"])
+def test_rating_with_inventory_matches_golden(info_profile: str) -> None:
+    golden = load_golden_case(f"rating_{info_profile}")
+    snapshot = v2_case_snapshot(rating_scenario(info_profile), None)
+    assert snapshot["balances"] == golden["balances"]
+    assert snapshot["events"] == golden["events"]
+
+```
+
+---
+
+### 🧪 tests/v2/test_rollover_parity.py
+
+```python
+"""Deterministic parity scenarios for payable rollover (Plan 024).
+
+Rollover refinances every settled payable past the latest open maturity,
+returning the settlement cash from creditor to debtor. Stability switches
+to consecutive default-free days. Covers the full-rollover path, the
+partial-rollover path (creditor cannot return all cash), and rollover
+interrupted by a default cascade.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from bilancio.config.models import ScenarioConfig
+from tests.v2.golden_cases import load_golden_case, v2_case_snapshot
+
+
+def rollover_ring(cash_per_agent: int, default_handling: str) -> ScenarioConfig:
+    agents = [{"id": "CB", "kind": "central_bank", "name": "CB"}] + [
+        {"id": f"H{i}", "kind": "household", "name": f"H{i}"} for i in range(5)
+    ]
+    actions: list[dict] = [{"mint_cash": {"to": f"H{i}", "amount": cash_per_agent}} for i in range(5)]
+    for i in range(5):
+        actions.append(
+            {
+                "create_payable": {
+                    "from": f"H{i}",
+                    "to": f"H{(i + 1) % 5}",
+                    "amount": 200,
+                    "due_day": 1 + i % 3,
+                    "maturity_distance": 2,
+                }
+            }
+        )
+    return ScenarioConfig.model_validate(
+        {
+            "version": 1,
+            "name": f"rollover-{default_handling}-{cash_per_agent}",
+            "agents": agents,
+            "initial_actions": actions,
+            "run": {
+                "max_days": 20,
+                "quiet_days": 3,
+                "default_handling": default_handling,
+                "rollover_enabled": True,
+            },
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("cash", "default_handling"),
+    [
+        (300, "fail-fast"),  # everyone liquid: clean perpetual rollover
+        (300, "expel-agent"),
+        (100, "expel-agent"),  # stressed ring: defaults interrupt rollover
+        (150, "expel-agent"),  # partial rollovers (creditor can't return all)
+    ],
+)
+def test_rollover_matches_golden(cash: int, default_handling: str) -> None:
+    golden = load_golden_case(f"rollover_{default_handling}_{cash}")
+    snapshot = v2_case_snapshot(rollover_ring(cash, default_handling), None)
+    assert snapshot["balances"] == golden["balances"]
+    assert snapshot["events"] == golden["events"]
+
+```
+
+---
+
+### 🧪 tests/v2/test_settlement.py
+
+```python
+"""Behavioral tests for v2 settlement: payment priority, defaults, recovery."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+
+from bilancio.config.models import ScenarioConfig
+from bilancio.core.errors import DefaultError
+from bilancio_v2 import run_scenario
+
+
+def make_config(payable_amount: int, default_handling: str) -> ScenarioConfig:
+    return ScenarioConfig.model_validate(
+        {
+            "version": 1,
+            "name": "settlement-test",
+            "agents": [
+                {"id": "CB", "kind": "central_bank", "name": "CB"},
+                {"id": "B1", "kind": "bank", "name": "Bank"},
+                {"id": "DEBTOR", "kind": "household", "name": "Debtor"},
+                {"id": "CRED1", "kind": "household", "name": "Creditor 1"},
+                {"id": "CRED2", "kind": "household", "name": "Creditor 2"},
+            ],
+            "initial_actions": [
+                {"mint_reserves": {"to": "B1", "amount": 10_000}},
+                {"mint_cash": {"to": "DEBTOR", "amount": 500}},
+                {"deposit_cash": {"customer": "DEBTOR", "bank": "B1", "amount": 300}},
+                {
+                    "create_payable": {
+                        "from": "DEBTOR",
+                        "to": "CRED1",
+                        "amount": payable_amount,
+                        "due_day": 1,
+                    }
+                },
+                {"create_payable": {"from": "DEBTOR", "to": "CRED2", "amount": 100, "due_day": 3}},
+            ],
+            "run": {
+                "max_days": 10,
+                "quiet_days": 2,
+                "default_handling": default_handling,
+            },
+        }
+    )
+
+
+def test_household_pays_deposits_before_cash() -> None:
+    result = run_scenario(make_config(payable_amount=400, default_handling="fail-fast"))
+    ledger = result.ledger
+    # 300 deposit drained first, the remaining 100 paid in cash.
+    assert ledger.deposits[("DEBTOR", "B1")] == Decimal(0)
+    assert ledger.deposits[("CRED1", "B1")] == Decimal(300)
+    assert ledger.cash["CRED1"] == Decimal(100)
+    kinds = [event["kind"] for event in result.events]
+    assert "PayableSettled" in kinds
+    assert "ObligationDefaulted" not in kinds
+
+
+def test_fail_fast_shortfall_raises() -> None:
+    with pytest.raises(DefaultError):
+        run_scenario(make_config(payable_amount=600, default_handling="fail-fast"))
+
+
+def test_expel_default_recovers_pro_rata_and_writes_off() -> None:
+    result = run_scenario(make_config(payable_amount=600, default_handling="expel-agent"))
+    ledger = result.ledger
+    assert "DEBTOR" in ledger.defaulted_agent_ids
+
+    kinds = [event["kind"] for event in result.events]
+    assert "PartialSettlement" in kinds  # 500 of 600 paid before the shortfall
+    assert "ObligationDefaulted" in kinds
+    assert "AgentDefaulted" in kinds
+    assert "ObligationWrittenOff" in kinds  # the day-3 payable to CRED2
+
+    # The debtor is fully drained; everything it had went to creditors.
+    assert ledger.cash["DEBTOR"] == Decimal(0)
+    assert ledger.deposits[("DEBTOR", "B1")] == Decimal(0)
+    assert ledger.cash["CRED1"] + ledger.deposits[("CRED1", "B1")] == Decimal(500)
+
+    # Invariants hold at the end of a default cascade.
+    ledger.check_invariants()
+
+```
+
+---
+
 ## End of Codebase
 
 Generated from: /home/runner/work/bilancio/bilancio
-Total source files: 231
-Total test files: 268
+Total source files: 235
+Total test files: 285
