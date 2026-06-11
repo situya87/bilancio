@@ -77,14 +77,15 @@ class ClearingPhase:
         if _balance_totals(ledger) != balances_before:
             raise InvariantViolation("netting moved cash, reserves, or deposits")
 
-        ledger.log(
-            "ClearingExecuted",
-            gross_face_due=gross_face_due,
-            face_extinguished=face_extinguished,
-            residual_face=gross_face_due - face_extinguished,
-            n_payables_affected=len(allocations),
-            n_fully_netted=n_fully_netted,
-        )
+        if face_extinguished > ZERO:
+            ledger.log(
+                "ClearingExecuted",
+                gross_face_due=gross_face_due,
+                face_extinguished=face_extinguished,
+                residual_face=gross_face_due - face_extinguished,
+                n_payables_affected=len(allocations),
+                n_fully_netted=n_fully_netted,
+            )
         return face_extinguished > ZERO
 
 
@@ -218,13 +219,15 @@ def allocate_single_edge(payables: list[Payable], reduction: Decimal) -> list[tu
             shares[payable_id] += Decimal("1")
             leftover -= Decimal("1")
     if leftover > ZERO:
-        # Non-integer residue (non-integer faces): assign it whole to the
-        # first payable in tie order with enough remaining capacity.
+        # Non-integer residue (non-integer faces): spread across payables
+        # in tie order, bounded by each payable's remaining capacity.
         for _remainder, payable_id in order:
-            if by_id[payable_id].amount - shares[payable_id] >= leftover:
-                shares[payable_id] += leftover
-                leftover = ZERO
+            if leftover <= ZERO:
                 break
+            take = min(leftover, by_id[payable_id].amount - shares[payable_id])
+            if take > ZERO:
+                shares[payable_id] += take
+                leftover -= take
     if leftover != ZERO:
         raise InvariantViolation(f"edge reduction left {leftover} unallocated")
 

@@ -639,7 +639,7 @@ def rollover_single_payable(
             payable_id=new_payable.id,
             cash_transfer=False,
         )
-    elif cash_transferred != amount:
+    elif cash_transferred != cash_return:
         ledger.log(
             "RolloverPartial",
             debtor=debtor_id,

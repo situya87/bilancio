@@ -480,7 +480,7 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
         "S_total": float(S_total) if S_total else 0.0,
         "gross_face_due": float(S_total) if S_total else 0.0,
         "face_extinguished_by_netting": float(face_netted_total) if face_netted_total else 0.0,
-        "netting_efficiency": (face_netted_total / S_total) if S_total else Decimal("0"),
+        "netting_efficiency": float(face_netted_total / S_total) if S_total else 0.0,
         "convergence_day": convergence_day,
         "convergence_quality": convergence_quality,
     }

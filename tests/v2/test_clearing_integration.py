@@ -81,11 +81,15 @@ def test_partially_netted_payables_roll_at_original_face_with_residual_cash_retu
     rolled_full = [event for event in result.events if event["kind"] == "PayableRolledOver"]
     rolled_partial = [event for event in result.events if event["kind"] == "RolloverPartial"]
 
-    assert [(event["amount"], event["cash_transfer"]) for event in rolled_full] == [(D(60), False)]
-    assert sorted((event["amount"], event["cash_transferred"]) for event in rolled_partial) == [
-        (D(100), D(40)),
-        (D(140), D(80)),
+    # Each leg rolls at full original face; the cash return-flow covers only
+    # the cash-settled residual, so a fully returned residual is a complete
+    # (not partial) rollover.
+    assert sorted((event["amount"], event["cash_transfer"]) for event in rolled_full) == [
+        (D(60), False),
+        (D(100), True),
+        (D(140), True),
     ]
+    assert rolled_partial == []
 
     # Gross face is restored in full and cash is conserved.
     assert open_face(ledger) == D(300)
