@@ -94,6 +94,11 @@ class RunResult:
         return self.ledger.journal.as_dicts()
 
     @property
+    def state(self) -> Ledger:
+        """Alias for the ledger, satisfying the views/display state protocol."""
+        return self.ledger
+
+    @property
     def stop_day(self) -> int:
         return self.final_day
 
@@ -267,6 +272,7 @@ def run_until_stable(
     *,
     max_days: int,
     quiet_days: int,
+    progress_callback: Callable[[int, int], None] | None = None,
     day_callback: Callable[[Runtime, int], None] | None = None,
 ) -> RunResult:
     reached_stable = False
@@ -274,6 +280,8 @@ def run_until_stable(
     tracker = StabilityTracker()
     for day in range(max_days):
         impactful = run_day(runtime, day)
+        if progress_callback:
+            progress_callback(day + 1, max_days)
         stable_today = update_stability(runtime, day=day, impactful=impactful, quiet_days=quiet_days, tracker=tracker)
         if day_callback:
             day_callback(runtime, day)
