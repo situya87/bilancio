@@ -11,6 +11,7 @@ across local and cloud execution.
 2. Record code revision and benchmark status:
    - ABM benchmark status must be `PASS`
    - simulation efficiency benchmark status must be `PASS`
+   - scientific comparison benchmark status must be `PASS` for treatment/control comparisons
 3. Fix run seeds and replicate policy.
 4. Confirm output directories and artifact naming.
 
@@ -20,6 +21,10 @@ across local and cloud execution.
 - Declare sweep dimensions and fixed controls explicitly:
   - `kappa`, `concentration`, `mu`, `monotonicity`, `outside_mid_ratio`
 - Set minimum replicate count before inferential reporting.
+- Use a pre-specified analysis manifest for treatment/control comparisons:
+  - primary and secondary endpoints
+  - MDE, alpha, and power assumptions
+  - hypothesis families and multiple-testing method
 - Define stopping rules and exclusion policy before running.
 
 ## Execution Requirements
@@ -50,6 +55,7 @@ Every experiment summary must include:
 - effect-size and confidence interval fields
 - explicit missing-data policy
 - benchmark status at execution time
+- analysis manifest path and endpoint-level power planning for comparison studies
 
 ## Reproducibility Metadata
 
@@ -58,4 +64,3 @@ Store or log:
 - executable command or runner config
 - generated artifact index
 - model version and key dependency versions
-

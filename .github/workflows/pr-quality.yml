@@ -25,6 +25,22 @@ env:
     src/bilancio/ui/sweep_setup.py
 
 jobs:
+  test-antipatterns:
+    name: Test Anti-Pattern Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run anti-pattern check
+        run: python scripts/check_test_antipatterns.py
+
   lint:
     name: Ruff (Enforced Scope)
     runs-on: ubuntu-latest
@@ -94,6 +110,34 @@ jobs:
       - name: Run non-benchmark test suite
         run: |
           PYTHONPATH=src python -m pytest tests/ --ignore=tests/benchmark --no-cov -m "not slow"
+
+  deterministic-regression:
+    name: Deterministic Regression Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install runtime + test extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,analysis,cloud]
+
+      - name: Run deterministic regression subset
+        run: |
+          PYTHONPATH=src python -m pytest \
+            tests/regression/test_performance_parity.py \
+            tests/regression/test_simulation_properties.py \
+            -m regression \
+            --no-cov \
+            -q
 
   core-profile:
     name: Core Profile Smoke

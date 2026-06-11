@@ -44,8 +44,41 @@ The `matching_order` flag is classified as `SEMANTICS_CHANGING` because
 sorting sellers/buyers by urgency changes the order in which RNG calls
 happen during trade matching, potentially producing different outcomes.
 
+## Tolerance Policy
+
+Semantics-preserving flags require exact reproducibility:
+
+- same seed
+- same scenario config
+- same run options
+- same critical summary metrics (`delta_total`, `phi_total`)
+- same normalized economic event stream
+
+The normalized event stream intentionally collapses volatile generated
+instrument IDs, because those labels are not economic state. Event kind,
+day, phase, agents, amounts, and other economic fields must still match
+exactly.
+
+Semantics-changing flags require versioned comparison instead of exact
+parity. Current semantics-changing flags:
+
+- `matching_order="urgency"`
+
+Reports that use semantics-changing flags must record the active
+`PerformanceConfig` and should not be compared silently against historical
+compatible-mode outputs.
+
+## Local/Cloud Parity
+
+Local and cloud runs must use the same scenario seed and serialized
+`PerformanceConfig`. Cloud execution serializes performance options through
+`PerformanceConfig.to_dict()` and restores them through
+`PerformanceConfig.from_dict()` before calling the same simulation entrypoint.
+
 ## Verification
 
 The regression test suite (`tests/regression/test_performance_parity.py`)
 verifies that compatible, fast, and aggressive presets produce
-bit-identical `delta_total` and `phi_total` for the same seed.
+bit-identical `delta_total` and `phi_total` for the same seed. It also
+verifies that each semantics-preserving boolean flag, and all such flags
+combined, preserve the normalized event stream.

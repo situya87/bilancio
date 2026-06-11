@@ -20,9 +20,18 @@ suites to ensure CI remains fast and resource-efficient.
 
 ## Monitoring
 
-Each benchmark reports wall time in its JSON output under `elapsed_seconds`.
-The `check_operational_budget()` helper in `benchmark_utils.py` can be
-used to validate budgets programmatically.
+Each registered benchmark report includes:
+
+- wall time in `elapsed_seconds`
+- an `operational_budget` object with wall-time, process peak RSS memory, and
+  optional cloud-cost checks
+- an `operational::within_budget` critical gate in `critical_checks`
+
+Exceeding the configured budget fails the benchmark status and process exit
+code, even when the scientific or behavioral score target is met. Peak memory
+is measured from the current process RSS where the platform exposes it. Cloud
+cost is checked only when a benchmark supplies a measured or estimated
+`cloud_cost_usd` value.
 
 ## Cost Budgets (Cloud)
 
@@ -42,7 +51,9 @@ If a benchmark exceeds its budget:
 1. Check for regression in simulation performance
 2. Review recent changes to the simulation engine
 3. Consider if the benchmark parameters need adjustment
-4. File an issue if the regression is real
+4. Record explicit sign-off if scientific validity is preserved but the
+   operational budget regression is accepted
+5. File an issue if the regression is real
 
 ## CI Timeout
 
