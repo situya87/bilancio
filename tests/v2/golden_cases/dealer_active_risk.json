@@ -1,0 +1,3037 @@
+{
+ "events": [
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "dealer_short",
+   "amount": "800"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "vbt_short",
+   "amount": "1500"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "dealer_mid",
+   "amount": "800"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "vbt_mid",
+   "amount": "1500"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "dealer_long",
+   "amount": "800"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "vbt_long",
+   "amount": "1500"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H0",
+   "amount": "60"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H1",
+   "amount": "60"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H2",
+   "amount": "60"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H3",
+   "amount": "60"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H4",
+   "amount": "60"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H5",
+   "amount": "60"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H0",
+   "creditor": "H1",
+   "amount": "200",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_12",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H1",
+   "creditor": "H2",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_13",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H2",
+   "creditor": "H3",
+   "amount": "200",
+   "due_day": 4,
+   "maturity_distance": 4,
+   "payable_id": "PAY_14",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H3",
+   "creditor": "H4",
+   "amount": "200",
+   "due_day": 5,
+   "maturity_distance": 5,
+   "payable_id": "PAY_15",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H4",
+   "creditor": "H5",
+   "amount": "200",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_16",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H5",
+   "creditor": "H0",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_17",
+   "alias": null
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Dealer",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 0,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Dealer",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H4",
+   "ticket_id": "TKT_PAY_15",
+   "bucket": "mid",
+   "offered_price": 0.7105982905982906,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H5",
+   "ticket_id": "TKT_PAY_16",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_12",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H0",
+   "ticket_id": "TKT_PAY_17",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 1,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Dealer",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H3",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "sell_rejected",
+   "day": 2,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_13",
+   "bucket": "short",
+   "offered_price": 0.6927991452991453,
+   "expected_value": 180.0,
+   "threshold": 0.0,
+   "reason": "price_below_ev_threshold"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "H0",
+   "to": "H1",
+   "amount": "60"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:H1",
+   "removed": "cash:H1:merged:2:0"
+  },
+  {
+   "kind": "PartialSettlement",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_12",
+   "alias": null,
+   "debtor": "H0",
+   "creditor": "H1",
+   "contract_kind": "payable",
+   "settlement_kind": "payable",
+   "amount_paid": "60",
+   "shortfall": "140",
+   "original_amount": "200",
+   "distribution": [
+    {
+     "method": "cash",
+     "amount": "60"
+    }
+   ]
+  },
+  {
+   "kind": "ObligationDefaulted",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_12",
+   "alias": null,
+   "debtor": "H0",
+   "creditor": "H1",
+   "contract_kind": "payable",
+   "shortfall": "140",
+   "amount_paid": "60",
+   "original_amount": "200",
+   "amount": "140"
+  },
+  {
+   "kind": "AgentDefaulted",
+   "day": 2,
+   "phase": "simulation",
+   "agent": "H0",
+   "frm": "H0",
+   "trigger_contract": "PAY_12",
+   "contract_kind": "payable",
+   "shortfall": "140",
+   "mode": "expel-agent"
+  },
+  {
+   "kind": "ReceivableReassigned",
+   "day": 2,
+   "phase": "simulation",
+   "defaulted_agent": "H0",
+   "debtor": "H5",
+   "new_creditor": "H1",
+   "old_payable": "PAY_17",
+   "new_payable": "PAY_reassigned_6",
+   "amount": "200",
+   "weight": 1.0,
+   "maturity_distance": 3,
+   "new_due_day": 5
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_6",
+   "debtor": "H5",
+   "creditor": "H1",
+   "amount": "200",
+   "due_day": 5,
+   "maturity_distance": 3,
+   "reason": "receivable_reassignment"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "H4",
+   "to": "H5",
+   "amount": "60"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:H5",
+   "removed": "cash:H5:merged:2:0"
+  },
+  {
+   "kind": "PartialSettlement",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_16",
+   "alias": null,
+   "debtor": "H4",
+   "creditor": "H5",
+   "contract_kind": "payable",
+   "settlement_kind": "payable",
+   "amount_paid": "60",
+   "shortfall": "140",
+   "original_amount": "200",
+   "distribution": [
+    {
+     "method": "cash",
+     "amount": "60"
+    }
+   ]
+  },
+  {
+   "kind": "ObligationDefaulted",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_16",
+   "alias": null,
+   "debtor": "H4",
+   "creditor": "H5",
+   "contract_kind": "payable",
+   "shortfall": "140",
+   "amount_paid": "60",
+   "original_amount": "200",
+   "amount": "140"
+  },
+  {
+   "kind": "AgentDefaulted",
+   "day": 2,
+   "phase": "simulation",
+   "agent": "H4",
+   "frm": "H4",
+   "trigger_contract": "PAY_16",
+   "contract_kind": "payable",
+   "shortfall": "140",
+   "mode": "expel-agent"
+  },
+  {
+   "kind": "ReceivableReassigned",
+   "day": 2,
+   "phase": "simulation",
+   "defaulted_agent": "H4",
+   "debtor": "H3",
+   "new_creditor": "H5",
+   "old_payable": "PAY_15",
+   "new_payable": "PAY_reassigned_7",
+   "amount": "200",
+   "weight": 1.0,
+   "maturity_distance": 5,
+   "new_due_day": 7
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_7",
+   "debtor": "H3",
+   "creditor": "H5",
+   "amount": "200",
+   "due_day": 7,
+   "maturity_distance": 5,
+   "reason": "receivable_reassignment"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Dealer",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "dealer_trade",
+   "day": 3,
+   "phase": "simulation",
+   "trader": "H3",
+   "side": "sell",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "price": 41.84601832276251,
+   "unit_price": 0.20923009161381254,
+   "face": 200.0,
+   "is_passthrough": false,
+   "is_liquidity_driven": true
+  },
+  {
+   "kind": "dealer_trade",
+   "day": 3,
+   "phase": "simulation",
+   "trader": "H5",
+   "side": "sell",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "price": 46.192036645525015,
+   "unit_price": 0.2309601832276251,
+   "face": 200.0,
+   "is_passthrough": false,
+   "is_liquidity_driven": true
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.2092895622895623,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "offered_price": 0.23107912457912458,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.2092895622895623,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "offered_price": 0.23107912457912458,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.2092895622895623,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "offered_price": 0.23107912457912458,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.2092895622895623,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "offered_price": 0.23107912457912458,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.2092895622895623,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "offered_price": 0.23107912457912458,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.2092895622895623,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "offered_price": 0.23107912457912458,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.2092895622895623,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "offered_price": 0.23107912457912458,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.2092895622895623,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "offered_price": 0.23107912457912458,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.2092895622895623,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "offered_price": 0.23107912457912458,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_14",
+   "bucket": "short",
+   "offered_price": 0.2092895622895623,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 3,
+   "phase": "simulation",
+   "trader_id": "H1",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "mid",
+   "offered_price": 0.23107912457912458,
+   "expected_value": 50.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "ClaimTransferredDealer",
+   "day": 3,
+   "phase": "simulation",
+   "payable_id": "PAY_14",
+   "from_holder": "H3",
+   "to_holder": "dealer_short",
+   "amount": "200",
+   "due_day": 4
+  },
+  {
+   "kind": "ClaimTransferredDealer",
+   "day": 3,
+   "phase": "simulation",
+   "payable_id": "PAY_reassigned_7",
+   "from_holder": "H5",
+   "to_holder": "dealer_mid",
+   "amount": "200",
+   "due_day": 7
+  },
+  {
+   "kind": "CashMinted",
+   "day": 3,
+   "phase": "simulation",
+   "to": "H3",
+   "amount": "42"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 3,
+   "phase": "simulation",
+   "to": "H5",
+   "amount": "46"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "H1",
+   "to": "H2",
+   "amount": "120"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H2",
+   "removed": "cash:H2:merged:3:0"
+  },
+  {
+   "kind": "PartialSettlement",
+   "day": 3,
+   "phase": "simulation",
+   "contract_id": "PAY_13",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "H2",
+   "contract_kind": "payable",
+   "settlement_kind": "payable",
+   "amount_paid": "120",
+   "shortfall": "80",
+   "original_amount": "200",
+   "distribution": [
+    {
+     "method": "cash",
+     "amount": "120"
+    }
+   ]
+  },
+  {
+   "kind": "ObligationDefaulted",
+   "day": 3,
+   "phase": "simulation",
+   "contract_id": "PAY_13",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "H2",
+   "contract_kind": "payable",
+   "shortfall": "80",
+   "amount_paid": "120",
+   "original_amount": "200",
+   "amount": "80"
+  },
+  {
+   "kind": "AgentDefaulted",
+   "day": 3,
+   "phase": "simulation",
+   "agent": "H1",
+   "frm": "H1",
+   "trigger_contract": "PAY_13",
+   "contract_kind": "payable",
+   "shortfall": "80",
+   "mode": "expel-agent"
+  },
+  {
+   "kind": "ReceivableReassigned",
+   "day": 3,
+   "phase": "simulation",
+   "defaulted_agent": "H1",
+   "debtor": "H5",
+   "new_creditor": "H2",
+   "old_payable": "PAY_reassigned_6",
+   "new_payable": "PAY_reassigned_8",
+   "amount": "200",
+   "weight": 1.0,
+   "maturity_distance": 3,
+   "new_due_day": 6
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 3,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_8",
+   "debtor": "H5",
+   "creditor": "H2",
+   "amount": "200",
+   "due_day": 6,
+   "maturity_distance": 3,
+   "reason": "receivable_reassignment"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Dealer",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 4,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "short",
+   "offered_price": 0.1720909090909091,
+   "expected_value": 40.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 4,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "short",
+   "offered_price": 0.1720909090909091,
+   "expected_value": 40.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 4,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "short",
+   "offered_price": 0.1720909090909091,
+   "expected_value": 40.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 4,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "short",
+   "offered_price": 0.1720909090909091,
+   "expected_value": 40.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 4,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "short",
+   "offered_price": 0.1720909090909091,
+   "expected_value": 40.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 4,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "short",
+   "offered_price": 0.1720909090909091,
+   "expected_value": 40.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 4,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "short",
+   "offered_price": 0.1720909090909091,
+   "expected_value": 40.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 4,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "short",
+   "offered_price": 0.1720909090909091,
+   "expected_value": 40.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 4,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "short",
+   "offered_price": 0.1720909090909091,
+   "expected_value": 40.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "buy_rejected",
+   "day": 4,
+   "phase": "simulation",
+   "trader_id": "H2",
+   "ticket_id": "TKT_PAY_reassigned_7",
+   "bucket": "short",
+   "offered_price": 0.1720909090909091,
+   "expected_value": 40.0,
+   "threshold": 0.0,
+   "reason": "ev_below_price_threshold"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 4,
+   "phase": "simulation",
+   "frm": "H2",
+   "to": "dealer_short",
+   "amount": "180"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 4,
+   "phase": "simulation",
+   "keep": "cash:dealer_short",
+   "removed": "cash:dealer_short:merged:4:0"
+  },
+  {
+   "kind": "PartialSettlement",
+   "day": 4,
+   "phase": "simulation",
+   "contract_id": "PAY_14",
+   "alias": null,
+   "debtor": "H2",
+   "creditor": "dealer_short",
+   "contract_kind": "payable",
+   "settlement_kind": "payable",
+   "amount_paid": "180",
+   "shortfall": "20",
+   "original_amount": "200",
+   "distribution": [
+    {
+     "method": "cash",
+     "amount": "180"
+    }
+   ]
+  },
+  {
+   "kind": "ObligationDefaulted",
+   "day": 4,
+   "phase": "simulation",
+   "contract_id": "PAY_14",
+   "alias": null,
+   "debtor": "H2",
+   "creditor": "dealer_short",
+   "contract_kind": "payable",
+   "shortfall": "20",
+   "amount_paid": "180",
+   "original_amount": "200",
+   "amount": "20"
+  },
+  {
+   "kind": "AgentDefaulted",
+   "day": 4,
+   "phase": "simulation",
+   "agent": "H2",
+   "frm": "H2",
+   "trigger_contract": "PAY_14",
+   "contract_kind": "payable",
+   "shortfall": "20",
+   "mode": "expel-agent"
+  },
+  {
+   "kind": "ReceivableReassigned",
+   "day": 4,
+   "phase": "simulation",
+   "defaulted_agent": "H2",
+   "debtor": "H5",
+   "new_creditor": "dealer_short",
+   "old_payable": "PAY_reassigned_8",
+   "new_payable": "PAY_reassigned_9",
+   "amount": "200",
+   "weight": 1.0,
+   "maturity_distance": 3,
+   "new_due_day": 7
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 4,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_9",
+   "debtor": "H5",
+   "creditor": "dealer_short",
+   "amount": "200",
+   "due_day": 7,
+   "maturity_distance": 3,
+   "reason": "receivable_reassignment"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Dealer",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashRetired",
+   "day": 5,
+   "phase": "simulation",
+   "frm": "dealer_short",
+   "amount": "120"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 5,
+   "phase": "simulation",
+   "to": "dealer_mid",
+   "amount": "60"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 5,
+   "phase": "simulation",
+   "to": "dealer_long",
+   "amount": "60"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Dealer",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Dealer",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 7,
+   "phase": "simulation",
+   "frm": "H3",
+   "to": "dealer_short",
+   "amount": "60"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 7,
+   "phase": "simulation",
+   "frm": "H3",
+   "to": "dealer_short",
+   "amount": "42"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 7,
+   "phase": "simulation",
+   "keep": "cash:dealer_short",
+   "removed": "cash:dealer_short:merged:7:0"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 7,
+   "phase": "simulation",
+   "keep": "cash:dealer_short",
+   "removed": "cash:dealer_short:merged:7:1"
+  },
+  {
+   "kind": "PartialSettlement",
+   "day": 7,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_7",
+   "alias": null,
+   "debtor": "H3",
+   "creditor": "dealer_short",
+   "contract_kind": "payable",
+   "settlement_kind": "payable",
+   "amount_paid": "102",
+   "shortfall": "98",
+   "original_amount": "200",
+   "distribution": [
+    {
+     "method": "cash",
+     "amount": "102"
+    }
+   ]
+  },
+  {
+   "kind": "ObligationDefaulted",
+   "day": 7,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_7",
+   "alias": null,
+   "debtor": "H3",
+   "creditor": "dealer_short",
+   "contract_kind": "payable",
+   "shortfall": "98",
+   "amount_paid": "102",
+   "original_amount": "200",
+   "amount": "98"
+  },
+  {
+   "kind": "AgentDefaulted",
+   "day": 7,
+   "phase": "simulation",
+   "agent": "H3",
+   "frm": "H3",
+   "trigger_contract": "PAY_reassigned_7",
+   "contract_kind": "payable",
+   "shortfall": "98",
+   "mode": "expel-agent"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 7,
+   "phase": "simulation",
+   "frm": "H5",
+   "to": "dealer_short",
+   "amount": "120"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 7,
+   "phase": "simulation",
+   "frm": "H5",
+   "to": "dealer_short",
+   "amount": "46"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 7,
+   "phase": "simulation",
+   "keep": "cash:dealer_short",
+   "removed": "cash:dealer_short:merged:7:0"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 7,
+   "phase": "simulation",
+   "keep": "cash:dealer_short",
+   "removed": "cash:dealer_short:merged:7:1"
+  },
+  {
+   "kind": "PartialSettlement",
+   "day": 7,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_9",
+   "alias": null,
+   "debtor": "H5",
+   "creditor": "dealer_short",
+   "contract_kind": "payable",
+   "settlement_kind": "payable",
+   "amount_paid": "166",
+   "shortfall": "34",
+   "original_amount": "200",
+   "distribution": [
+    {
+     "method": "cash",
+     "amount": "166"
+    }
+   ]
+  },
+  {
+   "kind": "ObligationDefaulted",
+   "day": 7,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_9",
+   "alias": null,
+   "debtor": "H5",
+   "creditor": "dealer_short",
+   "contract_kind": "payable",
+   "shortfall": "34",
+   "amount_paid": "166",
+   "original_amount": "200",
+   "amount": "34"
+  },
+  {
+   "kind": "AgentDefaulted",
+   "day": 7,
+   "phase": "simulation",
+   "agent": "H5",
+   "frm": "H5",
+   "trigger_contract": "PAY_reassigned_9",
+   "contract_kind": "payable",
+   "shortfall": "34",
+   "mode": "expel-agent"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 7,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "dealer_long": "860",
+   "dealer_mid": "860",
+   "dealer_short": "1128",
+   "vbt_long": "1500",
+   "vbt_mid": "1500",
+   "vbt_short": "1500"
+  },
+  "reserves": {},
+  "deposits": {},
+  "defaulted": [
+   "H0",
+   "H1",
+   "H2",
+   "H3",
+   "H4",
+   "H5"
+  ]
+ }
+}

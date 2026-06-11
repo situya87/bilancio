@@ -105,6 +105,7 @@ class SupabaseJobStore:
                 "outside_mid_ratios": [str(r) for r in job.config.outside_mid_ratios],
                 "seeds": job.config.seeds,
                 "cloud": job.config.cloud,
+                "performance": job.config.performance,
                 # Optional fields
                 "notes": job.notes,
                 "error": job.error,
@@ -305,6 +306,7 @@ class SupabaseJobStore:
             outside_mid_ratios=outside_mid_ratios,
             maturity_days=row.get("maturity_days") or 5,
             seeds=seeds,
+            performance=row.get("performance") or {},
         )
 
         # Parse timestamps

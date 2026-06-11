@@ -1,0 +1,847 @@
+{
+ "events": [
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "LENDER",
+   "amount": "400"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F1",
+   "amount": "80"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F2",
+   "amount": "120"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H1",
+   "amount": "50"
+  },
+  {
+   "kind": "StockCreated",
+   "day": 0,
+   "phase": "setup",
+   "owner": "F1",
+   "sku": "WIDGET",
+   "qty": 10,
+   "unit_price": "25",
+   "stock_id": "S_4"
+  },
+  {
+   "kind": "DeliveryObligationCreated",
+   "day": 0,
+   "phase": "setup",
+   "id": "D_5",
+   "frm": "F1",
+   "to": "F2",
+   "sku": "WIDGET",
+   "qty": 4,
+   "due_day": 2,
+   "unit_price": "25"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F1",
+   "creditor": "F2",
+   "amount": "150",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_6",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F2",
+   "creditor": "H1",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_7",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H1",
+   "creditor": "F1",
+   "amount": "180",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_8",
+   "alias": null
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Rating",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "RatingsPublished",
+   "day": 0,
+   "agency_id": "RATER",
+   "n_rated": 3,
+   "n_eligible": 3,
+   "ratings": {
+    "F1": "0.1052062780269058295964125561",
+    "H1": "0.2147551020408163265306122449",
+    "F2": "0.1129893048128342245989304813"
+   }
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "phase": "simulation",
+   "lender_id": "LENDER",
+   "borrower_id": "H1",
+   "amount": "60",
+   "loan_id": "NBL_0",
+   "rate": "0.09295102040816326530612244898",
+   "maturity_day": 2
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "phase": "simulation",
+   "lender_id": "LENDER",
+   "borrower_id": "F2",
+   "amount": "60",
+   "loan_id": "NBL_1",
+   "rate": "0.07259786096256684491978609626",
+   "maturity_day": 2
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "phase": "simulation",
+   "lender_id": "LENDER",
+   "borrower_id": "F1",
+   "amount": "60",
+   "loan_id": "NBL_2",
+   "rate": "0.07104125560538116591928251122",
+   "maturity_day": 2
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "lender_id": "LENDER",
+   "borrower_id": "H1",
+   "amount": "60",
+   "rate": "0.09295102040816326530612244898",
+   "loan_id": "NBL_0",
+   "p_default": "0.2147551020408163265306122449"
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "lender_id": "LENDER",
+   "borrower_id": "F2",
+   "amount": "60",
+   "rate": "0.07259786096256684491978609626",
+   "loan_id": "NBL_1",
+   "p_default": "0.1129893048128342245989304813"
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 0,
+   "lender_id": "LENDER",
+   "borrower_id": "F1",
+   "amount": "60",
+   "rate": "0.07104125560538116591928251122",
+   "loan_id": "NBL_2",
+   "p_default": "0.1052062780269058295964125561"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Rating",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "RatingsPublished",
+   "day": 1,
+   "agency_id": "RATER",
+   "n_rated": 3,
+   "n_eligible": 3,
+   "ratings": {
+    "F1": "0.1236775244299674267100977199",
+    "F2": "0.1706619718309859154929577465",
+    "H1": "0.2289310344827586206896551724"
+   }
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Rating",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "RatingsPublished",
+   "day": 2,
+   "agency_id": "RATER",
+   "n_rated": 3,
+   "n_eligible": 3,
+   "ratings": {
+    "H1": "0.220442622950819672131147541",
+    "F1": "0.1348709677419354838709677419",
+    "F2": "0.1476779661016949152542372881"
+   }
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "F1",
+   "to": "F2",
+   "amount": "80"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "F1",
+   "to": "F2",
+   "amount": "60"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:F2",
+   "removed": "cash:F2:merged:2:0"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:F2",
+   "removed": "cash:F2:merged:2:1"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:F2",
+   "removed": "cash:F2:merged:2:2"
+  },
+  {
+   "kind": "PartialSettlement",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_6",
+   "alias": null,
+   "debtor": "F1",
+   "creditor": "F2",
+   "contract_kind": "payable",
+   "settlement_kind": "payable",
+   "amount_paid": "140",
+   "shortfall": "10",
+   "original_amount": "150",
+   "distribution": [
+    {
+     "method": "cash",
+     "amount": "140"
+    }
+   ]
+  },
+  {
+   "kind": "ObligationDefaulted",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_6",
+   "alias": null,
+   "debtor": "F1",
+   "creditor": "F2",
+   "contract_kind": "payable",
+   "shortfall": "10",
+   "amount_paid": "140",
+   "original_amount": "150",
+   "amount": "10"
+  },
+  {
+   "kind": "AgentDefaulted",
+   "day": 2,
+   "phase": "simulation",
+   "agent": "F1",
+   "frm": "F1",
+   "trigger_contract": "PAY_6",
+   "contract_kind": "payable",
+   "shortfall": "10",
+   "mode": "expel-agent"
+  },
+  {
+   "kind": "ObligationWrittenOff",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "NBL_2",
+   "alias": null,
+   "debtor": "F1",
+   "creditor": "LENDER",
+   "contract_kind": "non_bank_loan",
+   "amount": "60"
+  },
+  {
+   "kind": "ObligationWrittenOff",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "D_5",
+   "alias": null,
+   "debtor": "F1",
+   "creditor": "F2",
+   "contract_kind": "delivery_obligation",
+   "amount": 4,
+   "due_day": 2,
+   "sku": "WIDGET"
+  },
+  {
+   "kind": "ReceivableReassigned",
+   "day": 2,
+   "phase": "simulation",
+   "defaulted_agent": "F1",
+   "debtor": "H1",
+   "new_creditor": "F2",
+   "old_payable": "PAY_8",
+   "new_payable": "PAY_reassigned_3",
+   "amount": "129",
+   "weight": 0.719626168224299,
+   "maturity_distance": 3,
+   "new_due_day": 5
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_3",
+   "debtor": "H1",
+   "creditor": "F2",
+   "amount": "129",
+   "due_day": 5,
+   "maturity_distance": 3,
+   "reason": "receivable_reassignment"
+  },
+  {
+   "kind": "ReceivableReassigned",
+   "day": 2,
+   "phase": "simulation",
+   "defaulted_agent": "F1",
+   "debtor": "H1",
+   "new_creditor": "LENDER",
+   "old_payable": "PAY_8",
+   "new_payable": "PAY_reassigned_4",
+   "amount": "50",
+   "weight": 0.2803738317757009,
+   "maturity_distance": 3,
+   "new_due_day": 5
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 2,
+   "phase": "simulation",
+   "contract_id": "PAY_reassigned_4",
+   "debtor": "H1",
+   "creditor": "LENDER",
+   "amount": "50",
+   "due_day": 5,
+   "maturity_distance": 3,
+   "reason": "receivable_reassignment"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "NonBankLoanRepaid",
+   "day": 2,
+   "phase": "simulation",
+   "loan_id": "NBL_0",
+   "borrower_id": "H1",
+   "lender_id": "LENDER",
+   "principal": "60",
+   "interest": "5",
+   "total_repaid": "65"
+  },
+  {
+   "kind": "NonBankLoanRepaid",
+   "day": 2,
+   "phase": "simulation",
+   "loan_id": "NBL_1",
+   "borrower_id": "F2",
+   "lender_id": "LENDER",
+   "principal": "60",
+   "interest": "4",
+   "total_repaid": "64"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Rating",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "RatingsPublished",
+   "day": 3,
+   "agency_id": "RATER",
+   "n_rated": 2,
+   "n_eligible": 2,
+   "ratings": {
+    "H1": "0.2871522842639593908629441624",
+    "F2": "0.216009900990099009900990099"
+   }
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 3,
+   "phase": "simulation",
+   "lender_id": "LENDER",
+   "borrower_id": "H1",
+   "amount": "52",
+   "loan_id": "NBL_3",
+   "rate": "0.1074304568527918781725888325",
+   "maturity_day": 5
+  },
+  {
+   "kind": "NonBankLoanCreated",
+   "day": 3,
+   "lender_id": "LENDER",
+   "borrower_id": "H1",
+   "amount": "52",
+   "rate": "0.1074304568527918781725888325",
+   "loan_id": "NBL_3",
+   "p_default": "0.2871522842639593908629441624"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "F2",
+   "to": "H1",
+   "amount": "200"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H1",
+   "removed": "cash:H1:merged:3:0"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:H1",
+   "removed": "cash:H1:merged:3:1"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_7",
+   "contract_id": "PAY_7",
+   "alias": null,
+   "debtor": "F2",
+   "creditor": "H1",
+   "amount": "200"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Rating",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "RatingsPublished",
+   "day": 4,
+   "agency_id": "RATER",
+   "n_rated": 2,
+   "n_eligible": 2,
+   "ratings": {
+    "F2": "0.145000000000000000000000000",
+    "H1": "0.3209097744360902255639097744"
+   }
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Rating",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "RatingsPublished",
+   "day": 5,
+   "agency_id": "RATER",
+   "n_rated": 2,
+   "n_eligible": 2,
+   "ratings": {
+    "F2": "0.145000000000000000000000000",
+    "H1": "0.3103632286995515695067264574"
+   }
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 5,
+   "phase": "simulation",
+   "frm": "H1",
+   "to": "F2",
+   "amount": "129"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 5,
+   "phase": "simulation",
+   "keep": "cash:F2",
+   "removed": "cash:F2:merged:5:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 5,
+   "phase": "simulation",
+   "pid": "PAY_reassigned_3",
+   "contract_id": "PAY_reassigned_3",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "F2",
+   "amount": "129"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 5,
+   "phase": "simulation",
+   "frm": "H1",
+   "to": "LENDER",
+   "amount": "50"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 5,
+   "phase": "simulation",
+   "keep": "cash:LENDER",
+   "removed": "cash:LENDER:merged:5:0"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 5,
+   "phase": "simulation",
+   "keep": "cash:LENDER",
+   "removed": "cash:LENDER:merged:5:1"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 5,
+   "phase": "simulation",
+   "keep": "cash:LENDER",
+   "removed": "cash:LENDER:merged:5:2"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 5,
+   "phase": "simulation",
+   "pid": "PAY_reassigned_4",
+   "contract_id": "PAY_reassigned_4",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "LENDER",
+   "amount": "50"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "NonBankLoanRepaid",
+   "day": 5,
+   "phase": "simulation",
+   "loan_id": "NBL_3",
+   "borrower_id": "H1",
+   "lender_id": "LENDER",
+   "principal": "52",
+   "interest": "5",
+   "total_repaid": "57"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Rating",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "RatingsPublished",
+   "day": 6,
+   "agency_id": "RATER",
+   "n_rated": 2,
+   "n_eligible": 2,
+   "ratings": {
+    "F2": "0.145000000000000000000000000",
+    "H1": "0.145000000000000000000000000"
+   }
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Rating",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "RatingsPublished",
+   "day": 7,
+   "agency_id": "RATER",
+   "n_rated": 2,
+   "n_eligible": 2,
+   "ratings": {
+    "F2": "0.145000000000000000000000000",
+    "H1": "0.145000000000000000000000000"
+   }
+  },
+  {
+   "kind": "SubphaseB_Lending",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 7,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 7,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "F2": "185",
+   "H1": "61",
+   "LENDER": "404"
+  },
+  "reserves": {},
+  "deposits": {},
+  "defaulted": [
+   "F1"
+  ]
+ }
+}

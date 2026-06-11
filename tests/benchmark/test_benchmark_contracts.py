@@ -6,6 +6,7 @@ to ensure stable contracts for benchmark scoring, grading, and reporting.
 
 from __future__ import annotations
 
+import json
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -158,6 +159,119 @@ class TestReportDict:
         assert len(result["critical_failures"]) == 1
         assert result["critical_failures"][0]["code"] == "G2"
 
+    def test_operational_budget_gate_added_for_registered_benchmark(self, monkeypatch):
+        monkeypatch.setattr(benchmark_utils, "current_peak_memory_mb", lambda: 128.0)
+
+        result = benchmark_utils.report_dict(
+            benchmark_name="Regression Benchmark",
+            target_score=80.0,
+            total_score=85.0,
+            status="PASS",
+            meets_target=True,
+            base_grade="B",
+            grade="B",
+            elapsed_seconds=1.0,
+            categories=[],
+            critical_checks=[],
+        )
+
+        assert result["status"] == "PASS"
+        assert result["operational_budget"]["all_ok"] is True
+        assert result["operational_budget"]["wall_time_budget_seconds"] == 120.0
+        assert result["operational_budget"]["memory_budget_mb"] == 1024.0
+        assert any(
+            check["code"] == "operational::within_budget"
+            for check in result["critical_checks"]
+        )
+
+    def test_operational_budget_failure_fails_report_status(self, monkeypatch):
+        monkeypatch.setattr(benchmark_utils, "current_peak_memory_mb", lambda: 128.0)
+
+        result = benchmark_utils.report_dict(
+            benchmark_name="Regression Benchmark",
+            target_score=80.0,
+            total_score=85.0,
+            status="PASS",
+            meets_target=True,
+            base_grade="A",
+            grade="A",
+            elapsed_seconds=999.0,
+            categories=[],
+            critical_checks=[],
+        )
+
+        assert result["status"] == "FAIL"
+        assert result["grade"] == "C"
+        assert result["operational_budget"]["wall_time_ok"] is False
+        assert result["critical_failures"] == [
+            {
+                "code": "operational::within_budget",
+                "passed": False,
+                "message": (
+                    "wall_time=999.0s/120.0s, memory=128.0MB/1024.0MB, "
+                    "cloud_cost=None/None"
+                ),
+            }
+        ]
+
+
+# ---------------------------------------------------------------------------
+# benchmark provenance helpers
+# ---------------------------------------------------------------------------
+
+class TestBenchmarkProvenance:
+    def test_dependency_lock_fingerprints_hashes_known_files(self, tmp_path):
+        (tmp_path / "uv.lock").write_text("version = 1\n", encoding="utf-8")
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
+
+        result = benchmark_utils.dependency_lock_fingerprints(tmp_path)
+
+        assert set(result) == {"uv.lock", "pyproject.toml"}
+        assert all(len(value) == 64 for value in result.values())
+
+    def test_build_benchmark_provenance_contract(self, tmp_path):
+        (tmp_path / "uv.lock").write_text("version = 1\n", encoding="utf-8")
+        config = {"grid": {"kappa": [0.5]}, "replicates": 2}
+        seed_map = {"cell=0|rep=0": 7001}
+
+        result = benchmark_utils.build_benchmark_provenance(
+            benchmark_name="test-bench",
+            config=config,
+            seed_map=seed_map,
+            cwd=tmp_path,
+        )
+
+        assert result["schema_version"] == 1
+        assert result["benchmark"] == "test-bench"
+        assert "sha" in result["git"]
+        assert result["dependencies"]["lockfiles"].keys() == {"uv.lock"}
+        assert result["runtime"]["python_version"]
+        assert result["config"] == config
+        assert len(result["config_hash"]) == 64
+        assert result["seed_map"] == seed_map
+
+    def test_write_reports_emits_provenance_sidecar(self, tmp_path):
+        report = {
+            "benchmark": "test-bench",
+            "target_score": 80.0,
+            "benchmark_config": {"replicates": 2},
+            "seed_map": {"rep=0": 42},
+        }
+        out_json = tmp_path / "report.json"
+        out_md = tmp_path / "report.md"
+
+        benchmark_utils.write_reports(report, "# Report\n", out_json, out_md)
+
+        written_report = json.loads(out_json.read_text(encoding="utf-8"))
+        provenance_path = Path(written_report["provenance_manifest_path"])
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+
+        assert out_md.read_text(encoding="utf-8") == "# Report\n"
+        assert provenance_path.name == "report_provenance.json"
+        assert provenance["benchmark"] == "test-bench"
+        assert provenance["config"] == {"replicates": 2}
+        assert provenance["seed_map"] == {"rep=0": 42}
+
 
 # ---------------------------------------------------------------------------
 # build_markdown_report()
@@ -227,6 +341,22 @@ class TestCheckOperationalBudget:
         )
         assert result["wall_time_ok"] is False
         assert result["memory_ok"] is False
+        assert result["all_ok"] is False
+
+    def test_cloud_cost_over_budget_fails(self):
+        result = benchmark_utils.check_operational_budget(
+            elapsed_seconds=100.0,
+            peak_memory_mb=512.0,
+            wall_time_budget_seconds=300.0,
+            memory_budget_mb=2048.0,
+            cloud_cost_usd=0.02,
+            cloud_cost_budget_usd=0.01,
+        )
+        assert result["wall_time_ok"] is True
+        assert result["memory_ok"] is True
+        assert result["cloud_cost_ok"] is False
+        assert result["cloud_cost_usd"] == 0.02
+        assert result["cloud_cost_budget_usd"] == 0.01
         assert result["all_ok"] is False
 
 

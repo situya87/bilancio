@@ -1,0 +1,523 @@
+{
+ "events": [
+  {
+   "kind": "ReservesMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "BANK_A",
+   "amount": "10000"
+  },
+  {
+   "kind": "ReservesMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "BANK_B",
+   "amount": "10000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "ALICE",
+   "amount": "5000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "BOB",
+   "amount": "5000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "CHARLIE",
+   "amount": "5000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "DIANA",
+   "amount": "5000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "ALICE",
+   "bank": "BANK_A",
+   "amount": "4000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "BOB",
+   "bank": "BANK_A",
+   "amount": "4000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "CHARLIE",
+   "bank": "BANK_B",
+   "amount": "4000"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "DIANA",
+   "bank": "BANK_B",
+   "amount": "4000"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "ALICE",
+   "creditor": "BOB",
+   "amount": "500",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_10",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "ALICE",
+   "creditor": "CHARLIE",
+   "amount": "1000",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_11",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "BOB",
+   "creditor": "DIANA",
+   "amount": "4200",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_12",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "CHARLIE",
+   "creditor": "ALICE",
+   "amount": "800",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_13",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "DIANA",
+   "creditor": "BOB",
+   "amount": "700",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_14",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "BOB",
+   "creditor": "ALICE",
+   "amount": "300",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_15",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "DIANA",
+   "creditor": "CHARLIE",
+   "amount": "400",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_16",
+   "alias": null
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "ALICE",
+   "payee": "BOB",
+   "bank": "BANK_A",
+   "amount": "500"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_10",
+   "contract_id": "PAY_10",
+   "alias": null,
+   "debtor": "ALICE",
+   "creditor": "BOB",
+   "amount": "500"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "ALICE",
+   "payer_bank": "BANK_A",
+   "payee": "CHARLIE",
+   "payee_bank": "BANK_B",
+   "amount": "1000"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_11",
+   "contract_id": "PAY_11",
+   "alias": null,
+   "debtor": "ALICE",
+   "creditor": "CHARLIE",
+   "amount": "1000"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "BOB",
+   "payer_bank": "BANK_A",
+   "payee": "DIANA",
+   "payee_bank": "BANK_B",
+   "amount": "4200"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_12",
+   "contract_id": "PAY_12",
+   "alias": null,
+   "debtor": "BOB",
+   "creditor": "DIANA",
+   "amount": "4200"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "ReservesTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "BANK_A",
+   "to": "BANK_B",
+   "amount": "5200"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 1,
+   "phase": "simulation",
+   "keep": "reserve:BANK_B",
+   "removed": "transfer:BANK_A:BANK_B:1"
+  },
+  {
+   "kind": "InterbankCleared",
+   "day": 1,
+   "phase": "simulation",
+   "debtor_bank": "BANK_A",
+   "creditor_bank": "BANK_B",
+   "amount": "5200"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 2,
+   "phase": "simulation",
+   "payer": "CHARLIE",
+   "payer_bank": "BANK_B",
+   "payee": "ALICE",
+   "payee_bank": "BANK_A",
+   "amount": "800"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_13",
+   "contract_id": "PAY_13",
+   "alias": null,
+   "debtor": "CHARLIE",
+   "creditor": "ALICE",
+   "amount": "800"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 2,
+   "phase": "simulation",
+   "payer": "DIANA",
+   "payer_bank": "BANK_B",
+   "payee": "BOB",
+   "payee_bank": "BANK_A",
+   "amount": "700"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_14",
+   "contract_id": "PAY_14",
+   "alias": null,
+   "debtor": "DIANA",
+   "creditor": "BOB",
+   "amount": "700"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "ReservesTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "BANK_B",
+   "to": "BANK_A",
+   "amount": "1500"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "reserve:BANK_A",
+   "removed": "transfer:BANK_B:BANK_A:2"
+  },
+  {
+   "kind": "InterbankCleared",
+   "day": 2,
+   "phase": "simulation",
+   "debtor_bank": "BANK_B",
+   "creditor_bank": "BANK_A",
+   "amount": "1500"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 3,
+   "phase": "simulation",
+   "payer": "BOB",
+   "payee": "ALICE",
+   "bank": "BANK_A",
+   "amount": "300"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_15",
+   "contract_id": "PAY_15",
+   "alias": null,
+   "debtor": "BOB",
+   "creditor": "ALICE",
+   "amount": "300"
+  },
+  {
+   "kind": "IntraBankPayment",
+   "day": 3,
+   "phase": "simulation",
+   "payer": "DIANA",
+   "payee": "CHARLIE",
+   "bank": "BANK_B",
+   "amount": "400"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_16",
+   "contract_id": "PAY_16",
+   "alias": null,
+   "debtor": "DIANA",
+   "creditor": "CHARLIE",
+   "amount": "400"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "ALICE": "1000",
+   "BANK_A": "8000",
+   "BANK_B": "8000",
+   "BOB": "1000",
+   "CHARLIE": "1000",
+   "DIANA": "1000"
+  },
+  "reserves": {
+   "BANK_A": "6300",
+   "BANK_B": "13700"
+  },
+  "deposits": {
+   "ALICE@BANK_A": "3600",
+   "BOB@BANK_A": "700",
+   "CHARLIE@BANK_B": "4600",
+   "DIANA@BANK_B": "7100"
+  },
+  "defaulted": []
+ }
+}

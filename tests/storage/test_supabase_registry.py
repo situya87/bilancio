@@ -44,6 +44,7 @@ def _make_entry(
         "seed": 42,
         "regime": "passive",
         "outside_mid_ratio": Decimal("0.9"),
+        "performance_config": {"preset": "fast", "fast_atomic": True},
         "extra_param": "ignored_by_runs_table",
     }
     metrics = {}
@@ -88,6 +89,7 @@ def _make_db_row(**overrides: object) -> dict:
         "seed": 42,
         "regime": "passive",
         "outside_mid_ratio": 0.9,
+        "performance_config": {"preset": "fast", "fast_atomic": True},
         "error": None,
         "modal_volume_path": "test-experiment/runs/balanced_passive_abc123",
         "metrics": [
@@ -470,6 +472,7 @@ class TestBuildRunsRow:
         assert row["mu"] == float(Decimal("0"))
         assert row["seed"] == 42
         assert row["regime"] == "passive"
+        assert row["performance_config"] == {"preset": "fast", "fast_atomic": True}
         # Non-param-column parameters should NOT appear
         assert "extra_param" not in row
 
@@ -596,6 +599,10 @@ class TestRowToEntry:
         assert entry.parameters["kappa"] == 0.5
         assert entry.parameters["seed"] == 42
         assert entry.parameters["regime"] == "passive"
+        assert entry.parameters["performance_config"] == {
+            "preset": "fast",
+            "fast_atomic": True,
+        }
         # Metrics from raw_metrics
         assert entry.metrics["delta_total"] == 0.15
         assert entry.metrics["custom"] == "value"

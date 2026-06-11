@@ -1,0 +1,833 @@
+{
+ "events": [
+  {
+   "kind": "ReservesMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "B1",
+   "amount": "2000"
+  },
+  {
+   "kind": "ReservesMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "B2",
+   "amount": "2000"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H0",
+   "amount": "500"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "H0",
+   "bank": "B1",
+   "amount": "400"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H1",
+   "amount": "500"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "H1",
+   "bank": "B2",
+   "amount": "400"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H2",
+   "amount": "500"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "H2",
+   "bank": "B1",
+   "amount": "400"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "H3",
+   "amount": "500"
+  },
+  {
+   "kind": "CashDeposited",
+   "day": 0,
+   "phase": "setup",
+   "customer": "H3",
+   "bank": "B2",
+   "amount": "400"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H0",
+   "creditor": "H1",
+   "amount": "350",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_10",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H1",
+   "creditor": "H2",
+   "amount": "600",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_11",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H2",
+   "creditor": "H3",
+   "amount": "450",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_12",
+   "alias": null
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "H3",
+   "creditor": "H0",
+   "amount": "700",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_13",
+   "alias": null
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankQuotes",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankLending",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "BankLoanIssued",
+   "day": 0,
+   "bank": "B1",
+   "borrower": "H1",
+   "amount": "100",
+   "rate": "-0.03622100122100122100122100121",
+   "maturity_day": 2,
+   "loan_id": "BL_0",
+   "n_tickets": 1
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseC_InterbankAuction",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "InterbankAuction",
+   "day": 0,
+   "clearing_rate": null,
+   "total_volume": 0,
+   "n_trades": 0,
+   "n_unfilled": 0,
+   "market_state": {
+    "positions": [
+     {
+      "bank_id": "B1",
+      "position": 1920,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     },
+     {
+      "bank_id": "B2",
+      "position": 1920,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     }
+    ],
+    "lender_asks": [
+     {
+      "bank_id": "B1",
+      "quantity": 1920,
+      "limit_rate": "0.01500000000000000000000000000"
+     },
+     {
+      "bank_id": "B2",
+      "quantity": 1920,
+      "limit_rate": "0.01500000000000000000000000000"
+     }
+    ],
+    "borrower_bids": []
+   }
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankQuotes",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankLending",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "BankLoanIssued",
+   "day": 1,
+   "bank": "B2",
+   "borrower": "H3",
+   "amount": "200",
+   "rate": "-0.03461843711843711843711843710",
+   "maturity_day": 3,
+   "loan_id": "BL_1",
+   "n_tickets": 2
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 1,
+   "phase": "simulation",
+   "payer": "H0",
+   "payer_bank": "B1",
+   "payee": "H1",
+   "payee_bank": "B2",
+   "amount": "350"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_10",
+   "contract_id": "PAY_10",
+   "alias": null,
+   "debtor": "H0",
+   "creditor": "H1",
+   "amount": "350"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseC_InterbankAuction",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "InterbankAuction",
+   "day": 1,
+   "clearing_rate": null,
+   "total_volume": 0,
+   "n_trades": 0,
+   "n_unfilled": 0,
+   "market_state": {
+    "positions": [
+     {
+      "bank_id": "B1",
+      "position": 1570,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     },
+     {
+      "bank_id": "B2",
+      "position": 2270,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     }
+    ],
+    "lender_asks": [
+     {
+      "bank_id": "B1",
+      "quantity": 1570,
+      "limit_rate": "0.01500000000000000000000000000"
+     },
+     {
+      "bank_id": "B2",
+      "quantity": 2270,
+      "limit_rate": "0.01500000000000000000000000000"
+     }
+    ],
+    "borrower_bids": []
+   }
+  },
+  {
+   "kind": "ReservesTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "B1",
+   "to": "B2",
+   "amount": "350"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 1,
+   "phase": "simulation",
+   "keep": "reserve:B2",
+   "removed": "transfer:B1:B2:1"
+  },
+  {
+   "kind": "InterbankCleared",
+   "day": 1,
+   "phase": "simulation",
+   "debtor_bank": "B1",
+   "creditor_bank": "B2",
+   "amount": "350"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankQuotes",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankLending",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 2,
+   "phase": "simulation",
+   "payer": "H1",
+   "payer_bank": "B2",
+   "payee": "H2",
+   "payee_bank": "B1",
+   "amount": "600"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_11",
+   "contract_id": "PAY_11",
+   "alias": null,
+   "debtor": "H1",
+   "creditor": "H2",
+   "amount": "600"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 2,
+   "phase": "simulation",
+   "payer": "H2",
+   "payer_bank": "B1",
+   "payee": "H3",
+   "payee_bank": "B2",
+   "amount": "450"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_12",
+   "contract_id": "PAY_12",
+   "alias": null,
+   "debtor": "H2",
+   "creditor": "H3",
+   "amount": "450"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseC_InterbankAuction",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "InterbankAuction",
+   "day": 2,
+   "clearing_rate": null,
+   "total_volume": 0,
+   "n_trades": 0,
+   "n_unfilled": 0,
+   "market_state": {
+    "positions": [
+     {
+      "bank_id": "B1",
+      "position": 1720,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     },
+     {
+      "bank_id": "B2",
+      "position": 2120,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     }
+    ],
+    "lender_asks": [
+     {
+      "bank_id": "B1",
+      "quantity": 1720,
+      "limit_rate": "0.01500000000000000000000000000"
+     },
+     {
+      "bank_id": "B2",
+      "quantity": 2120,
+      "limit_rate": "0.01500000000000000000000000000"
+     }
+    ],
+    "borrower_bids": []
+   }
+  },
+  {
+   "kind": "ReservesTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "B2",
+   "to": "B1",
+   "amount": "150"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "reserve:B1",
+   "removed": "transfer:B2:B1:2"
+  },
+  {
+   "kind": "InterbankCleared",
+   "day": 2,
+   "phase": "simulation",
+   "debtor_bank": "B2",
+   "creditor_bank": "B1",
+   "amount": "150"
+  },
+  {
+   "kind": "BankLoanRepaid",
+   "day": 2,
+   "bank": "B1",
+   "borrower": "H1",
+   "principal": "100",
+   "repayment": "96",
+   "interest": "-4",
+   "loan_id": "BL_0"
+  },
+  {
+   "kind": "CBLendingFreezeActivated",
+   "day": 3,
+   "phase": "simulation",
+   "cutoff_day": 3
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankQuotes",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankLending",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "ClientPayment",
+   "day": 3,
+   "phase": "simulation",
+   "payer": "H3",
+   "payer_bank": "B2",
+   "payee": "H0",
+   "payee_bank": "B1",
+   "amount": "700"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_13",
+   "contract_id": "PAY_13",
+   "alias": null,
+   "debtor": "H3",
+   "creditor": "H0",
+   "amount": "700"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseC_InterbankAuction",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "InterbankAuction",
+   "day": 3,
+   "clearing_rate": null,
+   "total_volume": 0,
+   "n_trades": 0,
+   "n_unfilled": 0,
+   "market_state": {
+    "positions": [
+     {
+      "bank_id": "B1",
+      "position": 2420,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     },
+     {
+      "bank_id": "B2",
+      "position": 1420,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     }
+    ],
+    "lender_asks": [
+     {
+      "bank_id": "B1",
+      "quantity": 2420,
+      "limit_rate": "0.01500000000000000000000000000"
+     },
+     {
+      "bank_id": "B2",
+      "quantity": 1420,
+      "limit_rate": "0.01500000000000000000000000000"
+     }
+    ],
+    "borrower_bids": []
+   }
+  },
+  {
+   "kind": "ReservesTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "B2",
+   "to": "B1",
+   "amount": "700"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "reserve:B1",
+   "removed": "transfer:B2:B1:3"
+  },
+  {
+   "kind": "InterbankCleared",
+   "day": 3,
+   "phase": "simulation",
+   "debtor_bank": "B2",
+   "creditor_bank": "B1",
+   "amount": "700"
+  },
+  {
+   "kind": "BankLoanRepaid",
+   "day": 3,
+   "bank": "B2",
+   "borrower": "H3",
+   "principal": "200",
+   "repayment": "193",
+   "interest": "-7",
+   "loan_id": "BL_1"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankQuotes",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankLending",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseC_InterbankAuction",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "InterbankAuction",
+   "day": 4,
+   "clearing_rate": null,
+   "total_volume": 0,
+   "n_trades": 0,
+   "n_unfilled": 0,
+   "market_state": {
+    "positions": [
+     {
+      "bank_id": "B1",
+      "position": 2420,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     },
+     {
+      "bank_id": "B2",
+      "position": 1420,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     }
+    ],
+    "lender_asks": [
+     {
+      "bank_id": "B1",
+      "quantity": 2420,
+      "limit_rate": "0.01500000000000000000000000000"
+     },
+     {
+      "bank_id": "B2",
+      "quantity": 1420,
+      "limit_rate": "0.01500000000000000000000000000"
+     }
+    ],
+    "borrower_bids": []
+   }
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankQuotes",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_BankLending",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseC_InterbankAuction",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "InterbankAuction",
+   "day": 5,
+   "clearing_rate": null,
+   "total_volume": 0,
+   "n_trades": 0,
+   "n_unfilled": 0,
+   "market_state": {
+    "positions": [
+     {
+      "bank_id": "B1",
+      "position": 2420,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     },
+     {
+      "bank_id": "B2",
+      "position": 1420,
+      "limit_rate": "0.01500000000000000000000000000",
+      "side": "lend"
+     }
+    ],
+    "lender_asks": [
+     {
+      "bank_id": "B1",
+      "quantity": 2420,
+      "limit_rate": "0.01500000000000000000000000000"
+     },
+     {
+      "bank_id": "B2",
+      "quantity": 1420,
+      "limit_rate": "0.01500000000000000000000000000"
+     }
+    ],
+    "borrower_bids": []
+   }
+  },
+  {
+   "kind": "CBFinalSettlementStart",
+   "day": 6,
+   "phase": "simulation",
+   "cb_loans_outstanding": "0"
+  },
+  {
+   "kind": "CBFinalSettlementEnd",
+   "day": 6,
+   "phase": "simulation",
+   "loans_attempted": 0,
+   "loans_repaid": 0,
+   "loans_written_off": 0,
+   "bank_defaults": 0,
+   "total_written_off_amount": "0",
+   "cb_loans_outstanding_pre_final": "0",
+   "cb_loans_outstanding_post_final": "0",
+   "cb_reserves_initial": "4000",
+   "cb_reserves_final": "4000",
+   "cb_interest_total_paid": "0",
+   "cb_loans_created_count": 0
+  }
+ ],
+ "balances": {
+  "cash": {
+   "B1": "800",
+   "B2": "800",
+   "H0": "100",
+   "H1": "100",
+   "H2": "100",
+   "H3": "100"
+  },
+  "reserves": {
+   "B1": "2500",
+   "B2": "1500"
+  },
+  "deposits": {
+   "H0@B1": "750",
+   "H1@B1": "4",
+   "H1@B2": "150",
+   "H2@B1": "550",
+   "H3@B2": "157"
+  },
+  "defaulted": []
+ }
+}

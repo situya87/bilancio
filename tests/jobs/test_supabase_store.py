@@ -47,6 +47,7 @@ def _make_job(
             outside_mid_ratios=[Decimal("0.9")],
             maturity_days=10,
             seeds=[42, 99],
+            performance={"preset": "fast", "fast_atomic": True},
         ),
         run_ids=["run-a", "run-b"],
         completed_at=completed_at,
@@ -71,6 +72,7 @@ def _make_db_row(**overrides: object) -> dict:
         "outside_mid_ratios": ["0.9"],
         "seeds": [42, 99],
         "cloud": True,
+        "performance": {"preset": "fast", "fast_atomic": True},
         "completed_at": "2025-01-15T10:45:00+00:00",
         "notes": "a test note",
         "error": None,
@@ -111,6 +113,7 @@ class TestSaveJob:
         assert data["sweep_type"] == "balanced"
         assert data["n_agents"] == 100
         assert data["cloud"] is True
+        assert data["performance"] == {"preset": "fast", "fast_atomic": True}
         assert data["notes"] == "a test note"
         assert data["total_runs"] == 2
         assert data["completed_runs"] == 2  # status is COMPLETED
@@ -195,6 +198,7 @@ class TestGetJob:
         assert job.config.concentrations == [Decimal("1")]
         assert job.config.mus == [Decimal("0")]
         assert job.config.cloud is True
+        assert job.config.performance == {"preset": "fast", "fast_atomic": True}
         assert job.config.maturity_days == 10
         assert job.completed_at is not None
         assert job.notes == "a test note"

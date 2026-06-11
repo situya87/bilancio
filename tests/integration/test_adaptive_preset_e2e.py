@@ -21,10 +21,10 @@ from bilancio.config.models import (
     RiskAssessmentConfig,
 )
 from bilancio.decision.adaptive import build_adaptive_overrides
-from bilancio.domain.agents.central_bank import CentralBank
-from bilancio.experiments.ring import RingSweepRunner
 from bilancio.decision.profiles import BankProfile, LenderProfile, TraderProfile, VBTProfile
 from bilancio.decision.risk_assessment import RiskAssessmentParams
+from bilancio.domain.agents.central_bank import CentralBank
+from bilancio.experiments.ring import RingSweepRunner
 from bilancio.ui.run import run_scenario
 
 # ── Shared helpers ──────────────────────────────────────────────────
@@ -463,6 +463,7 @@ class TestRunLevelPresetPipeline:
             max_days=2,
             quiet_days=1,
             show="none",
+            engine="legacy",
         )
         assert observed, "Expected wrapped run_day to capture runtime flags"
         return observed

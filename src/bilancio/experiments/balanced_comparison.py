@@ -1838,6 +1838,48 @@ class BalancedComparisonRunner:
             )
         return defs
 
+    def _experiment_design(self) -> dict[str, Any]:
+        """Return the baseline/treatment contract emitted with summary artifacts."""
+        optional_arms = []
+        if self.config.enable_lender:
+            optional_arms.append("lender")
+        if self.config.enable_dealer_lender:
+            optional_arms.append("dealer_lender")
+        deprecated_mixed_arms = []
+        if self.config.enable_bank_passive:
+            deprecated_mixed_arms.append("bank_passive")
+        if self.config.enable_bank_dealer:
+            deprecated_mixed_arms.append("bank_dealer")
+        if self.config.enable_bank_dealer_nbfi:
+            deprecated_mixed_arms.append("bank_dealer_nbfi")
+
+        return {
+            "mode": "legacy_balanced_dealer",
+            "comparison": "dealer_trading",
+            "baseline_arm": "passive",
+            "baseline_phase": "balanced_passive",
+            "treatment_arm": "active",
+            "treatment_phase": "balanced_active",
+            "effect_metric": "trading_effect",
+            "effect_formula": "delta_passive - delta_active",
+            "shared_controls": [
+                "same_seed",
+                "same_topology",
+                "same_parameter_cell",
+                "same_initial_balance_sheet",
+            ],
+            "legacy_mixed_mode": bool(optional_arms or deprecated_mixed_arms),
+            "optional_arms": optional_arms,
+            "deprecated_mixed_arms": deprecated_mixed_arms,
+            "clean_replacements": {
+                "bank_passive": "bilancio sweep bank",
+                "bank_dealer": "bilancio sweep bank",
+                "bank_dealer_nbfi": "bilancio sweep bank",
+                "lender": "bilancio sweep nbfi",
+                "dealer_lender": "split into bilancio sweep balanced and bilancio sweep nbfi",
+            },
+        }
+
     def _build_result_from_summaries(
         self,
         arm_summaries: dict[str, RingRunSummary],
@@ -2414,7 +2456,11 @@ class BalancedComparisonRunner:
                                     if completed >= self.config.n_replicates:
                                         continue
 
-                                    rep_label = f" rep {completed + rep + 1}/{self.config.n_replicates}" if self.config.n_replicates > 1 else ""
+                                    rep_label = (
+                                        f" rep {completed + rep + 1}/{self.config.n_replicates}"
+                                        if self.config.n_replicates > 1
+                                        else ""
+                                    )
 
                                     # Progress and ETA
                                     if completed_this_run > 0:
@@ -2430,7 +2476,10 @@ class BalancedComparisonRunner:
 
                                     topo_str = f", topo={topology_label}" if topology_label != "ring" else ""
                                     print(
-                                        f"{progress_str} Running{rep_label}: κ={kappa}, c={concentration}, μ={mu}, ρ={outside_mid_ratio}{topo_str}",
+                                        (
+                                            f"{progress_str} Running{rep_label}: κ={kappa}, "
+                                            f"c={concentration}, μ={mu}, ρ={outside_mid_ratio}{topo_str}"
+                                        ),
                                         flush=True,
                                     )
 
@@ -3528,6 +3577,7 @@ class BalancedComparisonRunner:
             worsened = 0
 
         summary = {
+            "experiment_design": self._experiment_design(),
             "total_pairs": len(self.comparison_results),
             "completed_pairs": len(completed),
             "mean_delta_passive": mean_delta_passive,

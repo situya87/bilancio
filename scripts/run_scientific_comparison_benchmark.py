@@ -292,6 +292,126 @@ def _validate_manifest_coverage(
     return required_metrics.issubset(available)
 
 
+def _paired_effects_for_endpoint(records: list[dict[str, Any]], metric: str) -> list[float]:
+    """Return paired treatment effects for a manifest endpoint."""
+    if metric == "delta_total":
+        return [
+            float(record["delta_passive"]) - float(record["delta_active"])
+            for record in records
+        ]
+    if metric == "phi_total":
+        return [
+            float(record["phi_active"]) - float(record["phi_passive"])
+            for record in records
+        ]
+    return []
+
+
+def _endpoint_variance(values: list[float], default: float = 0.01) -> float:
+    """Variance estimate for power planning, with a conservative fallback."""
+    if len(values) <= 1:
+        return default
+    import statistics
+
+    variance = statistics.variance(values)
+    return variance if math.isfinite(variance) and variance >= 0 else default
+
+
+def _build_power_plan(
+    manifest: dict[str, Any],
+    records: list[dict[str, Any]],
+    *,
+    min_replicates: int,
+) -> dict[str, Any]:
+    """Build endpoint-level power planning provenance for the report."""
+    endpoints: list[dict[str, Any]] = []
+    all_valid = bool(manifest and manifest.get("primary_endpoints"))
+
+    for endpoint in manifest.get("primary_endpoints", []):
+        metric = str(endpoint["metric"])
+        effects = _paired_effects_for_endpoint(records, metric)
+        available = bool(effects)
+        variance = _endpoint_variance(effects)
+        required = _compute_required_replicates(
+            mde=float(endpoint["mde"]),
+            alpha=float(endpoint["alpha"]),
+            power=float(endpoint["power"]),
+            variance=variance,
+        )
+        passed = available and min_replicates >= required
+        all_valid = all_valid and passed
+        endpoints.append(
+            {
+                "metric": metric,
+                "label": endpoint.get("label", metric),
+                "direction": endpoint.get("direction"),
+                "mde": float(endpoint["mde"]),
+                "alpha": float(endpoint["alpha"]),
+                "power": float(endpoint["power"]),
+                "estimated_variance": variance,
+                "required_replicates": required,
+                "observed_min_replicates": min_replicates,
+                "available": available,
+                "passes": passed,
+            }
+        )
+
+    return {
+        "valid": all_valid,
+        "min_replicates": min_replicates,
+        "endpoints": endpoints,
+    }
+
+
+def _manifest_detail_lines(manifest: dict[str, Any], manifest_path: Path) -> list[str]:
+    """Human-readable manifest summary for benchmark Markdown reports."""
+    if not manifest:
+        return [f"manifest_path={manifest_path}", "loaded=False"]
+
+    design = manifest.get("design", {})
+    lines = [
+        f"manifest_path={manifest_path}",
+        f"version={manifest.get('version')}",
+        (
+            "design="
+            f"{design.get('type')} control={design.get('control')} "
+            f"treatment={design.get('treatment')} pairing_key={design.get('pairing_key')}"
+        ),
+    ]
+    for endpoint in manifest.get("primary_endpoints", []):
+        lines.append(
+            "primary_endpoint="
+            f"{endpoint.get('metric')} mde={endpoint.get('mde')} "
+            f"alpha={endpoint.get('alpha')} power={endpoint.get('power')} "
+            f"direction={endpoint.get('direction')}"
+        )
+    for family in manifest.get("hypothesis_families", []):
+        lines.append(
+            "hypothesis_family="
+            f"{family.get('name')} endpoints={family.get('endpoints')} "
+            f"multiple_testing={family.get('multiple_testing')} alpha={family.get('alpha')}"
+        )
+    return lines
+
+
+def _power_plan_detail_lines(power_plan: dict[str, Any]) -> list[str]:
+    """Human-readable power planning summary for benchmark Markdown reports."""
+    lines = [
+        f"valid={power_plan.get('valid')}",
+        f"min_replicates={power_plan.get('min_replicates')}",
+    ]
+    for endpoint in power_plan.get("endpoints", []):
+        lines.append(
+            "endpoint="
+            f"{endpoint['metric']} mde={endpoint['mde']} alpha={endpoint['alpha']} "
+            f"power={endpoint['power']} variance={endpoint['estimated_variance']:.6f} "
+            f"required_replicates={endpoint['required_replicates']} "
+            f"observed_min_replicates={endpoint['observed_min_replicates']} "
+            f"passes={endpoint['passes']}"
+        )
+    return lines
+
+
 def main() -> int:
     args = parse_args()
     cwd = Path(__file__).resolve().parents[1]
@@ -315,6 +435,7 @@ def main() -> int:
 
     records: list[dict[str, Any]] = []
     failures: list[str] = []
+    seed_map: dict[str, int] = {}
 
     cell_idx = 0
     for kappa in kappas:
@@ -323,6 +444,12 @@ def main() -> int:
                 cell_idx += 1
                 for rep in range(args.replicates):
                     seed = args.seed_start + (cell_idx * 100) + rep
+                    seed_map[
+                        (
+                            f"kappa={kappa}|concentration={concentration}|"
+                            f"mu={mu}|replicate={rep}"
+                        )
+                    ] = seed
                     scenario = compile_ring_scenario(
                         n_agents=24,
                         kappa=kappa,
@@ -380,27 +507,25 @@ def main() -> int:
     max_replicates = max(cell_counts.values()) if cell_counts else 0
     balance_ratio = (min_replicates / max_replicates) if max_replicates > 0 else 0.0
 
-    # Power planning: compute required replicates from manifest
-    required_replicates = args.replicates  # default
-    power_valid = True
-    estimated_variance = 0.01  # conservative default
-    if manifest and records:
-        effects_list = [r["delta_passive"] - r["delta_active"] for r in records]
-        if len(effects_list) > 1:
-            import statistics
-
-            estimated_variance = statistics.variance(effects_list)
-        for ep in manifest.get("primary_endpoints", []):
-            if ep["metric"] == "delta_total":
-                req = _compute_required_replicates(
-                    mde=ep["mde"],
-                    alpha=ep["alpha"],
-                    power=ep["power"],
-                    variance=estimated_variance,
-                )
-                required_replicates = max(required_replicates, req)
-                if min_replicates < req:
-                    power_valid = False
+    power_plan = _build_power_plan(
+        manifest,
+        records,
+        min_replicates=min_replicates,
+    )
+    required_replicates = max(
+        [args.replicates]
+        + [
+            int(endpoint["required_replicates"])
+            for endpoint in power_plan.get("endpoints", [])
+        ]
+    )
+    estimated_variance = max(
+        [
+            float(endpoint["estimated_variance"])
+            for endpoint in power_plan.get("endpoints", [])
+        ],
+        default=0.01,
+    )
 
     unique_record_keys = {_record_key(record) for record in records}
     uniqueness_rate = len(unique_record_keys) / max(1, completed_pairs)
@@ -674,7 +799,7 @@ def main() -> int:
         ),
         CriticalCheck(
             code="scientific::power_planning_valid",
-            passed=power_valid,
+            passed=bool(power_plan["valid"]),
             message=f"min_replicates={min_replicates}, required_for_power={required_replicates}, variance={estimated_variance:.6f}",
         ),
         CriticalCheck(
@@ -693,6 +818,22 @@ def main() -> int:
 
     elapsed = perf_counter() - t0
     generated_at = generated_at_utc()
+    benchmark_config = {
+        "target_score": args.target_score,
+        "replicates": args.replicates,
+        "n_bootstrap": args.n_bootstrap,
+        "analysis_seed": args.analysis_seed,
+        "seed_start": args.seed_start,
+        "max_days": args.max_days,
+        "manifest": str(manifest_path),
+        "grid": {
+            "kappas": [float(value) for value in kappas],
+            "concentrations": [float(value) for value in concentrations],
+            "mus": [float(value) for value in mus],
+            "monotonicity": float(monotonicity),
+            "outside_mid_ratio": float(outside_mid_ratio),
+        },
+    }
 
     report = report_dict(
         benchmark_name="Scientific Comparison Benchmark",
@@ -706,13 +847,14 @@ def main() -> int:
         categories=categories,
         critical_checks=checks,
         extra={
+            "analysis_manifest_path": str(manifest_path),
+            "analysis_manifest": manifest,
+            "benchmark_config": benchmark_config,
+            "power_planning": power_plan,
+            "seed_map": seed_map,
             "details": {
-                "grid": {
-                    "kappas": [float(value) for value in kappas],
-                    "concentrations": [float(value) for value in concentrations],
-                    "mus": [float(value) for value in mus],
-                    "replicates": args.replicates,
-                },
+                "grid": benchmark_config["grid"] | {"replicates": args.replicates},
+                "seed_map": seed_map,
                 "expected_cells": expected_cells,
                 "expected_pairs": expected_pairs,
                 "completed_pairs": completed_pairs,
@@ -727,12 +869,12 @@ def main() -> int:
         generated_at=generated_at,
         target_score=args.target_score,
         total_score=total_score,
-        status=status,
-        grade=grade,
+        status=report["status"],
+        grade=report["grade"],
         base_grade=base_grade,
         meets_target=meets_target,
         categories=categories,
-        critical_checks=checks,
+        critical_checks=[CriticalCheck(**item) for item in report["critical_checks"]],
         summary_lines=[
             f"expected_pairs={expected_pairs}",
             f"completed_pairs={completed_pairs}",
@@ -769,16 +911,21 @@ def main() -> int:
                     f"deterministic_sensitivity={deterministic_sensitivity}",
                 ],
             ),
+            ("Analysis Manifest", _manifest_detail_lines(manifest, manifest_path)),
+            ("Power Planning", _power_plan_detail_lines(power_plan)),
         ],
     )
 
     write_reports(report, markdown, out_json, out_md)
 
-    print(f"Scientific comparison benchmark score: {total_score:.2f}/100 ({grade})")
-    print(f"Benchmark status: {status} (critical failures: {len(critical_failures)})")
+    print(f"Scientific comparison benchmark score: {total_score:.2f}/100 ({report['grade']})")
+    print(
+        f"Benchmark status: {report['status']} "
+        f"(critical failures: {len(report['critical_failures'])})"
+    )
     print(f"JSON report: {out_json}")
     print(f"Markdown report: {out_md}")
-    return 0 if status == "PASS" else 1
+    return 0 if report["status"] == "PASS" else 1
 
 
 if __name__ == "__main__":

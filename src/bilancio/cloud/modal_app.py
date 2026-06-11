@@ -266,14 +266,24 @@ def save_run_to_supabase(
             "error": error,
         }
 
-        # Add parameters
-        param_columns = {"kappa", "concentration", "mu", "outside_mid_ratio", "seed", "regime"}
+        # Add parameters and provenance metadata.
+        param_columns = {
+            "kappa",
+            "concentration",
+            "mu",
+            "outside_mid_ratio",
+            "seed",
+            "regime",
+            "performance_config",
+        }
         for param, value in params.items():
             if param in param_columns:
                 if param == "seed":
                     runs_row[param] = int(value) if value is not None else None
                 elif param == "regime":
                     runs_row[param] = value
+                elif param == "performance_config":
+                    runs_row[param] = value or None
                 else:
                     runs_row[param] = (
                         float(value) if isinstance(value, int | float | str) else value
@@ -392,6 +402,7 @@ def run_simulation(
     scenario_path.write_text(yaml.dump(scenario_config, default_flow_style=False))
 
     # Extract run parameters from options for Supabase
+    perf_dict = options.get("performance")
     run_params = {
         "kappa": options.get("kappa"),
         "concentration": options.get("concentration"),
@@ -399,6 +410,7 @@ def run_simulation(
         "outside_mid_ratio": options.get("outside_mid_ratio"),
         "seed": options.get("seed"),
         "regime": options.get("regime", ""),
+        "performance_config": perf_dict,
     }
 
     try:
@@ -406,7 +418,6 @@ def run_simulation(
         from bilancio.ui.run import run_scenario
 
         # Deserialize performance config if present
-        perf_dict = options.get("performance")
         performance = None
         if perf_dict:
             from bilancio.core.performance import PerformanceConfig

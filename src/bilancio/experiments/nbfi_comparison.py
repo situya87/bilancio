@@ -571,6 +571,26 @@ class NBFIComparisonRunner:
             ("lend", "nbfi_lend", "_get_lend_runner", "nbfi_lend"),
         ]
 
+    def _experiment_design(self) -> dict[str, Any]:
+        """Return the baseline/treatment contract emitted with summary artifacts."""
+        return {
+            "mode": "clean_causal",
+            "comparison": "nbfi_lending",
+            "baseline_arm": "idle",
+            "baseline_phase": "nbfi_idle",
+            "treatment_arm": "lend",
+            "treatment_phase": "nbfi_lend",
+            "effect_metric": "lending_effect",
+            "effect_formula": "delta_idle - delta_lend",
+            "shared_controls": [
+                "same_seed",
+                "same_topology",
+                "same_parameter_cell",
+                "same_vbt_dealer_passive_infrastructure",
+            ],
+            "legacy_mixed_mode": False,
+        }
+
     def _build_result_from_summaries(
         self,
         arm_summaries: dict[str, RingRunSummary],
@@ -858,14 +878,24 @@ class NBFIComparisonRunner:
                                     if completed_this_run > 0:
                                         elapsed = time.time() - self._start_time
                                         avg_time = elapsed / completed_this_run
-                                        eta = avg_time * (remaining * self.config.n_replicates * len(self.config.topologies) - completed_this_run)
-                                        progress_str = f"[{combo_idx}/{total_combos}] ({completed_this_run} done) ETA: {self._format_time(eta)}"
+                                        remaining_runs = (
+                                            remaining * self.config.n_replicates * len(self.config.topologies)
+                                            - completed_this_run
+                                        )
+                                        eta = avg_time * remaining_runs
+                                        progress_str = (
+                                            f"[{combo_idx}/{total_combos}] ({completed_this_run} done) "
+                                            f"ETA: {self._format_time(eta)}"
+                                        )
                                     else:
                                         progress_str = f"[{combo_idx}/{total_combos}]"
 
                                     topo_str = f", topo={topology_label}" if topology_label != "ring" else ""
                                     print(
-                                        f"{progress_str} Running{rep_label}: k={kappa}, c={concentration}, mu={mu}, rho={outside_mid_ratio}{topo_str}",
+                                        (
+                                            f"{progress_str} Running{rep_label}: k={kappa}, "
+                                            f"c={concentration}, mu={mu}, rho={outside_mid_ratio}{topo_str}"
+                                        ),
                                         flush=True,
                                     )
 
@@ -1076,6 +1106,7 @@ class NBFIComparisonRunner:
             worsened = 0
 
         summary = {
+            "experiment_design": self._experiment_design(),
             "total_combos": len(self.comparison_results),
             "completed_combos": len(completed),
             "mean_delta_idle": mean_delta_idle,

@@ -84,7 +84,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "src"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -100,6 +100,12 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "regression: end-to-end simulation regression tests (run with '-m regression')",
 ]
+
+[[tool.mypy.overrides]]
+# Verbatim move of the former clean_core_config module; its dynamic
+# Optional-guard style predates the move and is pinned by the golden suite.
+module = "bilancio_v2.scenario_gates"
+disable_error_code = ["union-attr", "call-arg", "unreachable"]
 
 [tool.mypy]
 python_version = "3.11"

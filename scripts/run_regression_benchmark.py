@@ -33,7 +33,6 @@ from benchmark_utils import (
     write_reports,
 )
 
-
 TIERS = {
     "small": {
         "n_agents": 8,
@@ -238,6 +237,15 @@ def main() -> int:
     status = "PASS" if meets_target and not critical_failures else "FAIL"
 
     elapsed = perf_counter() - t0
+    benchmark_config = {
+        "target_score": args.target_score,
+        "fingerprints": str(fp_path),
+        "tiers": TIERS,
+    }
+    seed_map = {
+        tier_name: tier_config["seed"]
+        for tier_name, tier_config in TIERS.items()
+    }
 
     report = report_dict(
         benchmark_name="Regression Benchmark",
@@ -250,7 +258,12 @@ def main() -> int:
         elapsed_seconds=elapsed,
         categories=categories,
         critical_checks=checks,
-        extra={"tier_results": tier_results, "generated_at_utc": generated_at_utc()},
+        extra={
+            "benchmark_config": benchmark_config,
+            "seed_map": seed_map,
+            "tier_results": tier_results,
+            "generated_at_utc": generated_at_utc(),
+        },
     )
 
     markdown = build_markdown_report(
@@ -258,12 +271,12 @@ def main() -> int:
         generated_at=generated_at_utc(),
         target_score=args.target_score,
         total_score=total_score,
-        status=status,
-        grade=grade,
+        status=report["status"],
+        grade=report["grade"],
         base_grade=base_grade,
         meets_target=meets_target,
         categories=categories,
-        critical_checks=checks,
+        critical_checks=[CriticalCheck(**item) for item in report["critical_checks"]],
         summary_lines=[
             f"tiers_completed={tiers_completed}/{len(TIERS)}",
             f"metric_match_rate={match_rate:.4f}",
@@ -273,9 +286,12 @@ def main() -> int:
 
     write_reports(report, markdown, out_json, out_md)
 
-    print(f"Regression benchmark score: {total_score:.2f}/100 ({grade})")
-    print(f"Benchmark status: {status}")
-    return 0 if status == "PASS" else 1
+    print(f"Regression benchmark score: {total_score:.2f}/100 ({report['grade']})")
+    print(
+        f"Benchmark status: {report['status']} "
+        f"(critical failures: {len(report['critical_failures'])})"
+    )
+    return 0 if report["status"] == "PASS" else 1
 
 
 if __name__ == "__main__":

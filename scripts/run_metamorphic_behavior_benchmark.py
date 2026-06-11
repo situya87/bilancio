@@ -284,12 +284,12 @@ def main() -> int:
         generated_at=generated_at,
         target_score=args.target_score,
         total_score=total_score,
-        status=status,
-        grade=grade,
+        status=report["status"],
+        grade=report["grade"],
         base_grade=base_grade,
         meets_target=meets_target,
         categories=categories,
-        critical_checks=checks,
+        critical_checks=[CriticalCheck(**item) for item in report["critical_checks"]],
         summary_lines=[
             f"baseline defaults={baseline.defaults_count}/{baseline.household_count}",
             f"scaled_loss_factor={scaled_loss_factor:.4f} (target={scale_factor})",
@@ -322,11 +322,14 @@ def main() -> int:
 
     write_reports(report, md, out_json, out_md)
 
-    print(f"Metamorphic benchmark score: {total_score:.2f}/100 ({grade})")
-    print(f"Benchmark status: {status} (critical failures: {len(critical_failures)})")
+    print(f"Metamorphic benchmark score: {total_score:.2f}/100 ({report['grade']})")
+    print(
+        f"Benchmark status: {report['status']} "
+        f"(critical failures: {len(report['critical_failures'])})"
+    )
     print(f"JSON report: {out_json}")
     print(f"Markdown report: {out_md}")
-    return 0 if status == "PASS" else 1
+    return 0 if report["status"] == "PASS" else 1
 
 
 if __name__ == "__main__":

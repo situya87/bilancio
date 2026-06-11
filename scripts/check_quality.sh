@@ -28,6 +28,7 @@ MYPY_TARGETS=(
 
 PYTHONPATH=src "$PYTHON_BIN" -m ruff check "${RUFF_TARGETS[@]}"
 PYTHONPATH=src "$PYTHON_BIN" -m ruff format --check "${RUFF_TARGETS[@]}"
+PYTHONPATH=src "$PYTHON_BIN" scripts/check_test_antipatterns.py
 PYTHONPATH=src "$PYTHON_BIN" -m mypy "${MYPY_TARGETS[@]}"
 PYTHONPATH=src "$PYTHON_BIN" -m pytest \
   tests/ \

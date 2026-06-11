@@ -40,7 +40,15 @@ class SupabaseRegistryStore:
     """
 
     # Parameter fields that map directly to runs table columns
-    RUNS_PARAM_COLUMNS = {"kappa", "concentration", "mu", "outside_mid_ratio", "seed", "regime"}
+    RUNS_PARAM_COLUMNS = {
+        "kappa",
+        "concentration",
+        "mu",
+        "outside_mid_ratio",
+        "seed",
+        "regime",
+        "performance_config",
+    }
 
     # Metric fields that map directly to metrics table columns
     METRICS_COLUMNS = {

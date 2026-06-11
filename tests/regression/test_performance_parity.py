@@ -6,11 +6,21 @@ only semantics-preserving optimizations differ.
 
 Also includes determinism tests (seed stability, golden snapshots) and
 native-vs-Python backend parity checks.
+
+Test intent:
+- Enforce that semantics-preserving performance options do not change critical
+  simulation outputs under fixed seeds.
+- Guard deterministic event fingerprints for the regression scenarios that
+  define the supported optimization surface.
+- Document which options are intentionally semantics-changing instead of
+  silently treating them as equivalent.
 """
 
 from __future__ import annotations
 
 import copy
+import json
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -24,6 +34,7 @@ from bilancio.core.performance import _BOOL_FLAGS, SEMANTICS_PRESERVING, Perform
 from bilancio.engines.simulation import run_until_stable
 from bilancio.engines.system import System
 from bilancio.scenarios.ring.compiler import compile_ring_explorer
+from tests.conftest import ALTERNATE_DETERMINISTIC_SEED, DETERMINISTIC_SEED
 
 try:
     from bilancio.dealer.kernel_native import NATIVE_AVAILABLE
@@ -74,14 +85,37 @@ def _scenario_to_system(scenario: dict[str, Any]) -> System:
     return system
 
 
+_GENERATED_ID_RE = re.compile(r"^[A-Z]+_[0-9a-f]{8,}$")
+
+
+def _normalize_for_fingerprint(value: Any) -> Any:
+    """Normalize event values for deterministic JSON fingerprinting."""
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): _normalize_for_fingerprint(v) for k, v in sorted(value.items())}
+    if isinstance(value, list | tuple):
+        return [_normalize_for_fingerprint(v) for v in value]
+    if isinstance(value, str) and _GENERATED_ID_RE.match(value):
+        prefix = value.split("_", 1)[0]
+        return f"{prefix}#"
+    return value
+
+
+def _event_fingerprint(events: list[dict[str, Any]]) -> tuple[str, ...]:
+    """Return a deterministic event-stream fingerprint."""
+    return tuple(json.dumps(_normalize_for_fingerprint(event), sort_keys=True) for event in events)
+
+
 def _run_ring(
     preset: str,
-    seed: int = 42,
+    seed: int = DETERMINISTIC_SEED,
     n_agents: int = 10,
     kappa: str = "1",
     concentration: str = "1",
     mu: str = "0",
     maturity_days: int = 5,
+    include_event_fingerprint: bool = False,
     **perf_overrides: Any,
 ) -> dict[str, Any]:
     """Run a ring simulation and return metrics.
@@ -113,14 +147,21 @@ def _run_ring(
     events = system.state.events
     result = compute_day_metrics(events=events, balances_rows=None, day_list=None)
     summary = summarize_day_metrics(result["day_metrics"])
-    return {
+    metrics = {
         "delta_total": summary.get("delta_total"),
         "phi_total": summary.get("phi_total"),
         "max_day": summary.get("max_day"),
     }
+    if include_event_fingerprint:
+        metrics["event_fingerprint"] = _event_fingerprint(events)
+    return metrics
 
 
-def _run_small_ring(preset: str, seed: int = 42, **perf_overrides: Any) -> dict[str, Any]:
+def _run_small_ring(
+    preset: str,
+    seed: int = DETERMINISTIC_SEED,
+    **perf_overrides: Any,
+) -> dict[str, Any]:
     """Run a small (n=10, kappa=1) ring simulation and return metrics.
 
     Convenience wrapper around ``_run_ring`` for backward compatibility
@@ -130,9 +171,7 @@ def _run_small_ring(preset: str, seed: int = 42, **perf_overrides: Any) -> dict[
 
 
 # -- Boolean flags that are semantics-preserving (suitable for parametrize) --
-_SEMANTICS_PRESERVING_BOOL_FLAGS = sorted(
-    flag for flag in _BOOL_FLAGS if flag in SEMANTICS_PRESERVING
-)
+_SEMANTICS_PRESERVING_BOOL_FLAGS = sorted(flag for flag in _BOOL_FLAGS if flag in SEMANTICS_PRESERVING)
 
 
 @pytest.mark.regression
@@ -183,15 +222,13 @@ class TestSeedDeterminism:
 
     def test_same_seed_same_config_produces_identical_results(self) -> None:
         """Three consecutive runs with identical seed + config must produce identical metrics."""
-        results = [_run_small_ring("compatible", seed=42) for _ in range(3)]
+        results = [_run_small_ring("compatible", seed=DETERMINISTIC_SEED) for _ in range(3)]
         for i in range(1, 3):
             assert results[0]["delta_total"] == results[i]["delta_total"], (
-                f"Run 0 vs run {i}: delta_total differs: "
-                f"{results[0]['delta_total']} != {results[i]['delta_total']}"
+                f"Run 0 vs run {i}: delta_total differs: {results[0]['delta_total']} != {results[i]['delta_total']}"
             )
             assert results[0]["phi_total"] == results[i]["phi_total"], (
-                f"Run 0 vs run {i}: phi_total differs: "
-                f"{results[0]['phi_total']} != {results[i]['phi_total']}"
+                f"Run 0 vs run {i}: phi_total differs: {results[0]['phi_total']} != {results[i]['phi_total']}"
             )
 
     def test_different_seeds_produce_different_results(self) -> None:
@@ -200,13 +237,15 @@ class TestSeedDeterminism:
         Uses kappa=0.5 with n=20 so defaults are likely and the Dirichlet
         draw creates meaningful variation between seeds.
         """
-        run_42 = _run_ring("compatible", seed=42, n_agents=20, kappa="0.5")
-        run_99 = _run_ring("compatible", seed=99, n_agents=20, kappa="0.5")
-        # At least one metric should differ between different seeds
-        differs = (
-            run_42["delta_total"] != run_99["delta_total"]
-            or run_42["phi_total"] != run_99["phi_total"]
+        run_42 = _run_ring("compatible", seed=DETERMINISTIC_SEED, n_agents=20, kappa="0.5")
+        run_99 = _run_ring(
+            "compatible",
+            seed=ALTERNATE_DETERMINISTIC_SEED,
+            n_agents=20,
+            kappa="0.5",
         )
+        # At least one metric should differ between different seeds
+        differs = run_42["delta_total"] != run_99["delta_total"] or run_42["phi_total"] != run_99["phi_total"]
         assert differs, (
             f"Seeds 42 and 99 produced identical results (n=20, kappa=0.5). "
             f"seed=42: delta={run_42['delta_total']}, phi={run_42['phi_total']}; "
@@ -224,12 +263,10 @@ class TestSemanticsPreservingFlags:
         baseline = _run_small_ring("compatible")
         toggled = _run_small_ring("compatible", **{flag: True})
         assert baseline["delta_total"] == toggled["delta_total"], (
-            f"delta_total differs with {flag}=True: "
-            f"baseline={baseline['delta_total']}, toggled={toggled['delta_total']}"
+            f"delta_total differs with {flag}=True: baseline={baseline['delta_total']}, toggled={toggled['delta_total']}"
         )
         assert baseline["phi_total"] == toggled["phi_total"], (
-            f"phi_total differs with {flag}=True: "
-            f"baseline={baseline['phi_total']}, toggled={toggled['phi_total']}"
+            f"phi_total differs with {flag}=True: baseline={baseline['phi_total']}, toggled={toggled['phi_total']}"
         )
 
     def test_all_semantics_preserving_flags_combined(self) -> None:
@@ -238,13 +275,36 @@ class TestSemanticsPreservingFlags:
         all_flags = dict.fromkeys(_SEMANTICS_PRESERVING_BOOL_FLAGS, True)
         combined = _run_small_ring("compatible", **all_flags)
         assert baseline["delta_total"] == combined["delta_total"], (
-            f"delta_total differs with all flags on: "
-            f"baseline={baseline['delta_total']}, combined={combined['delta_total']}"
+            f"delta_total differs with all flags on: baseline={baseline['delta_total']}, combined={combined['delta_total']}"
         )
         assert baseline["phi_total"] == combined["phi_total"], (
-            f"phi_total differs with all flags on: "
-            f"baseline={baseline['phi_total']}, combined={combined['phi_total']}"
+            f"phi_total differs with all flags on: baseline={baseline['phi_total']}, combined={combined['phi_total']}"
         )
+
+
+@pytest.mark.regression
+class TestSemanticsPreservingEventFingerprint:
+    """Semantics-preserving flags must keep the normalized event stream identical."""
+
+    @pytest.mark.parametrize("flag", _SEMANTICS_PRESERVING_BOOL_FLAGS)
+    def test_each_semantics_preserving_flag_preserves_event_stream(self, flag: str) -> None:
+        baseline = _run_small_ring("compatible", include_event_fingerprint=True)
+        toggled = _run_small_ring(
+            "compatible",
+            include_event_fingerprint=True,
+            **{flag: True},
+        )
+        assert baseline["event_fingerprint"] == toggled["event_fingerprint"], f"event stream differs with {flag}=True"
+
+    def test_all_semantics_preserving_flags_preserve_event_stream(self) -> None:
+        baseline = _run_small_ring("compatible", include_event_fingerprint=True)
+        all_flags = dict.fromkeys(_SEMANTICS_PRESERVING_BOOL_FLAGS, True)
+        combined = _run_small_ring(
+            "compatible",
+            include_event_fingerprint=True,
+            **all_flags,
+        )
+        assert baseline["event_fingerprint"] == combined["event_fingerprint"]
 
 
 @pytest.mark.regression
@@ -257,12 +317,10 @@ class TestNativeBackendParity:
         python_metrics = _run_small_ring("compatible", dealer_backend="python")
         native_metrics = _run_small_ring("compatible", dealer_backend="native")
         assert python_metrics["delta_total"] == native_metrics["delta_total"], (
-            f"delta_total differs: python={python_metrics['delta_total']}, "
-            f"native={native_metrics['delta_total']}"
+            f"delta_total differs: python={python_metrics['delta_total']}, native={native_metrics['delta_total']}"
         )
         assert python_metrics["phi_total"] == native_metrics["phi_total"], (
-            f"phi_total differs: python={python_metrics['phi_total']}, "
-            f"native={native_metrics['phi_total']}"
+            f"phi_total differs: python={python_metrics['phi_total']}, native={native_metrics['phi_total']}"
         )
 
 
@@ -282,7 +340,7 @@ class TestGoldenMetricSnapshot:
         reassignment now runs unconditionally on agent default, not only
         when rollover_enabled=True. This slightly changes the default cascade.
         """
-        metrics = _run_small_ring("compatible", seed=42)
+        metrics = _run_small_ring("compatible", seed=DETERMINISTIC_SEED)
         expected_delta = Decimal("0.6633366633366633366633366633")
         expected_phi = Decimal("0.3366633366633366633366633367")
         assert metrics["delta_total"] == expected_delta, (
@@ -303,7 +361,10 @@ class TestGoldenMetricSnapshot:
         reassignment now runs unconditionally on agent default.
         """
         metrics = _run_ring(
-            "compatible", seed=42, n_agents=20, kappa="0.5",
+            "compatible",
+            seed=DETERMINISTIC_SEED,
+            n_agents=20,
+            kappa="0.5",
         )
         expected_delta = Decimal("0.8262179809141135107985936715")
         expected_phi = Decimal("0.1737820190858864892014063285")

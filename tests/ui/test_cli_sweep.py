@@ -279,6 +279,7 @@ class TestSweepBalancedExecution:
         )
 
         assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        assert "balanced NBFI mixed arms are deprecated" in result.output
         # Verify BalancedComparisonRunner.__init__ received a config with enable_lender=True
         init_call = mock_runner_init.call_args
         config_arg = init_call[1].get("config") or init_call[0][0]
@@ -947,6 +948,7 @@ class TestSweepBalancedAdditionalParams:
         )
 
         assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        assert "balanced banking arms are deprecated" in result.output
         init_call = mock_runner_init.call_args
         config_arg = init_call[1].get("config") or init_call[0][0]
         assert config_arg.enable_bank_passive is True

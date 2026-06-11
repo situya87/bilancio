@@ -16,10 +16,19 @@ from rich.prompt import Confirm
 
 from bilancio.config import apply_to_system, load_yaml
 from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
+from bilancio_v2.balance_invariants import (
+    assert_clean_core_invariants as _assert_clean_core_invariants,
+)
 from bilancio.engines.simulation import run_day
 from bilancio.engines.system import System
 from bilancio.export.writers import write_balances_csv, write_events_jsonl
 
+from .v2_run import (
+    resolve_auto_engine as _resolve_auto_engine_impl,
+)
+from .v2_run import (
+    run_v2_scenario as _run_clean_core_scenario_impl,
+)
 from .display import (
     show_day_summary_renderable,
     show_error_panel,
@@ -57,6 +66,55 @@ def _filter_active_agent_ids(system: System, agent_ids: list[str] | None) -> lis
     return active_ids
 
 
+def _run_clean_core_scenario(
+    *,
+    path: Path,
+    mode: str,
+    max_days: int,
+    quiet_days: int,
+    show: str,
+    check_invariants: str,
+    export: dict[str, str] | None,
+    html_output: Path | None,
+    agent_ids: list[str] | None,
+    default_handling: str | None,
+    t_account: bool = False,
+    detailed_dealer_logging: bool = False,
+    run_id: str = "",
+    regime: str = "",
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> None:
+    """Run a scenario through the rebuilt clean core."""
+    _run_clean_core_scenario_impl(
+        console=console,
+        invariant_checker=_assert_clean_core_invariants,
+        confirm_ask=Confirm.ask,
+        path=path,
+        mode=mode,
+        max_days=max_days,
+        quiet_days=quiet_days,
+        show=show,
+        check_invariants=check_invariants,
+        export=export,
+        html_output=html_output,
+        agent_ids=agent_ids,
+        default_handling=default_handling,
+        t_account=t_account,
+        detailed_dealer_logging=detailed_dealer_logging,
+        run_id=run_id,
+        regime=regime,
+        progress_callback=progress_callback,
+    )
+
+
+def _resolve_auto_engine(
+    path: Path,
+    default_handling: str | None,
+) -> str:
+    """Choose clean-core when the scenario is in the rebuilt compatibility slice."""
+    return _resolve_auto_engine_impl(path, default_handling, console=console)
+
+
 def run_scenario(
     path: Path,
     mode: str = "until_stable",
@@ -74,6 +132,7 @@ def run_scenario(
     regime: str = "",
     progress_callback: Callable[[int, int], None] | None = None,
     performance: PerformanceConfig | None = None,
+    engine: str = "auto",
 ) -> None:
     """Run a Bilancio simulation scenario.
 
@@ -90,6 +149,35 @@ def run_scenario(
         progress_callback: Optional callback(current_day, max_days) for progress tracking
         performance: Optional performance tuning configuration
     """
+    if engine == "auto":
+        engine = _resolve_auto_engine(
+            path,
+            default_handling,
+        )
+
+    if engine == "clean-core":
+        _run_clean_core_scenario(
+            path=path,
+            mode=mode,
+            max_days=max_days,
+            quiet_days=quiet_days,
+            show=show,
+            check_invariants=check_invariants,
+            export=export,
+            html_output=html_output,
+            agent_ids=agent_ids,
+            default_handling=default_handling,
+            t_account=t_account,
+            detailed_dealer_logging=detailed_dealer_logging,
+            run_id=run_id,
+            regime=regime,
+            progress_callback=progress_callback,
+        )
+        return
+
+    if engine != "legacy":
+        raise ValueError(f"Unknown simulation engine: {engine}")
+
     # Load configuration
     console.print("[dim]Loading scenario...[/dim]")
     config = load_yaml(path)

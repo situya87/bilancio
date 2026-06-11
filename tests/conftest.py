@@ -22,6 +22,9 @@ from bilancio.domain.instruments.credit import Payable
 from bilancio.engines.system import System
 from bilancio.scenarios.ring_explorer import compile_ring_explorer
 
+DETERMINISTIC_SEED = 42
+ALTERNATE_DETERMINISTIC_SEED = 99
+
 # ---------------------------------------------------------------------------
 # Shared factory functions (importable by any test module)
 # ---------------------------------------------------------------------------
@@ -93,7 +96,7 @@ def create_dealer_config() -> DealerRingConfig:
     """Standard dealer configuration for testing.
 
     Uses DEFAULT_BUCKETS (short/mid/long), with standard anchors,
-    25% dealer share, 50% VBT share, seed=42.
+    25% dealer share, 50% VBT share, and the shared deterministic seed.
     """
     return DealerRingConfig(
         ticket_size=Decimal(1),
@@ -108,13 +111,25 @@ def create_dealer_config() -> DealerRingConfig:
         phi_M=Decimal("0.1"),
         phi_O=Decimal("0.1"),
         clip_nonneg_B=True,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
 
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def deterministic_seed() -> int:
+    """Primary fixed seed for deterministic simulation/regression tests."""
+    return DETERMINISTIC_SEED
+
+
+@pytest.fixture
+def alternate_deterministic_seed() -> int:
+    """Secondary fixed seed for tests that must prove seed sensitivity."""
+    return ALTERNATE_DETERMINISTIC_SEED
 
 
 @pytest.fixture
