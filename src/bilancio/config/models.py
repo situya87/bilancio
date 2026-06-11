@@ -1105,6 +1105,15 @@ class RatingAgencyScenarioConfig(BaseModel):
     )
 
 
+class ClearinghouseConfig(BaseModel):
+    """Clearinghouse configuration within a scenario (Plan 059)."""
+
+    enabled: bool = Field(default=False, description="Enable the clearinghouse phase")
+    mode: Literal["netting"] = Field(
+        default="netting", description="Clearinghouse mode (stage 1 supports only 'netting')"
+    )
+
+
 class ActionDefConfig(BaseModel):
     """Configuration for a single action an agent kind can perform."""
 
@@ -1183,6 +1192,9 @@ class ScenarioConfig(BaseModel):
     lender: LenderScenarioConfig | None = Field(None, description="Non-bank lender configuration")
     rating_agency: RatingAgencyScenarioConfig | None = Field(
         None, description="Rating agency configuration"
+    )
+    clearinghouse: ClearinghouseConfig | None = Field(
+        None, description="Clearinghouse (multilateral netting) configuration"
     )
     action_specs: list[ActionSpecConfig] | None = Field(
         None, description="Declarative behavioral specs per agent kind (new format)"

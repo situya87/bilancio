@@ -1,0 +1,71 @@
+version: 1
+name: "Clearinghouse netting ring"
+description: "Five-firm balanced ring, all payables due day 1, near-zero cash: multilateral netting clears the full circulation without any cash movement."
+
+clearinghouse:
+  enabled: true
+  mode: netting
+
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: F1
+    kind: firm
+    name: Firm One
+  - id: F2
+    kind: firm
+    name: Firm Two
+  - id: F3
+    kind: firm
+    name: Firm Three
+  - id: F4
+    kind: firm
+    name: Firm Four
+  - id: F5
+    kind: firm
+    name: Firm Five
+
+initial_actions:
+  - mint_cash:
+      to: F1
+      amount: 1
+      alias: F1_pocket_cash
+  - create_payable:
+      from: F1
+      to: F2
+      amount: 100
+      due_day: 1
+      alias: F1_to_F2
+  - create_payable:
+      from: F2
+      to: F3
+      amount: 100
+      due_day: 1
+      alias: F2_to_F3
+  - create_payable:
+      from: F3
+      to: F4
+      amount: 100
+      due_day: 1
+      alias: F3_to_F4
+  - create_payable:
+      from: F4
+      to: F5
+      amount: 100
+      due_day: 1
+      alias: F4_to_F5
+  - create_payable:
+      from: F5
+      to: F1
+      amount: 100
+      due_day: 1
+      alias: F5_to_F1
+run:
+  mode: until_stable
+  max_days: 3
+  quiet_days: 2
+  default_handling: expel-agent
+  show:
+    balances: [CB, F1, F2, F3, F4, F5]
+    events: detailed

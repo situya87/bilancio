@@ -15,7 +15,12 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from bilancio.config import apply_to_system, load_yaml
-from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
+from bilancio.core.errors import (
+    ConfigurationError,
+    DefaultError,
+    SimulationHalt,
+    ValidationError,
+)
 from bilancio_v2.balance_invariants import (
     assert_clean_core_invariants as _assert_clean_core_invariants,
 )
@@ -23,6 +28,9 @@ from bilancio.engines.simulation import run_day
 from bilancio.engines.system import System
 from bilancio.export.writers import write_balances_csv, write_events_jsonl
 
+from .v2_run import (
+    clearinghouse_enabled as _clearinghouse_enabled,
+)
 from .v2_run import (
     resolve_auto_engine as _resolve_auto_engine_impl,
 )
@@ -181,6 +189,9 @@ def run_scenario(
     # Load configuration
     console.print("[dim]Loading scenario...[/dim]")
     config = load_yaml(path)
+
+    if _clearinghouse_enabled(config):
+        raise ConfigurationError("clearinghouse requires the v2 engine")
 
     # Determine effective default-handling strategy (CLI override wins)
     effective_default_handling = default_handling or config.run.default_handling

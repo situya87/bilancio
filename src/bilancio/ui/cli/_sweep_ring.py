@@ -73,6 +73,11 @@ def _deps() -> Any:
     default="fail-fast",
     help="Default handling mode for runs",
 )
+@click.option(
+    "--clearing/--no-clearing",
+    default=False,
+    help="Enable the clearinghouse multilateral netting phase (v2 engine only)",
+)
 @click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
 @click.option(
     "--perf-preset",
@@ -121,6 +126,7 @@ def sweep_ring(
     base_seed: int,
     name_prefix: str,
     default_handling: str,
+    clearing: bool,
     job_id: str | None,
     perf_preset: str | None,
     fast_atomic: bool,
@@ -160,6 +166,8 @@ def sweep_ring(
             name_prefix = runner_cfg.name_prefix
         if runner_cfg.default_handling is not None and parameter_uses_default(ctx, "default_handling"):
             default_handling = runner_cfg.default_handling
+        if runner_cfg.clearing_enabled and parameter_uses_default(ctx, "clearing"):
+            clearing = runner_cfg.clearing_enabled
         dealer_enabled = runner_cfg.dealer_enabled
         dealer_config = runner_cfg.dealer_config
 
@@ -302,6 +310,7 @@ def sweep_ring(
         default_handling=default_handling,
         dealer_enabled=dealer_enabled,
         dealer_config=dealer_config,
+        clearing_enabled=clearing,
         executor=executor,
         performance=performance,
     )

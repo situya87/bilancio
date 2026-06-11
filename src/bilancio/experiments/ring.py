@@ -89,6 +89,9 @@ class RingRunSummary:
     initial_bank_reserves: float = 0.0
     # Total debt (denominator for loss percentages)
     S_total: float = 0.0
+    # Clearinghouse netting metrics (Plan 059)
+    gross_face_due: float = 0.0
+    netting_efficiency: float | None = None
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -226,6 +229,7 @@ class _RingSweepRunnerConfig(BaseModel):
     dealer_config: dict[str, Any] | None = None
     risk_assessment_enabled: bool = True
     risk_assessment_config: dict[str, Any] | None = None
+    clearing_enabled: bool = False
 
 
 class RingSweepConfig(BaseModel):
@@ -286,6 +290,7 @@ class RingSweepRunner:
         default_handling: str = "fail-fast",
         dealer_enabled: bool = False,
         dealer_config: dict[str, Any] | None = None,
+        clearing_enabled: bool = False,
         risk_assessment_enabled: bool = True,
         risk_assessment_config: dict[str, Any] | None = None,
         balanced_mode: bool = False,
@@ -369,6 +374,7 @@ class RingSweepRunner:
         self.default_handling = default_handling
         self.dealer_enabled = dealer_enabled
         self.dealer_config = dealer_config
+        self.clearing_enabled = clearing_enabled
         self.risk_assessment_enabled = risk_assessment_enabled
         self.risk_assessment_config = risk_assessment_config
         self.balanced_mode = balanced_mode
@@ -519,8 +525,11 @@ class RingSweepRunner:
             "L0",
             "default_handling",
             "dealer_enabled",
+            "clearing_enabled",
             "phi_total",
             "delta_total",
+            "gross_face_due",
+            "netting_efficiency",
             "time_to_stability",
             "scenario_yaml",
             "events_jsonl",
@@ -812,6 +821,7 @@ class RingSweepRunner:
             "Q_total": str(self.Q_total),
             "default_handling": self.default_handling,
             "dealer_enabled": self.dealer_enabled,
+            "clearing_enabled": self.clearing_enabled,
         }
 
         # Initial "running" status
@@ -981,6 +991,9 @@ class RingSweepRunner:
                     "collateral_advance_rate": str(self.lender_collateral_advance_rate),
                 }
 
+        if self.clearing_enabled:
+            scenario["clearinghouse"] = {"enabled": True, "mode": "netting"}
+
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
             scenario_run["default_handling"] = self.default_handling
@@ -1116,6 +1129,13 @@ class RingSweepRunner:
         S_total = float(bundle.summary.get("S_total", 0))
         total_loss_pct = total_loss / S_total if S_total > 0 else None
 
+        # Clearinghouse netting metrics (Plan 059)
+        gross_face_due = float(bundle.summary.get("gross_face_due", 0.0) or 0.0)
+        netting_efficiency_val = bundle.summary.get("netting_efficiency")
+        netting_efficiency = (
+            float(netting_efficiency_val) if netting_efficiency_val is not None else None
+        )
+
         # Read dealer metrics if available (treatment runs with dealer enabled)
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = out_dir / "dealer_metrics.json"
@@ -1134,6 +1154,10 @@ class RingSweepRunner:
             "n_defaults": str(n_defaults),
             "cascade_fraction": str(cascade_fraction_val)
             if cascade_fraction_val is not None
+            else "",
+            "gross_face_due": str(gross_face_due),
+            "netting_efficiency": str(netting_efficiency)
+            if netting_efficiency is not None
             else "",
         }
         self._upsert_registry(
@@ -1182,6 +1206,8 @@ class RingSweepRunner:
             total_loss=total_loss,
             total_loss_pct=total_loss_pct,
             S_total=S_total,
+            gross_face_due=gross_face_due,
+            netting_efficiency=netting_efficiency,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
@@ -1244,6 +1270,7 @@ class RingSweepRunner:
             "Q_total": str(self.Q_total),
             "default_handling": self.default_handling,
             "dealer_enabled": self.dealer_enabled,
+            "clearing_enabled": self.clearing_enabled,
         }
 
         # Initial "running" status (skip for cloud-only mode)
@@ -1444,6 +1471,9 @@ class RingSweepRunner:
         # Apply explicit CLI adaptive flag overrides after preset defaults.
         self._apply_adaptive_flag_overrides(scenario)
 
+        if self.clearing_enabled:
+            scenario["clearinghouse"] = {"enabled": True, "mode": "netting"}
+
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
             scenario_run["default_handling"] = self.default_handling
@@ -1606,6 +1636,12 @@ class RingSweepRunner:
                 total_loss=int(result.metrics.get("total_loss", 0)),
                 total_loss_pct=result.metrics.get("total_loss_pct"),
                 S_total=float(result.metrics.get("S_total", 0)),
+                gross_face_due=float(result.metrics.get("gross_face_due", 0.0) or 0.0),
+                netting_efficiency=(
+                    float(result.metrics["netting_efficiency"])
+                    if result.metrics.get("netting_efficiency") is not None
+                    else None
+                ),
                 nbfi_loan_loss=int(result.metrics.get("nbfi_loan_loss", 0)),
                 nbfi_loans_created=int(result.metrics.get("nbfi_loans_created", 0)),
                 bank_credit_loss=int(result.metrics.get("bank_credit_loss", 0)),
@@ -1649,6 +1685,13 @@ class RingSweepRunner:
         if convergence_quality_val is not None:
             convergence_quality_val = float(convergence_quality_val)
 
+        # Clearinghouse netting metrics (Plan 059)
+        gross_face_due = float(bundle.summary.get("gross_face_due", 0.0) or 0.0)
+        netting_efficiency_val = bundle.summary.get("netting_efficiency")
+        netting_efficiency = (
+            float(netting_efficiency_val) if netting_efficiency_val is not None else None
+        )
+
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = prepared.out_dir / "dealer_metrics.json"
         if dealer_metrics_path.exists():
@@ -1665,6 +1708,10 @@ class RingSweepRunner:
             "n_defaults": str(n_defaults),
             "cascade_fraction": str(cascade_fraction_val)
             if cascade_fraction_val is not None
+            else "",
+            "gross_face_due": str(gross_face_due),
+            "netting_efficiency": str(netting_efficiency)
+            if netting_efficiency is not None
             else "",
         }
         self._upsert_registry(
@@ -1718,6 +1765,8 @@ class RingSweepRunner:
                 if float(bundle.summary.get("S_total", 0)) > 0 else None
             ),
             S_total=float(bundle.summary.get("S_total", 0)),
+            gross_face_due=gross_face_due,
+            netting_efficiency=netting_efficiency,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),

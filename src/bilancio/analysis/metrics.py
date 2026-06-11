@@ -141,21 +141,40 @@ def size_and_bunching(
     return S_t, sd / m
 
 
-def phi_delta(
-    events: Iterable[Event], dues: Iterable[dict[str, Any]], t: int
-) -> tuple[Decimal | None, Decimal | None]:
-    """Compute on-time settlement ratio phi_t and delta_t = 1 - phi_t.
-
-    Numerator: settled events with day==t and original due_day==t.
-    Denominator: S_t from dues list.
-    """
-    # Map payable IDs (pid/alias) to due_day for matching
+def _due_id_map(dues: Iterable[dict[str, Any]]) -> dict[str, int]:
+    """Map payable IDs (pid/alias) to due_day for matching."""
     id_to_due: dict[str, int] = {}
     for d in dues:
         if d.get("pid"):
             id_to_due[str(d["pid"])] = int(d.get("due_day", -1))
         if d.get("alias"):
             id_to_due[str(d["alias"])] = int(d.get("due_day", -1))
+    return id_to_due
+
+
+def _match_due_day(e: Event, id_to_due: dict[str, int]) -> int | None:
+    """Resolve an event's payable to its original due_day via pid or alias."""
+    pid = str(e.get("pid") or e.get("contract_id") or "")
+    alias = str(e.get("alias") or "")
+    if pid and pid in id_to_due:
+        return id_to_due[pid]
+    if alias and alias in id_to_due:
+        return id_to_due[alias]
+    return None
+
+
+def phi_delta(
+    events: Iterable[Event], dues: Iterable[dict[str, Any]], t: int
+) -> tuple[Decimal | None, Decimal | None]:
+    """Compute on-time settlement ratio phi_t and delta_t = 1 - phi_t.
+
+    Numerator: settled events with day==t and original due_day==t, plus
+    clearinghouse PayableNetted reductions applied on day t to payables
+    due on day t (netted face counts as cleared).
+    Denominator: S_t from dues list.
+    """
+    dues = list(dues)
+    id_to_due = _due_id_map(dues)
 
     S_t = sum((Decimal(d.get("amount", 0)) for d in dues), start=Decimal("0"))
     if S_t == 0:
@@ -163,23 +182,65 @@ def phi_delta(
 
     num = Decimal("0")
     for e in events:
-        if e.get("kind") != "PayableSettled":
+        kind = e.get("kind")
+        if kind not in ("PayableSettled", "PayableNetted"):
             continue
         if int(e.get("day", -1)) != int(t):
             continue
-        # Match either by pid or alias if present
-        pid = str(e.get("pid") or e.get("contract_id") or "")
-        alias = str(e.get("alias") or "")
-        due = None
-        if pid and pid in id_to_due:
-            due = id_to_due[pid]
-        elif alias and alias in id_to_due:
-            due = id_to_due[alias]
-        if due == int(t):
+        if _match_due_day(e, id_to_due) != int(t):
+            continue
+        if kind == "PayableNetted":
+            num += Decimal(e.get("netted_amount", 0))
+        else:
             num += Decimal(e.get("amount", 0))
 
     phi = num / S_t
     return phi, (Decimal("1") - phi)
+
+
+def netted_for_day(events: Iterable[Event], dues: Iterable[dict[str, Any]], t: int) -> Decimal:
+    """Sum day-t PayableNetted reductions applied to payables due on day t."""
+    id_to_due = _due_id_map(dues)
+    total = Decimal("0")
+    for e in events:
+        if e.get("kind") != "PayableNetted":
+            continue
+        if int(e.get("day", -1)) != int(t):
+            continue
+        if _match_due_day(e, id_to_due) != int(t):
+            continue
+        total += Decimal(e.get("netted_amount", 0))
+    return total
+
+
+def netting_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal]:
+    """Return (gross_face_due, face_extinguished_by_netting) for a run.
+
+    gross_face_due sums all PayableCreated face; face_extinguished_by_netting
+    sums PayableNetted reductions applied on the payable's due day.
+    """
+    events_list = list(events)
+    gross = Decimal("0")
+    id_to_due: dict[str, int] = {}
+    for e in events_list:
+        if e.get("kind") != "PayableCreated":
+            continue
+        gross += Decimal(e.get("amount", 0))
+        due = int(e.get("due_day", -1))
+        pid = e.get("payable_id") or e.get("pid")
+        if pid:
+            id_to_due[str(pid)] = due
+        if e.get("alias"):
+            id_to_due[str(e["alias"])] = due
+
+    netted = Decimal("0")
+    for e in events_list:
+        if e.get("kind") != "PayableNetted":
+            continue
+        due = _match_due_day(e, id_to_due)
+        if due is not None and due == int(e.get("day", -1)):
+            netted += Decimal(e.get("netted_amount", 0))
+    return gross, netted
 
 
 def replay_intraday_peak(

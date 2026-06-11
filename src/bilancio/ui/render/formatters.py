@@ -155,6 +155,35 @@ def format_payable_settled(event: dict[str, Any]) -> tuple[str, list[str], str]:
     return title, lines, "$"
 
 
+@registry.register("PayableNetted")
+def format_payable_netted(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format clearinghouse payable netting events."""
+    netted = event.get("netted_amount", 0)
+    debtor = event.get("debtor", "Unknown")
+    creditor = event.get("creditor", "Unknown")
+    remaining = event.get("remaining_amount", None)
+
+    title = f"[NET] Payable Netted: ${netted:,}"
+    lines = [f"{debtor} → {creditor}"]
+    if remaining is not None:
+        lines.append(f"Remaining: ${remaining:,}")
+
+    return title, lines, "[NET]"
+
+
+@registry.register("ClearingExecuted")
+def format_clearing_executed(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format clearinghouse daily netting summary events."""
+    extinguished = event.get("face_extinguished", 0)
+    gross = event.get("gross_face_due", 0)
+    n_affected = event.get("n_payables_affected", 0)
+
+    title = f"[CLR] Clearinghouse Netting: ${extinguished:,}"
+    lines = [f"Gross face due: ${gross:,}", f"Payables affected: {n_affected}"]
+
+    return title, lines, "[CLR]"
+
+
 @registry.register("CashDeposited")
 def format_cash_deposited(event: dict[str, Any]) -> tuple[str, list[str], str]:
     """Format cash deposit events."""

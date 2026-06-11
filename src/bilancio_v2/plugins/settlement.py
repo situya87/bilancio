@@ -35,7 +35,16 @@ class SettlementPhase:
 
     def run(self, ledger: Ledger, ctx: RunContext) -> bool:
         impactful = False
-        settled_for_rollover: list[tuple[str, str, Decimal, int]] = []
+        settled_for_rollover: list[tuple[str, str, Decimal, int, Decimal]] = []
+        if ledger.netted_rollover_queue:
+            if ctx.rollover_enabled:
+                # Fully-netted payables settled without cash ("net-settle,
+                # gross-roll", Plan 059): roll at full face, zero cash return.
+                settled_for_rollover.extend(
+                    (debtor, creditor, face, maturity_distance, ZERO)
+                    for debtor, creditor, face, maturity_distance in ledger.netted_rollover_queue
+                )
+            ledger.netted_rollover_queue.clear()
         for payable in list(ledger.payables):
             if payable.settled or payable.due_day != ledger.day:
                 continue
@@ -53,7 +62,7 @@ class SettlementPhase:
         return impactful
 
 
-def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[bool, tuple[str, str, Decimal, int] | None]:
+def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[bool, tuple[str, str, Decimal, int, Decimal] | None]:
     checkpoint = ledger.checkpoint() if ctx.default_mode == "fail-fast" else None
 
     remaining = payable.amount
@@ -99,11 +108,14 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[b
     update_dealer_risk_history(ledger, issuer_id=payable.debtor, defaulted=False)
     rollover_info = None
     if ctx.rollover_enabled:
+        # Partially netted payables roll at full original face; only the
+        # cash-settled residual generates a cash return-flow.
         rollover_info = (
             payable.debtor,
             payable.creditor,
-            payable.amount,
+            payable.amount + payable.netted_amount,
             payable.maturity_distance,
+            payable.amount,
         )
     return True, rollover_info
 
@@ -551,7 +563,7 @@ def deliver_stock_for_obligation(ledger: Ledger, debtor: str, creditor: str, sku
     return deliver_quantity
 
 
-def rollover_settled_payables(ledger: Ledger, settled_payables: list[tuple[str, str, Decimal, int]]) -> list[str]:
+def rollover_settled_payables(ledger: Ledger, settled_payables: list[tuple[str, str, Decimal, int, Decimal]]) -> list[str]:
     """Refinance settled payables past the latest open maturity (Plan 024).
 
     The creditor returns the settlement cash to the debtor (deposit first,
@@ -566,7 +578,7 @@ def rollover_settled_payables(ledger: Ledger, settled_payables: list[tuple[str, 
             max_due_day = payable.due_day
 
     new_payable_ids: list[str] = []
-    for debtor_id, creditor_id, amount, maturity_distance in settled_payables:
+    for debtor_id, creditor_id, amount, maturity_distance, cash_return in settled_payables:
         payable_id = rollover_single_payable(
             ledger,
             debtor_id,
@@ -574,6 +586,7 @@ def rollover_settled_payables(ledger: Ledger, settled_payables: list[tuple[str, 
             amount,
             maturity_distance,
             max_due_day + maturity_distance,
+            cash_return=cash_return,
         )
         if payable_id is not None:
             new_payable_ids.append(payable_id)
@@ -587,7 +600,10 @@ def rollover_single_payable(
     amount: Decimal,
     maturity_distance: int,
     new_due_day: int,
+    cash_return: Decimal | None = None,
 ) -> str | None:
+    if cash_return is None:
+        cash_return = amount
     if debtor_id not in ledger.agents or debtor_id in ledger.defaulted_agent_ids:
         return None
     if creditor_id not in ledger.agents or creditor_id in ledger.defaulted_agent_ids:
@@ -601,15 +617,29 @@ def rollover_single_payable(
         maturity_distance=maturity_distance,
     )
 
-    cash_transferred = pay_with_deposit(ledger, creditor_id, debtor_id, amount)
-    remaining = amount - cash_transferred
-    if remaining > ZERO:
-        cash_paid = min(ledger.cash[creditor_id], remaining)
-        if cash_paid > ZERO:
-            ledger.transfer_cash(creditor_id, debtor_id, cash_paid)
-            cash_transferred += cash_paid
+    cash_transferred = ZERO
+    if cash_return > ZERO:
+        cash_transferred = pay_with_deposit(ledger, creditor_id, debtor_id, cash_return)
+        remaining = cash_return - cash_transferred
+        if remaining > ZERO:
+            cash_paid = min(ledger.cash[creditor_id], remaining)
+            if cash_paid > ZERO:
+                ledger.transfer_cash(creditor_id, debtor_id, cash_paid)
+                cash_transferred += cash_paid
 
-    if cash_transferred != amount:
+    if cash_return == ZERO:
+        # Fully-netted face: the gross roll happens with no cash return-flow.
+        ledger.log(
+            "PayableRolledOver",
+            debtor=debtor_id,
+            creditor=creditor_id,
+            amount=amount,
+            new_due_day=new_due_day,
+            maturity_distance=maturity_distance,
+            payable_id=new_payable.id,
+            cash_transfer=False,
+        )
+    elif cash_transferred != amount:
         ledger.log(
             "RolloverPartial",
             debtor=debtor_id,

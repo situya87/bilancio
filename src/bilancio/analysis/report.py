@@ -24,6 +24,7 @@ from bilancio.analysis.metrics import (
     dues_for_day,
     liquidity_gap,
     net_vectors,
+    netted_for_day,
     phi_delta,
     raw_minimum_liquidity,
     replay_intraday_peak,
@@ -329,6 +330,7 @@ def compute_day_metrics(
         Mbar_t = raw_minimum_liquidity(nets)
         S_t, _ = size_and_bunching(dues)
         phi_t, delta_t = phi_delta(events, dues, t)
+        face_netted_t = netted_for_day(events, dues, t)
         Mpeak_t, steps, gross_t = replay_intraday_peak(events, t)
         v_t = velocity(gross_t, Mpeak_t)
         HHIp_t = creditor_hhi_plus(nets)
@@ -363,6 +365,7 @@ def compute_day_metrics(
                 "v_t": v_t,
                 "phi_t": phi_t,
                 "delta_t": delta_t,
+                "face_netted_t": face_netted_t,
                 "n_debtors": n_debtors,
                 "n_creditors": n_creditors,
                 "HHIplus_t": HHIp_t,
@@ -389,6 +392,7 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
     S_total = Decimal("0")
     phi_weighted = Decimal("0")
     delta_weighted = Decimal("0")
+    face_netted_total = Decimal("0")
     max_G: Decimal | None = None
     alpha_1 = None
     Mpeak_1 = None
@@ -404,6 +408,7 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
         phi_t = row.get("phi_t")
         delta_t = row.get("delta_t")
         G_t = row.get("G_t")
+        face_netted_t = row.get("face_netted_t")
 
         if isinstance(S_t, str):
             S_t = _decimal_or_none(S_t)
@@ -413,6 +418,10 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
             delta_t = _decimal_or_none(delta_t)
         if isinstance(G_t, str):
             G_t = _decimal_or_none(G_t)
+        if isinstance(face_netted_t, str):
+            face_netted_t = _decimal_or_none(face_netted_t)
+        if face_netted_t is not None:
+            face_netted_total += Decimal(str(face_netted_t))
 
         if S_t is not None:
             S_total += S_t
@@ -469,6 +478,9 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
         "HHIplus_1": HHIplus_1,
         "max_day": max_day,
         "S_total": float(S_total) if S_total else 0.0,
+        "gross_face_due": float(S_total) if S_total else 0.0,
+        "face_extinguished_by_netting": float(face_netted_total) if face_netted_total else 0.0,
+        "netting_efficiency": (face_netted_total / S_total) if S_total else Decimal("0"),
         "convergence_day": convergence_day,
         "convergence_quality": convergence_quality,
     }
@@ -813,6 +825,8 @@ def aggregate_runs(
                 "HHIplus_1": summary.get("HHIplus_1"),
                 "n_defaults": n_defaults_val,
                 "cascade_fraction": cascade_fraction_val,
+                "gross_face_due": summary.get("gross_face_due"),
+                "netting_efficiency": summary.get("netting_efficiency"),
                 "time_to_stability": entry.get("time_to_stability")
                 or str(summary.get("max_day", "")),
                 "metrics_csv": metrics_rel,
@@ -839,6 +853,8 @@ def aggregate_runs(
         "HHIplus_1",
         "n_defaults",
         "cascade_fraction",
+        "gross_face_due",
+        "netting_efficiency",
         "time_to_stability",
         "metrics_csv",
     ]

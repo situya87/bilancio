@@ -32,6 +32,7 @@ from bilancio_v2.plugins.banking import (
     initial_banking_reserve_targets,
 )
 from bilancio_v2.plugins.base import PhasePlugin, RunContext
+from bilancio_v2.plugins.clearing import ClearingPhase
 from bilancio_v2.plugins.dealer import (
     DealerPhase,
     initialize_active_dealer_subsystem,
@@ -43,6 +44,7 @@ from bilancio_v2.plugins.rating import RatingPhase
 from bilancio_v2.plugins.settlement import SettlementPhase
 from bilancio_v2.policy import CapabilityMatrix
 from bilancio_v2.scenario_gates import (
+    build_clearing_config,
     build_dealer_config,
     build_lender_config,
     build_rating_config,
@@ -161,6 +163,7 @@ def prepare_scenario(
     # so both kernels always read a scenario identically.
     rating_config = build_rating_config(config)
     lender_config = build_lender_config(config)
+    clearing_config = build_clearing_config(config)
 
     ctx = RunContext(
         policy=policy,
@@ -179,6 +182,8 @@ def prepare_scenario(
         phases.append(BankLendingPhase(config=banking_config))
     if dealer_config is not None:
         phases.append(DealerPhase(config=dealer_config))
+    if clearing_config is not None:
+        phases.append(ClearingPhase(config=clearing_config))
     phases.append(SettlementPhase())
     phases.append(InterbankPhase())
     return Runtime(ledger=ledger, ctx=ctx, phases=tuple(phases))
