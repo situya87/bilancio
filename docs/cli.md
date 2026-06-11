@@ -12,6 +12,8 @@ Bilancio provides a command-line interface for running simulations, analyzing re
 | `bilancio analyze` | Compute metrics from simulation output |
 | `bilancio sweep ring` | Run parameter sweeps across ring scenarios |
 | `bilancio sweep balanced` | Compare passive vs active (dealer-enabled) scenarios |
+| `bilancio sweep nbfi` | Run clean NBFI idle-vs-lend experiments |
+| `bilancio sweep bank` | Run clean bank idle-vs-lend experiments |
 | `bilancio sweep comparison` | Run dealer comparison experiments |
 | `bilancio sweep strategy-outcomes` | Analyze trading strategy outcomes |
 | `bilancio sweep dealer-usage` | Analyze dealer usage patterns |
@@ -326,6 +328,10 @@ uv run bilancio sweep ring --cloud --job-id my-experiment-001 \
 ### bilancio sweep balanced
 
 Compare passive holders (C) against active dealers (D) with identical starting balance sheets.
+This is the legacy dealer comparison surface. Use `bilancio sweep nbfi` for clean
+NBFI lending experiments and `bilancio sweep bank` for clean bank lending
+experiments; balanced optional NBFI and banking arms are deprecated
+compatibility options.
 
 ```bash
 uv run bilancio sweep balanced [OPTIONS]
@@ -360,7 +366,7 @@ out-dir/
   active/            # All active dealer runs
   aggregate/
     comparison.csv   # C vs D metrics
-    summary.json     # Aggregate statistics
+    summary.json     # Aggregate statistics plus experiment_design metadata
 ```
 
 #### Examples
@@ -383,6 +389,79 @@ uv run bilancio sweep balanced --cloud \
   --out-dir out/experiments/dealer-impact-study \
   --n-agents 50 \
   --outside-mid-ratios "1.0,0.8,0.6"
+```
+
+---
+
+### bilancio sweep nbfi
+
+Run a clean two-arm NBFI lending experiment. Both arms share the same seed,
+topology, grid cell, and passive VBT/dealer infrastructure. The baseline arm is
+`nbfi_idle`; the treatment arm is `nbfi_lend`; the reported effect is
+`lending_effect = delta_idle - delta_lend`.
+
+```bash
+uv run bilancio sweep nbfi [OPTIONS]
+```
+
+#### Key Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--out-dir` | path | **required** | Output directory for results |
+| `--n-agents` | integer | `100` | Number of firms in ring |
+| `--n-replicates` | integer | `1` | Replicate seeds per parameter cell |
+| `--kappas` | string | `"0.3,0.5,1.0,2.0"` | Comma-separated liquidity ratios |
+| `--outside-mid-ratios` | string | `"0.90"` | Comma-separated outside money ratios |
+| `--nbfi-share` | decimal | `0.10` | NBFI capital share |
+| `--cloud` | flag | false | Run simulations on Modal cloud |
+
+#### Output Structure
+
+```
+out-dir/
+  nbfi_idle/
+  nbfi_lend/
+  aggregate/
+    comparison.csv
+    summary.json     # Includes experiment_design baseline/treatment metadata
+```
+
+---
+
+### bilancio sweep bank
+
+Run a clean two-arm bank lending experiment. Both arms share the same seed,
+topology, grid cell, and deposit means-of-payment infrastructure. The baseline
+arm is `bank_idle`; the treatment arm is `bank_lend`; the reported effect is
+`bank_lending_effect = delta_idle - delta_lend`.
+
+```bash
+uv run bilancio sweep bank [OPTIONS]
+```
+
+#### Key Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--out-dir` | path | **required** | Output directory for results |
+| `--n-agents` | integer | `100` | Number of firms in ring |
+| `--n-replicates` | integer | `1` | Replicate seeds per parameter cell |
+| `--kappas` | string | `"0.3,0.5,1.0,2.0"` | Comma-separated liquidity ratios |
+| `--n-banks` | integer | `5` | Number of banks |
+| `--reserve-ratio` | decimal | `0.50` | Initial reserves / total deposits |
+| `--credit-risk-loading` | decimal | `0.5` | Bank sensitivity to borrower risk |
+| `--cloud` | flag | false | Run simulations on Modal cloud |
+
+#### Output Structure
+
+```
+out-dir/
+  bank_idle/
+  bank_lend/
+  aggregate/
+    comparison.csv
+    summary.json     # Includes experiment_design baseline/treatment metadata
 ```
 
 ---
