@@ -1,6 +1,6 @@
 # Bilancio Codebase Documentation
 
-Generated: 2026-06-11 01:00:57 UTC | Branch: main | Commit: 280db5da
+Generated: 2026-06-11 03:50:47 UTC | Branch: main | Commit: 010e883e
 
 This document contains the complete codebase structure and content for LLM ingestion.
 
@@ -2427,7 +2427,6 @@ This document contains the complete codebase structure and content for LLM inges
 │   │   ├── 050_adaptive_decision_profiles.md
 │   │   ├── 052_integration_discipline_hardening_plan.md
 │   │   ├── 058_benchmark_hygiene_fixes.md
-│   │   ├── Kalecki_debt_simulation (1).pdf
 │   │   ├── banks_dealers_integration.md
 │   │   └── deploy_cloud_metrics.md
 │   ├── prompts
@@ -32485,7 +32484,7 @@ This document contains the complete codebase structure and content for LLM inges
         ├── test_rollover_parity.py
         └── test_settlement.py
 
-6901 directories, 25574 files
+6901 directories, 25573 files
 
 ```
 
@@ -39303,6 +39302,24 @@ Complete git history from oldest to newest:
   Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
   ---------
   Co-authored-by: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **6702c522** (2026-06-11) by github-actions[bot]
+  chore(docs): update codebase_for_llm.md
+
+- **010e883e** (2026-06-11) by situya87
+  chore: docs/CI alignment and test fixes following the v2 kernel merge (#170)
+  * docs+ci: align docs and quality gates with the v2 kernel cutover
+  Updates CLI/experiment/benchmark/RNG docs for the v2 engine, adds
+  test-antipattern and deterministic-regression CI jobs, refreshes
+  uv.lock and regenerated example event logs, and removes a duplicate
+  plan PDF.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * style: ruff format _sweep_balanced.py
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * test: tolerate console line-wrapping in treynor output assertion
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  ---------
+  Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
 
 ---
 
@@ -116799,15 +116816,9 @@ def sweep_balanced(
         job_id = deps.generate_job_id()
 
     if enable_lender or enable_dealer_lender:
-        click.echo(
-            "Warning: balanced NBFI mixed arms are deprecated; use "
-            "'bilancio sweep nbfi' for clean NBFI lending experiments."
-        )
+        click.echo("Warning: balanced NBFI mixed arms are deprecated; use 'bilancio sweep nbfi' for clean NBFI lending experiments.")
     if enable_bank_passive or enable_bank_dealer or enable_bank_dealer_nbfi:
-        click.echo(
-            "Warning: balanced banking arms are deprecated; use "
-            "'bilancio sweep bank' for clean bank lending experiments."
-        )
+        click.echo("Warning: balanced banking arms are deprecated; use 'bilancio sweep bank' for clean bank lending experiments.")
 
     from bilancio.scenarios.ring.topology import parse_topology_string
 
@@ -223401,7 +223412,8 @@ class TestTreynorCommand:
         assert output_file.exists()
         assert output_file.read_text() == "<html>dashboard</html>"
         assert "OK" in result.output
-        assert "treynor_dashboard.html" in result.output
+        # The console may wrap long paths mid-filename; collapse newlines first.
+        assert "treynor_dashboard.html" in result.output.replace("\n", "")
 
     @patch("webbrowser.open")
     @patch("bilancio.analysis.treynor_viz.build_treynor_dashboard")
