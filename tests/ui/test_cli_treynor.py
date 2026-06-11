@@ -34,7 +34,8 @@ class TestTreynorCommand:
         assert output_file.exists()
         assert output_file.read_text() == "<html>dashboard</html>"
         assert "OK" in result.output
-        assert "treynor_dashboard.html" in result.output
+        # The console may wrap long paths mid-filename; collapse newlines first.
+        assert "treynor_dashboard.html" in result.output.replace("\n", "")
 
     @patch("webbrowser.open")
     @patch("bilancio.analysis.treynor_viz.build_treynor_dashboard")

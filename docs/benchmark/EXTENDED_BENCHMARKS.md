@@ -8,6 +8,9 @@ valuable, but they are intentionally not the default merge gate for ordinary pul
 Each benchmark emits:
 - JSON report (`temp/...json`)
 - Markdown report (`temp/...md`)
+- provenance sidecar (`temp/..._provenance.json`) with git state,
+  dependency lock fingerprints, runtime metadata, config hash, and seed map
+- operational budget metadata plus the `operational::within_budget` critical gate
 - exit code `0` only when both the target score and all critical gates pass
 
 ## Benchmarks
@@ -115,6 +118,28 @@ PYTHONPATH=src .venv/bin/python scripts/run_failure_injection_integration_benchm
 - Outputs:
   - `temp/failure_injection_integration_benchmark_report.json`
   - `temp/failure_injection_integration_benchmark_report.md`
+
+### 10) Regression Benchmark
+- Script: `scripts/run_regression_benchmark.py`
+- Focus: canonical `small`, `medium`, and `stress` scenario fingerprints for critical metrics.
+- Run:
+```bash
+PYTHONPATH=src .venv/bin/python scripts/run_regression_benchmark.py
+```
+- Outputs:
+  - `temp/regression_benchmark_report.json`
+  - `temp/regression_benchmark_report.md`
+
+### 11) Failure-Mode Benchmark
+- Script: `scripts/run_failure_mode_benchmark.py`
+- Focus: liquidity shock, default cascade, and abundant-liquidity edge regimes.
+- Run:
+```bash
+PYTHONPATH=src .venv/bin/python scripts/run_failure_mode_benchmark.py
+```
+- Outputs:
+  - `temp/failure_mode_benchmark_report.json`
+  - `temp/failure_mode_benchmark_report.md`
 
 ## Optional knobs
 

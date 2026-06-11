@@ -16,6 +16,13 @@ Outputs:
 - `temp/scientific_comparison_benchmark_report.json`
 - `temp/scientific_comparison_benchmark_report.md`
 
+The JSON report includes the loaded pre-analysis contract under
+`analysis_manifest` and the endpoint-level replicate calculations under
+`power_planning`. The Markdown report mirrors these fields in the
+`Analysis Manifest` and `Power Planning` detail sections so the declared
+MDE, alpha, power, endpoint family, and multiple-testing policy are visible
+in the benchmark artifact itself.
+
 ## What It Checks
 
 1. Design & Pairing Discipline (30)
@@ -54,6 +61,8 @@ Current gates:
 - `scientific::fdr_report_valid`
 - `scientific::analysis_artifacts_schema`
 - `scientific::deterministic_reanalysis`
+- `scientific::power_planning_valid`
+- `scientific::analysis_manifest_present`
 
 ## Why This Is Separate From ABM Benchmark
 
