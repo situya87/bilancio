@@ -9,6 +9,7 @@ Tests cover:
 from __future__ import annotations
 
 import csv
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -551,7 +552,36 @@ class TestWriteComparisonCSV:
 
 
 # =============================================================================
-# 8. Config serialization round-trip
+# 8. _write_summary_json
+# =============================================================================
+
+
+class TestWriteSummaryJSON:
+    """Tests for NBFIComparisonRunner._write_summary_json."""
+
+    def test_summary_includes_clean_causal_design(self, tmp_path: Path):
+        """summary.json declares the NBFI baseline, treatment, and effect formula."""
+        config = NBFIComparisonConfig()
+        runner = NBFIComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [
+            _make_result(delta_idle=Decimal("0.6"), delta_lend=Decimal("0.4")),
+        ]
+
+        runner._write_summary_json()
+
+        summary = json.loads((tmp_path / "aggregate" / "summary.json").read_text())
+        design = summary["experiment_design"]
+        assert design["mode"] == "clean_causal"
+        assert design["comparison"] == "nbfi_lending"
+        assert design["baseline_arm"] == "idle"
+        assert design["treatment_arm"] == "lend"
+        assert design["effect_metric"] == "lending_effect"
+        assert design["effect_formula"] == "delta_idle - delta_lend"
+        assert design["legacy_mixed_mode"] is False
+
+
+# =============================================================================
+# 9. Config serialization round-trip
 # =============================================================================
 
 

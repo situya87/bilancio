@@ -11,6 +11,7 @@ Tests cover:
 from __future__ import annotations
 
 import csv
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -709,6 +710,49 @@ class TestWriteComparisonCSV:
         assert len(rows) == 2
         assert rows[0]["seed"] == "2"
         assert rows[1]["seed"] == "3"
+
+    def test_summary_includes_legacy_dealer_design(self, tmp_path: Path):
+        """summary.json declares the balanced passive/active contrast."""
+        cfg = BalancedComparisonConfig()
+        runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [
+            _make_result(delta_passive=Decimal("0.6"), delta_active=Decimal("0.4")),
+        ]
+
+        runner._write_summary_json()
+
+        summary = json.loads((tmp_path / "aggregate" / "summary.json").read_text())
+        design = summary["experiment_design"]
+        assert design["mode"] == "legacy_balanced_dealer"
+        assert design["comparison"] == "dealer_trading"
+        assert design["baseline_arm"] == "passive"
+        assert design["treatment_arm"] == "active"
+        assert design["effect_metric"] == "trading_effect"
+        assert design["effect_formula"] == "delta_passive - delta_active"
+        assert design["legacy_mixed_mode"] is False
+
+    def test_summary_marks_deprecated_mixed_bank_arms(self, tmp_path: Path):
+        """summary.json identifies deprecated mixed banking arms and replacements."""
+        cfg = BalancedComparisonConfig(
+            enable_bank_passive=True,
+            enable_bank_dealer=True,
+            enable_bank_dealer_nbfi=True,
+        )
+        with pytest.warns(DeprecationWarning):
+            runner = BalancedComparisonRunner(config=cfg, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [_make_result()]
+
+        runner._write_summary_json()
+
+        summary = json.loads((tmp_path / "aggregate" / "summary.json").read_text())
+        design = summary["experiment_design"]
+        assert design["legacy_mixed_mode"] is True
+        assert design["deprecated_mixed_arms"] == [
+            "bank_passive",
+            "bank_dealer",
+            "bank_dealer_nbfi",
+        ]
+        assert design["clean_replacements"]["bank_dealer"] == "bilancio sweep bank"
 
     def test_csv_includes_lender_fields(self, tmp_path: Path):
         """CSV includes lender fields when a result has lender data."""

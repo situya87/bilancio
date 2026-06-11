@@ -9,6 +9,7 @@ Tests cover:
 from __future__ import annotations
 
 import csv
+import json
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
@@ -619,7 +620,36 @@ class TestWriteComparisonCSV:
 
 
 # =============================================================================
-# 9. _get_performance
+# 9. _write_summary_json
+# =============================================================================
+
+
+class TestWriteSummaryJSON:
+    """Tests for BankComparisonRunner._write_summary_json."""
+
+    def test_summary_includes_clean_causal_design(self, tmp_path: Path):
+        """summary.json declares the bank baseline, treatment, and effect formula."""
+        config = BankComparisonConfig()
+        runner = BankComparisonRunner(config=config, out_dir=tmp_path, enable_supabase=False)
+        runner.comparison_results = [
+            _make_result(delta_idle=Decimal("0.6"), delta_lend=Decimal("0.4")),
+        ]
+
+        runner._write_summary_json()
+
+        summary = json.loads((tmp_path / "aggregate" / "summary.json").read_text())
+        design = summary["experiment_design"]
+        assert design["mode"] == "clean_causal"
+        assert design["comparison"] == "bank_lending"
+        assert design["baseline_arm"] == "idle"
+        assert design["treatment_arm"] == "lend"
+        assert design["effect_metric"] == "bank_lending_effect"
+        assert design["effect_formula"] == "delta_idle - delta_lend"
+        assert design["legacy_mixed_mode"] is False
+
+
+# =============================================================================
+# 10. _get_performance
 # =============================================================================
 
 
@@ -645,7 +675,7 @@ class TestGetPerformance:
 
 
 # =============================================================================
-# 10. Result with None optional fields
+# 11. Result with None optional fields
 # =============================================================================
 
 

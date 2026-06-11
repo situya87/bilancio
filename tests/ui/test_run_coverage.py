@@ -6,6 +6,7 @@ _filter_active_agent_ids, and related helpers.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -19,7 +20,6 @@ from bilancio.ui.run import (
     run_step_mode,
     run_until_stable_mode,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers: minimal YAML scenario builders
@@ -100,8 +100,10 @@ class TestFilterActiveAgentIds:
 
     def test_mixed_agents(self):
         """Mix of active, defaulted, and missing."""
-        active = MagicMock(); active.defaulted = False
-        defaulted = MagicMock(); defaulted.defaulted = True
+        active = MagicMock()
+        active.defaulted = False
+        defaulted = MagicMock()
+        defaulted.defaulted = True
 
         def get_agent(aid):
             return {"H1": active, "H2": defaulted}.get(aid)
@@ -117,6 +119,16 @@ class TestFilterActiveAgentIds:
 # ---------------------------------------------------------------------------
 
 class TestRunScenarioUntilStable:
+
+    def test_programmatic_default_engine_uses_clean_core_when_supported(self, tmp_path):
+        """run_scenario() defaults to auto and selects clean-core for compatible scenarios."""
+        scenario = _simple_bank_yaml()
+        path = _write_scenario(tmp_path, scenario)
+
+        with patch("bilancio.ui.run._run_clean_core_scenario") as clean_core_run:
+            run_scenario(path, mode="until_stable", max_days=5, quiet_days=1)
+
+        clean_core_run.assert_called_once()
 
     def test_basic_until_stable(self, tmp_path):
         """Run a minimal scenario in until_stable mode to completion."""
@@ -141,10 +153,13 @@ class TestRunScenarioUntilStable:
         """check_invariants='daily' exercises the daily invariant check path."""
         scenario = _simple_bank_yaml()
         path = _write_scenario(tmp_path, scenario)
-        run_scenario(
-            path, mode="until_stable", max_days=5, quiet_days=1,
-            check_invariants="daily",
-        )
+        with patch("bilancio.ui.run._assert_clean_core_invariants") as assert_invariants:
+            run_scenario(
+                path, mode="until_stable", max_days=5, quiet_days=1,
+                check_invariants="daily",
+            )
+
+        assert assert_invariants.call_count >= 2
 
     def test_check_invariants_none(self, tmp_path):
         """check_invariants='none' skips setup invariant check."""
@@ -173,6 +188,76 @@ class TestRunScenarioUntilStable:
         for day, mx in calls:
             assert 1 <= day <= 5
             assert mx == 5
+
+    def test_progress_callback_runs_on_programmatic_clean_core_default(self, tmp_path):
+        """Auto mode keeps clean-core when progress callbacks are requested."""
+        scenario = _simple_bank_yaml()
+        path = _write_scenario(tmp_path, scenario)
+        events_path = tmp_path / "events.jsonl"
+        calls = []
+
+        def cb(current: int, total: int) -> None:
+            calls.append((current, total))
+
+        run_scenario(
+            path,
+            mode="until_stable",
+            max_days=5,
+            quiet_days=1,
+            show="none",
+            progress_callback=cb,
+            export={"events_jsonl": str(events_path)},
+        )
+
+        assert calls
+        assert calls == [(1, 5), (2, 5), (3, 5)]
+        events = [json.loads(line) for line in events_path.read_text().splitlines()]
+        assert {event["kind"] for event in events} >= {"PhaseA", "PayableSettled"}
+
+    def test_performance_config_keeps_programmatic_default_on_clean_core(self, tmp_path):
+        """PerformanceConfig is accepted as no-op for clean-core-compatible scenarios."""
+        from bilancio.core.performance import PerformanceConfig
+
+        scenario = _simple_bank_yaml()
+        path = _write_scenario(tmp_path, scenario)
+
+        with patch("bilancio.ui.run._run_clean_core_scenario") as clean_core_run:
+            run_scenario(
+                path,
+                mode="until_stable",
+                max_days=5,
+                quiet_days=1,
+                performance=PerformanceConfig.create("fast"),
+            )
+
+        clean_core_run.assert_called_once()
+
+    def test_detailed_dealer_logging_keeps_programmatic_default_without_dealer(self, tmp_path):
+        """Detailed dealer logging only matters when a dealer subsystem exists."""
+        scenario = _simple_bank_yaml()
+        path = _write_scenario(tmp_path, scenario)
+
+        with patch("bilancio.ui.run._run_clean_core_scenario") as clean_core_run:
+            run_scenario(
+                path,
+                mode="until_stable",
+                max_days=5,
+                quiet_days=1,
+                detailed_dealer_logging=True,
+            )
+
+        clean_core_run.assert_called_once()
+
+    def test_estimate_logging_keeps_programmatic_default_on_clean_core(self, tmp_path):
+        """Rating estimate logging is supported by the clean-core default path."""
+        scenario = _simple_bank_yaml()
+        scenario["run"]["estimate_logging"] = True
+        path = _write_scenario(tmp_path, scenario)
+
+        with patch("bilancio.ui.run._run_clean_core_scenario") as clean_core_run:
+            run_scenario(path, mode="until_stable", max_days=5, quiet_days=1)
+
+        clean_core_run.assert_called_once()
 
     def test_default_handling_override(self, tmp_path):
         """CLI default_handling override replaces config value."""
@@ -914,7 +999,7 @@ class TestCBLendingCutoff:
         system = System(default_mode="fail-fast")
         apply_to_system(config, system)
 
-        result = run_until_stable_mode(
+        run_until_stable_mode(
             system=system,
             max_days=5,
             quiet_days=1,
@@ -1091,7 +1176,7 @@ class TestStepModeCBLendingCutoff:
 
         with patch("bilancio.ui.run.Confirm") as MockConfirm:
             MockConfirm.ask = mock_confirm
-            result = run_step_mode(
+            run_step_mode(
                 system=system,
                 max_days=5,
                 show="none",
@@ -1193,9 +1278,6 @@ class TestDealerMetricsExportMocked:
 
         events_path = str(tmp_path / "out" / "events.jsonl")
 
-        # Patch apply_to_system to inject our pre-configured system
-        original_apply = None
-
         def patched_apply(config, sys_obj):
             """Copy our mock dealer subsystem onto the new system."""
             from bilancio.config import apply_to_system as real_apply
@@ -1205,9 +1287,8 @@ class TestDealerMetricsExportMocked:
         with patch("bilancio.ui.run.apply_to_system", side_effect=patched_apply):
             run_scenario(
                 path, mode="until_stable", max_days=3, quiet_days=1,
-                export={"events_jsonl": events_path}, show="none",
+                export={"events_jsonl": events_path}, show="none", engine="legacy",
             )
-        import json
         dealer_metrics_path = tmp_path / "out" / "dealer_metrics.json"
         assert dealer_metrics_path.exists()
         data = json.loads(dealer_metrics_path.read_text())
@@ -1228,9 +1309,8 @@ class TestDealerMetricsExportMocked:
             with patch("bilancio.engines.dealer_integration.compute_passive_pnl", return_value={"passive_pnl": -5}):
                 run_scenario(
                     path, mode="until_stable", max_days=3, quiet_days=1,
-                    export={"balances_csv": csv_path}, show="none",
+                    export={"balances_csv": csv_path}, show="none", engine="legacy",
                 )
-        import json
         dealer_metrics_path = tmp_path / "out" / "dealer_metrics.json"
         assert dealer_metrics_path.exists()
         data = json.loads(dealer_metrics_path.read_text())
@@ -1256,6 +1336,7 @@ class TestDealerMetricsExportMocked:
                     detailed_dealer_logging=True,
                     run_id="test-run-123",
                     regime="active",
+                    engine="legacy",
                 )
 
         # Verify the CSV export methods were called
@@ -1295,7 +1376,7 @@ class TestStepModeBankingStabilityFreeze:
 
         with patch("bilancio.ui.run.Confirm") as MockConfirm:
             MockConfirm.ask = mock_confirm
-            result = run_step_mode(
+            run_step_mode(
                 system=system,
                 max_days=10,
                 show="none",

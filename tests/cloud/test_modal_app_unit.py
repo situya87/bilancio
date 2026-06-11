@@ -54,6 +54,7 @@ _mock_modal.Secret = MagicMock()
 # Patch before importing modal_app
 sys.modules.setdefault("modal", _mock_modal)
 
+from bilancio.cloud import modal_app as modal_app_module  # noqa: E402
 from bilancio.cloud.modal_app import (  # noqa: E402
     SupabaseCredentialsError,
     _compute_dealer_vbt_loss,
@@ -62,6 +63,7 @@ from bilancio.cloud.modal_app import (  # noqa: E402
 )
 
 # Retrieve the raw decorated functions
+_raw_run_simulation = _captured_decorated_fns["run_simulation"]
 _raw_compute_aggregate_metrics = _captured_decorated_fns["compute_aggregate_metrics"]
 _raw_health_check = _captured_decorated_fns["health_check"]
 
@@ -195,17 +197,39 @@ class TestComputeMetricsFromEvents:
         _write_events(p, _minimal_settlement_events())
         result = compute_metrics_from_events(str(p))
         expected_keys = {
-            "delta_total", "phi_total", "time_to_stability", "max_G_t",
-            "alpha_1", "Mpeak_1", "v_1", "HHIplus_1",
-            "n_defaults", "cascade_fraction",
-            "cb_loans_created_count", "cb_interest_total_paid",
-            "cb_loans_outstanding_pre_final", "bank_defaults_final",
-            "cb_reserves_initial", "cb_reserves_final", "cb_reserve_destruction_pct",
-            "delta_bank", "deposit_loss_gross", "deposit_loss_pct",
-            "total_deposits_created", "bank_obligations_created", "bank_writeoffs",
-            "payable_default_loss", "total_loss", "total_loss_pct", "S_total",
-            "nbfi_loan_loss", "bank_credit_loss", "cb_backstop_loss",
-            "dealer_vbt_loss", "intermediary_loss_total", "raw_metrics",
+            "delta_total",
+            "phi_total",
+            "time_to_stability",
+            "max_G_t",
+            "alpha_1",
+            "Mpeak_1",
+            "v_1",
+            "HHIplus_1",
+            "n_defaults",
+            "cascade_fraction",
+            "cb_loans_created_count",
+            "cb_interest_total_paid",
+            "cb_loans_outstanding_pre_final",
+            "bank_defaults_final",
+            "cb_reserves_initial",
+            "cb_reserves_final",
+            "cb_reserve_destruction_pct",
+            "delta_bank",
+            "deposit_loss_gross",
+            "deposit_loss_pct",
+            "total_deposits_created",
+            "bank_obligations_created",
+            "bank_writeoffs",
+            "payable_default_loss",
+            "total_loss",
+            "total_loss_pct",
+            "S_total",
+            "nbfi_loan_loss",
+            "bank_credit_loss",
+            "cb_backstop_loss",
+            "dealer_vbt_loss",
+            "intermediary_loss_total",
+            "raw_metrics",
         }
         assert expected_keys.issubset(set(result.keys()))
 
@@ -306,7 +330,14 @@ class TestSaveRunToSupabase:
                 job_id="job_001",
                 status="completed",
                 metrics={"delta_total": None, "phi_total": None},
-                params={"kappa": 0.5, "concentration": 1.0, "mu": 0.0, "seed": 42, "regime": "passive"},
+                params={
+                    "kappa": 0.5,
+                    "concentration": 1.0,
+                    "mu": 0.0,
+                    "seed": 42,
+                    "regime": "passive",
+                    "performance_config": {"preset": "fast", "fast_atomic": True},
+                },
                 execution_time_ms=2000,
                 modal_call_id="mc-456",
                 modal_volume_path="exp/runs/test_003",
@@ -323,6 +354,7 @@ class TestSaveRunToSupabase:
         assert row["mu"] == 0.0
         assert row["seed"] == 42
         assert row["regime"] == "passive"
+        assert row["performance_config"] == {"preset": "fast", "fast_atomic": True}
 
     @pytest.mark.usefixtures("_supabase_env")
     def test_metrics_mapping(self) -> None:
@@ -404,7 +436,84 @@ class TestSaveRunToSupabase:
 
 
 # ---------------------------------------------------------------------------
-# 4. compute_aggregate_metrics  (5 tests)
+# 4. run_simulation  (2 tests)
+# ---------------------------------------------------------------------------
+
+
+class TestRunSimulation:
+    """Tests for run_simulation request-path success and failure handling."""
+
+    def test_success_returns_artifacts_metrics_and_persists_run(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(modal_app_module, "RESULTS_MOUNT_PATH", str(tmp_path))
+        modal_app_module.modal.current_function_call_id.return_value = "call-success"
+        modal_app_module.results_volume.commit.reset_mock()
+
+        def fake_run_scenario(**kwargs):
+            export = kwargs["export"]
+            with open(export["events_jsonl"], "w") as fh:
+                fh.write('{"kind": "PhaseA", "day": 0}\n')
+            with open(export["balances_csv"], "w") as fh:
+                fh.write("agent_id,asset,liability,equity\n")
+            kwargs["html_output"].write_text("<html></html>")
+
+        metrics = {"delta_total": 0.1, "phi_total": 0.9, "raw_metrics": {}}
+        with (
+            patch("bilancio.ui.run.run_scenario", side_effect=fake_run_scenario) as run_mock,
+            patch.object(modal_app_module, "compute_metrics_from_events", return_value=metrics) as metrics_mock,
+            patch.object(modal_app_module, "save_run_to_supabase", return_value=True) as save_mock,
+        ):
+            result = _raw_run_simulation(
+                scenario_config={"version": 1, "name": "cloud fixture"},
+                run_id="run-success",
+                experiment_id="exp-success",
+                options={"mode": "until_stable", "max_days": 3, "quiet_days": 1},
+                job_id="job-success",
+            )
+
+        assert result["status"] == "completed"
+        assert result["storage_base"] == "exp-success/runs/run-success"
+        assert result["artifacts"]["events_jsonl"] == "out/events.jsonl"
+        assert result["metrics"] == metrics
+        assert result["modal_call_id"] == "call-success"
+        run_mock.assert_called_once()
+        metrics_mock.assert_called_once()
+        save_mock.assert_called_once()
+        assert save_mock.call_args.kwargs["status"] == "completed"
+        modal_app_module.results_volume.commit.assert_called_once()
+        assert (tmp_path / "exp-success" / "runs" / "run-success" / "scenario.yaml").exists()
+
+    def test_failure_returns_error_and_records_failed_run(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(modal_app_module, "RESULTS_MOUNT_PATH", str(tmp_path))
+        modal_app_module.modal.current_function_call_id.return_value = "call-failed"
+        modal_app_module.results_volume.commit.reset_mock()
+
+        with (
+            patch("bilancio.ui.run.run_scenario", side_effect=ValueError("bad scenario")),
+            patch.object(modal_app_module, "save_run_to_supabase", return_value=True) as save_mock,
+        ):
+            result = _raw_run_simulation(
+                scenario_config={"version": 1, "name": "bad cloud fixture"},
+                run_id="run-failed",
+                experiment_id="exp-failed",
+                options={"mode": "until_stable", "max_days": 3},
+                job_id="job-failed",
+            )
+
+        assert result["status"] == "failed"
+        assert result["storage_base"] == "exp-failed/runs/run-failed"
+        assert result["artifacts"] == {}
+        assert result["metrics"] == {}
+        assert result["error"] == "bad scenario"
+        assert result["modal_call_id"] == "call-failed"
+        save_mock.assert_called_once()
+        assert save_mock.call_args.kwargs["status"] == "failed"
+        assert save_mock.call_args.kwargs["error"] == "bad scenario"
+        modal_app_module.results_volume.commit.assert_called_once()
+        assert (tmp_path / "exp-failed" / "runs" / "run-failed" / "scenario.yaml").exists()
+
+
+# ---------------------------------------------------------------------------
+# 5. compute_aggregate_metrics  (5 tests)
 #
 # The raw function was captured from the mock decorator into
 # _raw_compute_aggregate_metrics.
@@ -443,14 +552,22 @@ class TestComputeAggregateMetrics:
 
         rows = [
             {
-                "run_id": "rp", "kappa": 0.5, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 42,
+                "run_id": "rp",
+                "kappa": 0.5,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 42,
                 "regime": "passive",
                 "metrics": [{"delta_total": 0.3, "phi_total": 0.7}],
             },
             {
-                "run_id": "ra", "kappa": 0.5, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 42,
+                "run_id": "ra",
+                "kappa": 0.5,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 42,
                 "regime": "active",
                 "metrics": [{"delta_total": 0.1, "phi_total": 0.9}],
             },
@@ -471,14 +588,22 @@ class TestComputeAggregateMetrics:
 
         rows = [
             {
-                "run_id": "p1", "kappa": 1.0, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 42,
+                "run_id": "p1",
+                "kappa": 1.0,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 42,
                 "regime": "passive",
                 "metrics": [{"delta_total": 0.4, "phi_total": 0.6}],
             },
             {
-                "run_id": "a1", "kappa": 1.0, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 42,
+                "run_id": "a1",
+                "kappa": 1.0,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 42,
                 "regime": "active",
                 "metrics": [{"delta_total": 0.15, "phi_total": 0.85}],
             },
@@ -515,14 +640,22 @@ class TestComputeAggregateMetrics:
 
         rows = [
             {
-                "run_id": "p2", "kappa": 0.5, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 7,
+                "run_id": "p2",
+                "kappa": 0.5,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 7,
                 "regime": "passive",
                 "metrics": [{"delta_total": 0.2, "phi_total": 0.8}],
             },
             {
-                "run_id": "a2", "kappa": 0.5, "concentration": 1.0,
-                "mu": 0.0, "outside_mid_ratio": 0.9, "seed": 7,
+                "run_id": "a2",
+                "kappa": 0.5,
+                "concentration": 1.0,
+                "mu": 0.0,
+                "outside_mid_ratio": 0.9,
+                "seed": 7,
                 "regime": "active",
                 "metrics": [{"delta_total": 0.05, "phi_total": 0.95}],
             },
@@ -539,7 +672,7 @@ class TestComputeAggregateMetrics:
 
 
 # ---------------------------------------------------------------------------
-# 5. health_check  (2 tests)
+# 6. health_check  (2 tests)
 # ---------------------------------------------------------------------------
 
 

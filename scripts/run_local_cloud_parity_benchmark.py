@@ -27,6 +27,7 @@ from benchmark_utils import (
     report_dict,
     write_reports,
 )
+
 from bilancio.analysis.report import compute_day_metrics, compute_run_level_metrics, summarize_day_metrics
 from bilancio.cloud.modal_app import compute_metrics_from_events
 from bilancio.runners.local_executor import LocalExecutor
@@ -316,12 +317,12 @@ def main() -> int:
         generated_at=generated_at,
         target_score=args.target_score,
         total_score=total_score,
-        status=status,
-        grade=grade,
+        status=report["status"],
+        grade=report["grade"],
         base_grade=base_grade,
         meets_target=meets_target,
         categories=categories,
-        critical_checks=checks,
+        critical_checks=[CriticalCheck(**item) for item in report["critical_checks"]],
         summary_lines=[
             f"local_status={result.status}",
             f"metric_keys_ok={metric_keys_ok}",
@@ -332,11 +333,14 @@ def main() -> int:
 
     write_reports(report, md, out_json, out_md)
 
-    print(f"Local/cloud parity benchmark score: {total_score:.2f}/100 ({grade})")
-    print(f"Benchmark status: {status} (critical failures: {len(critical_failures)})")
+    print(f"Local/cloud parity benchmark score: {total_score:.2f}/100 ({report['grade']})")
+    print(
+        f"Benchmark status: {report['status']} "
+        f"(critical failures: {len(report['critical_failures'])})"
+    )
     print(f"JSON report: {out_json}")
     print(f"Markdown report: {out_md}")
-    return 0 if status == "PASS" else 1
+    return 0 if report["status"] == "PASS" else 1
 
 
 if __name__ == "__main__":

@@ -76,6 +76,13 @@ from ._common import CLI_HANDLED_ERRORS, console, exit_with_panel
     default=None,
     help="Default-handling mode (override scenario setting)",
 )
+@click.option(
+    "--engine",
+    type=click.Choice(["legacy", "clean-core", "auto"]),
+    default="auto",
+    show_default=True,
+    help="Simulation engine to use; auto selects clean-core when compatible",
+)
 def run(
     scenario_file: Path,
     mode: str,
@@ -89,6 +96,7 @@ def run(
     html: Path | None,
     t_account: bool,
     default_handling: str | None,
+    engine: str,
 ) -> None:
     """Run a Bilancio simulation scenario.
 
@@ -121,6 +129,7 @@ def run(
             html_output=html,
             t_account=t_account,
             default_handling=default_handling,
+            engine=engine,
         )
 
     except FileNotFoundError as e:

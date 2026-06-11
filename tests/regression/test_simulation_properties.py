@@ -16,8 +16,6 @@ from decimal import Decimal
 
 import pytest
 
-from bilancio.dealer.models import DEFAULT_BUCKETS
-from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.decision.profiles import BankProfile
 from bilancio.domain.agents import Bank, CentralBank, Household
 from bilancio.domain.agents.non_bank_lender import NonBankLender
@@ -29,6 +27,7 @@ from bilancio.engines.lending import LendingConfig
 from bilancio.engines.simulation import run_until_stable
 from bilancio.engines.system import System
 from bilancio.ops.banking import deposit_cash
+from tests.conftest import DETERMINISTIC_SEED, create_dealer_config
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -40,7 +39,7 @@ def build_ring_system(
     cash_per_agent=50,
     payable_amount=100,
     maturity_days=5,
-    seed=42,
+    seed=DETERMINISTIC_SEED,
     default_mode="expel-agent",
 ):
     """Build a ring of n Household agents with payables.
@@ -104,12 +103,12 @@ def build_banking_ring_system(
     cash_per_agent=50,
     payable_amount=100,
     maturity_days=5,
-    seed=42,
     n_banks=2,
     kappa=Decimal("0.5"),
     credit_risk_loading=Decimal("0.5"),
     max_borrower_risk=Decimal("0.4"),
     reserve_multiplier=10,
+    seed=DETERMINISTIC_SEED,
     default_mode="expel-agent",
 ):
     """Build a ring with N banks and households deposited round-robin.
@@ -210,7 +209,7 @@ def test_lending_effect_is_nonzero():
         cash_per_agent=80,
         payable_amount=100,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
 
     # Add a well-capitalised non-bank lender
@@ -255,7 +254,7 @@ def test_trading_effect_is_reasonable():
         cash_per_agent=50,
         payable_amount=100,
         maturity_days=maturity,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys_passive, max_days=15)
     defaults_passive = count_defaults(sys_passive)
@@ -266,23 +265,9 @@ def test_trading_effect_is_reasonable():
         cash_per_agent=50,
         payable_amount=100,
         maturity_days=maturity,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
-    dealer_config = DealerRingConfig(
-        ticket_size=Decimal(1),
-        buckets=list(DEFAULT_BUCKETS),
-        dealer_share=Decimal("0.25"),
-        vbt_share=Decimal("0.50"),
-        vbt_anchors={
-            "short": (Decimal("1.0"), Decimal("0.20")),
-            "mid": (Decimal("1.0"), Decimal("0.30")),
-            "long": (Decimal("1.0"), Decimal("0.40")),
-        },
-        phi_M=Decimal("0.1"),
-        phi_O=Decimal("0.1"),
-        clip_nonneg_B=True,
-        seed=42,
-    )
+    dealer_config = create_dealer_config()
     subsystem = initialize_dealer_subsystem(sys_active, dealer_config, current_day=0)
     sys_active.state.dealer_subsystem = subsystem
     run_until_stable(sys_active, max_days=15, enable_dealer=True)
@@ -291,8 +276,7 @@ def test_trading_effect_is_reasonable():
     # Trading effect: difference in default fractions
     trading_effect = (defaults_passive - defaults_active) / n
     assert -0.5 <= trading_effect <= 0.5, (
-        f"Trading effect {trading_effect:.3f} out of bounds. "
-        f"Passive defaults={defaults_passive}, active defaults={defaults_active}"
+        f"Trading effect {trading_effect:.3f} out of bounds. Passive defaults={defaults_passive}, active defaults={defaults_active}"
     )
 
 
@@ -315,7 +299,7 @@ def test_defaults_increase_with_lower_kappa():
         cash_per_agent=30,
         payable_amount=payable,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys_low_kappa, max_days=15)
     defaults_low_kappa = count_defaults(sys_low_kappa)
@@ -326,19 +310,16 @@ def test_defaults_increase_with_lower_kappa():
         cash_per_agent=200,
         payable_amount=payable,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys_high_kappa, max_days=15)
     defaults_high_kappa = count_defaults(sys_high_kappa)
 
     assert defaults_low_kappa >= defaults_high_kappa, (
-        f"Monotonicity violated: kappa=0.3 had {defaults_low_kappa} defaults "
-        f"but kappa=2.0 had {defaults_high_kappa} defaults"
+        f"Monotonicity violated: kappa=0.3 had {defaults_low_kappa} defaults but kappa=2.0 had {defaults_high_kappa} defaults"
     )
     # Also verify high kappa actually has zero or very few defaults
-    assert defaults_high_kappa <= 2, (
-        f"kappa=2.0 should have very few defaults, got {defaults_high_kappa}"
-    )
+    assert defaults_high_kappa <= 2, f"kappa=2.0 should have very few defaults, got {defaults_high_kappa}"
 
 
 @pytest.mark.regression
@@ -354,7 +335,7 @@ def test_system_invariants_after_simulation():
         cash_per_agent=100,
         payable_amount=100,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys, max_days=15)
 
@@ -383,7 +364,7 @@ def test_nbfi_creates_loans_when_shortfalls_exist():
         cash_per_agent=20,
         payable_amount=100,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
 
     lender = NonBankLender(id="NBFI1", name="Non-Bank Lender")
@@ -447,9 +428,7 @@ def test_bank_lending_restricted_at_low_kappa():
 
     # Low kappa means some agents must default
     defaults = count_defaults(sys)
-    assert defaults >= 1, (
-        f"Expected at least 1 default at kappa=0.3, got {defaults}"
-    )
+    assert defaults >= 1, f"Expected at least 1 default at kappa=0.3, got {defaults}"
 
     # System invariants must still hold
     sys.assert_invariants()
@@ -477,10 +456,7 @@ def test_cb_backstop_bounded_at_low_kappa():
     run_until_stable(sys, max_days=15, enable_banking=True, enable_bank_lending=True)
 
     cb_loan_count = sys.state.cb_loans_created_count
-    assert cb_loan_count <= n, (
-        f"CB backstop created {cb_loan_count} loans for {n} agents — "
-        f"should be bounded by system size (max {n})"
-    )
+    assert cb_loan_count <= n, f"CB backstop created {cb_loan_count} loans for {n} agents — should be bounded by system size (max {n})"
 
 
 @pytest.mark.regression
@@ -505,10 +481,7 @@ def test_settlement_forecast_nonzero_with_cross_bank_payables():
     # Day 1: some payables are due — forecast should show cross-bank flows
     forecasts = subsystem.compute_settlement_forecasts(sys, current_day=1)
     has_nonzero = any(abs(v) > 0 for v in forecasts.values())
-    assert has_nonzero, (
-        f"Settlement forecast returned all zeros with 2 banks and "
-        f"cross-bank payables: {forecasts}"
-    )
+    assert has_nonzero, f"Settlement forecast returned all zeros with 2 banks and cross-bank payables: {forecasts}"
 
     # After refreshing quotes, at least one bank should have projected
     # reserves below its initial level (settlement drain reduces the path)
@@ -518,20 +491,16 @@ def test_settlement_forecast_nonzero_with_cross_bank_payables():
         initial_reserves[bank_id] = sum(
             sys.state.contracts[cid].amount
             for cid in agent.asset_ids
-            if cid in sys.state.contracts
-            and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
+            if cid in sys.state.contracts and sys.state.contracts[cid].kind == InstrumentKind.RESERVE_DEPOSIT
         )
 
     subsystem.refresh_all_quotes(sys, current_day=1)
 
-    has_lower_projection = any(
-        subsystem.banks[bid].min_projected_reserves < initial_reserves[bid]
-        for bid in subsystem.banks
-    )
+    has_lower_projection = any(subsystem.banks[bid].min_projected_reserves < initial_reserves[bid] for bid in subsystem.banks)
     assert has_lower_projection, (
         f"No bank has min_projected_reserves < initial reserves after "
         f"settlement forecast. Projections: "
-        f"{({bid: subsystem.banks[bid].min_projected_reserves for bid in subsystem.banks})}, "
+        f"{ ({bid: subsystem.banks[bid].min_projected_reserves for bid in subsystem.banks}) }, "
         f"Initial: {initial_reserves}"
     )
 
@@ -555,7 +524,7 @@ def test_banking_differs_from_passive():
         cash_per_agent=cash,
         payable_amount=payable,
         maturity_days=maturity,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys_passive, max_days=15)
     defaults_passive = count_defaults(sys_passive)
@@ -568,9 +537,7 @@ def test_banking_differs_from_passive():
         maturity_days=maturity,
         kappa=Decimal("0.5"),
     )
-    run_until_stable(
-        sys_banking, max_days=15, enable_banking=True, enable_bank_lending=True
-    )
+    run_until_stable(sys_banking, max_days=15, enable_banking=True, enable_bank_lending=True)
     defaults_banking = count_defaults(sys_banking)
 
     # Banking run must have at least 1 loan issued
@@ -583,9 +550,7 @@ def test_banking_differs_from_passive():
     # Outcomes must differ: either defaults differ or CB usage differs
     cb_loans_passive = count_events(sys_passive, "CBLoanCreated")
     cb_loans_banking = sys_banking.state.cb_loans_created_count
-    outcomes_differ = (defaults_passive != defaults_banking) or (
-        cb_loans_passive != cb_loans_banking
-    )
+    outcomes_differ = (defaults_passive != defaults_banking) or (cb_loans_passive != cb_loans_banking)
     assert outcomes_differ, (
         f"Banking arm produced identical outcomes to passive: "
         f"defaults={defaults_passive}, CB loans passive={cb_loans_passive}, "
@@ -606,7 +571,7 @@ def test_stylized_fact_liquidity_shortfall_produces_defaults():
         cash_per_agent=20,
         payable_amount=100,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
     run_until_stable(sys, max_days=10)
 
@@ -622,7 +587,7 @@ def test_stylized_fact_nbfi_credit_supply_emits_loans():
         cash_per_agent=20,
         payable_amount=100,
         maturity_days=5,
-        seed=42,
+        seed=DETERMINISTIC_SEED,
     )
 
     lender = NonBankLender(id="NBFI1", name="Non-Bank Lender")

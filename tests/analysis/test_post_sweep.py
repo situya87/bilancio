@@ -48,9 +48,7 @@ def _minimal_csv_content(
         kappas = [0.25, 0.5, 1.0, 2.0, 4.0]
     lines = [COMPARISON_HEADER.strip()]
     for k in kappas:
-        lines.append(
-            f"{k},1,0,0.9,42,0.3,0.2,0.7,0.8,0.1,passive_run_{k},active_run_{k}"
-        )
+        lines.append(f"{k},1,0,0.9,42,0.3,0.2,0.7,0.8,0.1,passive_run_{k},active_run_{k}")
     return "\n".join(lines) + "\n"
 
 
@@ -215,25 +213,17 @@ class TestOutputDirCreation:
     def test_default_output_dir(self, sweep_dir: Path):
         """When output_dir=None, analysis creates aggregate/analysis/."""
         # We need to mock the analysis functions to avoid plotly
-        with patch(
-            "bilancio.analysis.post_sweep._run_narrative"
-        ) as mock_narrative:
-            mock_narrative.return_value = (
-                sweep_dir / "aggregate" / "analysis" / "narrative_report.html"
-            )
+        with patch("bilancio.analysis.post_sweep._run_narrative") as mock_narrative:
+            mock_narrative.return_value = sweep_dir / "aggregate" / "analysis" / "narrative_report.html"
             run_post_sweep_analysis(sweep_dir, "dealer", ["narrative"])
             # The output_dir should have been created
             assert (sweep_dir / "aggregate" / "analysis").is_dir()
 
     def test_custom_output_dir(self, sweep_dir: Path):
         custom_out = sweep_dir / "custom_output" / "deep"
-        with patch(
-            "bilancio.analysis.post_sweep._run_narrative"
-        ) as mock_narrative:
+        with patch("bilancio.analysis.post_sweep._run_narrative") as mock_narrative:
             mock_narrative.return_value = custom_out / "narrative_report.html"
-            run_post_sweep_analysis(
-                sweep_dir, "dealer", ["narrative"], output_dir=custom_out
-            )
+            run_post_sweep_analysis(sweep_dir, "dealer", ["narrative"], output_dir=custom_out)
             assert custom_out.is_dir()
 
 
@@ -245,11 +235,7 @@ class TestOutputDirCreation:
 class TestCsvLoading:
     def test_read_csv(self, tmp_path: Path):
         csv_path = tmp_path / "test.csv"
-        csv_path.write_text(
-            "kappa,delta_passive,delta_active\n"
-            "0.5,0.3,0.2\n"
-            "1.0,0.1,0.05\n"
-        )
+        csv_path.write_text("kappa,delta_passive,delta_active\n0.5,0.3,0.2\n1.0,0.1,0.05\n")
         rows = _read_csv(csv_path)
         assert len(rows) == 2
         assert rows[0]["kappa"] == "0.5"
@@ -263,9 +249,7 @@ class TestCsvLoading:
 
     def test_auto_detect_kappas_picks_min_median_max(self, tmp_path: Path):
         csv_path = tmp_path / "c.csv"
-        csv_path.write_text(
-            _minimal_csv_content(kappas=[0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0])
-        )
+        csv_path.write_text(_minimal_csv_content(kappas=[0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]))
         result = _auto_detect_kappas(csv_path, n=3)
         assert 0.1 in result  # min
         assert 8.0 in result  # max
@@ -325,37 +309,25 @@ class TestDrilldownsOutput:
     def test_drilldowns_dispatched(self, sweep_dir: Path):
         """Verify that run_post_sweep_analysis dispatches drilldowns correctly."""
         out_dir = sweep_dir / "output"
-        with patch(
-            "bilancio.analysis.post_sweep._run_drilldowns"
-        ) as mock_dd:
+        with patch("bilancio.analysis.post_sweep._run_drilldowns") as mock_dd:
             mock_dd.return_value = out_dir / "drilldown_dashboard.html"
-            results = run_post_sweep_analysis(
-                sweep_dir, "dealer", ["drilldowns"], output_dir=out_dir
-            )
+            results = run_post_sweep_analysis(sweep_dir, "dealer", ["drilldowns"], output_dir=out_dir)
             assert mock_dd.called
             assert "drilldowns" in results
 
     def test_treatment_deltas_dispatched(self, sweep_dir: Path):
         out_dir = sweep_dir / "output"
-        with patch(
-            "bilancio.analysis.post_sweep._run_treatment_deltas"
-        ) as mock_td:
+        with patch("bilancio.analysis.post_sweep._run_treatment_deltas") as mock_td:
             mock_td.return_value = out_dir / "treatment_deltas_dashboard.html"
-            results = run_post_sweep_analysis(
-                sweep_dir, "dealer", ["deltas"], output_dir=out_dir
-            )
+            results = run_post_sweep_analysis(sweep_dir, "dealer", ["deltas"], output_dir=out_dir)
             assert mock_td.called
             assert "deltas" in results
 
     def test_dynamics_dispatched(self, sweep_dir: Path):
         out_dir = sweep_dir / "output"
-        with patch(
-            "bilancio.analysis.post_sweep._run_dynamics"
-        ) as mock_dyn:
+        with patch("bilancio.analysis.post_sweep._run_dynamics") as mock_dyn:
             mock_dyn.return_value = out_dir / "dynamics_dashboard.html"
-            results = run_post_sweep_analysis(
-                sweep_dir, "dealer", ["dynamics"], output_dir=out_dir
-            )
+            results = run_post_sweep_analysis(sweep_dir, "dealer", ["dynamics"], output_dir=out_dir)
             assert mock_dyn.called
             assert "dynamics" in results
 
@@ -406,6 +378,7 @@ class TestAllNanData:
         # float("nan") parses successfully but is NaN
         assert result is not None
         import math
+
         assert math.isnan(result)
 
     def test_narrative_with_empty_effects_hits_zero_division(self, tmp_path: Path):
@@ -468,9 +441,7 @@ class TestAnalysisDispatching:
             patch("bilancio.analysis.post_sweep._run_narrative") as mock_nr,
         ):
             mock_nr.return_value = out_dir / "narrative_report.html"
-            run_post_sweep_analysis(
-                sweep_dir, "dealer", ["narrative"], output_dir=out_dir
-            )
+            run_post_sweep_analysis(sweep_dir, "dealer", ["narrative"], output_dir=out_dir)
             assert mock_nr.called
             assert not mock_dd.called
             assert not mock_td.called
@@ -479,13 +450,9 @@ class TestAnalysisDispatching:
     def test_failed_analysis_logged_not_raised(self, sweep_dir: Path):
         """If an analysis function raises, it is logged but not re-raised."""
         out_dir = sweep_dir / "output"
-        with patch(
-            "bilancio.analysis.post_sweep._run_drilldowns"
-        ) as mock_dd:
+        with patch("bilancio.analysis.post_sweep._run_drilldowns") as mock_dd:
             mock_dd.side_effect = RuntimeError("No runs found")
-            results = run_post_sweep_analysis(
-                sweep_dir, "dealer", ["drilldowns"], output_dir=out_dir
-            )
+            results = run_post_sweep_analysis(sweep_dir, "dealer", ["drilldowns"], output_dir=out_dir)
             # drilldowns should NOT appear in results because it failed
             assert "drilldowns" not in results
 
@@ -502,9 +469,18 @@ class TestComparisonCsvLoading:
         assert len(rows) == 5
         # Check all expected columns are present
         expected_cols = {
-            "kappa", "concentration", "mu", "outside_mid_ratio", "seed",
-            "delta_passive", "delta_active", "phi_passive", "phi_active",
-            "trading_effect", "passive_run_id", "active_run_id",
+            "kappa",
+            "concentration",
+            "mu",
+            "outside_mid_ratio",
+            "seed",
+            "delta_passive",
+            "delta_active",
+            "phi_passive",
+            "phi_active",
+            "trading_effect",
+            "passive_run_id",
+            "active_run_id",
         }
         assert expected_cols.issubset(set(rows[0].keys()))
 
@@ -599,9 +575,7 @@ class TestBankSweepIntegration:
     def test_kappas_auto_detected_with_explicit_list(self, sweep_dir: Path):
         """run_post_sweep_analysis uses provided kappas instead of auto-detect."""
         out_dir = sweep_dir / "output"
-        with patch(
-            "bilancio.analysis.post_sweep._run_narrative"
-        ) as mock_nr:
+        with patch("bilancio.analysis.post_sweep._run_narrative") as mock_nr:
             mock_nr.return_value = out_dir / "narrative_report.html"
             run_post_sweep_analysis(
                 sweep_dir,

@@ -1,0 +1,62 @@
+version: 1
+name: Simple Dealer Demo (n=3, kappa=0.5, c=1, mu=0)
+description: Ring of 3 agents with total dues S1=300; initial liquidity L0=150 (kappa=0.5);
+  Dirichlet concentration c=1; maturity mu=0 over 2 day horizon
+agents:
+- id: CB
+  kind: central_bank
+  name: Central Bank
+- id: H1
+  kind: household
+  name: Agent 1
+- id: H2
+  kind: household
+  name: Agent 2
+- id: H3
+  kind: household
+  name: Agent 3
+initial_actions:
+- mint_cash:
+    to: H1
+    amount: 50
+    alias: LIQ_H1
+- mint_cash:
+    to: H2
+    amount: 50
+    alias: LIQ_H2
+- mint_cash:
+    to: H3
+    amount: 50
+    alias: LIQ_H3
+- create_payable:
+    from: H1
+    to: H2
+    amount: 24.155501641872586
+    due_day: 1
+    alias: P_H1_H2
+- create_payable:
+    from: H2
+    to: H3
+    amount: 40.97022526028383
+    due_day: 1
+    alias: P_H2_H3
+- create_payable:
+    from: H3
+    to: H1
+    amount: 234.87427309784357
+    due_day: 1
+    alias: P_H3_H1
+scheduled_actions: []
+run:
+  mode: until_stable
+  max_days: 30
+  quiet_days: 2
+  show:
+    balances:
+    - H1
+    - H2
+    - H3
+    events: detailed
+  export:
+    balances_csv: out/balances.csv
+    events_jsonl: out/events.jsonl

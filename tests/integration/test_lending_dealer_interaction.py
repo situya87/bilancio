@@ -23,8 +23,6 @@ References:
 
 from decimal import Decimal
 
-from bilancio.dealer.models import DEFAULT_BUCKETS
-from bilancio.dealer.simulation import DealerRingConfig
 from bilancio.domain.agents import Bank, CentralBank, Household
 from bilancio.domain.agents.firm import Firm
 from bilancio.domain.agents.non_bank_lender import NonBankLender
@@ -37,25 +35,7 @@ from bilancio.engines.dealer_integration import (
 from bilancio.engines.lending import LendingConfig
 from bilancio.engines.simulation import run_day
 from bilancio.engines.system import System
-
-
-def _make_dealer_config() -> DealerRingConfig:
-    """Standard dealer configuration for tests."""
-    return DealerRingConfig(
-        ticket_size=Decimal(1),
-        buckets=list(DEFAULT_BUCKETS),
-        dealer_share=Decimal("0.25"),
-        vbt_share=Decimal("0.50"),
-        vbt_anchors={
-            "short": (Decimal("1.0"), Decimal("0.20")),
-            "mid": (Decimal("1.0"), Decimal("0.30")),
-            "long": (Decimal("1.0"), Decimal("0.40")),
-        },
-        phi_M=Decimal("0.1"),
-        phi_O=Decimal("0.1"),
-        clip_nonneg_B=True,
-        seed=42,
-    )
+from tests.conftest import create_dealer_config
 
 
 def _total_agent_cash(system: System, agent_id: str) -> Decimal:
@@ -157,7 +137,7 @@ def test_lending_then_disabled_dealer_preserves_cash():
     sys.state.lender_config = LendingConfig()
 
     # Initialize dealer subsystem (disabled)
-    config = _make_dealer_config()
+    config = create_dealer_config()
     subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
     sys.state.dealer_subsystem = subsystem
     subsystem.enabled = False
@@ -185,8 +165,7 @@ def test_lending_then_disabled_dealer_preserves_cash():
         # The loan amount was added; F01 may have also paid settlements on day 0
         # but the payable is due on day 2, so no settlement should occur yet.
         assert f01_cash_after > f01_cash_before, (
-            f"F01 received a loan but cash did not increase: "
-            f"before={f01_cash_before}, after={f01_cash_after}"
+            f"F01 received a loan but cash did not increase: before={f01_cash_before}, after={f01_cash_after}"
         )
         # Lender should have less cash (transferred to borrower)
         assert nbl_cash_after < nbl_cash_before, "NonBankLender cash should decrease after lending"
@@ -204,8 +183,7 @@ def test_lending_then_disabled_dealer_preserves_cash():
     # The only source of new cash is CB minting during run_day (e.g., reserve interest).
     # Allow for small CB corridor adjustments.
     assert total_cash_after == total_cash_before, (
-        f"Total system cash changed unexpectedly: "
-        f"before={total_cash_before}, after={total_cash_after}"
+        f"Total system cash changed unexpectedly: before={total_cash_before}, after={total_cash_after}"
     )
 
 
@@ -274,7 +252,7 @@ def test_lending_effect_is_nonzero_in_nbfi_mode():
     )
 
     # Initialize dealer subsystem (disabled -- NBFI-only mode)
-    config = _make_dealer_config()
+    config = create_dealer_config()
     subsystem = initialize_dealer_subsystem(sys, config, current_day=0)
     sys.state.dealer_subsystem = subsystem
     subsystem.enabled = False

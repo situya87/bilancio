@@ -1013,6 +1013,7 @@ def reconstruct_network_snapshots(
     active_payables: dict[str, dict] = {}   # payable_id -> edge dict
     active_bank_loans: dict[str, dict] = {}  # loan_id -> edge dict
     active_cb_loans: dict[str, dict] = {}    # loan_id -> edge dict
+    active_nbfi_loans: dict[str, dict] = {}  # loan_id -> edge dict
     agents: dict[str, dict] = {}             # id -> {id, name, kind}
     defaulted_agents: set[str] = set()
     cash: dict[str, int] = {}                # agent_id -> cash amount
@@ -1027,10 +1028,12 @@ def reconstruct_network_snapshots(
             return "bank"
         if aid in ("cb", "central_bank", "CB"):
             return "central_bank"
-        if aid.startswith("D") and len(aid) <= 3:
+        if aid.startswith("dealer") or (aid.startswith("D") and len(aid) <= 3):
             return "dealer"
-        if aid.startswith("VBT"):
+        if aid.startswith("VBT") or aid.startswith("vbt"):
             return "vbt"
+        if aid == "lender" or aid.startswith("lender") or aid.startswith("nbfi"):
+            return "lender"
         return "firm"
 
     # Group events by day
@@ -1108,6 +1111,11 @@ def reconstruct_network_snapshots(
                 if pid in active_payables and new_holder:
                     _ensure_agent(new_holder, _agent_kind(new_holder))
                     active_payables[pid]["source"] = new_holder
+                    # Retype the claim while a dealer warehouses it, so the
+                    # dealer's inventory is visually distinct from firm-to-firm debt.
+                    active_payables[pid]["instrument_type"] = (
+                        "dealer_ticket" if _agent_kind(new_holder) == "dealer" else "payable"
+                    )
 
             # --- Bank loans ---
             elif kind == "BankLoanIssued":
@@ -1147,6 +1155,26 @@ def reconstruct_network_snapshots(
                 lid = e.get("loan_id", "")
                 active_cb_loans.pop(lid, None)
 
+            # --- NBFI (non-bank) loans ---
+            elif kind == "NonBankLoanCreated":
+                lid = e.get("loan_id", "")
+                lender = e.get("lender_id", "lender")
+                borrower = e.get("borrower_id", "")
+                if lid and borrower:
+                    _ensure_agent(lender, "lender")
+                    _ensure_agent(borrower, _agent_kind(borrower))
+                    active_nbfi_loans[lid] = {
+                        "source": lender,
+                        "target": borrower,
+                        "amount": int(e.get("amount", 0)),
+                        "instrument_type": "nbfi_loan",
+                        "contract_id": lid,
+                    }
+
+            elif kind in ("NonBankLoanRepaid", "NonBankLoanDefaulted"):
+                lid = e.get("loan_id", "")
+                active_nbfi_loans.pop(lid, None)
+
             # --- Agent defaults ---
             elif kind == "AgentDefaulted":
                 aid = e.get("agent", e.get("frm", ""))
@@ -1167,6 +1195,7 @@ def reconstruct_network_snapshots(
             list(active_payables.values())
             + list(active_bank_loans.values())
             + list(active_cb_loans.values())
+            + list(active_nbfi_loans.values())
         )
 
         snapshots.append({
@@ -1233,6 +1262,7 @@ def generate_network_animation_html(
       'bank_loan': '#3b82f6',
       'cb_loan': '#7c3aed',
       'dealer_ticket': '#ec4899',
+      'nbfi_loan': '#16a34a',
       'cash': '#10b981',
       'bank_deposit': '#06b6d4',
       'reserve_deposit': '#8b5cf6'
@@ -1244,6 +1274,7 @@ def generate_network_animation_html(
       'firm': '#f59e0b',
       'dealer': '#ec4899',
       'vbt': '#a855f7',
+      'lender': '#16a34a',
       'household': '#10b981'
     }};
 

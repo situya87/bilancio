@@ -124,13 +124,13 @@ def _deps() -> Any:
 @click.option(
     "--enable-lender/--no-lender",
     default=False,
-    help="Enable third comparison arm with non-bank lender",
+    help="[DEPRECATED: use 'bilancio sweep nbfi'] Enable third comparison arm with non-bank lender",
 )
 @click.option("--lender-share", type=Decimal, default=Decimal("0.10"), help="Lender capital share")
 @click.option(
     "--enable-dealer-lender/--no-dealer-lender",
     default=False,
-    help="Enable fourth arm with dealer trading and non-bank lending",
+    help="[DEPRECATED: split into 'bilancio sweep balanced' and 'bilancio sweep nbfi'] Enable dealer+NBFI arm",
 )
 @click.option(
     "--enable-bank-passive/--no-bank-passive",
@@ -505,6 +505,17 @@ def sweep_balanced(
     out_dir = Path(out_dir)
     if job_id is None:
         job_id = deps.generate_job_id()
+
+    if enable_lender or enable_dealer_lender:
+        click.echo(
+            "Warning: balanced NBFI mixed arms are deprecated; use "
+            "'bilancio sweep nbfi' for clean NBFI lending experiments."
+        )
+    if enable_bank_passive or enable_bank_dealer or enable_bank_dealer_nbfi:
+        click.echo(
+            "Warning: balanced banking arms are deprecated; use "
+            "'bilancio sweep bank' for clean bank lending experiments."
+        )
 
     from bilancio.scenarios.ring.topology import parse_topology_string
 
