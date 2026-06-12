@@ -18,6 +18,7 @@ SCENARIO_DIR = Path(__file__).resolve().parents[2] / "examples" / "scenarios"
 
 # Full-run parity against goldens (see test_golden.py for the comparison).
 SUPPORTED = [
+    "clearing_ring",
     "default_handling_demo",
     "firm_delivery",
     "interbank_netting",

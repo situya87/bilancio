@@ -1,0 +1,245 @@
+{
+ "events": [
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F1",
+   "amount": "1",
+   "alias": "F1_pocket_cash"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F1",
+   "creditor": "F2",
+   "amount": "100",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_1",
+   "alias": "F1_to_F2"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F2",
+   "creditor": "F3",
+   "amount": "100",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_2",
+   "alias": "F2_to_F3"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F3",
+   "creditor": "F4",
+   "amount": "100",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_3",
+   "alias": "F3_to_F4"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F4",
+   "creditor": "F5",
+   "amount": "100",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_4",
+   "alias": "F4_to_F5"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F5",
+   "creditor": "F1",
+   "amount": "100",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_5",
+   "alias": "F5_to_F1"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PayableNetted",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_1",
+   "contract_id": "PAY_1",
+   "alias": "F1_to_F2",
+   "debtor": "F1",
+   "creditor": "F2",
+   "original_amount": "100",
+   "netted_amount": "100",
+   "remaining_amount": "0"
+  },
+  {
+   "kind": "PayableNetted",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_2",
+   "contract_id": "PAY_2",
+   "alias": "F2_to_F3",
+   "debtor": "F2",
+   "creditor": "F3",
+   "original_amount": "100",
+   "netted_amount": "100",
+   "remaining_amount": "0"
+  },
+  {
+   "kind": "PayableNetted",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_3",
+   "contract_id": "PAY_3",
+   "alias": "F3_to_F4",
+   "debtor": "F3",
+   "creditor": "F4",
+   "original_amount": "100",
+   "netted_amount": "100",
+   "remaining_amount": "0"
+  },
+  {
+   "kind": "PayableNetted",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_4",
+   "contract_id": "PAY_4",
+   "alias": "F4_to_F5",
+   "debtor": "F4",
+   "creditor": "F5",
+   "original_amount": "100",
+   "netted_amount": "100",
+   "remaining_amount": "0"
+  },
+  {
+   "kind": "PayableNetted",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_5",
+   "contract_id": "PAY_5",
+   "alias": "F5_to_F1",
+   "debtor": "F5",
+   "creditor": "F1",
+   "original_amount": "100",
+   "netted_amount": "100",
+   "remaining_amount": "0"
+  },
+  {
+   "kind": "ClearingExecuted",
+   "day": 1,
+   "phase": "simulation",
+   "gross_face_due": "500",
+   "face_extinguished": "500",
+   "residual_face": "0",
+   "n_payables_affected": 5,
+   "n_fully_netted": 5
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "F1": "1"
+  },
+  "reserves": {},
+  "deposits": {},
+  "defaulted": []
+ }
+}

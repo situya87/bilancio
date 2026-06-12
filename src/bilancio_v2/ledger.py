@@ -58,6 +58,7 @@ class Payable:
     maturity_distance: int
     alias: str | None = None
     settled: bool = False
+    netted_amount: Decimal = ZERO
 
 
 @dataclass
@@ -187,6 +188,11 @@ class Ledger:
 
     scheduled_actions_by_day: dict[int, list[dict[str, Any]]] = field(default_factory=dict)
     defaulted_agent_ids: set[str] = field(default_factory=set)
+
+    # (debtor, creditor, original face, maturity distance) entries queued by
+    # the clearing phase for fully-netted payables, drained into the rollover
+    # flow by the settlement phase ("net-settle, gross-roll", Plan 059).
+    netted_rollover_queue: list[tuple[str, str, Decimal, int]] = field(default_factory=list)
 
     rating_registry: dict[str, Decimal] = field(default_factory=dict)
     lender_run_expected_loss_spent: Decimal = ZERO
@@ -610,6 +616,27 @@ class Ledger:
             principal=loan.amount,
             interest=loan.interest_amount,
             total_repaid=repayment,
+        )
+
+    def net_payable(self, payable: Payable, reduction: Decimal) -> None:
+        """Extinguish ``reduction`` of a payable's face by netting (no cash moves)."""
+        if reduction <= ZERO or reduction > payable.amount:
+            raise InvariantViolation(f"invalid netting reduction {reduction} for payable {payable.id} with face {payable.amount}")
+        original_amount = payable.amount + payable.netted_amount
+        payable.amount -= reduction
+        payable.netted_amount += reduction
+        if payable.amount == ZERO:
+            payable.settled = True
+        self.log(
+            "PayableNetted",
+            pid=payable.id,
+            contract_id=payable.id,
+            alias=payable.alias,
+            debtor=payable.debtor,
+            creditor=payable.creditor,
+            original_amount=original_amount,
+            netted_amount=reduction,
+            remaining_amount=payable.amount,
         )
 
     def add_rollover_payable(

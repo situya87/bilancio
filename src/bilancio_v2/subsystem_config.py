@@ -113,6 +113,11 @@ class CleanDealerConfig:
 
 
 @dataclass(frozen=True)
+class CleanClearingConfig:
+    mode: str = "netting"
+
+
+@dataclass(frozen=True)
 class CleanBankingConfig:
     kappa: Decimal = Decimal("1")
     reserve_target_ratio: Decimal = Decimal("0.10")

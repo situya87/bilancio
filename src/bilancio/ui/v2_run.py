@@ -323,6 +323,12 @@ def run_v2_scenario(
         console.print(f"[yellow]WARNING[/yellow] Maximum days reached ({max_days}) before stability")
 
 
+def clearinghouse_enabled(config: Any) -> bool:
+    """Return True when the scenario enables the clearinghouse (v2-only feature)."""
+    clearinghouse = getattr(config, "clearinghouse", None)
+    return clearinghouse is not None and bool(getattr(clearinghouse, "enabled", False))
+
+
 def resolve_auto_engine(
     path: Path,
     default_handling: str | None,
@@ -333,6 +339,12 @@ def resolve_auto_engine(
     reason = clean_core_auto_fallback_reason(path, default_handling)
     if reason is None:
         return "clean-core"
+
+    if clearinghouse_enabled(load_yaml(path)):
+        raise ConfigurationError(
+            "clearinghouse requires the v2 engine "
+            f"(scenario falls back to legacy: {reason})"
+        )
 
     console.print(f"[dim]Engine: legacy (auto fallback: {reason})[/dim]")
     return "legacy"

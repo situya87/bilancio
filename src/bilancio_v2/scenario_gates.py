@@ -10,6 +10,7 @@ from bilancio.core.errors import ConfigurationError
 from bilancio.decision.profiles import LenderProfile
 from bilancio_v2.subsystem_config import (
     ZERO,
+    CleanClearingConfig,
     CleanDealerBucketConfig,
     CleanDealerConfig,
     CleanLenderConfig,
@@ -294,6 +295,15 @@ def build_lender_config(config: ScenarioConfig) -> CleanLenderConfig | None:
         info_network_visibility=lender.info_network_visibility,
         info_market_visibility=lender.info_market_visibility,
     )
+
+
+def build_clearing_config(config: ScenarioConfig) -> CleanClearingConfig | None:
+    clearinghouse = config.clearinghouse
+    if clearinghouse is None or not clearinghouse.enabled:
+        return None
+    if clearinghouse.mode != "netting":
+        raise ConfigurationError(f"clearinghouse mode {clearinghouse.mode!r} is not supported; stage 1 supports only 'netting'")
+    return CleanClearingConfig(mode=clearinghouse.mode)
 
 
 def build_dealer_config(config: ScenarioConfig) -> CleanDealerConfig | None:
