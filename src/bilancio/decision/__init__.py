@@ -56,7 +56,13 @@ from bilancio.decision.intentions import (
 )
 from bilancio.decision.presets import AGGRESSIVE, BASELINE, CAUTIOUS
 from bilancio.decision.profile_factory import build_profile
-from bilancio.decision.profiles import LenderProfile, RatingProfile, TraderProfile, VBTProfile
+from bilancio.decision.profiles import (
+    ClearinghouseProfile,
+    LenderProfile,
+    RatingProfile,
+    TraderProfile,
+    VBTProfile,
+)
 from bilancio.decision.protocols import (
     CounterpartyScreener,
     FixedMaturitySelector,
@@ -151,6 +157,7 @@ __all__ = [
     "CreditAdjustedVBTPricing",
     "EVHoldValuer",
     # Profiles
+    "ClearinghouseProfile",
     "LenderProfile",
     "RatingProfile",
     "TraderProfile",

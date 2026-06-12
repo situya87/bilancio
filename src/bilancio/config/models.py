@@ -122,7 +122,7 @@ class AgentSpec(BaseModel):
 
     id: str = Field(..., description="Unique identifier for the agent")
     kind: Literal[
-        "central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency"
+        "central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency", "clearinghouse"
     ] = Field(..., description="Type of agent")
     name: str = Field(..., description="Human-readable name for the agent")
     jurisdiction: str | None = Field(None, description="Jurisdiction this agent belongs to")
@@ -1106,12 +1106,44 @@ class RatingAgencyScenarioConfig(BaseModel):
 
 
 class ClearinghouseConfig(BaseModel):
-    """Clearinghouse configuration within a scenario (Plan 059)."""
+    """Clearinghouse configuration within a scenario (Plans 059/060)."""
 
     enabled: bool = Field(default=False, description="Enable the clearinghouse phase")
-    mode: Literal["netting"] = Field(
-        default="netting", description="Clearinghouse mode (stage 1 supports only 'netting')"
+    mode: Literal["netting", "certificates"] = Field(
+        default="netting",
+        description="Clearinghouse mode: 'netting' (stage 1) or 'certificates' (stage 2; netting still runs first)",
     )
+    cert_haircut: Decimal = Field(
+        default=Decimal("0.25"), ge=Decimal("0"), lt=Decimal("1"),
+        description="Certificates issued = (1 - haircut) x pledged face (certificates mode)",
+    )
+    cert_rate: Decimal = Field(
+        default=Decimal("0.06"), ge=Decimal("0"),
+        description="Annual-equivalent interest charged per diem (cert_rate/360) against the pledging member",
+    )
+    max_issuance_per_member: Decimal = Field(
+        default=Decimal("1.0"), ge=Decimal("0"),
+        description="Daily issuance cap as a fraction of the member's gross dues today",
+    )
+    cert_max_tenor: int | None = Field(
+        default=None,
+        description="Eligible receivables must mature within N days; null = no tenor restriction",
+    )
+    mandatory_acceptance: bool = Field(
+        default=True,
+        description="Certificates must be accepted in settlement (stage 2 supports only true)",
+    )
+
+    @field_validator("mandatory_acceptance")
+    @classmethod
+    def mandatory_acceptance_required(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError(
+                "mandatory_acceptance=false is not supported: stage 2 certificate acceptance "
+                "is mandatory (the parameter exists so a voluntary stage 3 is a behavior "
+                "change, not a schema change)"
+            )
+        return v
 
 
 class ActionDefConfig(BaseModel):
@@ -1155,7 +1187,7 @@ class ActionSpecConfig(BaseModel):
     @field_validator("kind")
     @classmethod
     def kind_valid(cls, v: str) -> str:
-        valid = {"central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency"}
+        valid = {"central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency", "clearinghouse"}
         if v not in valid:
             raise ValueError(f"kind must be one of {sorted(valid)}, got '{v}'")
         return v
@@ -1364,6 +1396,13 @@ class RingExplorerParamsModel(BaseModel):
     )
     topology_config: dict[str, Any] | None = Field(
         None, description="Network topology config (e.g. {'type': 'k_regular', 'degree': 2})"
+    )
+    clearinghouse: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Clearinghouse block passthrough (Plans 059/060), e.g. "
+            "{'enabled': True, 'mode': 'certificates', 'cert_haircut': 0.25}"
+        ),
     )
 
 

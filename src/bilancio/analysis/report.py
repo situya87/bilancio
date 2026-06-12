@@ -18,6 +18,7 @@ from bilancio.analysis.metrics import (
 )
 from bilancio.analysis.metrics import (
     cascade_fraction,
+    certificate_totals,
     count_defaults,
     creditor_hhi_plus,
     debtor_shortfall_shares,
@@ -278,6 +279,10 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
     deposit_loss_pct = deposit_loss_gross / total_deposits_created if total_deposits_created > 0 else None
     total_loss = payable_default_loss + deposit_loss_gross
 
+    # Clearinghouse certificate metrics (Plan 060); all 0.0 when no
+    # certificate events are present (non-certificates runs are inert).
+    cert_issued_total, cert_outstanding_peak, cert_default_losses = certificate_totals(events)
+
     return {
         "n_defaults": count_defaults(events),
         "cascade_fraction": cascade_fraction(events),
@@ -300,6 +305,9 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         "nbfi_loans_created": nbfi_loans_created,
         "bank_credit_loss": bank_credit_loss,
         "cb_backstop_loss": cb_backstop_loss,
+        "certificates_issued_total": float(cert_issued_total),
+        "certificates_outstanding_peak": float(cert_outstanding_peak),
+        "cert_default_losses": float(cert_default_losses),
     }
 
 
@@ -804,6 +812,12 @@ def aggregate_runs(
         n_defaults_val = entry.get("n_defaults", "")
         cascade_fraction_val = entry.get("cascade_fraction", "")
 
+        # Certificate metrics (Plan 060) are event-derived, so they come from
+        # the per-run registry entry (like n_defaults); 0.0 when absent.
+        certificates_issued_total_val = entry.get("certificates_issued_total") or 0.0
+        certificates_outstanding_peak_val = entry.get("certificates_outstanding_peak") or 0.0
+        cert_default_losses_val = entry.get("cert_default_losses") or 0.0
+
         rows.append(
             {
                 "run_id": entry.get("run_id"),
@@ -827,6 +841,9 @@ def aggregate_runs(
                 "cascade_fraction": cascade_fraction_val,
                 "gross_face_due": summary.get("gross_face_due"),
                 "netting_efficiency": summary.get("netting_efficiency"),
+                "certificates_issued_total": certificates_issued_total_val,
+                "certificates_outstanding_peak": certificates_outstanding_peak_val,
+                "cert_default_losses": cert_default_losses_val,
                 "time_to_stability": entry.get("time_to_stability")
                 or str(summary.get("max_day", "")),
                 "metrics_csv": metrics_rel,
@@ -855,6 +872,9 @@ def aggregate_runs(
         "cascade_fraction",
         "gross_face_due",
         "netting_efficiency",
+        "certificates_issued_total",
+        "certificates_outstanding_peak",
+        "cert_default_losses",
         "time_to_stability",
         "metrics_csv",
     ]

@@ -54,6 +54,7 @@ class RingExplorerParams:
     currency: str
     policy_overrides: dict[str, Any] | None
     topology_config: dict[str, Any] | None = None
+    clearinghouse: dict[str, Any] | None = None
 
     @classmethod
     def from_model(cls, model: RingExplorerParamsModel) -> RingExplorerParams:
@@ -98,6 +99,10 @@ class RingExplorerParams:
         if hasattr(model, 'topology_config') and model.topology_config is not None:
             topology_config = model.topology_config
 
+        clearinghouse = None
+        if getattr(model, "clearinghouse", None) is not None:
+            clearinghouse = model.clearinghouse
+
         return cls(
             n_agents=model.n_agents,
             seed=model.seed,
@@ -109,6 +114,7 @@ class RingExplorerParams:
             currency=model.currency,
             policy_overrides=policy_overrides,
             topology_config=topology_config,
+            clearinghouse=clearinghouse,
         )
 
 
@@ -202,6 +208,10 @@ def compile_ring_explorer(
             },
         },
     }
+
+    # Clearinghouse block passthrough (Plans 059/060): netting or certificates.
+    if params.clearinghouse is not None:
+        scenario["clearinghouse"] = params.clearinghouse
 
     if config.compile.emit_yaml:
         _emit_yaml(

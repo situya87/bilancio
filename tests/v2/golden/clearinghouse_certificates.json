@@ -1,0 +1,423 @@
+{
+ "events": [
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F3",
+   "amount": "200",
+   "alias": "F3_cash"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F1",
+   "creditor": "F2",
+   "amount": "100",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_1",
+   "alias": "F1_to_F2"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F2",
+   "creditor": "F4",
+   "amount": "60",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_2",
+   "alias": "F2_to_F4"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F3",
+   "creditor": "F1",
+   "amount": "200",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_3",
+   "alias": "F3_to_F1_collateral"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Certificates",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Certificates",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CertificatePledgeCreated",
+   "day": 1,
+   "phase": "simulation",
+   "pledge_id": "CP_0",
+   "member": "F1",
+   "payable_id": "PAY_3",
+   "pledged_face": "200",
+   "certificates_issued": "150",
+   "issuance_day": 1
+  },
+  {
+   "kind": "CertificatesIssued",
+   "day": 1,
+   "phase": "simulation",
+   "member": "F1",
+   "amount": "150",
+   "pledge_id": "CP_0"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CertificatesTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "F1",
+   "to": "F2",
+   "amount": "100"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 1,
+   "phase": "simulation",
+   "pid": "PAY_1",
+   "contract_id": "PAY_1",
+   "alias": "F1_to_F2",
+   "debtor": "F1",
+   "creditor": "F2",
+   "amount": "100"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Certificates",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CertificatesTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "F2",
+   "to": "F4",
+   "amount": "60"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_2",
+   "contract_id": "PAY_2",
+   "alias": "F2_to_F4",
+   "debtor": "F2",
+   "creditor": "F4",
+   "amount": "60"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Certificates",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "F3",
+   "to": "CH1",
+   "amount": "200"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_3",
+   "contract_id": "PAY_3",
+   "alias": "F3_to_F1_collateral",
+   "debtor": "F3",
+   "creditor": "F1",
+   "amount": "200"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Certificates",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CertificateInterestCharged",
+   "day": 4,
+   "phase": "simulation",
+   "member": "F1",
+   "pledge_id": "CP_0",
+   "amount": "0",
+   "days_outstanding": 2
+  },
+  {
+   "kind": "CertificatesRetired",
+   "day": 4,
+   "phase": "simulation",
+   "agent": "F1",
+   "amount": "50",
+   "reason": "redemption_burn"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 4,
+   "phase": "simulation",
+   "frm": "CH1",
+   "to": "F1",
+   "amount": "100"
+  },
+  {
+   "kind": "CertificateExcessReturned",
+   "day": 4,
+   "phase": "simulation",
+   "member": "F1",
+   "pledge_id": "CP_0",
+   "amount": "100"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 4,
+   "phase": "simulation",
+   "frm": "CH1",
+   "to": "F2",
+   "amount": "40"
+  },
+  {
+   "kind": "CertificatesRetired",
+   "day": 4,
+   "phase": "simulation",
+   "agent": "F2",
+   "amount": "40",
+   "reason": "redemption_window"
+  },
+  {
+   "kind": "CertificateRedemptionWindow",
+   "day": 4,
+   "phase": "simulation",
+   "holder": "F2",
+   "amount": "40"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 4,
+   "phase": "simulation",
+   "frm": "CH1",
+   "to": "F4",
+   "amount": "60"
+  },
+  {
+   "kind": "CertificatesRetired",
+   "day": 4,
+   "phase": "simulation",
+   "agent": "F4",
+   "amount": "60",
+   "reason": "redemption_window"
+  },
+  {
+   "kind": "CertificateRedemptionWindow",
+   "day": 4,
+   "phase": "simulation",
+   "holder": "F4",
+   "amount": "60"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Certificates",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "F1": "100",
+   "F2": "40",
+   "F4": "60"
+  },
+  "reserves": {},
+  "deposits": {},
+  "defaulted": []
+ }
+}

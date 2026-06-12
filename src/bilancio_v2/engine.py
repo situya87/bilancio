@@ -32,6 +32,13 @@ from bilancio_v2.plugins.banking import (
     initial_banking_reserve_targets,
 )
 from bilancio_v2.plugins.base import PhasePlugin, RunContext
+from bilancio_v2.plugins.certificates import (
+    CLEARINGHOUSE_AGENT_ID,
+    CLEARINGHOUSE_AGENT_KIND,
+    CLEARINGHOUSE_AGENT_NAME,
+    CertificateFacilityPhase,
+    finalize_certificates,
+)
 from bilancio_v2.plugins.clearing import ClearingPhase
 from bilancio_v2.plugins.dealer import (
     DealerPhase,
@@ -132,9 +139,18 @@ def prepare_scenario(
     if config.policy_overrides is not None:
         policy = policy.with_mop_overrides(config.policy_overrides.mop_rank)
 
+    clearing_config = build_clearing_config(config)
+    certificates_mode = clearing_config is not None and clearing_config.mode == "certificates"
+    if certificates_mode:
+        policy = policy.with_certificate_mop()
+
     ledger = Ledger()
     for agent_spec in config.agents:
         ledger.register_agent(agent_spec.id, str(agent_spec.kind), agent_spec.name)
+    if certificates_mode:
+        ledger.clearing_config = clearing_config
+        if not any(agent.kind == CLEARINGHOUSE_AGENT_KIND for agent in ledger.agents.values()):
+            ledger.register_agent(CLEARINGHOUSE_AGENT_ID, CLEARINGHOUSE_AGENT_KIND, CLEARINGHOUSE_AGENT_NAME)
 
     for scheduled in config.scheduled_actions:
         ledger.scheduled_actions_by_day.setdefault(scheduled.day, []).append(scheduled.action)
@@ -163,7 +179,6 @@ def prepare_scenario(
     # so both kernels always read a scenario identically.
     rating_config = build_rating_config(config)
     lender_config = build_lender_config(config)
-    clearing_config = build_clearing_config(config)
 
     ctx = RunContext(
         policy=policy,
@@ -183,7 +198,11 @@ def prepare_scenario(
     if dealer_config is not None:
         phases.append(DealerPhase(config=dealer_config))
     if clearing_config is not None:
+        # Netting always runs first; in certificates mode the facility runs
+        # immediately after it, against the post-netting shortfall.
         phases.append(ClearingPhase(config=clearing_config))
+        if certificates_mode:
+            phases.append(CertificateFacilityPhase(config=clearing_config))
     phases.append(SettlementPhase())
     phases.append(InterbankPhase())
     return Runtime(ledger=ledger, ctx=ctx, phases=tuple(phases))
@@ -328,4 +347,5 @@ def run_scenario(
         reached_stable=result.reached_stable,
         banking_config=banking_config,
     )
+    finalize_certificates(result.ledger, final_day=result.final_day)
     return result

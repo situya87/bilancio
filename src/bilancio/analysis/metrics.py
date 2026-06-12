@@ -243,6 +243,63 @@ def netting_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal]:
     return gross, netted
 
 
+def certificate_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal, Decimal]:
+    """Return (issued_total, outstanding_peak, default_losses) for a run (Plan 060).
+
+    Clearinghouse loan certificate metrics, derived purely from the
+    certificate event stream:
+
+    - ``issued_total``: sum of all ``CertificatesIssued`` amounts.
+    - ``outstanding_peak``: certificates outstanding are replayed day by day
+      (issued minus retired minus haircut write-downs, aggregated per day,
+      cumulated in day order) and the running end-of-day peak is returned.
+    - ``default_losses``: sum of ``CertificateHaircutApplied`` ``loss``
+      payloads — the total written down through the recourse waterfall
+      (interest-margin absorption + pro-rata holder haircut + any uncovered
+      residue). The holder-haircut part (``haircut_total``) also reduces
+      outstanding certificates in the peak replay.
+
+    Returns (0, 0, 0) when no certificate events are present, so the metrics
+    are inert for non-certificates runs.
+    """
+    day_deltas: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    issued_total = Decimal("0")
+    default_losses = Decimal("0")
+
+    for e in events:
+        kind = e.get("kind")
+        if kind not in (
+            "CertificatesIssued",
+            "CertificatesRetired",
+            "CertificateHaircutApplied",
+        ):
+            continue
+        day = int(e.get("day", 0) or 0)
+        if kind == "CertificatesIssued":
+            amount = Decimal(str(e.get("amount", 0) or 0))
+            issued_total += amount
+            day_deltas[day] += amount
+        elif kind == "CertificatesRetired":
+            amount = Decimal(str(e.get("amount", 0) or 0))
+            day_deltas[day] -= amount
+        else:
+            # CertificateHaircutApplied payload: `loss` is the total
+            # written-down amount (margin absorption + holder haircut +
+            # uncovered residue); `haircut_total` is the part that reduced
+            # holder balances and therefore counts as retired face.
+            default_losses += Decimal(str(e.get("loss", 0) or 0))
+            day_deltas[day] -= Decimal(str(e.get("haircut_total", 0) or 0))
+
+    outstanding = Decimal("0")
+    peak = Decimal("0")
+    for day in sorted(day_deltas):
+        outstanding += day_deltas[day]
+        if outstanding > peak:
+            peak = outstanding
+
+    return issued_total, peak, default_losses
+
+
 def replay_intraday_peak(
     events: Iterable[Event], t: int
 ) -> tuple[Decimal, list[dict[str, Any]], Decimal]:

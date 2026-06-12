@@ -68,6 +68,7 @@ def run_v2_scenario(
         write_html_report,
     )
     from bilancio_v2.plugins.banking import finalize_banking
+    from bilancio_v2.plugins.certificates import finalize_certificates
     from bilancio_v2.plugins.dealer import dealer_metrics_summary
     from bilancio_v2.scenario_gates import (
         clean_core_configuration_error_reason,
@@ -197,6 +198,7 @@ def run_v2_scenario(
                 reached_stable=result.reached_stable,
                 banking_config=banking_config,
             )
+            finalize_certificates(result.ledger, final_day=result.final_day)
     except (ConfigurationError, DefaultError, SimulationHalt) as e:
         show_error_panel(
             error=e,

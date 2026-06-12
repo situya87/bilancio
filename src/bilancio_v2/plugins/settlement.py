@@ -22,6 +22,12 @@ from bilancio.core.errors import DefaultError
 from bilancio_v2.actions import action_references_agent
 from bilancio_v2.ledger import ZERO, DeliveryObligation, Ledger, Payable
 from bilancio_v2.plugins.base import RunContext
+from bilancio_v2.plugins.certificates import (
+    apply_certificate_writedown,
+    close_pledges_for_defaulted_debtor,
+    is_clearinghouse,
+)
+from bilancio_v2.policy import MOP_CLEARINGHOUSE_CERT
 
 
 def update_dealer_risk_history(ledger: Ledger, *, issuer_id: str, defaulted: bool) -> None:
@@ -67,25 +73,39 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[b
 
     remaining = payable.amount
     debtor = ledger.agents[payable.debtor]
+    # Pledged collateral (Plan 060): settlement proceeds are redirected to
+    # the clearinghouse instead of the creditor of record.
+    receiver = payable.pledged_to or payable.creditor
     for means in ctx.policy.mop_order(debtor.kind):
         if remaining <= 0:
             break
         if means == "cash":
             paid = min(ledger.cash[payable.debtor], remaining)
             if paid:
-                ledger.transfer_cash(payable.debtor, payable.creditor, paid)
+                ledger.transfer_cash(payable.debtor, receiver, paid)
                 remaining -= paid
         elif means == "bank_deposit":
             paid = pay_with_deposit(
                 ledger,
                 payable.debtor,
-                payable.creditor,
+                receiver,
                 remaining,
                 banking_config=ctx.banking_config,
             )
             remaining -= paid
+        elif means == MOP_CLEARINGHOUSE_CERT:
+            paid = min(ledger.certificates[payable.debtor], remaining)
+            if paid:
+                ledger.transfer_certificates(payable.debtor, receiver, paid)
+                if is_clearinghouse(ledger, receiver):
+                    # The clearinghouse receiving its own liability retires it.
+                    ledger.retire_certificates(receiver, paid, reason="payment_to_clearinghouse")
+                remaining -= paid
         # Other means (e.g. reserve_deposit) have no payable-settlement
         # channel in this slice, matching the existing engine.
+
+    if payable.pledged_to is not None:
+        record_pledge_proceeds(ledger, payable, payable.amount - remaining, fully_settled=remaining == ZERO)
 
     if remaining:
         try:
@@ -107,9 +127,12 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[b
     )
     update_dealer_risk_history(ledger, issuer_id=payable.debtor, defaulted=False)
     rollover_info = None
-    if ctx.rollover_enabled:
+    if ctx.rollover_enabled and payable.pledged_to is None and payable.id not in ledger.certificate_recourse_ids:
         # Partially netted payables roll at full original face; only the
-        # cash-settled residual generates a cash return-flow.
+        # cash-settled residual generates a cash return-flow. Pledged
+        # collateral never rolls (its proceeds belong to the clearinghouse),
+        # and neither do certificate recourse payables (the clearinghouse
+        # would otherwise return the recovered cash to the member).
         rollover_info = (
             payable.debtor,
             payable.creditor,
@@ -118,6 +141,18 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[b
             payable.amount,
         )
     return True, rollover_info
+
+
+def record_pledge_proceeds(ledger: Ledger, payable: Payable, paid: Decimal, *, fully_settled: bool) -> None:
+    """Track settlement proceeds routed to the clearinghouse for a pledged payable."""
+    for pledge in ledger.certificate_pledges:
+        if pledge.payable_id != payable.id or pledge.closed:
+            continue
+        if paid > ZERO:
+            pledge.proceeds += paid
+        if fully_settled:
+            pledge.settlement_day = ledger.day
+        return
 
 
 def pay_with_deposit(
@@ -248,6 +283,11 @@ def handle_payable_default(ledger: Ledger, payable: Payable, remaining: Decimal,
     )
     update_dealer_risk_history(ledger, issuer_id=payable.debtor, defaulted=True)
     reassign_receivables(ledger, payable.debtor, creditor_weights)
+    if payable.id in ledger.certificate_recourse_ids:
+        # Member defaulted on a certificate recourse payable: the unpaid
+        # remainder routes through the clearinghouse loss waterfall
+        # (interest-margin equity first, then a pro-rata holder haircut).
+        apply_certificate_writedown(ledger, payable.debtor, remaining, trigger=payable.id)
     return False
 
 
@@ -270,8 +310,11 @@ def expel_agent(
         shortfall=trigger_shortfall,
         mode=ctx.default_mode,
     )
-    distribute_pro_rata_recovery(ledger, agent_id)
-    write_off_liabilities(ledger, agent_id, skip_contract_id=trigger_contract_id)
+    recoveries = distribute_pro_rata_recovery(ledger, agent_id)
+    write_off_liabilities(ledger, agent_id, skip_contract_id=trigger_contract_id, recoveries=recoveries)
+    # Pledged collateral whose debtor just defaulted: close the pledge at
+    # recovered value and bill the member's deficiency (Plan 060 recourse).
+    close_pledges_for_defaulted_debtor(ledger, agent_id, recoveries)
     cancel_scheduled_actions_for_agent(ledger, agent_id, ctx)
 
 
@@ -280,7 +323,8 @@ def collect_creditor_weights(ledger: Ledger, agent_id: str) -> dict[str, Decimal
     for payable in ledger.payables:
         if payable.settled or payable.debtor != agent_id:
             continue
-        claims[payable.creditor] += payable.amount
+        # Pledged claims belong to the clearinghouse, not the creditor of record.
+        claims[payable.pledged_to or payable.creditor] += payable.amount
     for nb_loan in ledger.non_bank_loans:
         if nb_loan.settled or nb_loan.borrower != agent_id:
             continue
@@ -304,28 +348,35 @@ def collect_creditor_weights(ledger: Ledger, agent_id: str) -> dict[str, Decimal
     return {creditor: amount / total for creditor, amount in claims.items()}
 
 
-def distribute_pro_rata_recovery(ledger: Ledger, agent_id: str) -> None:
+def distribute_pro_rata_recovery(ledger: Ledger, agent_id: str) -> dict[str, Decimal]:
+    """Distribute the defaulted agent's liquid assets pro-rata to its creditors.
+
+    Returns the recovered amount per claim contract id (consumed by the
+    certificate recourse path; empty outside certificates mode behavior).
+    """
+    recovered_by_contract: dict[str, Decimal] = {}
     total_liquid = ledger.agent_liquid_assets(agent_id)
     if total_liquid <= ZERO:
-        return
+        return recovered_by_contract
 
-    claims: list[tuple[str, Decimal]] = []
+    claims: list[tuple[str, Decimal, str]] = []
     for payable in ledger.payables:
         if payable.settled or payable.debtor != agent_id:
             continue
-        claims.append((payable.creditor, payable.amount))
+        # Pledged claims (Plan 060): recovery routes to the clearinghouse.
+        claims.append((payable.pledged_to or payable.creditor, payable.amount, payable.id))
     for loan in ledger.non_bank_loans:
         if loan.settled or loan.borrower != agent_id:
             continue
-        claims.append((loan.lender, loan.repayment_amount))
+        claims.append((loan.lender, loan.repayment_amount, loan.id))
 
-    total_claims = sum((amount for _, amount in claims), ZERO)
+    total_claims = sum((amount for _, amount, _ in claims), ZERO)
     if total_claims <= ZERO:
-        return
+        return recovered_by_contract
 
     details = []
     total_distributed = ZERO
-    for creditor_id, claim_amount in claims:
+    for creditor_id, claim_amount, contract_id in claims:
         # float round preserved from the existing engine: the recovered share
         # is the float-rounded pro-rata fraction of liquid assets.
         share = Decimal(round(float((claim_amount / total_claims) * total_liquid)))
@@ -338,8 +389,18 @@ def distribute_pro_rata_recovery(ledger: Ledger, agent_id: str) -> None:
             if paid_cash > ZERO:
                 ledger.transfer_cash(agent_id, creditor_id, paid_cash)
                 transferred += paid_cash
+        remainder = share - transferred
+        if remainder > ZERO:
+            # Certificates transfer last (after deposits and cash, Plan 060).
+            paid_certificates = min(ledger.certificates[agent_id], remainder)
+            if paid_certificates > ZERO:
+                ledger.transfer_certificates(agent_id, creditor_id, paid_certificates)
+                if is_clearinghouse(ledger, creditor_id):
+                    ledger.retire_certificates(creditor_id, paid_certificates, reason="payment_to_clearinghouse")
+                transferred += paid_certificates
         if transferred > ZERO:
             total_distributed += transferred
+            recovered_by_contract[contract_id] = recovered_by_contract.get(contract_id, ZERO) + transferred
             details.append(
                 {
                     "creditor": creditor_id,
@@ -358,9 +419,17 @@ def distribute_pro_rata_recovery(ledger: Ledger, agent_id: str) -> None:
             num_creditors=len(details),
             details=details,
         )
+    return recovered_by_contract
 
 
-def write_off_liabilities(ledger: Ledger, agent_id: str, *, skip_contract_id: str | None) -> None:
+def write_off_liabilities(
+    ledger: Ledger,
+    agent_id: str,
+    *,
+    skip_contract_id: str | None,
+    recoveries: dict[str, Decimal] | None = None,
+) -> None:
+    recoveries = recoveries or {}
     for payable in ledger.payables:
         if payable.settled or payable.debtor != agent_id or payable.id == skip_contract_id:
             continue
@@ -375,6 +444,11 @@ def write_off_liabilities(ledger: Ledger, agent_id: str, *, skip_contract_id: st
             amount=payable.amount,
             due_day=payable.due_day,
         )
+        if payable.id in ledger.certificate_recourse_ids:
+            # An open recourse payable dies with the member: the unrecovered
+            # face routes through the clearinghouse loss waterfall.
+            loss = payable.amount - recoveries.get(payable.id, ZERO)
+            apply_certificate_writedown(ledger, agent_id, loss, trigger=payable.id)
 
     for loan in ledger.non_bank_loans:
         if loan.settled or loan.borrower != agent_id or loan.id == skip_contract_id:
@@ -428,12 +502,16 @@ def reassign_receivables(
 ) -> None:
     if not creditor_weights:
         for receivable in ledger.payables:
-            if not receivable.settled and receivable.creditor == defaulted_agent_id:
+            if not receivable.settled and receivable.creditor == defaulted_agent_id and receivable.pledged_to is None:
                 receivable.settled = True
         return
 
     for receivable in list(ledger.payables):
         if receivable.settled or receivable.creditor != defaulted_agent_id:
+            continue
+        if receivable.pledged_to is not None:
+            # Pledged collateral stays alive and routed to the clearinghouse;
+            # it is never reassigned to the defaulted member's creditors.
             continue
         if receivable.debtor == defaulted_agent_id:
             continue

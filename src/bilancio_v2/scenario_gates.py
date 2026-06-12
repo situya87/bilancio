@@ -301,9 +301,25 @@ def build_clearing_config(config: ScenarioConfig) -> CleanClearingConfig | None:
     clearinghouse = config.clearinghouse
     if clearinghouse is None or not clearinghouse.enabled:
         return None
-    if clearinghouse.mode != "netting":
-        raise ConfigurationError(f"clearinghouse mode {clearinghouse.mode!r} is not supported; stage 1 supports only 'netting'")
-    return CleanClearingConfig(mode=clearinghouse.mode)
+    if clearinghouse.mode not in ("netting", "certificates"):
+        raise ConfigurationError(
+            f"clearinghouse mode {clearinghouse.mode!r} is not supported; supported modes: 'netting', 'certificates'"
+        )
+    if not clearinghouse.mandatory_acceptance:
+        raise ConfigurationError(
+            "clearinghouse.mandatory_acceptance=false is not supported: stage 2 certificate acceptance is mandatory"
+        )
+    # mode "certificates" implies netting still runs first (ClearingPhase is
+    # always built when this config is present; the certificate facility is
+    # appended after it in engine.prepare_scenario).
+    return CleanClearingConfig(
+        mode=clearinghouse.mode,
+        cert_haircut=clearinghouse.cert_haircut,
+        cert_rate=clearinghouse.cert_rate,
+        max_issuance_per_member=clearinghouse.max_issuance_per_member,
+        cert_max_tenor=clearinghouse.cert_max_tenor,
+        mandatory_acceptance=clearinghouse.mandatory_acceptance,
+    )
 
 
 def build_dealer_config(config: ScenarioConfig) -> CleanDealerConfig | None:

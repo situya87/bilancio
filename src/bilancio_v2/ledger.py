@@ -19,7 +19,7 @@ existing clean-core engine exactly; the parity suite enforces this.
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
 
@@ -59,6 +59,10 @@ class Payable:
     alias: str | None = None
     settled: bool = False
     netted_amount: Decimal = ZERO
+    # Collateral marker (Plan 060 / roadmap WP-1): when set, settlement
+    # proceeds are redirected to this agent (the clearinghouse) and the
+    # payable is fenced off from netting, rollover, and reassignment.
+    pledged_to: str | None = None
 
 
 @dataclass
@@ -126,6 +130,25 @@ class BankLoan:
 
 
 @dataclass
+class CertificatePledge:
+    """A member's receivable pledged to the clearinghouse against certificates (Plan 060)."""
+
+    id: str
+    member: str
+    payable_id: str
+    pledged_face: Decimal
+    certificates_issued: Decimal
+    issuance_day: int
+    # Lifecycle state: proceeds received by the clearinghouse from the
+    # collateral (cash plus certificates burned at par), the day the
+    # collateral fully settled, and whether the pledge has been closed
+    # (redeemed at maturity or closed at recovered value on debtor default).
+    proceeds: Decimal = ZERO
+    settlement_day: int | None = None
+    closed: bool = False
+
+
+@dataclass
 class StockLot:
     id: str
     owner: str
@@ -160,6 +183,15 @@ class Checkpoint:
     deposits: defaultdict[tuple[str, str], Decimal]
     stocks: dict[str, StockLot]
     journal_length: int
+    # Certificate state (Plan 060): all of it is mutable inside a settlement
+    # attempt (certificate mop leg, pledge proceeds), so fail-fast rollback
+    # must restore it too. Empty/zero in non-certificate scenarios.
+    certificates: defaultdict[str, Decimal]
+    certificate_pledges: list[CertificatePledge]
+    certificate_recourse_ids: set[str]
+    certificates_issued_total: Decimal
+    certificates_retired_total: Decimal
+    cert_interest_margin: Decimal
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +209,18 @@ class Ledger:
     reserves: defaultdict[str, Decimal] = field(default_factory=lambda: defaultdict(Decimal))
     # (customer, bank) -> amount
     deposits: defaultdict[tuple[str, str], Decimal] = field(default_factory=lambda: defaultdict(Decimal))
+
+    # Clearinghouse certificates (Plan 060): a bearer balance map like cash
+    # but with NO lot tracking — certificates are fungible.
+    certificates: defaultdict[str, Decimal] = field(default_factory=lambda: defaultdict(Decimal))
+    certificate_pledges: list[CertificatePledge] = field(default_factory=list)
+    certificate_recourse_ids: set[str] = field(default_factory=set)
+    certificates_issued_total: Decimal = ZERO
+    certificates_retired_total: Decimal = ZERO
+    cert_interest_margin: Decimal = ZERO
+    # CleanClearingConfig when a clearinghouse block is active (consulted by
+    # settlement for recourse interest and by the finalize hook).
+    clearing_config: Any | None = None
 
     payables: list[Payable] = field(default_factory=list)
     cb_loans: list[CBLoan] = field(default_factory=list)
@@ -335,6 +379,49 @@ class Ledger:
             self.cash_lots[bank_id].clear()
             self.cash_burned_total += burned
             self.record("BankCashBurned", setup=setup, bank_id=bank_id, amount=burned)
+
+    # -- clearinghouse certificate operations (Plan 060) ----------------------
+
+    def issue_certificates(self, member_id: str, amount: Decimal, *, pledge_id: str) -> None:
+        """Credit freshly issued certificates to the pledging member."""
+        if amount <= ZERO:
+            return
+        self.certificates[member_id] += amount
+        self.certificates_issued_total += amount
+        self.log("CertificatesIssued", member=member_id, amount=amount, pledge_id=pledge_id)
+
+    def transfer_certificates(self, from_agent: str, to_agent: str, amount: Decimal) -> Decimal:
+        if amount <= ZERO:
+            return ZERO
+        self._require(self.certificates[from_agent], amount, f"{from_agent} certificates")
+        self.certificates[from_agent] -= amount
+        self.certificates[to_agent] += amount
+        self.log("CertificatesTransferred", frm=from_agent, to=to_agent, amount=amount)
+        return amount
+
+    def retire_certificates(self, agent_id: str, amount: Decimal, *, reason: str) -> None:
+        """Burn certificates held by ``agent_id`` (counts toward the retired total)."""
+        if amount <= ZERO:
+            return
+        self._require(self.certificates[agent_id], amount, f"{agent_id} certificates")
+        self.certificates[agent_id] -= amount
+        self.certificates_retired_total += amount
+        self.log("CertificatesRetired", agent=agent_id, amount=amount, reason=reason)
+
+    def charge_certificate_interest(self, member_id: str, pledge_id: str, amount: Decimal, *, days_outstanding: int) -> None:
+        """Accrue the per-diem financing charge against the pledging member.
+
+        The accrued interest is the clearinghouse's only equity buffer; the
+        loss waterfall debits it before any holder haircut.
+        """
+        self.cert_interest_margin += amount
+        self.log(
+            "CertificateInterestCharged",
+            member=member_id,
+            pledge_id=pledge_id,
+            amount=amount,
+            days_outstanding=days_outstanding,
+        )
 
     # -- reserve operations ---------------------------------------------------
 
@@ -892,7 +979,9 @@ class Ledger:
             (amount for (customer_id, _bank_id), amount in self.deposits.items() if customer_id == agent_id),
             ZERO,
         )
-        return self.cash[agent_id] + deposits
+        # Certificates count as liquid means of payment (Plan 060); the term
+        # is identically zero outside certificates mode.
+        return self.cash[agent_id] + deposits + self.certificates[agent_id]
 
     # -- checkpoint / rollback ----------------------------------------------------
 
@@ -912,12 +1001,24 @@ class Ledger:
                 for stock_id, stock in self.stocks.items()
             },
             journal_length=len(self.journal),
+            certificates=self.certificates.copy(),
+            certificate_pledges=[replace(pledge) for pledge in self.certificate_pledges],
+            certificate_recourse_ids=set(self.certificate_recourse_ids),
+            certificates_issued_total=self.certificates_issued_total,
+            certificates_retired_total=self.certificates_retired_total,
+            cert_interest_margin=self.cert_interest_margin,
         )
 
     def restore(self, checkpoint: Checkpoint, *, restore_stocks: bool = False) -> None:
         self.cash = checkpoint.cash
         self.cash_lots = defaultdict(list, checkpoint.cash_lots)
         self.deposits = checkpoint.deposits
+        self.certificates = checkpoint.certificates
+        self.certificate_pledges = checkpoint.certificate_pledges
+        self.certificate_recourse_ids = checkpoint.certificate_recourse_ids
+        self.certificates_issued_total = checkpoint.certificates_issued_total
+        self.certificates_retired_total = checkpoint.certificates_retired_total
+        self.cert_interest_margin = checkpoint.cert_interest_margin
         if restore_stocks:
             self.stocks = checkpoint.stocks
         self.journal.truncate(checkpoint.journal_length)
@@ -947,4 +1048,14 @@ class Ledger:
         if reserves_in_circulation != self.cb_reserves_outstanding:
             raise InvariantViolation(
                 f"reserve conservation broken: in circulation {reserves_in_circulation}, outstanding {self.cb_reserves_outstanding}"
+            )
+        for agent_id, balance in self.certificates.items():
+            if balance < ZERO:
+                raise InvariantViolation(f"negative certificates for {agent_id}: {balance}")
+        certificates_in_circulation = sum(self.certificates.values(), ZERO)
+        expected_certificates = self.certificates_issued_total - self.certificates_retired_total
+        if certificates_in_circulation != expected_certificates:
+            raise InvariantViolation(
+                f"certificate conservation broken: in circulation {certificates_in_circulation}, "
+                f"issued-retired {expected_certificates}"
             )

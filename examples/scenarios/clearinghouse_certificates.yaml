@@ -1,0 +1,71 @@
+version: 1
+name: "Clearinghouse loan certificates"
+description: >
+  Four-firm demonstration of clearinghouse loan certificates (Plan 060).
+  Day 1: F1 owes F2 100 with zero cash but holds a 200 receivable on F3 due
+  day 3 — F1 pledges it to CH1, receives 150 certificates (25% haircut), and
+  settles in certificates. Day 2: F2 spends 60 of those certificates on its
+  own due to F4 (circulation). Day 3: the collateral matures and F3's 200
+  cash routes to CH1. Day 4: redemption — F1's remaining 50 certificates are
+  burned, the 100-cash excess returns to F1, and the redemption window pays
+  out the 100 still-circulating certificates (F2: 40, F4: 60) at par.
+
+clearinghouse:
+  enabled: true
+  mode: certificates
+  cert_haircut: 0.25
+  cert_rate: 0.06
+  max_issuance_per_member: 1.0
+  cert_max_tenor: null
+  mandatory_acceptance: true
+
+agents:
+  - id: CB
+    kind: central_bank
+    name: Central Bank
+  - id: F1
+    kind: firm
+    name: Firm One
+  - id: F2
+    kind: firm
+    name: Firm Two
+  - id: F3
+    kind: firm
+    name: Firm Three
+  - id: F4
+    kind: firm
+    name: Firm Four
+
+initial_actions:
+  - mint_cash:
+      to: F3
+      amount: 200
+      alias: F3_cash
+  - create_payable:
+      from: F1
+      to: F2
+      amount: 100
+      due_day: 1
+      alias: F1_to_F2
+  - create_payable:
+      from: F2
+      to: F4
+      amount: 60
+      due_day: 2
+      alias: F2_to_F4
+  - create_payable:
+      from: F3
+      to: F1
+      amount: 200
+      due_day: 3
+      alias: F3_to_F1_collateral
+
+run:
+  mode: until_stable
+  max_days: 8
+  quiet_days: 2
+  default_handling: expel-agent
+  rollover_enabled: false
+  show:
+    balances: [CB, CH1, F1, F2, F3, F4]
+    events: detailed

@@ -31,11 +31,12 @@ EXCLUDED_AGENT_KINDS: frozenset[str] = frozenset({
 COVERED_INSTRUMENT_KINDS: frozenset[str] = frozenset({
     "cash", "bank_deposit", "reserve_deposit", "payable",
     "cb_loan", "non_bank_loan", "bank_loan", "interbank_loan",
-    "delivery_obligation",
+    "delivery_obligation", "clearinghouse_certificate",
 })
 
 COVERED_PROFILES: frozenset[str] = frozenset({
     "TraderProfile", "VBTProfile", "LenderProfile", "BankProfile", "RatingProfile",
+    "ClearinghouseProfile",
 })
 
 HANDLED_SWEEP_TYPES: frozenset[str] = frozenset({"dealer", "bank", "nbfi"})
