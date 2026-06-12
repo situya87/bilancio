@@ -203,3 +203,46 @@ In this branch (`main`-based) the phase list in `prepare_scenario` is: `Schedule
 | 2 | Rollover semantics for netted payables | **DECIDED**: "net-settle, gross-roll": settled status + full-original-face rollover, zero cash return-flow for netted portion |
 | 3 | Event shape for the zero-cash rollover | **DECIDED**: reuse `PayableRolledOver` with `cash_transfer: false`; no new event kind |
 | 4 | δ accounting under netting | **DECIDED (user-confirmed)**: `phi_delta` counts `PayableNetted` face as settled — netted = cleared, δ keeps its meaning; add `netting_efficiency` + `gross_face_due` for explicit gross-vs-net decomposition |
+
+## Validation findings (2026-06-12, autonomous run)
+
+Matched single-seed sweeps (`sweep ring`, n=20, maturity_days=5, κ ∈ {0.25, 0.5, 1, 2},
+c ∈ {0.5, 1}, μ ∈ {0, 0.5, 1}, base_seed=42, S₁=500), with and without `--clearing`.
+
+### Two bugs found and fixed before the numbers below
+
+1. **Ring compiler emitted fractional faces that the v2 kernel truncates** (legacy-exact
+   `int(...)` cast at action parse time). Small Dirichlet draws became zero-face payables in
+   the ledger, severing the ring's obligation cycle — netting was a no-op in most cells, and
+   ledger Q_total silently undershot the spec. Fix: the ring-explorer compiler now quantizes
+   generated faces (min 1) and liquidity with largest-remainder rounding. The balanced/bank
+   comparison compiler was deliberately left untouched (in-flight dealer/bank work).
+2. **Netted face on reassignment-created payables was dropped from φ and
+   `netting_efficiency`**: their `PayableCreated` events carry only `contract_id`, which the
+   metric id-maps didn't resolve. δ was overstated in clearing arms. Fixed in
+   `dues_for_day`/`netting_totals`.
+
+Golden pins re-captured for the generation change (parity example `kalecki_with_dealer`,
+performance-parity snapshots, regression fingerprints — loss ratios now exact, e.g. 0.125).
+
+### Results after fixes
+
+| Regime | Outcome |
+|--------|---------|
+| μ = 0 (synchronized dues) | Netting fires in **every** κ×c cell. δ falls by ≈ the netted face (−0.036 to −0.072): each netted unit is a unit that no longer needs scarce cash, converting would-be defaults 1:1 into cleared face. |
+| μ > 0 (staggered dues) | **Zero netting, structurally.** Due-today subgraphs of a ring are paths, never cycles. Not a bug — the temporal-mismatch residual that Plans 060/061 address. |
+
+Netting efficiency equals n·min_face/S₁ (greedy cycle cancellation is bounded by the ring's
+smallest edge): 4% at min face 1, 8% at (κ=2, c=1) where min face is 2. It rises with face
+homogeneity (c ↑) and with scale (larger Q_total ⇒ larger min face).
+
+### Decisions taken (autonomous)
+
+- **D1**: Fix the face-truncation at the *compiler* (quantize to whole units, preserve totals)
+  rather than letting the kernel accept fractional amounts — the int cast is documented
+  legacy-exact kernel semantics, and goldens/parity depend on it.
+- **D2**: Scope the quantization to `compile_ring_explorer` only; the balanced/bank compiler
+  keeps byte-identical output so dealer/bank baselines don't shift under in-flight work.
+- **D3**: Accept the small-n single-digit netting efficiency as the honest stage-1 result; do
+  NOT add the `clearing_window` variant now (stays deferred) — certificates (060) are the
+  designed answer to the μ>0 residual, and a window would blur the comparison.
