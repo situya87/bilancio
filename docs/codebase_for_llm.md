@@ -1,6 +1,6 @@
 # Bilancio Codebase Documentation
 
-Generated: 2026-06-12 00:05:49 UTC | Branch: main | Commit: 7e663f1f
+Generated: 2026-06-12 02:00:53 UTC | Branch: main | Commit: 9e123eab
 
 This document contains the complete codebase structure and content for LLM ingestion.
 
@@ -2519,6 +2519,7 @@ This document contains the complete codebase structure and content for LLM inges
 │   │   └── ring_sweep_config.yaml
 │   └── scenarios
 │       ├── clearing_ring.yaml
+│       ├── clearinghouse_certificates.yaml
 │       ├── default_handling_demo.yaml
 │       ├── firm_delivery.yaml
 │       ├── interbank_netting.yaml
@@ -32122,6 +32123,7 @@ This document contains the complete codebase structure and content for LLM inges
 │       │   ├── __init__.py
 │       │   ├── banking.py
 │       │   ├── base.py
+│       │   ├── certificates.py
 │       │   ├── clearing.py
 │       │   ├── dealer.py
 │       │   ├── interbank.py
@@ -32337,6 +32339,7 @@ This document contains the complete codebase structure and content for LLM inges
     │   ├── test_adaptive_wiring.py
     │   ├── test_banking_ops.py
     │   ├── test_clearing_phase_c.py
+    │   ├── test_clearinghouse_certificates.py
     │   ├── test_day_simulation.py
     │   ├── test_dealer_integration.py
     │   ├── test_dealer_trading_dynamics.py
@@ -32369,6 +32372,7 @@ This document contains the complete codebase structure and content for LLM inges
     ├── scenarios
     │   ├── test_compiler_coverage.py
     │   ├── test_ring_explorer.py
+    │   ├── test_ring_integer_quantization.py
     │   ├── test_sweep_diagnostics.py
     │   └── test_topology.py
     ├── specification
@@ -32449,6 +32453,7 @@ This document contains the complete codebase structure and content for LLM inges
         ├── __init__.py
         ├── golden
         │   ├── clearing_ring.json
+        │   ├── clearinghouse_certificates.json
         │   ├── default_handling_demo.json
         │   ├── firm_delivery.json
         │   ├── interbank_netting.json
@@ -32481,6 +32486,7 @@ This document contains the complete codebase structure and content for LLM inges
         ├── golden_cases.py
         ├── golden_io.py
         ├── test_banking_parity.py
+        ├── test_certificates.py
         ├── test_clearing.py
         ├── test_clearing_integration.py
         ├── test_dealer_parity.py
@@ -32493,7 +32499,7 @@ This document contains the complete codebase structure and content for LLM inges
         ├── test_rollover_parity.py
         └── test_settlement.py
 
-6901 directories, 25582 files
+6901 directories, 25588 files
 
 ```
 
@@ -39357,6 +39363,74 @@ Complete git history from oldest to newest:
   misclassified; non-integer netting residue spreads across payables
   instead of requiring a single host; netting_efficiency emitted as float;
   ClearingExecuted only logged when face was actually extinguished.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  ---------
+  Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
+
+- **8d513796** (2026-06-12) by github-actions[bot]
+  chore(docs): update codebase_for_llm.md
+
+- **9e123eab** (2026-06-12) by situya87
+  Clearinghouse stage 2: loan certificates (Plan 060) + 059 sweep-validation fixes (#172)
+  * fix(ring): integer-face quantization + netting metric id-matching (059 follow-up)
+  Two bugs surfaced by the Plan 059 validation sweep:
+  1. The v2 kernel truncates financial amounts to whole units at action
+     parse time (legacy-exact int cast), but the ring-explorer compiler
+     emitted fractional Dirichlet faces. Result: ledger Q_total silently
+     shrank by up to n units and small draws became zero-face payables,
+     which sever the ring's obligation cycle and made netting a no-op in
+     most sweep cells. The compiler now quantizes generated faces (min 1)
+     and generated liquidity with largest-remainder rounding so ledger
+     totals match the spec exactly. Explicit user vectors pass through
+     untouched, and the balanced/bank comparison compiler is deliberately
+     NOT touched (in-flight dealer/bank work depends on its output).
+  2. PayableCreated events for reassignment-created payables carry only
+     contract_id (no pid/alias), so dues_for_day and netting_totals never
+     matched their PayableNetted reductions: phi under-credited netting
+     and netting_efficiency under-reported. Both id maps now fall back to
+     contract_id.
+  Golden pins re-captured for the generation change (parity example
+  kalecki_with_dealer 251->252, performance-parity metric snapshots,
+  regression fingerprints via --update-fingerprints; loss ratios now come
+  out exact, e.g. 0.125, confirming faces are whole units).
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * docs(059): validation findings addendum — netting fires at mu=0 after fixes, structural zero at mu>0
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * feat(certificates): clearinghouse loan certificates for the Kalecki ring (Plan 060)
+  19th-century-style clearinghouse loan certificates: members short of cash
+  after netting pledge later-due receivables to CH1 at a haircut and receive
+  bearer certificates that circulate as a mandatory-acceptance means of
+  payment below cash; pledged collateral proceeds route to the clearinghouse,
+  with per-diem interest, burn-first redemption, an end-of-phase redemption
+  window, recourse on collateral default, and a loss waterfall (interest
+  margin then pro-rata holder haircut; the clearinghouse cannot default).
+  Kernel: certificates balance map + CertificatePledge + ops/invariants/
+  checkpointing, MOP_CLEARINGHOUSE_CERT, CertificateFacilityPhase between
+  clearing and settlement, settlement mop leg + recovery + recourse wiring,
+  CH1 auto-registration, finalize hook (engine + CLI until-stable path).
+  Pipeline: --clearing-certificates (implies --clearing) with haircut/rate/
+  cap options, clearinghouse block passthrough, certificate_totals metrics
+  (issued / outstanding peak / default losses) through registry and
+  results.csv, ClearinghouseProfile, legacy InstrumentKind member.
+  Validation (expel-agent, n=10 grid): delta falls in all 9 cells, by up to
+  30pp exactly in the mu-skew region where netting is structurally zero;
+  recourse and waterfall paths exercised. Off by default; goldens unchanged
+  except one new pinned certificates scenario.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * fix(certificates): adversarial-review fixes — rollover interactions, arm gating, finalize recourse
+  Review of PR #172 found three HIGH issues, all latent in the validation
+  grid but real: claims reassigned to CH1 entered a perpetual rollover loop
+  (recovery bounced back to the payer); face settled in certificates rolled
+  at full value with no return-flow (manufactured defaults — decided
+  question 5 overturned: certificates now return after deposits/cash);
+  pledged and recourse payables could become tradeable dealer tickets.
+  Also: certificates mode now rejects banking/lender/dealer arms outright
+  (stage-2 scope), finalize resolves recourse payables created on the final
+  day, and certificate balance reads no longer pollute the defaultdict.
+  Conservation, inert-when-off, checkpointing, and the 059 quantization were
+  independently verified correct. Validation sweep re-run: headline numbers
+  unchanged; new regression tests cover each fixed path. Run-artifact
+  events.jsonl files restored to main's versions.
   Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
   ---------
   Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
@@ -47033,7 +47107,7 @@ def dues_for_day(events: Iterable[Event], t: int) -> list[dict[str, Any]]:
                     "creditor": e.get("creditor") or e.get("to"),
                     "amount": Decimal(e.get("amount", 0)),
                     "due_day": int(e.get("due_day")),  # type: ignore[arg-type]
-                    "pid": e.get("payable_id") or e.get("pid"),
+                    "pid": e.get("payable_id") or e.get("pid") or e.get("contract_id"),
                     "alias": e.get("alias"),
                 }
             )
@@ -47190,7 +47264,7 @@ def netting_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal]:
             continue
         gross += Decimal(e.get("amount", 0))
         due = int(e.get("due_day", -1))
-        pid = e.get("payable_id") or e.get("pid")
+        pid = e.get("payable_id") or e.get("pid") or e.get("contract_id")
         if pid:
             id_to_due[str(pid)] = due
         if e.get("alias"):
@@ -47204,6 +47278,63 @@ def netting_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal]:
         if due is not None and due == int(e.get("day", -1)):
             netted += Decimal(e.get("netted_amount", 0))
     return gross, netted
+
+
+def certificate_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal, Decimal]:
+    """Return (issued_total, outstanding_peak, default_losses) for a run (Plan 060).
+
+    Clearinghouse loan certificate metrics, derived purely from the
+    certificate event stream:
+
+    - ``issued_total``: sum of all ``CertificatesIssued`` amounts.
+    - ``outstanding_peak``: certificates outstanding are replayed day by day
+      (issued minus retired minus haircut write-downs, aggregated per day,
+      cumulated in day order) and the running end-of-day peak is returned.
+    - ``default_losses``: sum of ``CertificateHaircutApplied`` ``loss``
+      payloads — the total written down through the recourse waterfall
+      (interest-margin absorption + pro-rata holder haircut + any uncovered
+      residue). The holder-haircut part (``haircut_total``) also reduces
+      outstanding certificates in the peak replay.
+
+    Returns (0, 0, 0) when no certificate events are present, so the metrics
+    are inert for non-certificates runs.
+    """
+    day_deltas: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    issued_total = Decimal("0")
+    default_losses = Decimal("0")
+
+    for e in events:
+        kind = e.get("kind")
+        if kind not in (
+            "CertificatesIssued",
+            "CertificatesRetired",
+            "CertificateHaircutApplied",
+        ):
+            continue
+        day = int(e.get("day", 0) or 0)
+        if kind == "CertificatesIssued":
+            amount = Decimal(str(e.get("amount", 0) or 0))
+            issued_total += amount
+            day_deltas[day] += amount
+        elif kind == "CertificatesRetired":
+            amount = Decimal(str(e.get("amount", 0) or 0))
+            day_deltas[day] -= amount
+        else:
+            # CertificateHaircutApplied payload: `loss` is the total
+            # written-down amount (margin absorption + holder haircut +
+            # uncovered residue); `haircut_total` is the part that reduced
+            # holder balances and therefore counts as retired face.
+            default_losses += Decimal(str(e.get("loss", 0) or 0))
+            day_deltas[day] -= Decimal(str(e.get("haircut_total", 0) or 0))
+
+    outstanding = Decimal("0")
+    peak = Decimal("0")
+    for day in sorted(day_deltas):
+        outstanding += day_deltas[day]
+        if outstanding > peak:
+            peak = outstanding
+
+    return issued_total, peak, default_losses
 
 
 def replay_intraday_peak(
@@ -48088,11 +48219,12 @@ EXCLUDED_AGENT_KINDS: frozenset[str] = frozenset({
 COVERED_INSTRUMENT_KINDS: frozenset[str] = frozenset({
     "cash", "bank_deposit", "reserve_deposit", "payable",
     "cb_loan", "non_bank_loan", "bank_loan", "interbank_loan",
-    "delivery_obligation",
+    "delivery_obligation", "clearinghouse_certificate",
 })
 
 COVERED_PROFILES: frozenset[str] = frozenset({
     "TraderProfile", "VBTProfile", "LenderProfile", "BankProfile", "RatingProfile",
+    "ClearinghouseProfile",
 })
 
 HANDLED_SWEEP_TYPES: frozenset[str] = frozenset({"dealer", "bank", "nbfi"})
@@ -51565,6 +51697,7 @@ from bilancio.analysis.metrics import (
 )
 from bilancio.analysis.metrics import (
     cascade_fraction,
+    certificate_totals,
     count_defaults,
     creditor_hhi_plus,
     debtor_shortfall_shares,
@@ -51825,6 +51958,10 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
     deposit_loss_pct = deposit_loss_gross / total_deposits_created if total_deposits_created > 0 else None
     total_loss = payable_default_loss + deposit_loss_gross
 
+    # Clearinghouse certificate metrics (Plan 060); all 0.0 when no
+    # certificate events are present (non-certificates runs are inert).
+    cert_issued_total, cert_outstanding_peak, cert_default_losses = certificate_totals(events)
+
     return {
         "n_defaults": count_defaults(events),
         "cascade_fraction": cascade_fraction(events),
@@ -51847,6 +51984,9 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         "nbfi_loans_created": nbfi_loans_created,
         "bank_credit_loss": bank_credit_loss,
         "cb_backstop_loss": cb_backstop_loss,
+        "certificates_issued_total": float(cert_issued_total),
+        "certificates_outstanding_peak": float(cert_outstanding_peak),
+        "cert_default_losses": float(cert_default_losses),
     }
 
 
@@ -52351,6 +52491,12 @@ def aggregate_runs(
         n_defaults_val = entry.get("n_defaults", "")
         cascade_fraction_val = entry.get("cascade_fraction", "")
 
+        # Certificate metrics (Plan 060) are event-derived, so they come from
+        # the per-run registry entry (like n_defaults); 0.0 when absent.
+        certificates_issued_total_val = entry.get("certificates_issued_total") or 0.0
+        certificates_outstanding_peak_val = entry.get("certificates_outstanding_peak") or 0.0
+        cert_default_losses_val = entry.get("cert_default_losses") or 0.0
+
         rows.append(
             {
                 "run_id": entry.get("run_id"),
@@ -52374,6 +52520,9 @@ def aggregate_runs(
                 "cascade_fraction": cascade_fraction_val,
                 "gross_face_due": summary.get("gross_face_due"),
                 "netting_efficiency": summary.get("netting_efficiency"),
+                "certificates_issued_total": certificates_issued_total_val,
+                "certificates_outstanding_peak": certificates_outstanding_peak_val,
+                "cert_default_losses": cert_default_losses_val,
                 "time_to_stability": entry.get("time_to_stability")
                 or str(summary.get("max_day", "")),
                 "metrics_csv": metrics_rel,
@@ -52402,6 +52551,9 @@ def aggregate_runs(
         "cascade_fraction",
         "gross_face_due",
         "netting_efficiency",
+        "certificates_issued_total",
+        "certificates_outstanding_peak",
+        "cert_default_losses",
         "time_to_stability",
         "metrics_csv",
     ]
@@ -64193,7 +64345,7 @@ class AgentSpec(BaseModel):
 
     id: str = Field(..., description="Unique identifier for the agent")
     kind: Literal[
-        "central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency"
+        "central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency", "clearinghouse"
     ] = Field(..., description="Type of agent")
     name: str = Field(..., description="Human-readable name for the agent")
     jurisdiction: str | None = Field(None, description="Jurisdiction this agent belongs to")
@@ -65177,12 +65329,44 @@ class RatingAgencyScenarioConfig(BaseModel):
 
 
 class ClearinghouseConfig(BaseModel):
-    """Clearinghouse configuration within a scenario (Plan 059)."""
+    """Clearinghouse configuration within a scenario (Plans 059/060)."""
 
     enabled: bool = Field(default=False, description="Enable the clearinghouse phase")
-    mode: Literal["netting"] = Field(
-        default="netting", description="Clearinghouse mode (stage 1 supports only 'netting')"
+    mode: Literal["netting", "certificates"] = Field(
+        default="netting",
+        description="Clearinghouse mode: 'netting' (stage 1) or 'certificates' (stage 2; netting still runs first)",
     )
+    cert_haircut: Decimal = Field(
+        default=Decimal("0.25"), ge=Decimal("0"), lt=Decimal("1"),
+        description="Certificates issued = (1 - haircut) x pledged face (certificates mode)",
+    )
+    cert_rate: Decimal = Field(
+        default=Decimal("0.06"), ge=Decimal("0"),
+        description="Annual-equivalent interest charged per diem (cert_rate/360) against the pledging member",
+    )
+    max_issuance_per_member: Decimal = Field(
+        default=Decimal("1.0"), ge=Decimal("0"),
+        description="Daily issuance cap as a fraction of the member's gross dues today",
+    )
+    cert_max_tenor: int | None = Field(
+        default=None,
+        description="Eligible receivables must mature within N days; null = no tenor restriction",
+    )
+    mandatory_acceptance: bool = Field(
+        default=True,
+        description="Certificates must be accepted in settlement (stage 2 supports only true)",
+    )
+
+    @field_validator("mandatory_acceptance")
+    @classmethod
+    def mandatory_acceptance_required(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError(
+                "mandatory_acceptance=false is not supported: stage 2 certificate acceptance "
+                "is mandatory (the parameter exists so a voluntary stage 3 is a behavior "
+                "change, not a schema change)"
+            )
+        return v
 
 
 class ActionDefConfig(BaseModel):
@@ -65226,7 +65410,7 @@ class ActionSpecConfig(BaseModel):
     @field_validator("kind")
     @classmethod
     def kind_valid(cls, v: str) -> str:
-        valid = {"central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency"}
+        valid = {"central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency", "clearinghouse"}
         if v not in valid:
             raise ValueError(f"kind must be one of {sorted(valid)}, got '{v}'")
         return v
@@ -65435,6 +65619,13 @@ class RingExplorerParamsModel(BaseModel):
     )
     topology_config: dict[str, Any] | None = Field(
         None, description="Network topology config (e.g. {'type': 'k_regular', 'degree': 2})"
+    )
+    clearinghouse: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Clearinghouse block passthrough (Plans 059/060), e.g. "
+            "{'enabled': True, 'mode': 'certificates', 'cert_haircut': 0.25}"
+        ),
     )
 
 
@@ -74966,7 +75157,13 @@ from bilancio.decision.intentions import (
 )
 from bilancio.decision.presets import AGGRESSIVE, BASELINE, CAUTIOUS
 from bilancio.decision.profile_factory import build_profile
-from bilancio.decision.profiles import LenderProfile, RatingProfile, TraderProfile, VBTProfile
+from bilancio.decision.profiles import (
+    ClearinghouseProfile,
+    LenderProfile,
+    RatingProfile,
+    TraderProfile,
+    VBTProfile,
+)
 from bilancio.decision.protocols import (
     CounterpartyScreener,
     FixedMaturitySelector,
@@ -75061,6 +75258,7 @@ __all__ = [
     "CreditAdjustedVBTPricing",
     "EVHoldValuer",
     # Profiles
+    "ClearinghouseProfile",
     "LenderProfile",
     "RatingProfile",
     "TraderProfile",
@@ -77843,6 +78041,52 @@ class LenderProfile:
 
 
 @dataclass(frozen=True)
+class ClearinghouseProfile:
+    """Tunable parameters for the clearinghouse certificate facility (Plan 060).
+
+    This is an experiment-layer convenience container mirroring LenderProfile.
+    The v2 kernel does NOT read this dataclass — it reads the scenario's
+    `clearinghouse:` block (mode "certificates"); the sweep pipeline emits
+    that block from these tunables. The clearinghouse itself is rule-based
+    (no optimization): members pledge receivables against post-netting
+    shortfalls and receive haircut, interest-bearing bearer certificates.
+
+    Attributes:
+        cert_haircut: Certificates issued = (1 - haircut) x pledged face
+        cert_rate: Interest (annual-equivalent) accruing to the CH against
+            the pledging member; converted per-diem by the kernel
+        max_issuance_per_member: Cap on cumulative issuance per member per
+            day, as a fraction of the member's gross dues today
+        cert_max_tenor: Receivables due within N days are eligible collateral;
+            None = scenario maturity_days (all ring receivables eligible)
+        mandatory_acceptance: Stage 2 fixes acceptance as mandatory (the
+            historical clearinghouse association rule); the field exists so a
+            voluntary stage 3 is a behavior change, not a schema change
+    """
+
+    cert_haircut: Decimal = Decimal("0.25")
+    cert_rate: Decimal = Decimal("0.06")
+    max_issuance_per_member: Decimal = Decimal("1.0")
+    cert_max_tenor: int | None = None
+    mandatory_acceptance: bool = True
+
+    def __post_init__(self) -> None:
+        if not (Decimal("0") <= self.cert_haircut < Decimal("1")):
+            raise ValueError("cert_haircut must be in [0, 1)")
+        if self.cert_rate < Decimal("0"):
+            raise ValueError("cert_rate cannot be negative")
+        if self.max_issuance_per_member <= Decimal("0"):
+            raise ValueError("max_issuance_per_member must be positive")
+        if self.cert_max_tenor is not None and self.cert_max_tenor < 1:
+            raise ValueError("cert_max_tenor must be >= 1 when provided")
+        if not self.mandatory_acceptance:
+            raise ValueError(
+                "mandatory_acceptance must be True in stage 2 "
+                "(voluntary acceptance is a stage-3 extension)"
+            )
+
+
+@dataclass(frozen=True)
 class BankProfile:
     """Treynor pricing parameters for active banks in the Kalecki ring.
 
@@ -79935,6 +80179,10 @@ class InstrumentKind(str, Enum):
     BANK_LOAN = "bank_loan"
     INTERBANK_LOAN = "interbank_loan"
     DELIVERY_OBLIGATION = "delivery_obligation"
+    # Plan 060: bearer clearinghouse loan certificate. The v2 kernel models
+    # certificates as a balance map (not an Instrument record); this member
+    # exists for legacy display/export parity only.
+    CLEARINGHOUSE_CERTIFICATE = "clearinghouse_certificate"
 
     def __str__(self) -> str:
         return self.value
@@ -100526,6 +100774,10 @@ class RingRunSummary:
     # Clearinghouse netting metrics (Plan 059)
     gross_face_due: float = 0.0
     netting_efficiency: float | None = None
+    # Clearinghouse certificate metrics (Plan 060)
+    certificates_issued_total: float = 0.0
+    certificates_outstanding_peak: float = 0.0
+    cert_default_losses: float = 0.0
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -100664,6 +100916,10 @@ class _RingSweepRunnerConfig(BaseModel):
     risk_assessment_enabled: bool = True
     risk_assessment_config: dict[str, Any] | None = None
     clearing_enabled: bool = False
+    clearing_certificates: bool = False
+    cert_haircut: Decimal | None = None
+    cert_rate: Decimal | None = None
+    cert_max_issuance: Decimal | None = None
 
 
 class RingSweepConfig(BaseModel):
@@ -100725,6 +100981,10 @@ class RingSweepRunner:
         dealer_enabled: bool = False,
         dealer_config: dict[str, Any] | None = None,
         clearing_enabled: bool = False,
+        clearing_certificates: bool = False,
+        cert_haircut: Decimal = Decimal("0.25"),
+        cert_rate: Decimal = Decimal("0.06"),
+        cert_max_issuance: Decimal = Decimal("1.0"),
         risk_assessment_enabled: bool = True,
         risk_assessment_config: dict[str, Any] | None = None,
         balanced_mode: bool = False,
@@ -100808,7 +101068,13 @@ class RingSweepRunner:
         self.default_handling = default_handling
         self.dealer_enabled = dealer_enabled
         self.dealer_config = dealer_config
-        self.clearing_enabled = clearing_enabled
+        # Certificates mode (Plan 060) implies the clearing phase (Plan 059):
+        # netting runs first, certificates cover the post-netting shortfall.
+        self.clearing_enabled = clearing_enabled or clearing_certificates
+        self.clearing_certificates = clearing_certificates
+        self.cert_haircut = cert_haircut
+        self.cert_rate = cert_rate
+        self.cert_max_issuance = cert_max_issuance
         self.risk_assessment_enabled = risk_assessment_enabled
         self.risk_assessment_config = risk_assessment_config
         self.balanced_mode = balanced_mode
@@ -100960,10 +101226,14 @@ class RingSweepRunner:
             "default_handling",
             "dealer_enabled",
             "clearing_enabled",
+            "clearing_certificates",
             "phi_total",
             "delta_total",
             "gross_face_due",
             "netting_efficiency",
+            "certificates_issued_total",
+            "certificates_outstanding_peak",
+            "cert_default_losses",
             "time_to_stability",
             "scenario_yaml",
             "events_jsonl",
@@ -100975,6 +101245,25 @@ class RingSweepRunner:
         with registry_path.open("w", newline="") as fh:
             writer = csv.DictWriter(fh, fieldnames=default_fields)
             writer.writeheader()
+
+    def _clearinghouse_block(self) -> dict[str, Any] | None:
+        """Build the scenario `clearinghouse:` block (Plans 059/060).
+
+        Returns None when no clearing is requested. With certificates mode
+        the block carries the certificate facility parameters; otherwise it
+        is the plain netting block from Plan 059.
+        """
+        if self.clearing_certificates:
+            return {
+                "enabled": True,
+                "mode": "certificates",
+                "cert_haircut": float(self.cert_haircut),
+                "cert_rate": float(self.cert_rate),
+                "max_issuance_per_member": float(self.cert_max_issuance),
+            }
+        if self.clearing_enabled:
+            return {"enabled": True, "mode": "netting"}
+        return None
 
     def _next_seed(self) -> int:
         value = self.seed_counter
@@ -101256,6 +101545,7 @@ class RingSweepRunner:
             "default_handling": self.default_handling,
             "dealer_enabled": self.dealer_enabled,
             "clearing_enabled": self.clearing_enabled,
+            "clearing_certificates": self.clearing_certificates,
         }
 
         # Initial "running" status
@@ -101425,8 +101715,9 @@ class RingSweepRunner:
                     "collateral_advance_rate": str(self.lender_collateral_advance_rate),
                 }
 
-        if self.clearing_enabled:
-            scenario["clearinghouse"] = {"enabled": True, "mode": "netting"}
+        clearinghouse_block = self._clearinghouse_block()
+        if clearinghouse_block is not None:
+            scenario["clearinghouse"] = clearinghouse_block
 
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
@@ -101570,6 +101861,15 @@ class RingSweepRunner:
             float(netting_efficiency_val) if netting_efficiency_val is not None else None
         )
 
+        # Clearinghouse certificate metrics (Plan 060)
+        certificates_issued_total = float(
+            bundle.summary.get("certificates_issued_total", 0.0) or 0.0
+        )
+        certificates_outstanding_peak = float(
+            bundle.summary.get("certificates_outstanding_peak", 0.0) or 0.0
+        )
+        cert_default_losses = float(bundle.summary.get("cert_default_losses", 0.0) or 0.0)
+
         # Read dealer metrics if available (treatment runs with dealer enabled)
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = out_dir / "dealer_metrics.json"
@@ -101593,6 +101893,9 @@ class RingSweepRunner:
             "netting_efficiency": str(netting_efficiency)
             if netting_efficiency is not None
             else "",
+            "certificates_issued_total": str(certificates_issued_total),
+            "certificates_outstanding_peak": str(certificates_outstanding_peak),
+            "cert_default_losses": str(cert_default_losses),
         }
         self._upsert_registry(
             run_id=run_id,
@@ -101642,6 +101945,9 @@ class RingSweepRunner:
             S_total=S_total,
             gross_face_due=gross_face_due,
             netting_efficiency=netting_efficiency,
+            certificates_issued_total=certificates_issued_total,
+            certificates_outstanding_peak=certificates_outstanding_peak,
+            cert_default_losses=cert_default_losses,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
@@ -101705,6 +102011,7 @@ class RingSweepRunner:
             "default_handling": self.default_handling,
             "dealer_enabled": self.dealer_enabled,
             "clearing_enabled": self.clearing_enabled,
+            "clearing_certificates": self.clearing_certificates,
         }
 
         # Initial "running" status (skip for cloud-only mode)
@@ -101905,8 +102212,9 @@ class RingSweepRunner:
         # Apply explicit CLI adaptive flag overrides after preset defaults.
         self._apply_adaptive_flag_overrides(scenario)
 
-        if self.clearing_enabled:
-            scenario["clearinghouse"] = {"enabled": True, "mode": "netting"}
+        clearinghouse_block = self._clearinghouse_block()
+        if clearinghouse_block is not None:
+            scenario["clearinghouse"] = clearinghouse_block
 
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
@@ -102076,6 +102384,15 @@ class RingSweepRunner:
                     if result.metrics.get("netting_efficiency") is not None
                     else None
                 ),
+                certificates_issued_total=float(
+                    result.metrics.get("certificates_issued_total", 0.0) or 0.0
+                ),
+                certificates_outstanding_peak=float(
+                    result.metrics.get("certificates_outstanding_peak", 0.0) or 0.0
+                ),
+                cert_default_losses=float(
+                    result.metrics.get("cert_default_losses", 0.0) or 0.0
+                ),
                 nbfi_loan_loss=int(result.metrics.get("nbfi_loan_loss", 0)),
                 nbfi_loans_created=int(result.metrics.get("nbfi_loans_created", 0)),
                 bank_credit_loss=int(result.metrics.get("bank_credit_loss", 0)),
@@ -102126,6 +102443,15 @@ class RingSweepRunner:
             float(netting_efficiency_val) if netting_efficiency_val is not None else None
         )
 
+        # Clearinghouse certificate metrics (Plan 060)
+        certificates_issued_total = float(
+            bundle.summary.get("certificates_issued_total", 0.0) or 0.0
+        )
+        certificates_outstanding_peak = float(
+            bundle.summary.get("certificates_outstanding_peak", 0.0) or 0.0
+        )
+        cert_default_losses = float(bundle.summary.get("cert_default_losses", 0.0) or 0.0)
+
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = prepared.out_dir / "dealer_metrics.json"
         if dealer_metrics_path.exists():
@@ -102147,6 +102473,9 @@ class RingSweepRunner:
             "netting_efficiency": str(netting_efficiency)
             if netting_efficiency is not None
             else "",
+            "certificates_issued_total": str(certificates_issued_total),
+            "certificates_outstanding_peak": str(certificates_outstanding_peak),
+            "cert_default_losses": str(cert_default_losses),
         }
         self._upsert_registry(
             run_id=prepared.run_id,
@@ -102201,6 +102530,9 @@ class RingSweepRunner:
             S_total=float(bundle.summary.get("S_total", 0)),
             gross_face_due=gross_face_due,
             netting_efficiency=netting_efficiency,
+            certificates_issued_total=certificates_issued_total,
+            certificates_outstanding_peak=certificates_outstanding_peak,
+            cert_default_losses=cert_default_losses,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
@@ -107995,6 +108327,7 @@ class RingExplorerParams:
     currency: str
     policy_overrides: dict[str, Any] | None
     topology_config: dict[str, Any] | None = None
+    clearinghouse: dict[str, Any] | None = None
 
     @classmethod
     def from_model(cls, model: RingExplorerParamsModel) -> RingExplorerParams:
@@ -108039,6 +108372,10 @@ class RingExplorerParams:
         if hasattr(model, 'topology_config') and model.topology_config is not None:
             topology_config = model.topology_config
 
+        clearinghouse = None
+        if getattr(model, "clearinghouse", None) is not None:
+            clearinghouse = model.clearinghouse
+
         return cls(
             n_agents=model.n_agents,
             seed=model.seed,
@@ -108050,6 +108387,7 @@ class RingExplorerParams:
             currency=model.currency,
             policy_overrides=policy_overrides,
             topology_config=topology_config,
+            clearinghouse=clearinghouse,
         )
 
 
@@ -108068,6 +108406,14 @@ def compile_ring_explorer(
         params.seed,
     )
     liquidity_amounts = _allocate_liquidity(params)
+    # The v2 kernel truncates financial amounts to whole units at action
+    # parse time (legacy-exact `int(...)` cast). Quantize generated amounts
+    # here with largest-remainder so the ledger totals match Q_total and the
+    # liquidity spec exactly instead of silently losing the fractional parts
+    # (which also produced zero-face payables that break obligation cycles).
+    # User-supplied explicit vectors are passed through untouched.
+    if params.liquidity.mode != "vector":
+        liquidity_amounts = _quantize_to_integers(liquidity_amounts)
     due_days = _build_due_days(params.n_agents, params.maturity.days, params.maturity.mu)
 
     agents = _build_agents(params.n_agents)
@@ -108092,6 +108438,7 @@ def compile_ring_explorer(
     topology = topology_from_config(getattr(params, 'topology_config', None))
     edges = topology.generate_edges(params.n_agents, random.Random(params.seed + 1000))
     edge_amounts = _distribute_amounts_to_edges(payable_amounts, edges, params.n_agents)
+    edge_amounts = _quantize_to_integers(edge_amounts, min_one=True)
     edge_due_days = _expand_due_days(due_days, edges, params.n_agents)
 
     for edge, amount, due_day in zip(edges, edge_amounts, edge_due_days):
@@ -108134,6 +108481,10 @@ def compile_ring_explorer(
             },
         },
     }
+
+    # Clearinghouse block passthrough (Plans 059/060): netting or certificates.
+    if params.clearinghouse is not None:
+        scenario["clearinghouse"] = params.clearinghouse
 
     if config.compile.emit_yaml:
         _emit_yaml(
@@ -108803,6 +109154,44 @@ def _build_action_specs(
         specs.append(lender_spec)
 
     return specs
+
+
+def _quantize_to_integers(
+    amounts: list[Decimal],
+    *,
+    min_one: bool = False,
+) -> list[Decimal]:
+    """Round amounts to whole Decimal units, preserving the integer total.
+
+    Largest-remainder rounding: floor every amount, then hand the leftover
+    whole units to the largest fractional remainders (ties broken by index).
+    The result sums to ``int(sum(amounts))`` exactly.
+
+    With ``min_one=True``, every entry is lifted to at least 1 (taking units
+    from the largest entries), provided the total is large enough; entries
+    stay at 0 otherwise. Zero-face payables are meaningless obligations and,
+    on ring topologies, they sever the circular-flow structure the scenario
+    is meant to produce.
+    """
+    if not amounts:
+        return []
+    target = int(sum(amounts))
+    floors = [int(a) for a in amounts]
+    leftover = target - sum(floors)
+    order = sorted(range(len(amounts)), key=lambda i: (-(amounts[i] - floors[i]), i))
+    for i in order[:leftover]:
+        floors[i] += 1
+    if min_one and target >= len(amounts):
+        donors = sorted(range(len(amounts)), key=lambda i: -floors[i])
+        for i in range(len(floors)):
+            if floors[i] >= 1:
+                continue
+            for j in donors:
+                if floors[j] > 1:
+                    floors[j] -= 1
+                    floors[i] = 1
+                    break
+    return [Decimal(v) for v in floors]
 
 
 def _distribute_amounts_to_edges(
@@ -118300,6 +118689,30 @@ def _deps() -> Any:
     default=False,
     help="Enable the clearinghouse multilateral netting phase (v2 engine only)",
 )
+@click.option(
+    "--clearing-certificates",
+    is_flag=True,
+    default=False,
+    help="Enable clearinghouse loan certificates (implies --clearing; v2 engine only)",
+)
+@click.option(
+    "--cert-haircut",
+    type=float,
+    default=0.25,
+    help="Certificate haircut: certificates issued = (1 - haircut) x pledged face",
+)
+@click.option(
+    "--cert-rate",
+    type=float,
+    default=0.06,
+    help="Certificate interest rate charged to the pledging member (annual-equivalent)",
+)
+@click.option(
+    "--cert-max-issuance",
+    type=float,
+    default=1.0,
+    help="Max certificate issuance per member as fraction of its gross dues today",
+)
 @click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
 @click.option(
     "--perf-preset",
@@ -118349,6 +118762,10 @@ def sweep_ring(
     name_prefix: str,
     default_handling: str,
     clearing: bool,
+    clearing_certificates: bool,
+    cert_haircut: float,
+    cert_rate: float,
+    cert_max_issuance: float,
     job_id: str | None,
     perf_preset: str | None,
     fast_atomic: bool,
@@ -118390,6 +118807,14 @@ def sweep_ring(
             default_handling = runner_cfg.default_handling
         if runner_cfg.clearing_enabled and parameter_uses_default(ctx, "clearing"):
             clearing = runner_cfg.clearing_enabled
+        if runner_cfg.clearing_certificates and parameter_uses_default(ctx, "clearing_certificates"):
+            clearing_certificates = runner_cfg.clearing_certificates
+        if runner_cfg.cert_haircut is not None and parameter_uses_default(ctx, "cert_haircut"):
+            cert_haircut = float(runner_cfg.cert_haircut)
+        if runner_cfg.cert_rate is not None and parameter_uses_default(ctx, "cert_rate"):
+            cert_rate = float(runner_cfg.cert_rate)
+        if runner_cfg.cert_max_issuance is not None and parameter_uses_default(ctx, "cert_max_issuance"):
+            cert_max_issuance = float(runner_cfg.cert_max_issuance)
         dealer_enabled = runner_cfg.dealer_enabled
         dealer_config = runner_cfg.dealer_config
 
@@ -118533,6 +118958,10 @@ def sweep_ring(
         dealer_enabled=dealer_enabled,
         dealer_config=dealer_config,
         clearing_enabled=clearing,
+        clearing_certificates=clearing_certificates,
+        cert_haircut=Decimal(str(cert_haircut)),
+        cert_rate=Decimal(str(cert_rate)),
+        cert_max_issuance=Decimal(str(cert_max_issuance)),
         executor=executor,
         performance=performance,
     )
@@ -124548,6 +124977,7 @@ def run_v2_scenario(
         write_html_report,
     )
     from bilancio_v2.plugins.banking import finalize_banking
+    from bilancio_v2.plugins.certificates import finalize_certificates
     from bilancio_v2.plugins.dealer import dealer_metrics_summary
     from bilancio_v2.scenario_gates import (
         clean_core_configuration_error_reason,
@@ -124677,6 +125107,7 @@ def run_v2_scenario(
                 reached_stable=result.reached_stable,
                 banking_config=banking_config,
             )
+            finalize_certificates(result.ledger, final_day=result.final_day)
     except (ConfigurationError, DefaultError, SimulationHalt) as e:
         show_error_panel(
             error=e,
@@ -132146,6 +132577,42 @@ class TestNettingTotals:
             {"kind": "PayableCreated", "payable_id": "p1", "amount": "100", "due_day": 1},
         ]
         assert netting_totals(events) == (Decimal("100"), Decimal("0"))
+
+    def test_contract_id_only_creation_events_are_matched(self):
+        """Reassignment-created payables log PayableCreated with contract_id only
+        (no pid/payable_id/alias); their netted face must still be counted."""
+        events = [
+            {
+                "kind": "PayableCreated",
+                "contract_id": "PAY_reassigned_7",
+                "amount": "50",
+                "due_day": 3,
+                "reason": "receivable_reassignment",
+            },
+            _netted_event("PAY_reassigned_7", "20", day=3),
+        ]
+        gross, netted = netting_totals(events)
+        assert gross == Decimal("50")
+        assert netted == Decimal("20")
+
+    def test_phi_delta_counts_contract_id_netting(self):
+        from bilancio.analysis.metrics import dues_for_day
+
+        events = [
+            {
+                "kind": "PayableCreated",
+                "contract_id": "PAY_reassigned_7",
+                "amount": "50",
+                "due_day": 3,
+                "debtor": "A",
+                "creditor": "B",
+            },
+            _netted_event("PAY_reassigned_7", "50", day=3),
+        ]
+        dues = dues_for_day(events, 3)
+        phi, delta = phi_delta(events, dues, 3)
+        assert phi == Decimal("1")
+        assert delta == Decimal("0")
 
     def test_empty_events(self):
         assert netting_totals([]) == (Decimal("0"), Decimal("0"))
@@ -170677,6 +171144,7 @@ class TestInstrumentKind:
             "BANK_LOAN",
             "INTERBANK_LOAN",
             "DELIVERY_OBLIGATION",
+            "CLEARINGHOUSE_CERTIFICATE",
         }
         assert set(InstrumentKind.__members__.keys()) == expected
 
@@ -203149,6 +203617,552 @@ def test_phase_c_no_nets_for_same_bank():
 
 ---
 
+### 🧪 tests/integration/test_clearinghouse_certificates.py
+
+```python
+"""Sweep-pipeline tests for clearinghouse loan certificates (Plan 060).
+
+Covers:
+- the `certificate_totals` metrics helper on synthetic event lists,
+- run-level metric wiring (compute_run_level_metrics),
+- CLI wiring of `--clearing-certificates` down to the generator/scenario config,
+- the new aggregate results columns (certificates_issued_total,
+  certificates_outstanding_peak, cert_default_losses).
+
+The kernel side (v2 CertificateFacilityPhase, ClearinghouseConfig mode
+"certificates") is implemented separately; tests that would require a live
+kernel run are guarded so they skip until the kernel lands.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import get_args
+from unittest.mock import MagicMock, patch
+
+import pytest
+from click.testing import CliRunner
+
+from bilancio.analysis.metrics import certificate_totals
+from bilancio.analysis.report import aggregate_runs, compute_run_level_metrics
+from bilancio.ui.cli import cli
+
+
+def _kernel_supports_certificates() -> bool:
+    """True once the v2 kernel's ClearinghouseConfig accepts mode='certificates'."""
+    from bilancio.config.models import ClearinghouseConfig
+
+    annotation = ClearinghouseConfig.model_fields["mode"].annotation
+    return "certificates" in get_args(annotation)
+
+
+# ---------------------------------------------------------------------------
+# certificate_totals helper
+# ---------------------------------------------------------------------------
+
+
+class TestCertificateTotals:
+    def test_empty_events_returns_zeros(self):
+        assert certificate_totals([]) == (Decimal("0"), Decimal("0"), Decimal("0"))
+
+    def test_non_certificate_events_ignored(self):
+        events = [
+            {"kind": "PayableCreated", "amount": "100", "due_day": 1},
+            {"kind": "PayableSettled", "day": 1, "amount": "100"},
+        ]
+        assert certificate_totals(events) == (Decimal("0"), Decimal("0"), Decimal("0"))
+
+    def test_issued_total_sums_issuance_amounts(self):
+        events = [
+            {"kind": "CertificatesIssued", "day": 1, "member": "H1", "amount": "75"},
+            {"kind": "CertificatesIssued", "day": 2, "member": "H2", "amount": "25"},
+        ]
+        issued, peak, losses = certificate_totals(events)
+        assert issued == Decimal("100")
+        assert peak == Decimal("100")
+        assert losses == Decimal("0")
+
+    def test_outstanding_peak_replays_day_by_day(self):
+        # Day 1: +75; day 2: +50 (peak 125); day 3: -100 retired (outstanding 25)
+        events = [
+            {"kind": "CertificatesIssued", "day": 1, "member": "H1", "amount": "75"},
+            {"kind": "CertificatesIssued", "day": 2, "member": "H2", "amount": "50"},
+            {"kind": "CertificatesRetired", "day": 3, "member": "H1", "amount": "100"},
+        ]
+        issued, peak, losses = certificate_totals(events)
+        assert issued == Decimal("125")
+        assert peak == Decimal("125")
+        assert losses == Decimal("0")
+
+    def test_same_day_issue_and_retire_nets_within_day(self):
+        # Redemption (retire) and new issuance occur in the same facility
+        # phase, so peak is tracked at end-of-day granularity.
+        events = [
+            {"kind": "CertificatesIssued", "day": 1, "member": "H1", "amount": "60"},
+            {"kind": "CertificatesRetired", "day": 2, "member": "H1", "amount": "60"},
+            {"kind": "CertificatesIssued", "day": 2, "member": "H2", "amount": "40"},
+        ]
+        issued, peak, losses = certificate_totals(events)
+        assert issued == Decimal("100")
+        assert peak == Decimal("60")
+        assert losses == Decimal("0")
+
+    def test_haircut_counts_as_loss_and_reduces_outstanding(self):
+        # Real kernel payload: `loss` is the total written down (margin
+        # absorption + holder haircut + uncovered); `haircut_total` is the
+        # holder-balance reduction that counts as retired face.
+        events = [
+            {"kind": "CertificatesIssued", "day": 1, "member": "H1", "amount": "100"},
+            {"kind": "CertificatesRetired", "day": 2, "member": "H1", "amount": "70"},
+            {
+                "kind": "CertificateHaircutApplied",
+                "day": 3,
+                "loss": "30",
+                "absorbed_by_margin": "5",
+                "haircut_total": "25",
+                "uncovered": "0",
+            },
+        ]
+        issued, peak, losses = certificate_totals(events)
+        assert issued == Decimal("100")
+        assert peak == Decimal("100")
+        assert losses == Decimal("30")
+
+    def test_out_of_order_days_are_sorted(self):
+        events = [
+            {"kind": "CertificatesRetired", "day": 3, "amount": "50"},
+            {"kind": "CertificatesIssued", "day": 1, "amount": "50"},
+        ]
+        issued, peak, losses = certificate_totals(events)
+        assert issued == Decimal("50")
+        assert peak == Decimal("50")
+        assert losses == Decimal("0")
+
+    def test_other_certificate_events_do_not_affect_totals(self):
+        # Transfers/interest/recourse events move certificates between agents
+        # or record charges; they do not change the outstanding total.
+        events = [
+            {"kind": "CertificatesIssued", "day": 1, "amount": "100"},
+            {"kind": "CertificatesTransferred", "day": 1, "amount": "100"},
+            {"kind": "CertificateInterestCharged", "day": 2, "amount": "3"},
+            {"kind": "CertificateRecourseCreated", "day": 2, "amount": "40"},
+            {"kind": "CertificateExcessReturned", "day": 2, "amount": "10"},
+            {"kind": "CertificateRedemptionWindow", "day": 2, "amount": "20"},
+            {"kind": "CertificatePledgeCreated", "day": 1, "amount": "133"},
+        ]
+        issued, peak, losses = certificate_totals(events)
+        assert issued == Decimal("100")
+        assert peak == Decimal("100")
+        assert losses == Decimal("0")
+
+
+class TestRunLevelMetricsWiring:
+    def test_certificate_keys_present_and_zero_without_events(self):
+        summary = compute_run_level_metrics([])
+        assert summary["certificates_issued_total"] == 0.0
+        assert summary["certificates_outstanding_peak"] == 0.0
+        assert summary["cert_default_losses"] == 0.0
+
+    def test_certificate_keys_are_floats(self):
+        events = [
+            {"kind": "CertificatesIssued", "day": 1, "member": "H1", "amount": "75"},
+            {
+                "kind": "CertificateHaircutApplied",
+                "day": 2,
+                "loss": "5",
+                "absorbed_by_margin": "0",
+                "haircut_total": "5",
+                "uncovered": "0",
+            },
+        ]
+        summary = compute_run_level_metrics(events)
+        assert summary["certificates_issued_total"] == 75.0
+        assert summary["certificates_outstanding_peak"] == 75.0
+        assert summary["cert_default_losses"] == 5.0
+        assert isinstance(summary["certificates_issued_total"], float)
+        assert isinstance(summary["certificates_outstanding_peak"], float)
+        assert isinstance(summary["cert_default_losses"], float)
+
+
+# ---------------------------------------------------------------------------
+# CLI wiring (--clearing-certificates)
+# ---------------------------------------------------------------------------
+
+
+class TestSweepRingCertificatesCLI:
+    def test_sweep_ring_help_lists_certificate_options(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sweep", "ring", "--help"])
+        assert result.exit_code == 0
+        assert "--clearing-certificates" in result.output
+        assert "--cert-haircut" in result.output
+        assert "--cert-rate" in result.output
+        assert "--cert-max-issuance" in result.output
+
+    @patch("bilancio.ui.cli.sweep.aggregate_runs")
+    @patch("bilancio.ui.cli.sweep.render_dashboard")
+    @patch("bilancio.ui.cli.sweep.RingSweepRunner")
+    @patch("bilancio.ui.cli.sweep.create_job_manager")
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-cert-job")
+    def test_clearing_certificates_flag_passed_to_runner(
+        self,
+        mock_gen_id,
+        mock_create_jm,
+        mock_runner_cls,
+        mock_render,
+        mock_agg,
+        tmp_path,
+    ):
+        mock_create_jm.return_value = MagicMock()
+        mock_runner = MagicMock()
+        mock_runner.registry_dir = tmp_path / "registry"
+        mock_runner.aggregate_dir = tmp_path / "aggregate"
+        (tmp_path / "registry").mkdir()
+        (tmp_path / "aggregate").mkdir()
+        mock_runner_cls.return_value = mock_runner
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "sweep",
+                "ring",
+                "--out-dir",
+                str(tmp_path / "ring_out"),
+                "--clearing-certificates",
+                "--cert-haircut",
+                "0.3",
+                "--cert-rate",
+                "0.05",
+                "--cert-max-issuance",
+                "0.8",
+            ],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        kwargs = mock_runner_cls.call_args[1]
+        assert kwargs["clearing_certificates"] is True
+        assert kwargs["cert_haircut"] == Decimal("0.3")
+        assert kwargs["cert_rate"] == Decimal("0.05")
+        assert kwargs["cert_max_issuance"] == Decimal("0.8")
+
+    @patch("bilancio.ui.cli.sweep.aggregate_runs")
+    @patch("bilancio.ui.cli.sweep.render_dashboard")
+    @patch("bilancio.ui.cli.sweep.RingSweepRunner")
+    @patch("bilancio.ui.cli.sweep.create_job_manager")
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-cert-defaults")
+    def test_certificate_defaults_match_plan(
+        self,
+        mock_gen_id,
+        mock_create_jm,
+        mock_runner_cls,
+        mock_render,
+        mock_agg,
+        tmp_path,
+    ):
+        mock_create_jm.return_value = MagicMock()
+        mock_runner = MagicMock()
+        mock_runner.registry_dir = tmp_path / "registry"
+        mock_runner.aggregate_dir = tmp_path / "aggregate"
+        (tmp_path / "registry").mkdir()
+        (tmp_path / "aggregate").mkdir()
+        mock_runner_cls.return_value = mock_runner
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "sweep",
+                "ring",
+                "--out-dir",
+                str(tmp_path / "ring_out"),
+                "--clearing-certificates",
+            ],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        kwargs = mock_runner_cls.call_args[1]
+        assert kwargs["clearing_certificates"] is True
+        assert kwargs["cert_haircut"] == Decimal("0.25")
+        assert kwargs["cert_rate"] == Decimal("0.06")
+        assert kwargs["cert_max_issuance"] == Decimal("1.0")
+
+
+class TestRunnerScenarioBlock:
+    """RingSweepRunner emits the certificates clearinghouse block."""
+
+    def _make_runner(self, tmp_path, **kwargs):
+        from bilancio.experiments.ring import RingSweepRunner
+
+        return RingSweepRunner(
+            out_dir=tmp_path,
+            name_prefix="CertTest",
+            n_agents=4,
+            maturity_days=3,
+            Q_total=Decimal("100"),
+            liquidity_mode="uniform",
+            liquidity_agent=None,
+            base_seed=42,
+            **kwargs,
+        )
+
+    def test_certificates_block_in_prepared_scenario(self, tmp_path):
+        runner = self._make_runner(
+            tmp_path,
+            clearing_certificates=True,
+            cert_haircut=Decimal("0.25"),
+            cert_rate=Decimal("0.06"),
+            cert_max_issuance=Decimal("1.0"),
+        )
+        prepared = runner._prepare_run(
+            "grid", Decimal("0.5"), Decimal("1"), Decimal("0.75"), Decimal("0"), 42
+        )
+        block = prepared.scenario_config.get("clearinghouse")
+        assert block == {
+            "enabled": True,
+            "mode": "certificates",
+            "cert_haircut": 0.25,
+            "cert_rate": 0.06,
+            "max_issuance_per_member": 1.0,
+        }
+
+    def test_certificates_implies_clearing(self, tmp_path):
+        runner = self._make_runner(tmp_path, clearing_certificates=True)
+        assert runner.clearing_enabled is True
+        assert runner.clearing_certificates is True
+
+    def test_netting_block_unchanged_without_certificates(self, tmp_path):
+        runner = self._make_runner(tmp_path, clearing_enabled=True)
+        prepared = runner._prepare_run(
+            "grid", Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), 42
+        )
+        assert prepared.scenario_config.get("clearinghouse") == {
+            "enabled": True,
+            "mode": "netting",
+        }
+
+    def test_no_block_when_clearing_off(self, tmp_path):
+        runner = self._make_runner(tmp_path)
+        prepared = runner._prepare_run(
+            "grid", Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), 42
+        )
+        assert "clearinghouse" not in prepared.scenario_config
+
+
+class TestCompilerPassthrough:
+    """RingExplorerParamsModel.clearinghouse passthrough to compiled scenarios."""
+
+    def _generator_config(self, clearinghouse=None):
+        from bilancio.config.models import RingExplorerGeneratorConfig
+
+        params = {
+            "n_agents": 4,
+            "seed": 42,
+            "kappa": "0.5",
+            "Q_total": "100",
+            "maturity": {"days": 3, "mode": "lead_lag", "mu": "0.75"},
+        }
+        if clearinghouse is not None:
+            params["clearinghouse"] = clearinghouse
+        return RingExplorerGeneratorConfig.model_validate(
+            {
+                "version": 1,
+                "generator": "ring_explorer_v1",
+                "name_prefix": "CertCompiler",
+                "params": params,
+                "compile": {"emit_yaml": False},
+            }
+        )
+
+    def test_clearinghouse_block_emitted(self):
+        from bilancio.scenarios import compile_ring_explorer
+
+        block = {
+            "enabled": True,
+            "mode": "certificates",
+            "cert_haircut": 0.25,
+            "cert_rate": 0.06,
+            "max_issuance_per_member": 1.0,
+        }
+        scenario = compile_ring_explorer(self._generator_config(block))
+        assert scenario["clearinghouse"] == block
+
+    def test_no_block_by_default(self):
+        from bilancio.scenarios import compile_ring_explorer
+
+        scenario = compile_ring_explorer(self._generator_config())
+        assert "clearinghouse" not in scenario
+
+
+# ---------------------------------------------------------------------------
+# Aggregate results columns
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_runs_carries_certificate_columns(tmp_path):
+    registry_dir = tmp_path / "registry"
+    out_dir = tmp_path / "runs" / "grid_cert1" / "out"
+    aggregate_dir = tmp_path / "aggregate"
+    registry_dir.mkdir()
+    out_dir.mkdir(parents=True)
+    aggregate_dir.mkdir()
+
+    metrics_csv = out_dir / "metrics.csv"
+    metrics_csv.write_text(
+        "day,S_t,phi_t,delta_t,face_netted_t\n"
+        "1,100,1,0,0\n"
+    )
+
+    registry_csv = registry_dir / "experiments.csv"
+    registry_csv.write_text(
+        "run_id,phase,seed,n_agents,kappa,concentration,mu,monotonicity,S1,L0,"
+        "metrics_csv,status,time_to_stability,n_defaults,cascade_fraction,"
+        "certificates_issued_total,certificates_outstanding_peak,cert_default_losses\n"
+        "grid_cert1,grid,42,5,0.5,1,0.75,0,100,50,"
+        "../runs/grid_cert1/out/metrics.csv,completed,2,0,,"
+        "75.0,75.0,5.0\n"
+    )
+
+    results_csv = aggregate_dir / "results.csv"
+    rows = aggregate_runs(registry_csv, results_csv)
+
+    assert rows
+    row = rows[0]
+    assert row["certificates_issued_total"] == "75.0"
+    assert row["certificates_outstanding_peak"] == "75.0"
+    assert row["cert_default_losses"] == "5.0"
+
+    header = results_csv.read_text().splitlines()[0]
+    assert "certificates_issued_total" in header
+    assert "certificates_outstanding_peak" in header
+    assert "cert_default_losses" in header
+
+
+def test_aggregate_runs_defaults_to_zero_for_legacy_registries(tmp_path):
+    """Registries written before Plan 060 lack the certificate columns."""
+    registry_dir = tmp_path / "registry"
+    out_dir = tmp_path / "runs" / "grid_old1" / "out"
+    aggregate_dir = tmp_path / "aggregate"
+    registry_dir.mkdir()
+    out_dir.mkdir(parents=True)
+    aggregate_dir.mkdir()
+
+    metrics_csv = out_dir / "metrics.csv"
+    metrics_csv.write_text("day,S_t,phi_t,delta_t\n1,100,1,0\n")
+
+    registry_csv = registry_dir / "experiments.csv"
+    registry_csv.write_text(
+        "run_id,phase,seed,n_agents,kappa,concentration,mu,monotonicity,S1,L0,"
+        "metrics_csv,status,time_to_stability,n_defaults,cascade_fraction\n"
+        "grid_old1,grid,42,5,0.5,1,0,0,100,50,"
+        "../runs/grid_old1/out/metrics.csv,completed,2,0,\n"
+    )
+
+    results_csv = aggregate_dir / "results.csv"
+    rows = aggregate_runs(registry_csv, results_csv)
+
+    assert rows
+    row = rows[0]
+    assert row["certificates_issued_total"] == 0.0
+    assert row["certificates_outstanding_peak"] == 0.0
+    assert row["cert_default_losses"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Profile and instrument-kind surface
+# ---------------------------------------------------------------------------
+
+
+class TestClearinghouseProfile:
+    def test_defaults_match_plan(self):
+        from bilancio.decision.profiles import ClearinghouseProfile
+
+        profile = ClearinghouseProfile()
+        assert profile.cert_haircut == Decimal("0.25")
+        assert profile.cert_rate == Decimal("0.06")
+        assert profile.max_issuance_per_member == Decimal("1.0")
+        assert profile.cert_max_tenor is None
+        assert profile.mandatory_acceptance is True
+
+    def test_invalid_haircut_rejected(self):
+        from bilancio.decision.profiles import ClearinghouseProfile
+
+        with pytest.raises(ValueError):
+            ClearinghouseProfile(cert_haircut=Decimal("1.0"))
+
+    def test_voluntary_acceptance_rejected_in_stage_2(self):
+        from bilancio.decision.profiles import ClearinghouseProfile
+
+        with pytest.raises(ValueError):
+            ClearinghouseProfile(mandatory_acceptance=False)
+
+
+def test_instrument_kind_member_exists():
+    from bilancio.domain.instruments.base import InstrumentKind
+
+    assert InstrumentKind.CLEARINGHOUSE_CERTIFICATE == "clearinghouse_certificate"
+    assert str(InstrumentKind.CLEARINGHOUSE_CERTIFICATE) == "clearinghouse_certificate"
+
+
+# ---------------------------------------------------------------------------
+# Tiny end-to-end run (requires the kernel side of Plan 060)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _kernel_supports_certificates(),
+    # KERNEL DEPENDENCY: the sibling Plan 060 kernel change widens
+    # ClearinghouseConfig.mode to include "certificates". Until it lands,
+    # scenario validation rejects the certificates block, so this end-to-end
+    # test is skipped. The orchestrator should unskip after integration.
+    reason="v2 kernel does not yet accept clearinghouse mode 'certificates'",
+)
+def test_end_to_end_tiny_certificates_run(tmp_path):
+    """Smallest possible local run: certificates block flows through the
+    runner, the run completes, and the registry carries the three metrics."""
+    import csv
+
+    from bilancio.experiments.ring import RingSweepRunner
+
+    runner = RingSweepRunner(
+        out_dir=tmp_path,
+        name_prefix="CertE2E",
+        n_agents=4,
+        maturity_days=3,
+        Q_total=Decimal("100"),
+        liquidity_mode="uniform",
+        liquidity_agent=None,
+        base_seed=42,
+        default_handling="expel-agent",
+        clearing_certificates=True,
+    )
+    summaries = runner.run_grid(
+        [Decimal("0.5")], [Decimal("1")], [Decimal("0.75")], [Decimal("0")]
+    )
+    assert len(summaries) == 1
+    summary = summaries[0]
+    # Metrics must be populated floats (possibly 0.0 depending on dynamics)
+    assert summary.certificates_issued_total >= 0.0
+    assert summary.certificates_outstanding_peak >= 0.0
+    assert summary.cert_default_losses >= 0.0
+
+    registry_csv = tmp_path / "registry" / "experiments.csv"
+    with registry_csv.open() as fh:
+        rows = list(csv.DictReader(fh))
+    assert rows
+    assert rows[0]["status"] == "completed"
+    for column in (
+        "certificates_issued_total",
+        "certificates_outstanding_peak",
+        "cert_default_losses",
+    ):
+        assert column in rows[0]
+        assert rows[0][column] != ""
+
+```
+
+---
+
 ### 🧪 tests/integration/test_day_simulation.py
 
 ```python
@@ -207488,10 +208502,15 @@ class TestGoldenMetricSnapshot:
         Updated in Plan 055 (network topology generalization): receivable
         reassignment now runs unconditionally on agent default, not only
         when rollover_enabled=True. This slightly changes the default cascade.
+
+        Updated again with Plan 059 follow-up: the ring compiler now
+        quantizes generated faces/liquidity to whole units with
+        largest-remainder rounding (the kernel truncated fractional amounts
+        anyway, silently shrinking Q_total and emitting zero-face payables).
         """
         metrics = _run_small_ring("compatible", seed=DETERMINISTIC_SEED)
-        expected_delta = Decimal("0.6633366633366633366633366633")
-        expected_phi = Decimal("0.3366633366633366633366633367")
+        expected_delta = Decimal("0.6573705179282868525896414343")
+        expected_phi = Decimal("0.3426294820717131474103585657")
         assert metrics["delta_total"] == expected_delta, (
             f"Golden delta_total changed! "
             f"expected={expected_delta}, actual={metrics['delta_total']}. "
@@ -207508,6 +208527,9 @@ class TestGoldenMetricSnapshot:
 
         Updated in Plan 055 (network topology generalization): receivable
         reassignment now runs unconditionally on agent default.
+
+        Updated again with Plan 059 follow-up: ring compiler integer-face
+        quantization (see test_golden_metric_snapshot_seed_42).
         """
         metrics = _run_ring(
             "compatible",
@@ -207515,8 +208537,8 @@ class TestGoldenMetricSnapshot:
             n_agents=20,
             kappa="0.5",
         )
-        expected_delta = Decimal("0.8262179809141135107985936715")
-        expected_phi = Decimal("0.1737820190858864892014063285")
+        expected_delta = Decimal("0.8240879560219890054972513743")
+        expected_phi = Decimal("0.1759120439780109945027486257")
         assert metrics["delta_total"] == expected_delta, (
             f"Golden delta_total (stressed) changed! "
             f"expected={expected_delta}, actual={metrics['delta_total']}. "
@@ -209869,6 +210891,106 @@ def test_monotonicity_extremes():
     assert ascending_amounts == sorted(ascending_amounts, reverse=False)
     assert all(amount > Decimal("0") for amount in descending_amounts)
     assert all(amount > Decimal("0") for amount in ascending_amounts)
+
+```
+
+---
+
+### 🧪 tests/scenarios/test_ring_integer_quantization.py
+
+```python
+"""Ring compiler integer-face quantization.
+
+The v2 kernel truncates financial amounts to whole units at action parse
+time, so the ring-explorer compiler quantizes generated payable faces and
+liquidity with largest-remainder rounding: ledger totals match Q_total and
+the liquidity spec exactly, and no zero-face payables sever the ring cycle.
+"""
+
+from decimal import Decimal
+
+from bilancio.config.models import RingExplorerGeneratorConfig
+from bilancio.scenarios.ring.compiler import (
+    _quantize_to_integers,
+    compile_ring_explorer,
+)
+
+
+class TestQuantizeToIntegers:
+    def test_preserves_integer_total(self):
+        amounts = [Decimal("5.0689"), Decimal("12.6703"), Decimal("0.469"), Decimal("231.79")]
+        out = _quantize_to_integers(amounts)
+        assert sum(out) == Decimal(int(sum(amounts)))
+        assert all(v == v.to_integral_value() for v in out)
+
+    def test_largest_remainder_gets_the_leftover_unit(self):
+        out = _quantize_to_integers([Decimal("1.2"), Decimal("1.9"), Decimal("1.9")])
+        assert out == [Decimal(1), Decimal(2), Decimal(2)]
+
+    def test_min_one_lifts_zero_entries(self):
+        out = _quantize_to_integers(
+            [Decimal("0.1"), Decimal("0.2"), Decimal("99.7")], min_one=True
+        )
+        assert sum(out) == Decimal(100)
+        assert min(out) >= Decimal(1)
+
+    def test_min_one_skipped_when_total_too_small(self):
+        out = _quantize_to_integers([Decimal("0.5"), Decimal("0.5"), Decimal("1")], min_one=True)
+        assert sum(out) == Decimal(2)
+
+    def test_deterministic(self):
+        amounts = [Decimal("3.5"), Decimal("2.5"), Decimal("4.0")]
+        assert _quantize_to_integers(amounts) == _quantize_to_integers(amounts)
+
+    def test_empty(self):
+        assert _quantize_to_integers([]) == []
+
+
+class TestCompiledScenarioIsIntegerQuantized:
+    def _compile(self, **param_overrides):
+        params = {
+            "n_agents": 20,
+            "seed": 42,
+            "kappa": "0.5",
+            "Q_total": "250",
+            "liquidity": {"allocation": {"mode": "uniform"}},
+            "inequality": {"scheme": "dirichlet", "concentration": "0.5"},
+            "maturity": {"days": 5, "mode": "lead_lag", "mu": "0"},
+        }
+        params.update(param_overrides)
+        config = RingExplorerGeneratorConfig.model_validate(
+            {
+                "version": 1,
+                "generator": "ring_explorer_v1",
+                "name_prefix": "Quantization Test",
+                "params": params,
+                "compile": {"emit_yaml": False},
+            }
+        )
+        return compile_ring_explorer(config)
+
+    def test_payable_faces_are_positive_integers_summing_to_q_total(self):
+        scenario = self._compile()
+        faces = [
+            Decimal(str(a["create_payable"]["amount"]))
+            for a in scenario["initial_actions"]
+            if "create_payable" in a
+        ]
+        assert len(faces) == 20
+        assert all(f == f.to_integral_value() for f in faces)
+        assert all(f >= 1 for f in faces)
+        assert sum(faces) == Decimal(250)
+
+    def test_liquidity_is_integer_and_sums_to_spec(self):
+        scenario = self._compile()
+        cash = [
+            Decimal(str(a["mint_cash"]["amount"]))
+            for a in scenario["initial_actions"]
+            if "mint_cash" in a
+        ]
+        assert all(c == c.to_integral_value() for c in cash)
+        # kappa=0.5 on Q=250 -> L=125
+        assert sum(cash) == Decimal(125)
 
 ```
 
@@ -242795,6 +243917,766 @@ def test_banking_scenarios_self_consistent(
 
 ---
 
+### 🧪 tests/v2/test_certificates.py
+
+```python
+"""Unit and integration tests for clearinghouse loan certificates (Plan 060).
+
+Covers acceptance criterion 8: issuance math, the eligibility filter, the
+per-member cap, per-diem interest, burn-before-redeem ordering, the
+conservation invariant, the loss waterfall (margin equity then holder
+haircut), cash-first mop order, the redemption window, and checkpoint /
+restore of all certificate state. All amounts are whole integers (the
+kernel truncates money to whole units).
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+
+from bilancio.config.models import ClearinghouseConfig, ScenarioConfig
+from bilancio.core.errors import ConfigurationError, DefaultError
+from bilancio_v2 import prepare_scenario, run_scenario, run_until_stable
+from bilancio_v2.ledger import ZERO, CertificatePledge, InvariantViolation, Ledger, Payable
+from bilancio_v2.plugins.certificates import (
+    apply_certificate_writedown,
+    eligible_collateral,
+    per_diem_interest,
+)
+from bilancio_v2.policy import MOP_CLEARINGHOUSE_CERT, CapabilityMatrix
+from bilancio_v2.scenario_gates import build_clearing_config
+from bilancio_v2.subsystem_config import CleanClearingConfig
+
+D = Decimal
+
+
+def cert_scenario(
+    payables: list[tuple[str, str, int, int]],
+    *,
+    n_firms: int = 4,
+    cash: dict[str, int] | None = None,
+    clearinghouse: dict | None | bool = None,
+    default_handling: str = "expel-agent",
+    rollover: bool = False,
+    max_days: int = 8,
+    quiet_days: int = 2,
+) -> ScenarioConfig:
+    agents = [{"id": "CB", "kind": "central_bank", "name": "CB"}] + [
+        {"id": f"F{i + 1}", "kind": "firm", "name": f"Firm {i + 1}"} for i in range(n_firms)
+    ]
+    initial_actions: list[dict] = []
+    for agent_id, amount in (cash or {}).items():
+        initial_actions.append({"mint_cash": {"to": agent_id, "amount": amount}})
+    for debtor, creditor, amount, due_day in payables:
+        initial_actions.append({"create_payable": {"from": debtor, "to": creditor, "amount": amount, "due_day": due_day}})
+    data: dict = {
+        "version": 1,
+        "name": "certificates-test",
+        "agents": agents,
+        "initial_actions": initial_actions,
+        "run": {
+            "max_days": max_days,
+            "quiet_days": quiet_days,
+            "default_handling": default_handling,
+            "rollover_enabled": rollover,
+        },
+    }
+    if clearinghouse is not False:
+        data["clearinghouse"] = {"enabled": True, "mode": "certificates", **(clearinghouse or {})}
+    return ScenarioConfig.model_validate(data)
+
+
+def events_of(result, kind: str) -> list[dict]:
+    return [event for event in result.events if event["kind"] == kind]
+
+
+def event_index(result, kind: str, **match) -> int:
+    for index, event in enumerate(result.events):
+        if event["kind"] == kind and all(event.get(key) == value for key, value in match.items()):
+            return index
+    raise AssertionError(f"no {kind} event matching {match}")
+
+
+def make_payable(payable_id: str, debtor: str, creditor: str, amount: int, *, due_day: int = 2, pledged_to: str | None = None) -> Payable:
+    return Payable(
+        id=payable_id,
+        debtor=debtor,
+        creditor=creditor,
+        amount=D(amount),
+        due_day=due_day,
+        maturity_distance=1,
+        pledged_to=pledged_to,
+    )
+
+
+# -- gating / inertness -------------------------------------------------------
+
+
+def test_netting_mode_registers_no_certificate_machinery() -> None:
+    config = cert_scenario([("F1", "F2", 100, 1)], clearinghouse={"mode": "netting"})
+    runtime = prepare_scenario(config)
+    assert [phase.name for phase in runtime.phases] == ["SubphaseB1", "SubphaseB_Clearing", "SubphaseB2", "PhaseC"]
+    assert not any(agent.kind == "clearinghouse" for agent in runtime.ledger.agents.values())
+    assert runtime.ctx.policy.mop_order("firm") == ("cash", "bank_deposit")
+    assert runtime.ctx.policy.mop_order("household") == ("bank_deposit", "cash")
+
+
+def test_absent_block_emits_no_certificate_events() -> None:
+    config = cert_scenario([("F1", "F2", 100, 1)], cash={"F1": 100}, clearinghouse=False)
+    result = run_scenario(config)
+    assert not any(event["kind"].startswith("Certificate") for event in result.events)
+    assert "CH1" not in result.ledger.agents
+
+
+def test_certificates_mode_registers_phase_and_agent() -> None:
+    config = cert_scenario([("F1", "F2", 100, 1)])
+    runtime = prepare_scenario(config)
+    assert [phase.name for phase in runtime.phases] == [
+        "SubphaseB1",
+        "SubphaseB_Clearing",
+        "SubphaseB_Certificates",
+        "SubphaseB2",
+        "PhaseC",
+    ]
+    assert runtime.ledger.agents["CH1"].kind == "clearinghouse"
+    assert runtime.ctx.policy.mop_order("firm") == ("cash", "bank_deposit", MOP_CLEARINGHOUSE_CERT)
+    assert runtime.ctx.policy.mop_order("household") == ("bank_deposit", "cash", MOP_CLEARINGHOUSE_CERT)
+    assert runtime.ctx.policy.mop_order("clearinghouse") == ("cash",)
+    assert runtime.ctx.policy.rows["clearinghouse"].can_default is False
+
+
+def test_default_capability_matrix_untouched() -> None:
+    matrix = CapabilityMatrix.default()
+    extended = matrix.with_certificate_mop()
+    assert matrix.mop_order("firm") == ("cash", "bank_deposit")
+    assert matrix.mop_order("household") == ("bank_deposit", "cash")
+    assert extended.mop_order("firm") == ("cash", "bank_deposit", MOP_CLEARINGHOUSE_CERT)
+    assert extended.mop_order("bank") == matrix.mop_order("bank")
+
+
+def test_mandatory_acceptance_false_rejected_by_schema() -> None:
+    with pytest.raises(ValueError, match="mandatory_acceptance"):
+        ClearinghouseConfig(enabled=True, mode="certificates", mandatory_acceptance=False)
+
+
+def test_mandatory_acceptance_false_rejected_by_gate() -> None:
+    config = cert_scenario([("F1", "F2", 100, 1)], clearinghouse=False)
+    bypassed = ClearinghouseConfig.model_construct(
+        enabled=True,
+        mode="certificates",
+        cert_haircut=D("0.25"),
+        cert_rate=D("0.06"),
+        max_issuance_per_member=D("1.0"),
+        cert_max_tenor=None,
+        mandatory_acceptance=False,
+    )
+    config = config.model_copy(update={"clearinghouse": bypassed})
+    with pytest.raises(ConfigurationError, match="mandatory_acceptance"):
+        build_clearing_config(config)
+
+
+def test_gate_maps_certificate_fields() -> None:
+    config = cert_scenario(
+        [("F1", "F2", 100, 1)],
+        clearinghouse={"cert_haircut": "0.4", "cert_rate": "0.12", "max_issuance_per_member": "0.5", "cert_max_tenor": 3},
+    )
+    clean = build_clearing_config(config)
+    assert clean is not None
+    assert clean.mode == "certificates"
+    assert clean.cert_haircut == D("0.4")
+    assert clean.cert_rate == D("0.12")
+    assert clean.max_issuance_per_member == D("0.5")
+    assert clean.cert_max_tenor == 3
+    assert clean.mandatory_acceptance is True
+
+
+# -- issuance math (acceptance criterion 2) -----------------------------------
+
+
+def test_issuance_is_exactly_int_face_times_one_minus_haircut() -> None:
+    # Face 10 at 25% haircut: 7.5 truncates to exactly 7 certificates.
+    config = cert_scenario(
+        [("F1", "F2", 7, 1), ("F3", "F1", 10, 2)],
+        cash={"F3": 10},
+    )
+    result = run_scenario(config)
+    issued = events_of(result, "CertificatesIssued")
+    assert len(issued) == 1
+    assert issued[0]["member"] == "F1"
+    assert issued[0]["amount"] == D(7)
+    pledge = events_of(result, "CertificatePledgeCreated")[0]
+    assert pledge["pledged_face"] == D(10)
+    assert pledge["certificates_issued"] == D(7)
+    assert events_of(result, "PayableSettled")  # the due settled in certificates
+
+
+def test_eligibility_filter_excludes_each_reason() -> None:
+    ledger = Ledger()
+    ledger.day = 1
+    ledger.defaulted_agent_ids.add("F9")
+    config = CleanClearingConfig(mode="certificates", cert_max_tenor=3)
+
+    own_issued = make_payable("PAY_own", "F1", "F1", 100)
+    due_today = make_payable("PAY_today", "F2", "F1", 100, due_day=1)
+    due_past = make_payable("PAY_past", "F2", "F1", 100, due_day=0)
+    settled = make_payable("PAY_settled", "F2", "F1", 100)
+    settled.settled = True
+    already_pledged = make_payable("PAY_pledged", "F2", "F1", 100, pledged_to="CH1")
+    defaulted_debtor = make_payable("PAY_defaulted", "F9", "F1", 100)
+    beyond_tenor = make_payable("PAY_tenor", "F2", "F1", 100, due_day=5)
+    other_creditor = make_payable("PAY_other", "F2", "F3", 100)
+    eligible_late = make_payable("PAY_b", "F2", "F1", 100, due_day=3)
+    eligible_early = make_payable("PAY_a", "F3", "F1", 100, due_day=2)
+    ledger.payables.extend(
+        [
+            own_issued,
+            due_today,
+            due_past,
+            settled,
+            already_pledged,
+            defaulted_debtor,
+            beyond_tenor,
+            other_creditor,
+            eligible_late,
+            eligible_early,
+        ]
+    )
+
+    assert eligible_collateral(ledger, config, "F1") == [eligible_early, eligible_late]  # earliest due first
+
+    # With no tenor restriction, the long receivable becomes eligible too.
+    no_tenor = CleanClearingConfig(mode="certificates", cert_max_tenor=None)
+    assert beyond_tenor in eligible_collateral(ledger, no_tenor, "F1")
+
+
+def test_per_member_cap_binds_below_need() -> None:
+    # Dues 100, two eligible receivables of face 40 (30 certificates each).
+    # Cap 0.3 x 100 = 30: the first whole pledge reaches the cap, the second
+    # is never made even though the shortfall is not covered.
+    config = cert_scenario(
+        [("F1", "F2", 100, 1), ("F3", "F1", 40, 2), ("F4", "F1", 40, 2)],
+        clearinghouse={"max_issuance_per_member": "0.3"},
+    )
+    result = run_scenario(config)
+    assert len(events_of(result, "CertificatePledgeCreated")) == 1
+    assert result.ledger.certificates_issued_total == D(30)
+
+
+def test_cap_overshoot_bounded_by_one_face() -> None:
+    # Cap 1.0 x dues = 100 < 150 certificates from the single whole
+    # receivable: the pledge still happens (whole receivables only).
+    config = cert_scenario(
+        [("F1", "F2", 100, 1), ("F3", "F1", 200, 3)],
+        cash={"F3": 200},
+    )
+    result = run_scenario(config)
+    assert result.ledger.certificates_issued_total == D(150)
+    assert not events_of(result, "AgentDefaulted")
+
+
+# -- settlement integration (acceptance criteria 3-4) -------------------------
+
+
+def test_cash_first_then_certificates() -> None:
+    # F1 holds 30 cash and receives 75 certificates: cash is exhausted first.
+    config = cert_scenario(
+        [("F1", "F2", 100, 1), ("F3", "F1", 100, 2)],
+        cash={"F1": 30, "F3": 100},
+    )
+    result = run_scenario(config)
+    cash_index = event_index(result, "CashTransferred", frm="F1", to="F2")
+    cert_index = event_index(result, "CertificatesTransferred", frm="F1", to="F2")
+    assert cash_index < cert_index
+    assert result.events[cash_index]["amount"] == D(30)
+    assert result.events[cert_index]["amount"] == D(70)
+    settled = event_index(result, "PayableSettled", debtor="F1", creditor="F2")
+    assert cert_index < settled
+    assert not events_of(result, "AgentDefaulted")
+
+
+def test_certificates_circulate_through_a_chain() -> None:
+    # F2 spends the certificates received from F1 on its own due a day later.
+    config = cert_scenario(
+        [("F1", "F2", 100, 1), ("F2", "F4", 60, 2), ("F3", "F1", 200, 3)],
+        cash={"F3": 200},
+    )
+    result = run_scenario(config)
+    first = event_index(result, "CertificatesTransferred", frm="F1", to="F2")
+    second = event_index(result, "CertificatesTransferred", frm="F2", to="F4")
+    assert first < second
+    assert not events_of(result, "AgentDefaulted")
+
+
+# -- redemption, interest, conservation (acceptance criterion 5) --------------
+
+
+def test_per_diem_interest_charged_at_redemption() -> None:
+    # 15000 certificates outstanding for 2 days at 6%/360:
+    # int(15000 * 0.06 / 360 * 2) = 5.
+    config = cert_scenario(
+        [("F1", "F2", 15000, 1), ("F3", "F1", 20000, 3)],
+        cash={"F3": 20000},
+    )
+    result = run_scenario(config)
+    interest = events_of(result, "CertificateInterestCharged")
+    assert len(interest) == 1
+    assert interest[0]["amount"] == D(5)
+    assert interest[0]["days_outstanding"] == 2
+    # Excess returned: proceeds 20000 - (15000 issued + 5 interest - 0 burned).
+    excess = events_of(result, "CertificateExcessReturned")[0]
+    assert excess["amount"] == D(4995)
+    assert result.ledger.cert_interest_margin == D(5)
+    assert result.ledger.cash["CH1"] == D(5)  # the margin stays as CH cash
+
+
+def test_per_diem_interest_helper_math() -> None:
+    config = CleanClearingConfig(mode="certificates", cert_rate=D("0.06"))
+    assert per_diem_interest(config, D(15000), 2) == D(5)
+    assert per_diem_interest(config, D(150), 2) == ZERO  # truncates to zero
+    assert per_diem_interest(config, D(15000), 0) == ZERO
+
+
+def test_burn_member_holdings_before_redemption_pool() -> None:
+    # F1 keeps 50 of its 150 certificates: they are burned first, the pool
+    # covers the 100 still circulating, the true excess returns to F1.
+    config = cert_scenario(
+        [("F1", "F2", 100, 1), ("F3", "F1", 200, 3)],
+        cash={"F3": 200},
+    )
+    result = run_scenario(config)
+    burn = event_index(result, "CertificatesRetired", agent="F1", reason="redemption_burn")
+    assert result.events[burn]["amount"] == D(50)
+    excess = event_index(result, "CertificateExcessReturned", member="F1")
+    assert result.events[excess]["amount"] == D(100)  # 200 - (150 + 0 - 50)
+    assert burn < excess
+    window = event_index(result, "CertificateRedemptionWindow", holder="F2")
+    assert excess < window
+    assert result.events[window]["amount"] == D(100)
+    assert result.ledger.certificates_issued_total == D(150)
+    assert result.ledger.certificates_retired_total == D(150)
+    assert sum(result.ledger.certificates.values(), ZERO) == ZERO
+
+
+def test_redemption_window_deterministic_holder_order() -> None:
+    config = cert_scenario(
+        [("F1", "F2", 100, 1), ("F2", "F4", 60, 2), ("F3", "F1", 200, 3)],
+        cash={"F3": 200},
+    )
+    result = run_scenario(config)
+    window = events_of(result, "CertificateRedemptionWindow")
+    assert [(event["holder"], event["amount"]) for event in window] == [("F2", D(40)), ("F4", D(60))]
+    assert result.ledger.cash["F2"] == D(40)
+    assert result.ledger.cash["F4"] == D(60)
+
+
+def test_conservation_invariant_enforced() -> None:
+    config = cert_scenario(
+        [("F1", "F2", 100, 1), ("F3", "F1", 200, 3)],
+        cash={"F3": 200},
+    )
+    result = run_scenario(config)
+    ledger = result.ledger
+    ledger.check_invariants()
+    assert sum(ledger.certificates.values(), ZERO) == ledger.certificates_issued_total - ledger.certificates_retired_total
+    ledger.certificates["F2"] += D(1)
+    with pytest.raises(InvariantViolation, match="certificate conservation"):
+        ledger.check_invariants()
+    ledger.certificates["F2"] -= D(2)
+    with pytest.raises(InvariantViolation, match="negative certificates"):
+        ledger.check_invariants()
+
+
+# -- recourse and the loss waterfall (acceptance criterion 6) ------------------
+
+
+def test_collateral_default_creates_next_day_recourse() -> None:
+    # F3 (collateral debtor) has no cash and defaults on the pledged
+    # receivable; the deficiency becomes a member->CH1 payable due next day.
+    config = cert_scenario(
+        [("F1", "F2", 150, 1), ("F3", "F1", 200, 3)],
+    )
+    result = run_scenario(config)
+    recourse = events_of(result, "CertificateRecourseCreated")
+    assert len(recourse) == 1
+    assert recourse[0]["member"] == "F1"
+    assert recourse[0]["deficiency"] == D(150)
+    assert recourse[0]["recovered"] == ZERO
+    assert recourse[0]["day"] == 3
+    payable = next(p for p in result.ledger.payables if p.id == recourse[0]["payable_id"])
+    assert payable.debtor == "F1"
+    assert payable.creditor == "CH1"
+    assert payable.due_day == 4
+    assert payable.id in result.ledger.certificate_recourse_ids
+    created = next(
+        event for event in result.events if event["kind"] == "PayableCreated" and event.get("contract_id") == payable.id
+    )
+    assert created["reason"] == "certificate_recourse"
+
+
+def test_member_default_on_recourse_triggers_holder_haircut() -> None:
+    # F1 spent all 150 certificates and cannot pay the recourse: zero margin,
+    # so the full 150 loss is a pro-rata haircut on the only holder F2.
+    config = cert_scenario(
+        [("F1", "F2", 150, 1), ("F3", "F1", 200, 3)],
+    )
+    result = run_scenario(config)
+    haircut = events_of(result, "CertificateHaircutApplied")
+    assert len(haircut) == 1
+    assert haircut[0]["member"] == "F1"
+    assert haircut[0]["loss"] == D(150)
+    assert haircut[0]["absorbed_by_margin"] == ZERO
+    assert haircut[0]["haircut_total"] == D(150)
+    assert haircut[0]["details"] == [{"holder": "F2", "amount": D(150)}]
+    ledger = result.ledger
+    assert ledger.certificates["F2"] == ZERO
+    assert ledger.certificates_retired_total == D(150)
+    ledger.check_invariants()
+    assert "F1" in ledger.defaulted_agent_ids and "F3" in ledger.defaulted_agent_ids
+
+
+def test_waterfall_absorbs_margin_before_haircut() -> None:
+    ledger = Ledger()
+    ledger.register_agent("CH1", "clearinghouse", "Clearinghouse")
+    ledger.register_agent("F2", "firm", "Firm 2")
+    ledger.register_agent("F4", "firm", "Firm 4")
+    ledger.certificates["F2"] = D(60)
+    ledger.certificates["F4"] = D(40)
+    ledger.certificates_issued_total = D(100)
+    ledger.cert_interest_margin = D(5)
+
+    apply_certificate_writedown(ledger, "F1", D(25), trigger="CP_0")
+
+    assert ledger.cert_interest_margin == ZERO  # equity absorbed first
+    assert ledger.certificates["F2"] == D(48)  # 20 * 60/100 = 12 haircut
+    assert ledger.certificates["F4"] == D(32)  # 20 * 40/100 = 8 haircut
+    assert ledger.certificates_retired_total == D(20)
+    ledger.check_invariants()
+    event = ledger.journal.as_dicts()[-1]
+    assert event["kind"] == "CertificateHaircutApplied"
+    assert event["absorbed_by_margin"] == D(5)
+    assert event["haircut_total"] == D(20)
+    assert event["uncovered"] == ZERO
+
+
+def test_waterfall_fully_absorbed_by_margin_leaves_holders_whole() -> None:
+    ledger = Ledger()
+    ledger.register_agent("F2", "firm", "Firm 2")
+    ledger.certificates["F2"] = D(100)
+    ledger.certificates_issued_total = D(100)
+    ledger.cert_interest_margin = D(30)
+
+    apply_certificate_writedown(ledger, "F1", D(10), trigger="CP_0")
+
+    assert ledger.cert_interest_margin == D(20)
+    assert ledger.certificates["F2"] == D(100)
+    assert ledger.certificates_retired_total == ZERO
+    ledger.check_invariants()
+
+
+# -- cross-phase synchronization (checklist item 9) ----------------------------
+
+
+def test_recovery_counts_member_certificates_once() -> None:
+    # F1 pays 100 of its 150 certificates day 1 and keeps 50; on day 2 it
+    # defaults on a delivery obligation (which cannot consume certificates):
+    # the residual 50 certificates join the pro-rata recovery pool exactly
+    # once, transferred to the open payable claimant F2.
+    config = cert_scenario(
+        [("F1", "F2", 100, 1), ("F1", "F2", 30, 5), ("F3", "F1", 200, 3)],
+        cash={"F3": 200},
+    )
+    config.initial_actions.append(
+        {
+            "create_delivery_obligation": {
+                "from": "F1",
+                "to": "F4",
+                "sku": "widgets",
+                "quantity": 5,
+                "unit_price": 1,
+                "due_day": 2,
+            }
+        }
+    )
+    result = run_scenario(config)
+    assert event_index(result, "AgentDefaulted", agent="F1") >= 0
+    recovery = events_of(result, "ProRataRecovery")[0]
+    assert recovery["agent"] == "F1"
+    assert recovery["total_liquid"] == D(50)  # exactly the residual certificates
+    recovery_transfer = event_index(result, "CertificatesTransferred", frm="F1", to="F2", amount=D(50))
+    assert recovery_transfer > event_index(result, "AgentDefaulted", agent="F1")
+    assert recovery["details"] == [{"creditor": "F2", "claim": D(30), "recovery": D(50)}]
+    # F2 held 100 (settlement) + 50 (recovery) certificates; once the pledged
+    # collateral matured to CH1, the redemption window converted all 150 to cash.
+    assert result.ledger.certificates["F2"] == ZERO
+    assert result.ledger.cash["F2"] == D(150)
+    result.ledger.check_invariants()
+
+
+# -- checkpoint / restore (fail-fast rollback safety) --------------------------
+
+
+def test_checkpoint_restores_all_certificate_state() -> None:
+    ledger = Ledger()
+    ledger.certificates["F1"] = D(100)
+    ledger.certificates_issued_total = D(120)
+    ledger.certificates_retired_total = D(20)
+    ledger.cert_interest_margin = D(3)
+    pledge = CertificatePledge(
+        id="CP_0",
+        member="F1",
+        payable_id="PAY_0",
+        pledged_face=D(160),
+        certificates_issued=D(120),
+        issuance_day=1,
+        proceeds=D(40),
+    )
+    ledger.certificate_pledges.append(pledge)
+    ledger.certificate_recourse_ids.add("PAY_r")
+
+    checkpoint = ledger.checkpoint()
+
+    ledger.certificates["F1"] -= D(60)
+    ledger.certificates["F2"] += D(60)
+    ledger.certificates_issued_total += D(7)
+    ledger.certificates_retired_total += D(7)
+    ledger.cert_interest_margin += D(9)
+    pledge.proceeds += D(99)
+    pledge.settlement_day = 4
+    pledge.closed = True
+    ledger.certificate_pledges.append(
+        CertificatePledge(id="CP_1", member="F2", payable_id="PAY_1", pledged_face=D(10), certificates_issued=D(7), issuance_day=2)
+    )
+    ledger.certificate_recourse_ids.add("PAY_r2")
+
+    ledger.restore(checkpoint)
+
+    assert ledger.certificates["F1"] == D(100)
+    assert ledger.certificates["F2"] == ZERO
+    assert ledger.certificates_issued_total == D(120)
+    assert ledger.certificates_retired_total == D(20)
+    assert ledger.cert_interest_margin == D(3)
+    assert len(ledger.certificate_pledges) == 1
+    restored = ledger.certificate_pledges[0]
+    assert restored.proceeds == D(40)
+    assert restored.settlement_day is None
+    assert restored.closed is False
+    assert ledger.certificate_recourse_ids == {"PAY_r"}
+
+
+def test_fail_fast_rolls_back_certificate_state() -> None:
+    # Day 2: the pledged collateral debtor pays 150 of 200 and fails; the
+    # fail-fast rollback must restore the pledge proceeds and CH cash.
+    config = cert_scenario(
+        [("F1", "F2", 100, 1), ("F3", "F1", 200, 2)],
+        cash={"F3": 150},
+        default_handling="fail-fast",
+    )
+    runtime = prepare_scenario(config)
+    with pytest.raises(DefaultError):
+        run_until_stable(runtime, max_days=8, quiet_days=2)
+    ledger = runtime.ledger
+    pledge = ledger.certificate_pledges[0]
+    assert pledge.proceeds == ZERO
+    assert pledge.settlement_day is None
+    assert ledger.cash["CH1"] == ZERO
+    assert ledger.cash["F3"] == D(150)
+    assert ledger.certificates["F2"] == D(100)  # day-1 settlement stands
+    ledger.check_invariants()
+
+
+# -- pledged collateral fencing -------------------------------------------------
+
+
+def test_pledged_receivable_excluded_from_netting_and_reassignment() -> None:
+    ledger = Ledger()
+    ledger.day = 1
+    pledged = make_payable("PAY_pledged", "F2", "F1", 100, due_day=1, pledged_to="CH1")
+    plain = make_payable("PAY_plain", "F2", "F1", 100, due_day=1)
+    ledger.payables.extend([pledged, plain])
+
+    from bilancio_v2.plugins.clearing import collect_due_payables
+
+    assert collect_due_payables(ledger) == [plain]
+
+    from bilancio_v2.plugins.settlement import reassign_receivables
+
+    reassign_receivables(ledger, "F1", {})
+    assert plain.settled is True
+    assert pledged.settled is False  # stays alive, routed to the clearinghouse
+
+
+class TestReviewFixes:
+    """Regression tests for the PR #172 adversarial-review findings."""
+
+    def test_reassigned_to_clearinghouse_claims_do_not_roll_over(self):
+        """Review finding 2: a claim whose creditor is CH1 (e.g. reassigned
+        after a collateral default) must not enter the rollover loop, which
+        would bounce the recovery back to the payer forever."""
+        # F1 owes F2 day 1; F2 has no cash but a day-3 receivable on F3 to
+        # pledge. F3 (collateral debtor) has nothing and will default, F3's
+        # own receivable on F4 reassigns to CH1. F4 then pays CH1 on day 4.
+        config = cert_scenario(
+            [
+                ("F2", "F1", 60, 1),
+                ("F3", "F2", 100, 3),
+                ("F4", "F3", 100, 4),
+            ],
+            cash={"F1": 5, "F4": 100},
+            rollover=True,
+            max_days=8,
+        )
+        result = run_scenario(config)
+        rolled = [
+            event
+            for event in result.events
+            if event["kind"] in ("PayableRolledOver", "RolloverPartial")
+            and event.get("creditor") == "CH1"
+        ]
+        assert rolled == [], f"claims held by CH1 must not roll over: {rolled}"
+
+    def test_certificate_paid_face_returns_certificates_on_rollover(self):
+        """Review finding 3: rollover re-lends what was repaid — face settled
+        in certificates must return as certificates, not silently vanish."""
+        # F1 owes F2 80 on day 1, holds zero cash but pledges a day-3
+        # receivable on F3 (face 100, haircut 0.25 -> 75 certificates) plus 5
+        # cash to cover the due. F3 is funded, so the collateral performs.
+        config = cert_scenario(
+            [
+                ("F1", "F2", 80, 1),
+                ("F3", "F1", 100, 3),
+            ],
+            cash={"F1": 5, "F3": 100},
+            rollover=True,
+            max_days=8,
+        )
+        result = run_scenario(config)
+        transfers = events_of(result, "CertificatesTransferred")
+        # The settlement leg pays F2 75 in certificates; the rollover
+        # return-flow must hand them back to F1.
+        returned = [
+            event for event in transfers if event.get("frm") == "F2" and event.get("to") == "F1"
+        ]
+        assert returned, f"no certificate return-flow in rollover: {transfers}"
+        # And no manufactured default: F1 settled day 1 in full.
+        assert not [
+            event
+            for event in events_of(result, "AgentDefaulted")
+            if event.get("agent") == "F1" or event.get("agent_id") == "F1"
+        ]
+
+    @pytest.mark.parametrize("arm", ["lender", "dealer"])
+    def test_certificates_mode_rejects_lender_and_dealer(self, arm):
+        """Review finding 8: stage-2 scope — certificates exist for the pure
+        ring only; combined arms are rejected at validation."""
+        data = cert_scenario([("F1", "F2", 50, 1)], cash={"F1": 50}).model_dump()
+        data[arm] = {"enabled": True}
+        config = ScenarioConfig.model_validate(data)
+        with pytest.raises(ConfigurationError, match="cannot be combined"):
+            build_clearing_config(config)
+
+    def test_certificates_mode_rejects_banking(self):
+        """Banking arrives via prepare_scenario's banking_config, so the gate
+        lives in the engine."""
+        from bilancio_v2.subsystem_config import CleanBankingConfig
+
+        config = cert_scenario([("F1", "F2", 50, 1)], cash={"F1": 50})
+        with pytest.raises(ConfigurationError, match="cannot be combined"):
+            prepare_scenario(config, banking_config=CleanBankingConfig())
+
+    def test_finalize_resolves_open_recourse(self):
+        """Review finding 6: a recourse payable created on the final day must
+        not vanish — finalize burns the member's certificates at par and
+        writes down the remainder."""
+        ledger = Ledger()
+        ledger.register_agent("CH1", "clearinghouse", "Clearinghouse")
+        ledger.register_agent("F1", "firm", "Firm 1")
+        ledger.register_agent("F2", "firm", "Firm 2")
+        ledger.clearing_config = CleanClearingConfig(
+            mode="certificates",
+            cert_haircut=Decimal("0.25"),
+            cert_rate=Decimal("0.06"),
+            max_issuance_per_member=Decimal("1.0"),
+            cert_max_tenor=None,
+            mandatory_acceptance=True,
+        )
+        ledger.issue_certificates("F1", D(30), pledge_id="CP_test")
+        ledger.transfer_certificates("F1", "F2", D(20))  # 20 circulated away
+        recourse = ledger.create_payable(
+            payable_id="PAY_recourse_t",
+            debtor="F1",
+            creditor="CH1",
+            amount=D(30),
+            due_day=9,
+            maturity_distance=1,
+            reason="certificate_recourse",
+        )
+        ledger.certificate_recourse_ids.add("PAY_recourse_t")
+
+        from bilancio_v2.plugins.certificates import finalize_certificates
+
+        finalize_certificates(ledger, final_day=8)
+
+        assert recourse.settled
+        # F1's remaining 10 burned at par; 20 written down via holder haircut.
+        retired = events_of_ledger(ledger, "CertificatesRetired")
+        assert any(event.get("reason") == "recourse_finalize_burn" for event in retired)
+        haircuts = events_of_ledger(ledger, "CertificateHaircutApplied")
+        assert len(haircuts) == 1
+        assert haircuts[0]["loss"] == D(20)
+        ledger.check_invariants()
+
+    def test_dealer_ticket_fence_skips_pledged_and_recourse(self):
+        """Review finding 1: pledged collateral and recourse claims never
+        become tradeable dealer tickets (defense in depth behind the gate)."""
+        from bilancio_v2.plugins.dealer import convert_payables_to_tickets
+
+        ledger = Ledger()
+        for agent_id in ("F1", "F2", "CH1"):
+            ledger.register_agent(agent_id, "clearinghouse" if agent_id == "CH1" else "firm", agent_id)
+        ledger.day = 1
+        plain = ledger.create_payable(
+            payable_id="PAY_plain", debtor="F1", creditor="F2", amount=D(50), due_day=3, maturity_distance=2
+        )
+        pledged = ledger.create_payable(
+            payable_id="PAY_pledged", debtor="F1", creditor="F2", amount=D(50), due_day=3, maturity_distance=2
+        )
+        pledged.pledged_to = "CH1"
+        recourse = ledger.create_payable(
+            payable_id="PAY_recourse_x", debtor="F1", creditor="CH1", amount=D(20), due_day=3, maturity_distance=2
+        )
+        ledger.certificate_recourse_ids.add(recourse.id)
+
+        class FakeSubsystem:
+            payable_to_ticket: dict = {}
+
+            def __init__(self):
+                self.added = []
+
+        captured: list[str] = []
+
+        import bilancio_v2.plugins.dealer as dealer_mod
+
+        original = dealer_mod.add_ticket_for_payable
+        try:
+            dealer_mod.add_ticket_for_payable = (
+                lambda ledger, dealer_config, subsystem, payable: captured.append(payable.id)
+            )
+            convert_payables_to_tickets(ledger, dealer_config=None, subsystem=FakeSubsystem())
+        finally:
+            dealer_mod.add_ticket_for_payable = original
+
+        assert captured == [plain.id]
+
+
+def events_of_ledger(ledger: Ledger, kind: str) -> list[dict]:
+    return [event for event in ledger.journal.as_dicts() if event["kind"] == kind]
+
+```
+
+---
+
 ### 🧪 tests/v2/test_clearing.py
 
 ```python
@@ -243512,6 +245394,7 @@ SCENARIO_DIR = Path(__file__).resolve().parents[2] / "examples" / "scenarios"
 # Full-run parity against goldens (see test_golden.py for the comparison).
 SUPPORTED = [
     "clearing_ring",
+    "clearinghouse_certificates",
     "default_handling_demo",
     "firm_delivery",
     "interbank_netting",
@@ -243529,8 +245412,11 @@ SUPPORTED = [
 # Failure parity: fail-fast shortfalls in liquidity-stressed rings whose
 # dealer config the generator drops. Error messages pinned while the
 # clean-core engine raised the identical errors.
+# kalecki_with_dealer is a generator config compiled at load time; its pin
+# was re-captured (251 -> 252) when the ring compiler gained integer-face
+# quantization (Plan 059 follow-up) — generation change, not an engine change.
 FAIL_IDENTICALLY = {
-    "kalecki_with_dealer": "Insufficient funds to settle payable PAY_9: 251 still owed",
+    "kalecki_with_dealer": "Insufficient funds to settle payable PAY_9: 252 still owed",
     "simple_dealer": "Insufficient funds to settle payable PAY_5: 144 still owed",
     "simple_dealer_demo_n_3_kappa_0_5_c_1_mu_0": ("Insufficient funds to settle payable PAY_5: 144 still owed"),
 }
@@ -244009,4 +245895,4 @@ def test_expel_default_recovers_pro_rata_and_writes_off() -> None:
 
 Generated from: /home/runner/work/bilancio/bilancio
 Total source files: 235
-Total test files: 288
+Total test files: 291
