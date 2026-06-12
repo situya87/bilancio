@@ -70,7 +70,7 @@ def dues_for_day(events: Iterable[Event], t: int) -> list[dict[str, Any]]:
                     "creditor": e.get("creditor") or e.get("to"),
                     "amount": Decimal(e.get("amount", 0)),
                     "due_day": int(e.get("due_day")),  # type: ignore[arg-type]
-                    "pid": e.get("payable_id") or e.get("pid"),
+                    "pid": e.get("payable_id") or e.get("pid") or e.get("contract_id"),
                     "alias": e.get("alias"),
                 }
             )
@@ -227,7 +227,7 @@ def netting_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal]:
             continue
         gross += Decimal(e.get("amount", 0))
         due = int(e.get("due_day", -1))
-        pid = e.get("payable_id") or e.get("pid")
+        pid = e.get("payable_id") or e.get("pid") or e.get("contract_id")
         if pid:
             id_to_due[str(pid)] = due
         if e.get("alias"):

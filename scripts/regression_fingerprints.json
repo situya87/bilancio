@@ -2,19 +2,19 @@
   "small": {
     "default_ratio": 0.375,
     "defaults_count": 3,
-    "total_loss_ratio": 0.12421580928481807,
+    "total_loss_ratio": 0.125,
     "max_day": 5
   },
   "medium": {
     "default_ratio": 0.45,
     "defaults_count": 9,
-    "total_loss_ratio": 0.48592964824120605,
+    "total_loss_ratio": 0.4855,
     "max_day": 13
   },
   "stress": {
     "default_ratio": 0.45,
     "defaults_count": 9,
-    "total_loss_ratio": 0.6824120603015076,
+    "total_loss_ratio": 0.678,
     "max_day": 4
   }
 }

@@ -36,8 +36,11 @@ SUPPORTED = [
 # Failure parity: fail-fast shortfalls in liquidity-stressed rings whose
 # dealer config the generator drops. Error messages pinned while the
 # clean-core engine raised the identical errors.
+# kalecki_with_dealer is a generator config compiled at load time; its pin
+# was re-captured (251 -> 252) when the ring compiler gained integer-face
+# quantization (Plan 059 follow-up) — generation change, not an engine change.
 FAIL_IDENTICALLY = {
-    "kalecki_with_dealer": "Insufficient funds to settle payable PAY_9: 251 still owed",
+    "kalecki_with_dealer": "Insufficient funds to settle payable PAY_9: 252 still owed",
     "simple_dealer": "Insufficient funds to settle payable PAY_5: 144 still owed",
     "simple_dealer_demo_n_3_kappa_0_5_c_1_mu_0": ("Insufficient funds to settle payable PAY_5: 144 still owed"),
 }
