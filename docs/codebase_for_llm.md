@@ -1,6 +1,6 @@
 # Bilancio Codebase Documentation
 
-Generated: 2026-06-11 03:50:47 UTC | Branch: main | Commit: 010e883e
+Generated: 2026-06-12 00:05:49 UTC | Branch: main | Commit: 7e663f1f
 
 This document contains the complete codebase structure and content for LLM ingestion.
 
@@ -2427,6 +2427,9 @@ This document contains the complete codebase structure and content for LLM inges
 │   │   ├── 050_adaptive_decision_profiles.md
 │   │   ├── 052_integration_discipline_hardening_plan.md
 │   │   ├── 058_benchmark_hygiene_fixes.md
+│   │   ├── 059_clearinghouse_netting.md
+│   │   ├── 060_clearinghouse_certificates.md
+│   │   ├── 061_clearinghouse_ccp_novation.md
 │   │   ├── banks_dealers_integration.md
 │   │   └── deploy_cloud_metrics.md
 │   ├── prompts
@@ -2515,6 +2518,7 @@ This document contains the complete codebase structure and content for LLM inges
 │   │   ├── kalecki_ring_baseline.yaml
 │   │   └── ring_sweep_config.yaml
 │   └── scenarios
+│       ├── clearing_ring.yaml
 │       ├── default_handling_demo.yaml
 │       ├── firm_delivery.yaml
 │       ├── interbank_netting.yaml
@@ -32118,6 +32122,7 @@ This document contains the complete codebase structure and content for LLM inges
 │       │   ├── __init__.py
 │       │   ├── banking.py
 │       │   ├── base.py
+│       │   ├── clearing.py
 │       │   ├── dealer.py
 │       │   ├── interbank.py
 │       │   ├── lending.py
@@ -32159,6 +32164,7 @@ This document contains the complete codebase structure and content for LLM inges
     │   ├── test_mechanism_activity.py
     │   ├── test_metrics.py
     │   ├── test_metrics_computer.py
+    │   ├── test_netting_metrics.py
     │   ├── test_network.py
     │   ├── test_notebook_generator.py
     │   ├── test_phase6_analysis.py
@@ -32442,6 +32448,7 @@ This document contains the complete codebase structure and content for LLM inges
     └── v2
         ├── __init__.py
         ├── golden
+        │   ├── clearing_ring.json
         │   ├── default_handling_demo.json
         │   ├── firm_delivery.json
         │   ├── interbank_netting.json
@@ -32474,6 +32481,8 @@ This document contains the complete codebase structure and content for LLM inges
         ├── golden_cases.py
         ├── golden_io.py
         ├── test_banking_parity.py
+        ├── test_clearing.py
+        ├── test_clearing_integration.py
         ├── test_dealer_parity.py
         ├── test_golden.py
         ├── test_ledger.py
@@ -32484,7 +32493,7 @@ This document contains the complete codebase structure and content for LLM inges
         ├── test_rollover_parity.py
         └── test_settlement.py
 
-6901 directories, 25573 files
+6901 directories, 25582 files
 
 ```
 
@@ -39317,6 +39326,37 @@ Complete git history from oldest to newest:
   * style: ruff format _sweep_balanced.py
   Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
   * test: tolerate console line-wrapping in treynor output assertion
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  ---------
+  Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
+
+- **2db878cc** (2026-06-11) by github-actions[bot]
+  chore(docs): update codebase_for_llm.md
+
+- **7e663f1f** (2026-06-12) by situya87
+  feat: clearinghouse netting phase for the Kalecki ring (Plan 059, + plans 060/061) (#171)
+  * plan: 059-061 clearinghouse suite — netting, loan certificates, CCP novation
+  Three-stage clearinghouse program for the no-bank/no-dealer Kalecki ring:
+  059 multilateral netting phase, 060 clearinghouse loan certificates,
+  061 CCP via novation with default fund + VMGH. All open design
+  questions resolved (netted=cleared delta accounting, mandatory
+  certificate acceptance, exclusive modes, accept-and-report kappa drain).
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * feat(clearing): multilateral netting clearinghouse for the Kalecki ring (Plan 059)
+  New ClearingPhase plugin nets due-today payables (bilateral pass +
+  deterministic cycle cancellation) before settlement, extinguishing
+  offsetting face without cash. Net-settle gross-roll rollover semantics,
+  netting-aware phi/delta (netted = cleared), netting_efficiency and
+  gross_face_due metrics through the ring sweep pipeline, --clearing CLI
+  flag, legacy-engine guard, golden-pinned example scenario. Off by
+  default; existing goldens byte-identical.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * fix(clearing): review fixes — rollover event classification, residue allocation, serialization
+  RolloverPartial vs PayableRolledOver now compares against cash_return
+  (not gross face) so fully-returned partially-netted rollovers are not
+  misclassified; non-integer netting residue spreads across payables
+  instead of requiring a single host; netting_efficiency emitted as float;
+  ClearingExecuted only logged when face was actually extinguished.
   Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
   ---------
   Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
@@ -47064,21 +47104,40 @@ def size_and_bunching(
     return S_t, sd / m
 
 
-def phi_delta(
-    events: Iterable[Event], dues: Iterable[dict[str, Any]], t: int
-) -> tuple[Decimal | None, Decimal | None]:
-    """Compute on-time settlement ratio phi_t and delta_t = 1 - phi_t.
-
-    Numerator: settled events with day==t and original due_day==t.
-    Denominator: S_t from dues list.
-    """
-    # Map payable IDs (pid/alias) to due_day for matching
+def _due_id_map(dues: Iterable[dict[str, Any]]) -> dict[str, int]:
+    """Map payable IDs (pid/alias) to due_day for matching."""
     id_to_due: dict[str, int] = {}
     for d in dues:
         if d.get("pid"):
             id_to_due[str(d["pid"])] = int(d.get("due_day", -1))
         if d.get("alias"):
             id_to_due[str(d["alias"])] = int(d.get("due_day", -1))
+    return id_to_due
+
+
+def _match_due_day(e: Event, id_to_due: dict[str, int]) -> int | None:
+    """Resolve an event's payable to its original due_day via pid or alias."""
+    pid = str(e.get("pid") or e.get("contract_id") or "")
+    alias = str(e.get("alias") or "")
+    if pid and pid in id_to_due:
+        return id_to_due[pid]
+    if alias and alias in id_to_due:
+        return id_to_due[alias]
+    return None
+
+
+def phi_delta(
+    events: Iterable[Event], dues: Iterable[dict[str, Any]], t: int
+) -> tuple[Decimal | None, Decimal | None]:
+    """Compute on-time settlement ratio phi_t and delta_t = 1 - phi_t.
+
+    Numerator: settled events with day==t and original due_day==t, plus
+    clearinghouse PayableNetted reductions applied on day t to payables
+    due on day t (netted face counts as cleared).
+    Denominator: S_t from dues list.
+    """
+    dues = list(dues)
+    id_to_due = _due_id_map(dues)
 
     S_t = sum((Decimal(d.get("amount", 0)) for d in dues), start=Decimal("0"))
     if S_t == 0:
@@ -47086,23 +47145,65 @@ def phi_delta(
 
     num = Decimal("0")
     for e in events:
-        if e.get("kind") != "PayableSettled":
+        kind = e.get("kind")
+        if kind not in ("PayableSettled", "PayableNetted"):
             continue
         if int(e.get("day", -1)) != int(t):
             continue
-        # Match either by pid or alias if present
-        pid = str(e.get("pid") or e.get("contract_id") or "")
-        alias = str(e.get("alias") or "")
-        due = None
-        if pid and pid in id_to_due:
-            due = id_to_due[pid]
-        elif alias and alias in id_to_due:
-            due = id_to_due[alias]
-        if due == int(t):
+        if _match_due_day(e, id_to_due) != int(t):
+            continue
+        if kind == "PayableNetted":
+            num += Decimal(e.get("netted_amount", 0))
+        else:
             num += Decimal(e.get("amount", 0))
 
     phi = num / S_t
     return phi, (Decimal("1") - phi)
+
+
+def netted_for_day(events: Iterable[Event], dues: Iterable[dict[str, Any]], t: int) -> Decimal:
+    """Sum day-t PayableNetted reductions applied to payables due on day t."""
+    id_to_due = _due_id_map(dues)
+    total = Decimal("0")
+    for e in events:
+        if e.get("kind") != "PayableNetted":
+            continue
+        if int(e.get("day", -1)) != int(t):
+            continue
+        if _match_due_day(e, id_to_due) != int(t):
+            continue
+        total += Decimal(e.get("netted_amount", 0))
+    return total
+
+
+def netting_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal]:
+    """Return (gross_face_due, face_extinguished_by_netting) for a run.
+
+    gross_face_due sums all PayableCreated face; face_extinguished_by_netting
+    sums PayableNetted reductions applied on the payable's due day.
+    """
+    events_list = list(events)
+    gross = Decimal("0")
+    id_to_due: dict[str, int] = {}
+    for e in events_list:
+        if e.get("kind") != "PayableCreated":
+            continue
+        gross += Decimal(e.get("amount", 0))
+        due = int(e.get("due_day", -1))
+        pid = e.get("payable_id") or e.get("pid")
+        if pid:
+            id_to_due[str(pid)] = due
+        if e.get("alias"):
+            id_to_due[str(e["alias"])] = due
+
+    netted = Decimal("0")
+    for e in events_list:
+        if e.get("kind") != "PayableNetted":
+            continue
+        due = _match_due_day(e, id_to_due)
+        if due is not None and due == int(e.get("day", -1)):
+            netted += Decimal(e.get("netted_amount", 0))
+    return gross, netted
 
 
 def replay_intraday_peak(
@@ -51470,6 +51571,7 @@ from bilancio.analysis.metrics import (
     dues_for_day,
     liquidity_gap,
     net_vectors,
+    netted_for_day,
     phi_delta,
     raw_minimum_liquidity,
     replay_intraday_peak,
@@ -51775,6 +51877,7 @@ def compute_day_metrics(
         Mbar_t = raw_minimum_liquidity(nets)
         S_t, _ = size_and_bunching(dues)
         phi_t, delta_t = phi_delta(events, dues, t)
+        face_netted_t = netted_for_day(events, dues, t)
         Mpeak_t, steps, gross_t = replay_intraday_peak(events, t)
         v_t = velocity(gross_t, Mpeak_t)
         HHIp_t = creditor_hhi_plus(nets)
@@ -51809,6 +51912,7 @@ def compute_day_metrics(
                 "v_t": v_t,
                 "phi_t": phi_t,
                 "delta_t": delta_t,
+                "face_netted_t": face_netted_t,
                 "n_debtors": n_debtors,
                 "n_creditors": n_creditors,
                 "HHIplus_t": HHIp_t,
@@ -51835,6 +51939,7 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
     S_total = Decimal("0")
     phi_weighted = Decimal("0")
     delta_weighted = Decimal("0")
+    face_netted_total = Decimal("0")
     max_G: Decimal | None = None
     alpha_1 = None
     Mpeak_1 = None
@@ -51850,6 +51955,7 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
         phi_t = row.get("phi_t")
         delta_t = row.get("delta_t")
         G_t = row.get("G_t")
+        face_netted_t = row.get("face_netted_t")
 
         if isinstance(S_t, str):
             S_t = _decimal_or_none(S_t)
@@ -51859,6 +51965,10 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
             delta_t = _decimal_or_none(delta_t)
         if isinstance(G_t, str):
             G_t = _decimal_or_none(G_t)
+        if isinstance(face_netted_t, str):
+            face_netted_t = _decimal_or_none(face_netted_t)
+        if face_netted_t is not None:
+            face_netted_total += Decimal(str(face_netted_t))
 
         if S_t is not None:
             S_total += S_t
@@ -51915,6 +52025,9 @@ def summarize_day_metrics(day_metrics: Sequence[dict[str, Any]]) -> dict[str, An
         "HHIplus_1": HHIplus_1,
         "max_day": max_day,
         "S_total": float(S_total) if S_total else 0.0,
+        "gross_face_due": float(S_total) if S_total else 0.0,
+        "face_extinguished_by_netting": float(face_netted_total) if face_netted_total else 0.0,
+        "netting_efficiency": float(face_netted_total / S_total) if S_total else 0.0,
         "convergence_day": convergence_day,
         "convergence_quality": convergence_quality,
     }
@@ -52259,6 +52372,8 @@ def aggregate_runs(
                 "HHIplus_1": summary.get("HHIplus_1"),
                 "n_defaults": n_defaults_val,
                 "cascade_fraction": cascade_fraction_val,
+                "gross_face_due": summary.get("gross_face_due"),
+                "netting_efficiency": summary.get("netting_efficiency"),
                 "time_to_stability": entry.get("time_to_stability")
                 or str(summary.get("max_day", "")),
                 "metrics_csv": metrics_rel,
@@ -52285,6 +52400,8 @@ def aggregate_runs(
         "HHIplus_1",
         "n_defaults",
         "cascade_fraction",
+        "gross_face_due",
+        "netting_efficiency",
         "time_to_stability",
         "metrics_csv",
     ]
@@ -61473,6 +61590,9 @@ def compute_metrics_from_events(events_path: str, dealer_metrics_path: str | Non
         "payable_default_loss": run_level.get("payable_default_loss", 0),
         "total_loss": run_level.get("total_loss", 0),
         "S_total": summary.get("S_total", 0),
+        # Clearinghouse netting metrics (Plan 059)
+        "gross_face_due": to_serializable(summary.get("gross_face_due", 0.0)),
+        "netting_efficiency": to_serializable(summary.get("netting_efficiency")),
         "total_loss_pct": (
             run_level.get("total_loss", 0) / summary["S_total"]
             if summary.get("S_total") and summary["S_total"] > 0
@@ -65056,6 +65176,15 @@ class RatingAgencyScenarioConfig(BaseModel):
     )
 
 
+class ClearinghouseConfig(BaseModel):
+    """Clearinghouse configuration within a scenario (Plan 059)."""
+
+    enabled: bool = Field(default=False, description="Enable the clearinghouse phase")
+    mode: Literal["netting"] = Field(
+        default="netting", description="Clearinghouse mode (stage 1 supports only 'netting')"
+    )
+
+
 class ActionDefConfig(BaseModel):
     """Configuration for a single action an agent kind can perform."""
 
@@ -65134,6 +65263,9 @@ class ScenarioConfig(BaseModel):
     lender: LenderScenarioConfig | None = Field(None, description="Non-bank lender configuration")
     rating_agency: RatingAgencyScenarioConfig | None = Field(
         None, description="Rating agency configuration"
+    )
+    clearinghouse: ClearinghouseConfig | None = Field(
+        None, description="Clearinghouse (multilateral netting) configuration"
     )
     action_specs: list[ActionSpecConfig] | None = Field(
         None, description="Declarative behavioral specs per agent kind (new format)"
@@ -100391,6 +100523,9 @@ class RingRunSummary:
     initial_bank_reserves: float = 0.0
     # Total debt (denominator for loss percentages)
     S_total: float = 0.0
+    # Clearinghouse netting metrics (Plan 059)
+    gross_face_due: float = 0.0
+    netting_efficiency: float | None = None
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -100528,6 +100663,7 @@ class _RingSweepRunnerConfig(BaseModel):
     dealer_config: dict[str, Any] | None = None
     risk_assessment_enabled: bool = True
     risk_assessment_config: dict[str, Any] | None = None
+    clearing_enabled: bool = False
 
 
 class RingSweepConfig(BaseModel):
@@ -100588,6 +100724,7 @@ class RingSweepRunner:
         default_handling: str = "fail-fast",
         dealer_enabled: bool = False,
         dealer_config: dict[str, Any] | None = None,
+        clearing_enabled: bool = False,
         risk_assessment_enabled: bool = True,
         risk_assessment_config: dict[str, Any] | None = None,
         balanced_mode: bool = False,
@@ -100671,6 +100808,7 @@ class RingSweepRunner:
         self.default_handling = default_handling
         self.dealer_enabled = dealer_enabled
         self.dealer_config = dealer_config
+        self.clearing_enabled = clearing_enabled
         self.risk_assessment_enabled = risk_assessment_enabled
         self.risk_assessment_config = risk_assessment_config
         self.balanced_mode = balanced_mode
@@ -100821,8 +100959,11 @@ class RingSweepRunner:
             "L0",
             "default_handling",
             "dealer_enabled",
+            "clearing_enabled",
             "phi_total",
             "delta_total",
+            "gross_face_due",
+            "netting_efficiency",
             "time_to_stability",
             "scenario_yaml",
             "events_jsonl",
@@ -101114,6 +101255,7 @@ class RingSweepRunner:
             "Q_total": str(self.Q_total),
             "default_handling": self.default_handling,
             "dealer_enabled": self.dealer_enabled,
+            "clearing_enabled": self.clearing_enabled,
         }
 
         # Initial "running" status
@@ -101283,6 +101425,9 @@ class RingSweepRunner:
                     "collateral_advance_rate": str(self.lender_collateral_advance_rate),
                 }
 
+        if self.clearing_enabled:
+            scenario["clearinghouse"] = {"enabled": True, "mode": "netting"}
+
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
             scenario_run["default_handling"] = self.default_handling
@@ -101418,6 +101563,13 @@ class RingSweepRunner:
         S_total = float(bundle.summary.get("S_total", 0))
         total_loss_pct = total_loss / S_total if S_total > 0 else None
 
+        # Clearinghouse netting metrics (Plan 059)
+        gross_face_due = float(bundle.summary.get("gross_face_due", 0.0) or 0.0)
+        netting_efficiency_val = bundle.summary.get("netting_efficiency")
+        netting_efficiency = (
+            float(netting_efficiency_val) if netting_efficiency_val is not None else None
+        )
+
         # Read dealer metrics if available (treatment runs with dealer enabled)
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = out_dir / "dealer_metrics.json"
@@ -101436,6 +101588,10 @@ class RingSweepRunner:
             "n_defaults": str(n_defaults),
             "cascade_fraction": str(cascade_fraction_val)
             if cascade_fraction_val is not None
+            else "",
+            "gross_face_due": str(gross_face_due),
+            "netting_efficiency": str(netting_efficiency)
+            if netting_efficiency is not None
             else "",
         }
         self._upsert_registry(
@@ -101484,6 +101640,8 @@ class RingSweepRunner:
             total_loss=total_loss,
             total_loss_pct=total_loss_pct,
             S_total=S_total,
+            gross_face_due=gross_face_due,
+            netting_efficiency=netting_efficiency,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
@@ -101546,6 +101704,7 @@ class RingSweepRunner:
             "Q_total": str(self.Q_total),
             "default_handling": self.default_handling,
             "dealer_enabled": self.dealer_enabled,
+            "clearing_enabled": self.clearing_enabled,
         }
 
         # Initial "running" status (skip for cloud-only mode)
@@ -101746,6 +101905,9 @@ class RingSweepRunner:
         # Apply explicit CLI adaptive flag overrides after preset defaults.
         self._apply_adaptive_flag_overrides(scenario)
 
+        if self.clearing_enabled:
+            scenario["clearinghouse"] = {"enabled": True, "mode": "netting"}
+
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
             scenario_run["default_handling"] = self.default_handling
@@ -101908,6 +102070,12 @@ class RingSweepRunner:
                 total_loss=int(result.metrics.get("total_loss", 0)),
                 total_loss_pct=result.metrics.get("total_loss_pct"),
                 S_total=float(result.metrics.get("S_total", 0)),
+                gross_face_due=float(result.metrics.get("gross_face_due", 0.0) or 0.0),
+                netting_efficiency=(
+                    float(result.metrics["netting_efficiency"])
+                    if result.metrics.get("netting_efficiency") is not None
+                    else None
+                ),
                 nbfi_loan_loss=int(result.metrics.get("nbfi_loan_loss", 0)),
                 nbfi_loans_created=int(result.metrics.get("nbfi_loans_created", 0)),
                 bank_credit_loss=int(result.metrics.get("bank_credit_loss", 0)),
@@ -101951,6 +102119,13 @@ class RingSweepRunner:
         if convergence_quality_val is not None:
             convergence_quality_val = float(convergence_quality_val)
 
+        # Clearinghouse netting metrics (Plan 059)
+        gross_face_due = float(bundle.summary.get("gross_face_due", 0.0) or 0.0)
+        netting_efficiency_val = bundle.summary.get("netting_efficiency")
+        netting_efficiency = (
+            float(netting_efficiency_val) if netting_efficiency_val is not None else None
+        )
+
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = prepared.out_dir / "dealer_metrics.json"
         if dealer_metrics_path.exists():
@@ -101967,6 +102142,10 @@ class RingSweepRunner:
             "n_defaults": str(n_defaults),
             "cascade_fraction": str(cascade_fraction_val)
             if cascade_fraction_val is not None
+            else "",
+            "gross_face_due": str(gross_face_due),
+            "netting_efficiency": str(netting_efficiency)
+            if netting_efficiency is not None
             else "",
         }
         self._upsert_registry(
@@ -102020,6 +102199,8 @@ class RingSweepRunner:
                 if float(bundle.summary.get("S_total", 0)) > 0 else None
             ),
             S_total=float(bundle.summary.get("S_total", 0)),
+            gross_face_due=gross_face_due,
+            netting_efficiency=netting_efficiency,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
@@ -118114,6 +118295,11 @@ def _deps() -> Any:
     default="fail-fast",
     help="Default handling mode for runs",
 )
+@click.option(
+    "--clearing/--no-clearing",
+    default=False,
+    help="Enable the clearinghouse multilateral netting phase (v2 engine only)",
+)
 @click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
 @click.option(
     "--perf-preset",
@@ -118162,6 +118348,7 @@ def sweep_ring(
     base_seed: int,
     name_prefix: str,
     default_handling: str,
+    clearing: bool,
     job_id: str | None,
     perf_preset: str | None,
     fast_atomic: bool,
@@ -118201,6 +118388,8 @@ def sweep_ring(
             name_prefix = runner_cfg.name_prefix
         if runner_cfg.default_handling is not None and parameter_uses_default(ctx, "default_handling"):
             default_handling = runner_cfg.default_handling
+        if runner_cfg.clearing_enabled and parameter_uses_default(ctx, "clearing"):
+            clearing = runner_cfg.clearing_enabled
         dealer_enabled = runner_cfg.dealer_enabled
         dealer_config = runner_cfg.dealer_config
 
@@ -118343,6 +118532,7 @@ def sweep_ring(
         default_handling=default_handling,
         dealer_enabled=dealer_enabled,
         dealer_config=dealer_config,
+        clearing_enabled=clearing,
         executor=executor,
         performance=performance,
     )
@@ -121247,6 +121437,35 @@ def format_payable_settled(event: dict[str, Any]) -> tuple[str, list[str], str]:
     return title, lines, "$"
 
 
+@registry.register("PayableNetted")
+def format_payable_netted(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format clearinghouse payable netting events."""
+    netted = event.get("netted_amount", 0)
+    debtor = event.get("debtor", "Unknown")
+    creditor = event.get("creditor", "Unknown")
+    remaining = event.get("remaining_amount", None)
+
+    title = f"[NET] Payable Netted: ${netted:,}"
+    lines = [f"{debtor} → {creditor}"]
+    if remaining is not None:
+        lines.append(f"Remaining: ${remaining:,}")
+
+    return title, lines, "[NET]"
+
+
+@registry.register("ClearingExecuted")
+def format_clearing_executed(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format clearinghouse daily netting summary events."""
+    extinguished = event.get("face_extinguished", 0)
+    gross = event.get("gross_face_due", 0)
+    n_affected = event.get("n_payables_affected", 0)
+
+    title = f"[CLR] Clearinghouse Netting: ${extinguished:,}"
+    lines = [f"Gross face due: ${gross:,}", f"Payables affected: {n_affected}"]
+
+    return title, lines, "[CLR]"
+
+
 @registry.register("CashDeposited")
 def format_cash_deposited(event: dict[str, Any]) -> tuple[str, list[str], str]:
     """Format cash deposit events."""
@@ -122081,7 +122300,12 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from bilancio.config import apply_to_system, load_yaml
-from bilancio.core.errors import DefaultError, SimulationHalt, ValidationError
+from bilancio.core.errors import (
+    ConfigurationError,
+    DefaultError,
+    SimulationHalt,
+    ValidationError,
+)
 from bilancio_v2.balance_invariants import (
     assert_clean_core_invariants as _assert_clean_core_invariants,
 )
@@ -122089,6 +122313,9 @@ from bilancio.engines.simulation import run_day
 from bilancio.engines.system import System
 from bilancio.export.writers import write_balances_csv, write_events_jsonl
 
+from .v2_run import (
+    clearinghouse_enabled as _clearinghouse_enabled,
+)
 from .v2_run import (
     resolve_auto_engine as _resolve_auto_engine_impl,
 )
@@ -122247,6 +122474,9 @@ def run_scenario(
     # Load configuration
     console.print("[dim]Loading scenario...[/dim]")
     config = load_yaml(path)
+
+    if _clearinghouse_enabled(config):
+        raise ConfigurationError("clearinghouse requires the v2 engine")
 
     # Determine effective default-handling strategy (CLI override wins)
     effective_default_handling = default_handling or config.run.default_handling
@@ -124573,6 +124803,12 @@ def run_v2_scenario(
         console.print(f"[yellow]WARNING[/yellow] Maximum days reached ({max_days}) before stability")
 
 
+def clearinghouse_enabled(config: Any) -> bool:
+    """Return True when the scenario enables the clearinghouse (v2-only feature)."""
+    clearinghouse = getattr(config, "clearinghouse", None)
+    return clearinghouse is not None and bool(getattr(clearinghouse, "enabled", False))
+
+
 def resolve_auto_engine(
     path: Path,
     default_handling: str | None,
@@ -124583,6 +124819,12 @@ def resolve_auto_engine(
     reason = clean_core_auto_fallback_reason(path, default_handling)
     if reason is None:
         return "clean-core"
+
+    if clearinghouse_enabled(load_yaml(path)):
+        raise ConfigurationError(
+            "clearinghouse requires the v2 engine "
+            f"(scenario falls back to legacy: {reason})"
+        )
 
     console.print(f"[dim]Engine: legacy (auto fallback: {reason})[/dim]")
     return "legacy"
@@ -131749,6 +131991,275 @@ class TestMetricsComputerInit:
         loader = LocalArtifactLoader(tmp_path)
         computer = MetricsComputer(loader)
         assert computer.loader is not None
+
+```
+
+---
+
+### 🧪 tests/analysis/test_netting_metrics.py
+
+```python
+"""Tests for clearinghouse netting metrics (Plan 059).
+
+Covers phi_delta netting-awareness, the netting_totals helper, and the
+gross/net decomposition emitted by the per-run metrics summary.
+"""
+
+from decimal import Decimal
+
+from bilancio.analysis.metrics import netted_for_day, netting_totals, phi_delta
+from bilancio.analysis.report import (
+    aggregate_runs,
+    compute_day_metrics,
+    summarize_day_metrics,
+)
+
+
+def _ring_dues():
+    return [
+        {"amount": "100", "pid": "p1", "due_day": 1, "debtor": "A", "creditor": "B"},
+        {"amount": "100", "pid": "p2", "due_day": 1, "debtor": "B", "creditor": "C"},
+        {"amount": "100", "pid": "p3", "due_day": 1, "debtor": "C", "creditor": "A"},
+    ]
+
+
+def _netted_event(pid: str, netted: str, day: int = 1, **extra):
+    event = {
+        "kind": "PayableNetted",
+        "day": day,
+        "pid": pid,
+        "netted_amount": netted,
+        "original_amount": "100",
+        "remaining_amount": "0",
+    }
+    event.update(extra)
+    return event
+
+
+class TestPhiDeltaNetting:
+    """phi_delta counts PayableNetted face as cleared."""
+
+    def test_fully_netted_ring_counts_as_settled(self):
+        dues = _ring_dues()
+        events = [
+            _netted_event("p1", "100"),
+            _netted_event("p2", "100"),
+            _netted_event("p3", "100"),
+        ]
+        phi, delta = phi_delta(events, dues, 1)
+        assert phi == Decimal("1")
+        assert delta == Decimal("0")
+
+    def test_partial_netting_plus_cash_settlement(self):
+        dues = _ring_dues()
+        events = [
+            _netted_event("p1", "60", remaining_amount="40"),
+            {"kind": "PayableSettled", "day": 1, "amount": "40", "pid": "p1"},
+            {"kind": "PayableSettled", "day": 1, "amount": "100", "pid": "p2"},
+        ]
+        phi, delta = phi_delta(events, dues, 1)
+        assert phi == Decimal("200") / Decimal("300")
+        assert delta == Decimal("100") / Decimal("300")
+
+    def test_netted_on_other_day_ignored(self):
+        dues = _ring_dues()
+        events = [_netted_event("p1", "100", day=2)]
+        phi, delta = phi_delta(events, dues, 1)
+        assert phi == Decimal("0")
+        assert delta == Decimal("1")
+
+    def test_netted_with_unknown_pid_ignored(self):
+        dues = _ring_dues()
+        events = [_netted_event("p_unknown", "100")]
+        phi, delta = phi_delta(events, dues, 1)
+        assert phi == Decimal("0")
+        assert delta == Decimal("1")
+
+    def test_netted_matches_by_alias(self):
+        dues = [{"amount": "100", "alias": "loan1", "due_day": 1}]
+        events = [
+            {
+                "kind": "PayableNetted",
+                "day": 1,
+                "alias": "loan1",
+                "netted_amount": "100",
+            }
+        ]
+        phi, delta = phi_delta(events, dues, 1)
+        assert phi == Decimal("1")
+        assert delta == Decimal("0")
+
+    def test_backward_compatible_without_netted_events(self):
+        """Zero PayableNetted events => identical phi/delta to pre-change semantics."""
+        dues = _ring_dues()
+        events = [
+            {"kind": "PayableSettled", "day": 1, "amount": "100", "pid": "p1"},
+            {"kind": "PayableSettled", "day": 1, "amount": "100", "pid": "p2"},
+        ]
+        phi, delta = phi_delta(events, dues, 1)
+        assert phi == Decimal("200") / Decimal("300")
+        assert delta == Decimal("100") / Decimal("300")
+
+    def test_netting_is_purely_additive(self):
+        """Adding a matched PayableNetted event raises phi by exactly its amount."""
+        dues = _ring_dues()
+        base_events = [
+            {"kind": "PayableSettled", "day": 1, "amount": "100", "pid": "p1"},
+        ]
+        phi_base, _ = phi_delta(base_events, dues, 1)
+        phi_netted, _ = phi_delta(base_events + [_netted_event("p2", "100")], dues, 1)
+        assert phi_base == Decimal("100") / Decimal("300")
+        assert phi_netted == Decimal("200") / Decimal("300")
+
+
+class TestNettedForDay:
+    def test_sums_matched_due_today_reductions(self):
+        dues = _ring_dues()
+        events = [
+            _netted_event("p1", "60"),
+            _netted_event("p2", "40"),
+            _netted_event("p3", "100", day=2),
+            _netted_event("p_unknown", "100"),
+        ]
+        assert netted_for_day(events, dues, 1) == Decimal("100")
+
+    def test_zero_without_netted_events(self):
+        assert netted_for_day([], _ring_dues(), 1) == Decimal("0")
+
+
+class TestNettingTotals:
+    def test_totals_for_netted_ring(self):
+        events = [
+            {"kind": "PayableCreated", "payable_id": "p1", "amount": "100", "due_day": 1},
+            {"kind": "PayableCreated", "payable_id": "p2", "amount": "100", "due_day": 1},
+            {"kind": "PayableCreated", "payable_id": "p3", "amount": "100", "due_day": 2},
+            _netted_event("p1", "100"),
+            _netted_event("p2", "30", remaining_amount="70"),
+            _netted_event("p3", "100", day=1),  # netted before due day: excluded
+        ]
+        gross, netted = netting_totals(events)
+        assert gross == Decimal("300")
+        assert netted == Decimal("130")
+
+    def test_no_netted_events(self):
+        events = [
+            {"kind": "PayableCreated", "payable_id": "p1", "amount": "100", "due_day": 1},
+        ]
+        assert netting_totals(events) == (Decimal("100"), Decimal("0"))
+
+    def test_empty_events(self):
+        assert netting_totals([]) == (Decimal("0"), Decimal("0"))
+
+
+class TestNettingEfficiencySummary:
+    def test_summary_reports_netting_decomposition(self):
+        day_metrics = [
+            {"day": 1, "S_t": Decimal("300"), "phi_t": Decimal("1"),
+             "delta_t": Decimal("0"), "face_netted_t": Decimal("300")},
+            {"day": 2, "S_t": Decimal("100"), "phi_t": Decimal("0"),
+             "delta_t": Decimal("1"), "face_netted_t": Decimal("0")},
+        ]
+        summary = summarize_day_metrics(day_metrics)
+        assert summary["gross_face_due"] == 400.0
+        assert summary["face_extinguished_by_netting"] == 300.0
+        assert summary["netting_efficiency"] == Decimal("300") / Decimal("400")
+
+    def test_efficiency_zero_when_no_face_due(self):
+        summary = summarize_day_metrics([])
+        assert summary["gross_face_due"] == 0.0
+        assert summary["face_extinguished_by_netting"] == 0.0
+        assert summary["netting_efficiency"] == Decimal("0")
+
+    def test_efficiency_zero_for_legacy_rows_without_netting_column(self):
+        day_metrics = [
+            {"day": 1, "S_t": "100", "phi_t": "1", "delta_t": "0"},
+        ]
+        summary = summarize_day_metrics(day_metrics)
+        assert summary["netting_efficiency"] == Decimal("0")
+        assert summary["gross_face_due"] == 100.0
+
+    def test_string_rows_from_csv(self):
+        day_metrics = [
+            {"day": "1", "S_t": "200", "phi_t": "1", "delta_t": "0",
+             "face_netted_t": "50"},
+        ]
+        summary = summarize_day_metrics(day_metrics)
+        assert summary["face_extinguished_by_netting"] == 50.0
+        assert summary["netting_efficiency"] == Decimal("50") / Decimal("200")
+
+
+class TestComputeDayMetricsNetting:
+    def test_face_netted_t_emitted_per_day(self):
+        events = [
+            {"kind": "PayableCreated", "payable_id": "p1", "amount": Decimal("100"),
+             "due_day": 1, "debtor": "A", "creditor": "B"},
+            {"kind": "PayableCreated", "payable_id": "p2", "amount": Decimal("100"),
+             "due_day": 1, "debtor": "B", "creditor": "A"},
+            {"kind": "PayableNetted", "day": 1, "pid": "p1",
+             "netted_amount": Decimal("100"), "remaining_amount": Decimal("0")},
+            {"kind": "PayableNetted", "day": 1, "pid": "p2",
+             "netted_amount": Decimal("100"), "remaining_amount": Decimal("0")},
+        ]
+        result = compute_day_metrics(events)
+        row = result["day_metrics"][0]
+        assert row["day"] == 1
+        assert row["face_netted_t"] == Decimal("200")
+        assert row["phi_t"] == Decimal("1")
+        assert row["delta_t"] == Decimal("0")
+
+        summary = summarize_day_metrics(result["day_metrics"])
+        assert summary["netting_efficiency"] == Decimal("1")
+        assert summary["gross_face_due"] == 200.0
+        assert summary["delta_total"] == Decimal("0")
+
+    def test_no_netting_events_zero_efficiency(self):
+        events = [
+            {"kind": "PayableCreated", "payable_id": "p1", "amount": Decimal("100"),
+             "due_day": 1, "debtor": "A", "creditor": "B"},
+            {"kind": "PayableSettled", "day": 1, "pid": "p1",
+             "amount": Decimal("100"), "debtor": "A", "creditor": "B"},
+        ]
+        result = compute_day_metrics(events)
+        assert result["day_metrics"][0]["face_netted_t"] == Decimal("0")
+        summary = summarize_day_metrics(result["day_metrics"])
+        assert summary["netting_efficiency"] == Decimal("0")
+        assert summary["phi_total"] == Decimal("1")
+
+
+def test_aggregate_runs_carries_netting_efficiency(tmp_path):
+    registry_dir = tmp_path / "registry"
+    out_dir = tmp_path / "runs" / "grid_net1" / "out"
+    aggregate_dir = tmp_path / "aggregate"
+    registry_dir.mkdir()
+    out_dir.mkdir(parents=True)
+    aggregate_dir.mkdir()
+
+    metrics_csv = out_dir / "metrics.csv"
+    metrics_csv.write_text(
+        "day,S_t,phi_t,delta_t,face_netted_t\n"
+        "1,100,1,0,100\n"
+        "2,100,0.5,0.5,0\n"
+    )
+
+    registry_csv = registry_dir / "experiments.csv"
+    registry_csv.write_text(
+        "run_id,phase,seed,n_agents,kappa,concentration,mu,monotonicity,S1,L0,"
+        "metrics_csv,status,time_to_stability,n_defaults,cascade_fraction\n"
+        "grid_net1,grid,42,5,0.25,1,0,0,200,50,"
+        "../runs/grid_net1/out/metrics.csv,completed,2,0,\n"
+    )
+
+    results_csv = aggregate_dir / "results.csv"
+    rows = aggregate_runs(registry_csv, results_csv)
+
+    assert rows
+    row = rows[0]
+    assert row["netting_efficiency"] == Decimal("0.5")
+    assert row["gross_face_due"] == 200.0
+
+    header = results_csv.read_text().splitlines()[0]
+    assert "netting_efficiency" in header
+    assert "gross_face_due" in header
 
 ```
 
@@ -242284,6 +242795,377 @@ def test_banking_scenarios_self_consistent(
 
 ---
 
+### 🧪 tests/v2/test_clearing.py
+
+```python
+"""Unit tests for the clearinghouse netting phase (Plan 059): gating,
+conservation, and the netting algorithm (cycles, pro-rata allocation,
+determinism)."""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from decimal import Decimal
+
+import pytest
+
+from bilancio.config.models import ClearinghouseConfig, ScenarioConfig
+from bilancio.core.errors import ConfigurationError
+from bilancio_v2 import prepare_scenario, run_scenario
+from bilancio_v2.ledger import ZERO, Ledger, Payable
+from bilancio_v2.plugins.clearing import (
+    allocate_single_edge,
+    cancel_bilateral,
+    cancel_cycles,
+    collect_due_payables,
+    find_cycle,
+)
+from bilancio_v2.scenario_gates import build_clearing_config
+
+D = Decimal
+
+
+def ring_scenario(
+    faces: list[int],
+    *,
+    cash: list[int] | None = None,
+    clearing: bool = True,
+    default_handling: str = "expel-agent",
+    rollover: bool = False,
+    max_days: int = 3,
+) -> ScenarioConfig:
+    n = len(faces)
+    agents = [{"id": "CB", "kind": "central_bank", "name": "CB"}] + [
+        {"id": f"F{i + 1}", "kind": "firm", "name": f"Firm {i + 1}"} for i in range(n)
+    ]
+    initial_actions: list[dict] = []
+    for i, amount in enumerate(cash or []):
+        if amount:
+            initial_actions.append({"mint_cash": {"to": f"F{i + 1}", "amount": amount}})
+    for i, face in enumerate(faces):
+        initial_actions.append(
+            {
+                "create_payable": {
+                    "from": f"F{i + 1}",
+                    "to": f"F{(i + 1) % n + 1}",
+                    "amount": face,
+                    "due_day": 1,
+                }
+            }
+        )
+    data: dict = {
+        "version": 1,
+        "name": "clearing-test-ring",
+        "agents": agents,
+        "initial_actions": initial_actions,
+        "run": {
+            "max_days": max_days,
+            "quiet_days": 10,
+            "default_handling": default_handling,
+            "rollover_enabled": rollover,
+        },
+    }
+    if clearing:
+        data["clearinghouse"] = {"enabled": True, "mode": "netting"}
+    return ScenarioConfig.model_validate(data)
+
+
+def make_payable(payable_id: str, debtor: str, creditor: str, amount: int, *, due_day: int = 1) -> Payable:
+    return Payable(
+        id=payable_id,
+        debtor=debtor,
+        creditor=creditor,
+        amount=D(amount),
+        due_day=due_day,
+        maturity_distance=1,
+    )
+
+
+CLEARING_EVENT_KINDS = {"SubphaseB_Clearing", "PayableNetted", "ClearingExecuted"}
+
+
+# -- gating (acceptance criterion 1) ---------------------------------------
+
+
+def test_absent_block_registers_no_phase_and_emits_no_events() -> None:
+    config = ring_scenario([100] * 5, clearing=False)
+    runtime = prepare_scenario(config)
+    assert [phase.name for phase in runtime.phases] == ["SubphaseB1", "SubphaseB2", "PhaseC"]
+
+    result = run_scenario(config)
+    assert not CLEARING_EVENT_KINDS & {event["kind"] for event in result.events}
+
+
+def test_enabled_false_registers_no_phase() -> None:
+    config = ring_scenario([100] * 5, clearing=False)
+    config = config.model_copy(update={"clearinghouse": ClearinghouseConfig(enabled=False)})
+    assert build_clearing_config(config) is None
+    runtime = prepare_scenario(config)
+    assert [phase.name for phase in runtime.phases] == ["SubphaseB1", "SubphaseB2", "PhaseC"]
+
+
+def test_enabled_registers_phase_immediately_before_settlement() -> None:
+    runtime = prepare_scenario(ring_scenario([100] * 5))
+    names = [phase.name for phase in runtime.phases]
+    assert names == ["SubphaseB1", "SubphaseB_Clearing", "SubphaseB2", "PhaseC"]
+
+
+def test_unknown_mode_raises_configuration_error() -> None:
+    config = ring_scenario([100] * 5, clearing=False)
+    config = config.model_copy(update={"clearinghouse": ClearinghouseConfig.model_construct(enabled=True, mode="ccp")})
+    with pytest.raises(ConfigurationError):
+        build_clearing_config(config)
+
+
+# -- conservation (acceptance criterion 3) ----------------------------------
+
+
+def test_clearing_executed_matches_netted_events_and_preserves_positions() -> None:
+    result = run_scenario(ring_scenario([100, 60, 140], cash=[40, 0, 80]))
+    netted = [event for event in result.events if event["kind"] == "PayableNetted"]
+    executed = [event for event in result.events if event["kind"] == "ClearingExecuted"]
+    assert executed
+
+    for summary in executed:
+        day = summary["day"]
+        day_netted = [event for event in netted if event["day"] == day]
+        assert summary["face_extinguished"] == sum((event["netted_amount"] for event in day_netted), ZERO)
+        assert summary["residual_face"] == summary["gross_face_due"] - summary["face_extinguished"]
+
+        as_debtor: defaultdict[str, Decimal] = defaultdict(lambda: ZERO)
+        as_creditor: defaultdict[str, Decimal] = defaultdict(lambda: ZERO)
+        for event in day_netted:
+            as_debtor[event["debtor"]] += event["netted_amount"]
+            as_creditor[event["creditor"]] += event["netted_amount"]
+        for agent_id in set(as_debtor) | set(as_creditor):
+            assert as_debtor[agent_id] == as_creditor[agent_id]
+
+    result.ledger.check_invariants()
+
+
+# -- algorithm units (acceptance criterion 5) --------------------------------
+
+
+def test_equal_face_ring_fully_nets() -> None:
+    result = run_scenario(ring_scenario([100] * 5))
+    executed = next(event for event in result.events if event["kind"] == "ClearingExecuted")
+    assert executed["gross_face_due"] == D(500)
+    assert executed["face_extinguished"] == D(500)
+    assert executed["residual_face"] == ZERO
+    assert executed["n_fully_netted"] == 5
+    assert all(payable.settled for payable in result.ledger.payables)
+
+
+def test_heterogeneous_residual_is_acyclic_and_net_positions_preserved() -> None:
+    weights = {("A", "B"): D(5), ("B", "C"): D(3), ("C", "A"): D(7), ("A", "C"): D(2)}
+
+    def net_positions(edge_weights: dict[tuple[str, str], Decimal]) -> dict[str, Decimal]:
+        positions: defaultdict[str, Decimal] = defaultdict(lambda: ZERO)
+        for (debtor, creditor), weight in edge_weights.items():
+            positions[debtor] += weight
+            positions[creditor] -= weight
+        return {"A": positions["A"], "B": positions["B"], "C": positions["C"]}
+
+    before = net_positions(weights)
+    bilateral = cancel_bilateral(weights)
+    cyclic = cancel_cycles(weights)
+
+    assert bilateral == {("A", "C"): D(2), ("C", "A"): D(2)}
+    assert cyclic == {("A", "B"): D(3), ("B", "C"): D(3), ("C", "A"): D(3)}
+    assert find_cycle({edge for edge, weight in weights.items() if weight > ZERO}) is None
+    assert net_positions(weights) == before
+    assert all(weight >= ZERO for weight in weights.values())
+
+
+def test_pro_rata_largest_remainder_conserves_edge_total() -> None:
+    payables = [make_payable("PAY_0", "A", "B", 3), make_payable("PAY_1", "A", "B", 7)]
+    allocations = allocate_single_edge(payables, D(5))
+    assert allocations == [(payables[0], D(2)), (payables[1], D(3))]
+    assert sum((reduction for _, reduction in allocations), ZERO) == D(5)
+
+
+def test_pro_rata_ties_break_by_payable_id() -> None:
+    payables = [make_payable(f"PAY_{i}", "A", "B", 1) for i in range(3)]
+    allocations = allocate_single_edge(payables, D(2))
+    assert allocations == [(payables[0], D(1)), (payables[1], D(1))]
+
+
+def test_full_edge_reduction_allocates_full_faces() -> None:
+    payables = [make_payable("PAY_0", "A", "B", 3), make_payable("PAY_1", "A", "B", 7)]
+    allocations = allocate_single_edge(payables, D(10))
+    assert allocations == [(payables[0], D(3)), (payables[1], D(7))]
+
+
+def test_deterministic_netted_sequence_across_runs() -> None:
+    config = ring_scenario([100, 60, 140, 90, 110], cash=[10, 0, 5, 0, 0])
+    first = [event for event in run_scenario(config).events if event["kind"] == "PayableNetted"]
+    second = [event for event in run_scenario(config).events if event["kind"] == "PayableNetted"]
+    assert first == second
+    assert first
+
+
+def test_collect_due_payables_skips_settled_other_days_and_defaulted() -> None:
+    ledger = Ledger()
+    ledger.day = 1
+    ledger.defaulted_agent_ids.add("F9")
+    due = make_payable("PAY_0", "F1", "F2", 10)
+    settled = make_payable("PAY_1", "F2", "F3", 10)
+    settled.settled = True
+    later = make_payable("PAY_2", "F3", "F1", 10, due_day=2)
+    defaulted_debtor = make_payable("PAY_3", "F9", "F1", 10)
+    defaulted_creditor = make_payable("PAY_4", "F1", "F9", 10)
+    ledger.payables.extend([due, settled, later, defaulted_debtor, defaulted_creditor])
+    assert collect_due_payables(ledger) == [due]
+
+```
+
+---
+
+### 🧪 tests/v2/test_clearing_integration.py
+
+```python
+"""Integration tests for clearing + settlement + rollover + default handling
+(Plan 059, acceptance criteria 4, 6, 7)."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+
+from bilancio.core.errors import DefaultError
+from bilancio_v2 import prepare_scenario, run_day, run_scenario
+from bilancio_v2.ledger import ZERO, Ledger
+
+from tests.v2.test_clearing import ring_scenario
+
+D = Decimal
+
+
+def simulation_cash_transfers(events: list[dict]) -> list[dict]:
+    return [event for event in events if event["kind"] == "CashTransferred" and event.get("phase") == "simulation"]
+
+
+def open_face(ledger: Ledger) -> Decimal:
+    return sum((payable.amount for payable in ledger.payables if not payable.settled), ZERO)
+
+
+# -- full netting at kappa ~ 0 (acceptance criterion 4) ----------------------
+
+
+def test_full_netting_clears_balanced_ring_without_cash() -> None:
+    result = run_scenario(ring_scenario([100] * 5, cash=None))
+    kinds = [event["kind"] for event in result.events]
+    assert "ClearingExecuted" in kinds
+    assert "ObligationDefaulted" not in kinds
+    assert "AgentDefaulted" not in kinds
+    assert not simulation_cash_transfers(result.events)
+
+    executed = next(event for event in result.events if event["kind"] == "ClearingExecuted")
+    assert executed["face_extinguished"] == executed["gross_face_due"] == D(500)
+    assert executed["residual_face"] == ZERO
+    assert not result.ledger.defaulted_agent_ids
+
+
+def test_identical_ring_without_clearing_defaults() -> None:
+    result = run_scenario(ring_scenario([100] * 5, cash=None, clearing=False))
+    kinds = [event["kind"] for event in result.events]
+    assert "ObligationDefaulted" in kinds
+    assert "AgentDefaulted" in kinds
+    assert result.ledger.defaulted_agent_ids
+
+
+# -- "net-settle, gross-roll" rollover (acceptance criterion 6) ---------------
+
+
+def test_fully_netted_payables_roll_at_full_face_without_cash() -> None:
+    config = ring_scenario([100] * 5, rollover=True, max_days=3)
+    result = run_scenario(config)
+    ledger = result.ledger
+
+    rolled = [event for event in result.events if event["kind"] == "PayableRolledOver"]
+    # Days 1 and 2 each fully net the ring and gross-roll all five payables.
+    assert len(rolled) == 10
+    assert all(event["amount"] == D(100) for event in rolled)
+    assert all(event["cash_transfer"] is False for event in rolled)
+    assert not simulation_cash_transfers(result.events)
+    assert "ObligationDefaulted" not in {event["kind"] for event in result.events}
+
+    # The open debt stock is stationary at the original gross face.
+    assert open_face(ledger) == D(500)
+    assert not ledger.netted_rollover_queue
+    ledger.check_invariants()
+
+
+def test_partially_netted_payables_roll_at_original_face_with_residual_cash_return() -> None:
+    # Cycle cancellation extinguishes 60 on every leg; residuals (40, 0, 80)
+    # settle in cash and the cash return-flow covers only those residuals.
+    config = ring_scenario([100, 60, 140], cash=[40, 0, 80], rollover=True, max_days=2)
+    result = run_scenario(config)
+    ledger = result.ledger
+
+    rolled_full = [event for event in result.events if event["kind"] == "PayableRolledOver"]
+    rolled_partial = [event for event in result.events if event["kind"] == "RolloverPartial"]
+
+    # Each leg rolls at full original face; the cash return-flow covers only
+    # the cash-settled residual, so a fully returned residual is a complete
+    # (not partial) rollover.
+    assert sorted((event["amount"], event["cash_transfer"]) for event in rolled_full) == [
+        (D(60), False),
+        (D(100), True),
+        (D(140), True),
+    ]
+    assert rolled_partial == []
+
+    # Gross face is restored in full and cash is conserved.
+    assert open_face(ledger) == D(300)
+    assert sum(ledger.cash.values(), ZERO) == D(120)
+    assert "ObligationDefaulted" not in {event["kind"] for event in result.events}
+    ledger.check_invariants()
+
+
+# -- default interaction (acceptance criterion 7) -----------------------------
+
+
+def test_expel_agent_defaults_on_residual_after_netting() -> None:
+    config = ring_scenario([100, 60, 140], cash=None, default_handling="expel-agent")
+    result = run_scenario(config)
+    events = result.events
+
+    defaulted = next(event for event in events if event["kind"] == "ObligationDefaulted")
+    assert defaulted["debtor"] == "F1"
+    assert defaulted["shortfall"] == D(40)  # the post-netting residual, not the gross 100
+    assert defaulted["original_amount"] == D(40)
+
+    kinds = [event["kind"] for event in events]
+    assert "AgentDefaulted" in kinds
+    assert "ReceivableReassigned" in kinds
+    assert "F1" in result.ledger.defaulted_agent_ids
+
+    # Netting on later days never touches the defaulted agent.
+    for event in events:
+        if event["kind"] == "PayableNetted" and event["day"] > 1:
+            assert "F1" not in (event["debtor"], event["creditor"])
+    result.ledger.check_invariants()
+
+
+def test_fail_fast_raises_but_retains_prior_netting() -> None:
+    config = ring_scenario([100, 60, 140], cash=None, default_handling="fail-fast")
+    runtime = prepare_scenario(config)
+    run_day(runtime, 0)
+    with pytest.raises(DefaultError):
+        run_day(runtime, 1)
+
+    events = runtime.ledger.journal.as_dicts()
+    netted = [event for event in events if event["kind"] == "PayableNetted"]
+    assert len(netted) == 3
+    assert sum((event["netted_amount"] for event in netted), ZERO) == D(180)
+    assert "ClearingExecuted" in {event["kind"] for event in events}
+
+```
+
+---
+
 ### 🧪 tests/v2/test_dealer_parity.py
 
 ```python
@@ -242629,6 +243511,7 @@ SCENARIO_DIR = Path(__file__).resolve().parents[2] / "examples" / "scenarios"
 
 # Full-run parity against goldens (see test_golden.py for the comparison).
 SUPPORTED = [
+    "clearing_ring",
     "default_handling_demo",
     "firm_delivery",
     "interbank_netting",
@@ -243126,4 +244009,4 @@ def test_expel_default_recovers_pro_rata_and_writes_off() -> None:
 
 Generated from: /home/runner/work/bilancio/bilancio
 Total source files: 235
-Total test files: 285
+Total test files: 288
