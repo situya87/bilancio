@@ -22,6 +22,8 @@ def balance_rows(result: Any) -> list[dict[str, Any]]:
     total_assets: Counter[str] = Counter()
     total_liabilities: Counter[str] = Counter()
 
+    certificates = getattr(state, "certificates", None)
+
     for agent_id in state.agents:
         assets: Counter[str] = Counter()
         liabilities: Counter[str] = Counter()
@@ -30,6 +32,15 @@ def balance_rows(result: Any) -> list[dict[str, Any]]:
             assets["cash"] = state.cash[agent_id]
         if state.reserves[agent_id]:
             assets["reserve_deposit"] = state.reserves[agent_id]
+
+        if certificates is not None:
+            holding = certificates.get(agent_id)
+            if holding:
+                assets["clearinghouse_certificate"] = holding
+            if state.agents[agent_id].kind == "clearinghouse":
+                outstanding = sum(certificates.values(), ZERO)
+                if outstanding:
+                    liabilities["clearinghouse_certificate"] += outstanding
 
         for (customer_id, bank_id), amount in state.deposits.items():
             if customer_id == agent_id and amount:
@@ -40,7 +51,9 @@ def balance_rows(result: Any) -> list[dict[str, Any]]:
         for payable in state.payables:
             if payable.settled:
                 continue
-            if payable.creditor == agent_id:
+            # Pledged collateral is an asset of the clearinghouse, not of the
+            # creditor of record (Plan 060).
+            if (getattr(payable, "pledged_to", None) or payable.creditor) == agent_id:
                 assets["payable"] += payable.amount
             if payable.debtor == agent_id:
                 liabilities["payable"] += payable.amount
@@ -103,12 +116,19 @@ def balance_rows(result: Any) -> list[dict[str, Any]]:
         total_assets.update(assets)
         total_liabilities.update(liabilities)
 
+        equity_extras: dict[str, Any] = {}
+        if state.agents[agent_id].kind == "clearinghouse":
+            # The clearinghouse's only equity buffer is its accrued
+            # certificate interest margin (Plan 060).
+            equity_extras["equity_cert_interest_margin"] = getattr(state, "cert_interest_margin", ZERO)
+
         rows.append(
             {
                 "agent_id": agent_id,
                 "total_financial_assets": total_financial_assets,
                 "total_financial_liabilities": total_financial_liabilities,
                 "net_financial": total_financial_assets - total_financial_liabilities,
+                **equity_extras,
                 "total_nonfinancial_value": total_nonfinancial_value,
                 "total_inventory_value": total_inventory_value,
                 **{f"assets_{kind}": amount for kind, amount in assets.items()},
@@ -222,20 +242,51 @@ def t_account_rows(state: Any, agent_id: str) -> dict[str, list[dict[str, Any]]]
                 )
             )
 
+    certificates = getattr(state, "certificates", None)
+    if certificates is not None:
+        clearinghouse_id = next(
+            (candidate for candidate in sorted(state.agents) if state.agents[candidate].kind == "clearinghouse"),
+            None,
+        )
+        holding = certificates.get(agent_id)
+        if holding:
+            assets.append(
+                _t_account_row(
+                    "clearinghouse_certificate",
+                    holding,
+                    counterparty=_format_clean_agent(state, clearinghouse_id),
+                    maturity="on-demand",
+                    id_or_alias=f"certificates:{agent_id}",
+                )
+            )
+        if agent_id == clearinghouse_id:
+            outstanding = sum(certificates.values(), ZERO)
+            if outstanding:
+                liabilities.append(
+                    _t_account_row(
+                        "clearinghouse_certificate",
+                        outstanding,
+                        counterparty="-",
+                        maturity="on-demand",
+                        id_or_alias="certificates:outstanding",
+                    )
+                )
+
     for payable in state.payables:
         if payable.settled:
             continue
+        holder = getattr(payable, "pledged_to", None) or payable.creditor
         row = _t_account_row(
             "payable",
             payable.amount,
             counterparty=_format_clean_agent(
                 state,
-                payable.debtor if payable.creditor == agent_id else payable.creditor,
+                payable.debtor if holder == agent_id else payable.creditor,
             ),
             maturity=f"Day {payable.due_day}",
             id_or_alias=payable.alias or payable.id,
         )
-        if payable.creditor == agent_id:
+        if holder == agent_id:
             assets.append(row)
         if payable.debtor == agent_id:
             liabilities.append(row)

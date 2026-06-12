@@ -54,6 +54,7 @@ class RingExplorerParams:
     currency: str
     policy_overrides: dict[str, Any] | None
     topology_config: dict[str, Any] | None = None
+    clearinghouse: dict[str, Any] | None = None
 
     @classmethod
     def from_model(cls, model: RingExplorerParamsModel) -> RingExplorerParams:
@@ -98,6 +99,10 @@ class RingExplorerParams:
         if hasattr(model, 'topology_config') and model.topology_config is not None:
             topology_config = model.topology_config
 
+        clearinghouse = None
+        if getattr(model, "clearinghouse", None) is not None:
+            clearinghouse = model.clearinghouse
+
         return cls(
             n_agents=model.n_agents,
             seed=model.seed,
@@ -109,6 +114,7 @@ class RingExplorerParams:
             currency=model.currency,
             policy_overrides=policy_overrides,
             topology_config=topology_config,
+            clearinghouse=clearinghouse,
         )
 
 
@@ -127,6 +133,14 @@ def compile_ring_explorer(
         params.seed,
     )
     liquidity_amounts = _allocate_liquidity(params)
+    # The v2 kernel truncates financial amounts to whole units at action
+    # parse time (legacy-exact `int(...)` cast). Quantize generated amounts
+    # here with largest-remainder so the ledger totals match Q_total and the
+    # liquidity spec exactly instead of silently losing the fractional parts
+    # (which also produced zero-face payables that break obligation cycles).
+    # User-supplied explicit vectors are passed through untouched.
+    if params.liquidity.mode != "vector":
+        liquidity_amounts = _quantize_to_integers(liquidity_amounts)
     due_days = _build_due_days(params.n_agents, params.maturity.days, params.maturity.mu)
 
     agents = _build_agents(params.n_agents)
@@ -151,6 +165,7 @@ def compile_ring_explorer(
     topology = topology_from_config(getattr(params, 'topology_config', None))
     edges = topology.generate_edges(params.n_agents, random.Random(params.seed + 1000))
     edge_amounts = _distribute_amounts_to_edges(payable_amounts, edges, params.n_agents)
+    edge_amounts = _quantize_to_integers(edge_amounts, min_one=True)
     edge_due_days = _expand_due_days(due_days, edges, params.n_agents)
 
     for edge, amount, due_day in zip(edges, edge_amounts, edge_due_days):
@@ -193,6 +208,10 @@ def compile_ring_explorer(
             },
         },
     }
+
+    # Clearinghouse block passthrough (Plans 059/060): netting or certificates.
+    if params.clearinghouse is not None:
+        scenario["clearinghouse"] = params.clearinghouse
 
     if config.compile.emit_yaml:
         _emit_yaml(
@@ -862,6 +881,44 @@ def _build_action_specs(
         specs.append(lender_spec)
 
     return specs
+
+
+def _quantize_to_integers(
+    amounts: list[Decimal],
+    *,
+    min_one: bool = False,
+) -> list[Decimal]:
+    """Round amounts to whole Decimal units, preserving the integer total.
+
+    Largest-remainder rounding: floor every amount, then hand the leftover
+    whole units to the largest fractional remainders (ties broken by index).
+    The result sums to ``int(sum(amounts))`` exactly.
+
+    With ``min_one=True``, every entry is lifted to at least 1 (taking units
+    from the largest entries), provided the total is large enough; entries
+    stay at 0 otherwise. Zero-face payables are meaningless obligations and,
+    on ring topologies, they sever the circular-flow structure the scenario
+    is meant to produce.
+    """
+    if not amounts:
+        return []
+    target = int(sum(amounts))
+    floors = [int(a) for a in amounts]
+    leftover = target - sum(floors)
+    order = sorted(range(len(amounts)), key=lambda i: (-(amounts[i] - floors[i]), i))
+    for i in order[:leftover]:
+        floors[i] += 1
+    if min_one and target >= len(amounts):
+        donors = sorted(range(len(amounts)), key=lambda i: -floors[i])
+        for i in range(len(floors)):
+            if floors[i] >= 1:
+                continue
+            for j in donors:
+                if floors[j] > 1:
+                    floors[j] -= 1
+                    floors[i] = 1
+                    break
+    return [Decimal(v) for v in floors]
 
 
 def _distribute_amounts_to_edges(

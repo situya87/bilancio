@@ -31,19 +31,19 @@ initial_actions:
 - create_payable:
     from: H1
     to: H2
-    amount: 24.155501641872586
+    amount: 24
     due_day: 1
     alias: P_H1_H2
 - create_payable:
     from: H2
     to: H3
-    amount: 40.97022526028383
+    amount: 41
     due_day: 1
     alias: P_H2_H3
 - create_payable:
     from: H3
     to: H1
-    amount: 234.87427309784357
+    amount: 235
     due_day: 1
     alias: P_H3_H1
 scheduled_actions: []

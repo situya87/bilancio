@@ -97,6 +97,9 @@ def collect_due_payables(ledger: Ledger) -> list[Payable]:
         and payable.due_day == ledger.day
         and payable.debtor not in ledger.defaulted_agent_ids
         and payable.creditor not in ledger.defaulted_agent_ids
+        # Pledged collateral (Plan 060) is fenced off from netting: its
+        # proceeds belong to the clearinghouse, not the creditor of record.
+        and payable.pledged_to is None
     ]
 
 

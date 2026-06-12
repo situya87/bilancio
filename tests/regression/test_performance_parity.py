@@ -339,10 +339,15 @@ class TestGoldenMetricSnapshot:
         Updated in Plan 055 (network topology generalization): receivable
         reassignment now runs unconditionally on agent default, not only
         when rollover_enabled=True. This slightly changes the default cascade.
+
+        Updated again with Plan 059 follow-up: the ring compiler now
+        quantizes generated faces/liquidity to whole units with
+        largest-remainder rounding (the kernel truncated fractional amounts
+        anyway, silently shrinking Q_total and emitting zero-face payables).
         """
         metrics = _run_small_ring("compatible", seed=DETERMINISTIC_SEED)
-        expected_delta = Decimal("0.6633366633366633366633366633")
-        expected_phi = Decimal("0.3366633366633366633366633367")
+        expected_delta = Decimal("0.6573705179282868525896414343")
+        expected_phi = Decimal("0.3426294820717131474103585657")
         assert metrics["delta_total"] == expected_delta, (
             f"Golden delta_total changed! "
             f"expected={expected_delta}, actual={metrics['delta_total']}. "
@@ -359,6 +364,9 @@ class TestGoldenMetricSnapshot:
 
         Updated in Plan 055 (network topology generalization): receivable
         reassignment now runs unconditionally on agent default.
+
+        Updated again with Plan 059 follow-up: ring compiler integer-face
+        quantization (see test_golden_metric_snapshot_seed_42).
         """
         metrics = _run_ring(
             "compatible",
@@ -366,8 +374,8 @@ class TestGoldenMetricSnapshot:
             n_agents=20,
             kappa="0.5",
         )
-        expected_delta = Decimal("0.8262179809141135107985936715")
-        expected_phi = Decimal("0.1737820190858864892014063285")
+        expected_delta = Decimal("0.8240879560219890054972513743")
+        expected_phi = Decimal("0.1759120439780109945027486257")
         assert metrics["delta_total"] == expected_delta, (
             f"Golden delta_total (stressed) changed! "
             f"expected={expected_delta}, actual={metrics['delta_total']}. "

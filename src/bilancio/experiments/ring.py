@@ -92,6 +92,10 @@ class RingRunSummary:
     # Clearinghouse netting metrics (Plan 059)
     gross_face_due: float = 0.0
     netting_efficiency: float | None = None
+    # Clearinghouse certificate metrics (Plan 060)
+    certificates_issued_total: float = 0.0
+    certificates_outstanding_peak: float = 0.0
+    cert_default_losses: float = 0.0
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -230,6 +234,10 @@ class _RingSweepRunnerConfig(BaseModel):
     risk_assessment_enabled: bool = True
     risk_assessment_config: dict[str, Any] | None = None
     clearing_enabled: bool = False
+    clearing_certificates: bool = False
+    cert_haircut: Decimal | None = None
+    cert_rate: Decimal | None = None
+    cert_max_issuance: Decimal | None = None
 
 
 class RingSweepConfig(BaseModel):
@@ -291,6 +299,10 @@ class RingSweepRunner:
         dealer_enabled: bool = False,
         dealer_config: dict[str, Any] | None = None,
         clearing_enabled: bool = False,
+        clearing_certificates: bool = False,
+        cert_haircut: Decimal = Decimal("0.25"),
+        cert_rate: Decimal = Decimal("0.06"),
+        cert_max_issuance: Decimal = Decimal("1.0"),
         risk_assessment_enabled: bool = True,
         risk_assessment_config: dict[str, Any] | None = None,
         balanced_mode: bool = False,
@@ -374,7 +386,13 @@ class RingSweepRunner:
         self.default_handling = default_handling
         self.dealer_enabled = dealer_enabled
         self.dealer_config = dealer_config
-        self.clearing_enabled = clearing_enabled
+        # Certificates mode (Plan 060) implies the clearing phase (Plan 059):
+        # netting runs first, certificates cover the post-netting shortfall.
+        self.clearing_enabled = clearing_enabled or clearing_certificates
+        self.clearing_certificates = clearing_certificates
+        self.cert_haircut = cert_haircut
+        self.cert_rate = cert_rate
+        self.cert_max_issuance = cert_max_issuance
         self.risk_assessment_enabled = risk_assessment_enabled
         self.risk_assessment_config = risk_assessment_config
         self.balanced_mode = balanced_mode
@@ -526,10 +544,14 @@ class RingSweepRunner:
             "default_handling",
             "dealer_enabled",
             "clearing_enabled",
+            "clearing_certificates",
             "phi_total",
             "delta_total",
             "gross_face_due",
             "netting_efficiency",
+            "certificates_issued_total",
+            "certificates_outstanding_peak",
+            "cert_default_losses",
             "time_to_stability",
             "scenario_yaml",
             "events_jsonl",
@@ -541,6 +563,25 @@ class RingSweepRunner:
         with registry_path.open("w", newline="") as fh:
             writer = csv.DictWriter(fh, fieldnames=default_fields)
             writer.writeheader()
+
+    def _clearinghouse_block(self) -> dict[str, Any] | None:
+        """Build the scenario `clearinghouse:` block (Plans 059/060).
+
+        Returns None when no clearing is requested. With certificates mode
+        the block carries the certificate facility parameters; otherwise it
+        is the plain netting block from Plan 059.
+        """
+        if self.clearing_certificates:
+            return {
+                "enabled": True,
+                "mode": "certificates",
+                "cert_haircut": float(self.cert_haircut),
+                "cert_rate": float(self.cert_rate),
+                "max_issuance_per_member": float(self.cert_max_issuance),
+            }
+        if self.clearing_enabled:
+            return {"enabled": True, "mode": "netting"}
+        return None
 
     def _next_seed(self) -> int:
         value = self.seed_counter
@@ -822,6 +863,7 @@ class RingSweepRunner:
             "default_handling": self.default_handling,
             "dealer_enabled": self.dealer_enabled,
             "clearing_enabled": self.clearing_enabled,
+            "clearing_certificates": self.clearing_certificates,
         }
 
         # Initial "running" status
@@ -991,8 +1033,9 @@ class RingSweepRunner:
                     "collateral_advance_rate": str(self.lender_collateral_advance_rate),
                 }
 
-        if self.clearing_enabled:
-            scenario["clearinghouse"] = {"enabled": True, "mode": "netting"}
+        clearinghouse_block = self._clearinghouse_block()
+        if clearinghouse_block is not None:
+            scenario["clearinghouse"] = clearinghouse_block
 
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
@@ -1136,6 +1179,15 @@ class RingSweepRunner:
             float(netting_efficiency_val) if netting_efficiency_val is not None else None
         )
 
+        # Clearinghouse certificate metrics (Plan 060)
+        certificates_issued_total = float(
+            bundle.summary.get("certificates_issued_total", 0.0) or 0.0
+        )
+        certificates_outstanding_peak = float(
+            bundle.summary.get("certificates_outstanding_peak", 0.0) or 0.0
+        )
+        cert_default_losses = float(bundle.summary.get("cert_default_losses", 0.0) or 0.0)
+
         # Read dealer metrics if available (treatment runs with dealer enabled)
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = out_dir / "dealer_metrics.json"
@@ -1159,6 +1211,9 @@ class RingSweepRunner:
             "netting_efficiency": str(netting_efficiency)
             if netting_efficiency is not None
             else "",
+            "certificates_issued_total": str(certificates_issued_total),
+            "certificates_outstanding_peak": str(certificates_outstanding_peak),
+            "cert_default_losses": str(cert_default_losses),
         }
         self._upsert_registry(
             run_id=run_id,
@@ -1208,6 +1263,9 @@ class RingSweepRunner:
             S_total=S_total,
             gross_face_due=gross_face_due,
             netting_efficiency=netting_efficiency,
+            certificates_issued_total=certificates_issued_total,
+            certificates_outstanding_peak=certificates_outstanding_peak,
+            cert_default_losses=cert_default_losses,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
@@ -1271,6 +1329,7 @@ class RingSweepRunner:
             "default_handling": self.default_handling,
             "dealer_enabled": self.dealer_enabled,
             "clearing_enabled": self.clearing_enabled,
+            "clearing_certificates": self.clearing_certificates,
         }
 
         # Initial "running" status (skip for cloud-only mode)
@@ -1471,8 +1530,9 @@ class RingSweepRunner:
         # Apply explicit CLI adaptive flag overrides after preset defaults.
         self._apply_adaptive_flag_overrides(scenario)
 
-        if self.clearing_enabled:
-            scenario["clearinghouse"] = {"enabled": True, "mode": "netting"}
+        clearinghouse_block = self._clearinghouse_block()
+        if clearinghouse_block is not None:
+            scenario["clearinghouse"] = clearinghouse_block
 
         if self.default_handling:
             scenario_run = scenario.setdefault("run", {})
@@ -1642,6 +1702,15 @@ class RingSweepRunner:
                     if result.metrics.get("netting_efficiency") is not None
                     else None
                 ),
+                certificates_issued_total=float(
+                    result.metrics.get("certificates_issued_total", 0.0) or 0.0
+                ),
+                certificates_outstanding_peak=float(
+                    result.metrics.get("certificates_outstanding_peak", 0.0) or 0.0
+                ),
+                cert_default_losses=float(
+                    result.metrics.get("cert_default_losses", 0.0) or 0.0
+                ),
                 nbfi_loan_loss=int(result.metrics.get("nbfi_loan_loss", 0)),
                 nbfi_loans_created=int(result.metrics.get("nbfi_loans_created", 0)),
                 bank_credit_loss=int(result.metrics.get("bank_credit_loss", 0)),
@@ -1692,6 +1761,15 @@ class RingSweepRunner:
             float(netting_efficiency_val) if netting_efficiency_val is not None else None
         )
 
+        # Clearinghouse certificate metrics (Plan 060)
+        certificates_issued_total = float(
+            bundle.summary.get("certificates_issued_total", 0.0) or 0.0
+        )
+        certificates_outstanding_peak = float(
+            bundle.summary.get("certificates_outstanding_peak", 0.0) or 0.0
+        )
+        cert_default_losses = float(bundle.summary.get("cert_default_losses", 0.0) or 0.0)
+
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = prepared.out_dir / "dealer_metrics.json"
         if dealer_metrics_path.exists():
@@ -1713,6 +1791,9 @@ class RingSweepRunner:
             "netting_efficiency": str(netting_efficiency)
             if netting_efficiency is not None
             else "",
+            "certificates_issued_total": str(certificates_issued_total),
+            "certificates_outstanding_peak": str(certificates_outstanding_peak),
+            "cert_default_losses": str(cert_default_losses),
         }
         self._upsert_registry(
             run_id=prepared.run_id,
@@ -1767,6 +1848,9 @@ class RingSweepRunner:
             S_total=float(bundle.summary.get("S_total", 0)),
             gross_face_due=gross_face_due,
             netting_efficiency=netting_efficiency,
+            certificates_issued_total=certificates_issued_total,
+            certificates_outstanding_peak=certificates_outstanding_peak,
+            cert_default_losses=cert_default_losses,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),

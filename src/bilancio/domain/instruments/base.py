@@ -22,6 +22,10 @@ class InstrumentKind(str, Enum):
     BANK_LOAN = "bank_loan"
     INTERBANK_LOAN = "interbank_loan"
     DELIVERY_OBLIGATION = "delivery_obligation"
+    # Plan 060: bearer clearinghouse loan certificate. The v2 kernel models
+    # certificates as a balance map (not an Instrument record); this member
+    # exists for legacy display/export parity only.
+    CLEARINGHOUSE_CERTIFICATE = "clearinghouse_certificate"
 
     def __str__(self) -> str:
         return self.value

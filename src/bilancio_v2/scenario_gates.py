@@ -301,9 +301,38 @@ def build_clearing_config(config: ScenarioConfig) -> CleanClearingConfig | None:
     clearinghouse = config.clearinghouse
     if clearinghouse is None or not clearinghouse.enabled:
         return None
-    if clearinghouse.mode != "netting":
-        raise ConfigurationError(f"clearinghouse mode {clearinghouse.mode!r} is not supported; stage 1 supports only 'netting'")
-    return CleanClearingConfig(mode=clearinghouse.mode)
+    if clearinghouse.mode not in ("netting", "certificates"):
+        raise ConfigurationError(
+            f"clearinghouse mode {clearinghouse.mode!r} is not supported; supported modes: 'netting', 'certificates'"
+        )
+    if not clearinghouse.mandatory_acceptance:
+        raise ConfigurationError(
+            "clearinghouse.mandatory_acceptance=false is not supported: stage 2 certificate acceptance is mandatory"
+        )
+    if clearinghouse.mode == "certificates":
+        # Stage-2 scope: certificates exist for the pure (no-bank/no-dealer/
+        # no-lender) ring only — dealer/lender arms could double-use pledged
+        # collateral. (Banking is gated in engine.prepare_scenario, where the
+        # separate banking_config is available.)
+        if config.lender is not None and config.lender.enabled:
+            raise ConfigurationError(
+                "clearinghouse mode 'certificates' cannot be combined with a lender (stage 2 scope)"
+            )
+        if config.dealer is not None and config.dealer.enabled:
+            raise ConfigurationError(
+                "clearinghouse mode 'certificates' cannot be combined with a dealer (stage 2 scope)"
+            )
+    # mode "certificates" implies netting still runs first (ClearingPhase is
+    # always built when this config is present; the certificate facility is
+    # appended after it in engine.prepare_scenario).
+    return CleanClearingConfig(
+        mode=clearinghouse.mode,
+        cert_haircut=clearinghouse.cert_haircut,
+        cert_rate=clearinghouse.cert_rate,
+        max_issuance_per_member=clearinghouse.max_issuance_per_member,
+        cert_max_tenor=clearinghouse.cert_max_tenor,
+        mandatory_acceptance=clearinghouse.mandatory_acceptance,
+    )
 
 
 def build_dealer_config(config: ScenarioConfig) -> CleanDealerConfig | None:

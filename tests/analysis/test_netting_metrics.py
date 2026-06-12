@@ -146,6 +146,42 @@ class TestNettingTotals:
         ]
         assert netting_totals(events) == (Decimal("100"), Decimal("0"))
 
+    def test_contract_id_only_creation_events_are_matched(self):
+        """Reassignment-created payables log PayableCreated with contract_id only
+        (no pid/payable_id/alias); their netted face must still be counted."""
+        events = [
+            {
+                "kind": "PayableCreated",
+                "contract_id": "PAY_reassigned_7",
+                "amount": "50",
+                "due_day": 3,
+                "reason": "receivable_reassignment",
+            },
+            _netted_event("PAY_reassigned_7", "20", day=3),
+        ]
+        gross, netted = netting_totals(events)
+        assert gross == Decimal("50")
+        assert netted == Decimal("20")
+
+    def test_phi_delta_counts_contract_id_netting(self):
+        from bilancio.analysis.metrics import dues_for_day
+
+        events = [
+            {
+                "kind": "PayableCreated",
+                "contract_id": "PAY_reassigned_7",
+                "amount": "50",
+                "due_day": 3,
+                "debtor": "A",
+                "creditor": "B",
+            },
+            _netted_event("PAY_reassigned_7", "50", day=3),
+        ]
+        dues = dues_for_day(events, 3)
+        phi, delta = phi_delta(events, dues, 3)
+        assert phi == Decimal("1")
+        assert delta == Decimal("0")
+
     def test_empty_events(self):
         assert netting_totals([]) == (Decimal("0"), Decimal("0"))
 

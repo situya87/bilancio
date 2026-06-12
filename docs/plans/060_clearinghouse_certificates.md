@@ -394,3 +394,100 @@ drive metrics and the HTML event log; none appears unless mode is `certificates`
 
 Member assessments (waterfall b), voluntary acceptance, rating-conditioned haircuts,
 certificates in bank/dealer/lender arms, migration onto full WP-1 collateral (roadmap 056).
+
+## Implementation notes (sweep pipeline)
+
+**Pre-flight viability check V9 (certificates).** Certificates only bind when κ < 1 and
+the μ-skew leaves receivables maturing *after* dues (a member must hold an unmatured
+receivable to pledge against today's shortfall). When reviewing parameters before a
+`--clearing-certificates` sweep, warn if:
+
+- `cert_haircut >= 1` — issuance is zero by construction (advance rate `1 − haircut ≤ 0`);
+- `maturity_days == 1` — no temporal mismatch to bridge: every receivable is due the same
+  day as the dues it would collateralize, so nothing is eligible to pledge.
+
+Expect `certificates_issued_total ≈ 0` (inert facility) when all κ ≥ 2 or μ = 0.
+
+**Sweep wiring.** `--clearing-certificates` implies `--clearing` (netting runs first;
+certificates cover the post-netting shortfall). `--cert-haircut` (0.25), `--cert-rate`
+(0.06) and `--cert-max-issuance` (1.0) are only consulted when the certificates flag is
+on. The compiled scenario gains
+`clearinghouse: {enabled: true, mode: certificates, cert_haircut, cert_rate,
+max_issuance_per_member}`, and `results.csv` gains `certificates_issued_total`,
+`certificates_outstanding_peak`, `cert_default_losses` (event-derived via
+`bilancio.analysis.metrics.certificate_totals`; 0.0 for non-certificates runs).
+
+## Implementation findings & decisions (2026-06-12, autonomous run)
+
+### Smoke sweep result (acceptance criterion 7, extended grid)
+
+Matched `sweep ring` arms (n=10, maturity_days=5, c=1, κ ∈ {0.25, 0.5, 1}, μ ∈ {0.5, 0.75, 1},
+seed 42, `--default-handling expel-agent`), netting-only vs `--clearing-certificates`:
+
+| κ | μ | δ netting | δ certificates | Δ | issued | losses |
+|---|---|-----------|----------------|---|--------|--------|
+| 0.25 | 1 | 0.886 | 0.681 | **−0.205** | 246 | 13 |
+| 0.5 | 0.75 | 0.837 | 0.614 | **−0.223** | 249 | 25 |
+| 0.5 | 1 | 0.870 | 0.703 | −0.168 | 305 | 78 |
+| 1 | 1 | 0.934 | 0.631 | **−0.303** | 349 | 33 |
+| (all 9 cells) | | | | ≤ 0 everywhere | 109–349 | 13–80 |
+
+The hypothesis holds: certificates bind exactly where netting is structurally dead (μ-skewed
+dues on a ring), cutting δ by up to 30pp with the recourse/waterfall path exercised
+(`cert_default_losses` > 0) and certificates actually retiring (peak < issued).
+
+### Decisions taken (autonomous)
+
+- **D1 (sweep methodology)**: `RingSweepRunner` defaults to `default_handling="fail-fast"`,
+  which ends a run at the first unresolvable default — day 1 in stressed rings — and records
+  the truncated run as completed. All clearinghouse validation sweeps use
+  `--default-handling expel-agent` (the CLAUDE.md spec default). The fail-fast runner default
+  is pre-existing and left unchanged.
+- **D2 (metrics)**: `cert_default_losses` = sum of `CertificateHaircutApplied.loss` (margin
+  absorption + holder haircut + uncovered residue); the holder-haircut component also reduces
+  outstanding in the peak replay. (The first implementation read a nonexistent `amount` field —
+  fixed during review.)
+- **D3 (CLI step mode)**: `v2_run.py` now calls `finalize_certificates` after
+  `finalize_banking` in the until-stable path, so end-of-run redemption also happens for CLI
+  runs, not only engine `run_scenario` callers.
+- **D4 (documented dynamic)**: netting is not monotonically benign per-seed — in one 059 cell
+  (κ=0.25, c=1, μ=0.5) netting shifted the expel cascade path and produced one extra default
+  (δ +0.019). Single-seed cascade-path sensitivity, not an accounting error (n_defaults 17→18,
+  conservation invariants hold). Multi-seed sweeps should average this out.
+- **D5 (deviations adopted from implementation)**: per-member cap is a stopping threshold the
+  final whole pledge may overshoot by at most one face (decided Q4); redemption excess formula
+  `proceeds − (issued + interest − burned)`; recourse detection inside `expel_agent` with
+  per-contract recovery amounts; defaulted members' redemption excess stays in the CH pool;
+  recourse payables excluded from rollover.
+
+### Adversarial review round (PR #172, 2026-06-12)
+
+An independent review verified conservation end-to-end (certificate totals, no proceeds
+double-count, pledged fences in netting/reassignment, checkpoint/restore, inert-when-off,
+059 quantization) and produced 15 findings. Fixed in the review commit:
+
+1. **CH1-creditor rollover loop** (HIGH): claims reassigned to the clearinghouse entered the
+   perpetual rollover loop — recovery bounced back to the payer forever. Rollover now skips
+   any payable whose creditor is the clearinghouse.
+2. **Certificate-paid face rolled at full value** (HIGH): rollover returned only cash/deposits,
+   so face settled in certificates left the debtor owing the rolled face twice — manufactured
+   defaults. **Decision: Q5 overturned** — the rollover return-flow now returns certificates
+   after deposits and cash (rollover re-lends what was repaid, whatever its form).
+3. **Dealer ticket fence** (HIGH): pledged collateral and recourse claims are skipped by
+   `convert_payables_to_tickets` (defense in depth), and
+4. **stage-2 arm gating** (MEDIUM): certificates mode now rejects lender/dealer at
+   `build_clearing_config` and banking at `prepare_scenario` with `ConfigurationError`.
+5. **Final-day recourse** (MEDIUM): `finalize_certificates` resolves open recourse payables
+   (member's certificates burn at par, remainder through the waterfall) so deficiencies can't
+   silently vanish at simulation end.
+6. **defaultdict hygiene** (NIT): certificate balance queries use `.get`, avoiding spurious
+   zero entries copied into every checkpoint.
+
+Documented as stage-2 semantics (not fixed): writedown conservatism — losses are recognized at
+default while reassigned-to-CH claims replenish the redemption pool only when they later pay
+(review #4); commingled redemption pool, historical-association style (#5); CH cash stranded at
+end of run when holders are gone (#7); per-diem interest truncates to 0 at small scale, so the
+margin layer of the waterfall binds only at scale (#9); `certificates_outstanding_peak` is an
+end-of-day peak (#11); stability can end a certificates run with open pledges — finalize
+redeems them (#10). Validation sweep re-run after the fixes: headline table unchanged (the two
+rollover paths are latent in this grid; covered by regression tests instead).

@@ -78,6 +78,30 @@ def _deps() -> Any:
     default=False,
     help="Enable the clearinghouse multilateral netting phase (v2 engine only)",
 )
+@click.option(
+    "--clearing-certificates",
+    is_flag=True,
+    default=False,
+    help="Enable clearinghouse loan certificates (implies --clearing; v2 engine only)",
+)
+@click.option(
+    "--cert-haircut",
+    type=float,
+    default=0.25,
+    help="Certificate haircut: certificates issued = (1 - haircut) x pledged face",
+)
+@click.option(
+    "--cert-rate",
+    type=float,
+    default=0.06,
+    help="Certificate interest rate charged to the pledging member (annual-equivalent)",
+)
+@click.option(
+    "--cert-max-issuance",
+    type=float,
+    default=1.0,
+    help="Max certificate issuance per member as fraction of its gross dues today",
+)
 @click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
 @click.option(
     "--perf-preset",
@@ -127,6 +151,10 @@ def sweep_ring(
     name_prefix: str,
     default_handling: str,
     clearing: bool,
+    clearing_certificates: bool,
+    cert_haircut: float,
+    cert_rate: float,
+    cert_max_issuance: float,
     job_id: str | None,
     perf_preset: str | None,
     fast_atomic: bool,
@@ -168,6 +196,14 @@ def sweep_ring(
             default_handling = runner_cfg.default_handling
         if runner_cfg.clearing_enabled and parameter_uses_default(ctx, "clearing"):
             clearing = runner_cfg.clearing_enabled
+        if runner_cfg.clearing_certificates and parameter_uses_default(ctx, "clearing_certificates"):
+            clearing_certificates = runner_cfg.clearing_certificates
+        if runner_cfg.cert_haircut is not None and parameter_uses_default(ctx, "cert_haircut"):
+            cert_haircut = float(runner_cfg.cert_haircut)
+        if runner_cfg.cert_rate is not None and parameter_uses_default(ctx, "cert_rate"):
+            cert_rate = float(runner_cfg.cert_rate)
+        if runner_cfg.cert_max_issuance is not None and parameter_uses_default(ctx, "cert_max_issuance"):
+            cert_max_issuance = float(runner_cfg.cert_max_issuance)
         dealer_enabled = runner_cfg.dealer_enabled
         dealer_config = runner_cfg.dealer_config
 
@@ -311,6 +347,10 @@ def sweep_ring(
         dealer_enabled=dealer_enabled,
         dealer_config=dealer_config,
         clearing_enabled=clearing,
+        clearing_certificates=clearing_certificates,
+        cert_haircut=Decimal(str(cert_haircut)),
+        cert_rate=Decimal(str(cert_rate)),
+        cert_max_issuance=Decimal(str(cert_max_issuance)),
         executor=executor,
         performance=performance,
     )

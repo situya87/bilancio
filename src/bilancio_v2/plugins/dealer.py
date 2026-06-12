@@ -191,6 +191,11 @@ def convert_payables_to_tickets(ledger: Ledger, dealer_config: CleanDealerConfig
     for payable in ledger.payables:
         if payable.settled or payable.due_day is None or payable.amount <= ZERO:
             continue
+        if payable.pledged_to is not None or payable.id in ledger.certificate_recourse_ids:
+            # Pledged collateral belongs economically to the clearinghouse and
+            # recourse claims are clearinghouse paper: neither may be traded
+            # (defense in depth — certificates+dealer is also gated outright).
+            continue
         if payable.id in subsystem.payable_to_ticket:
             continue
         add_ticket_for_payable(ledger, dealer_config, subsystem, payable)

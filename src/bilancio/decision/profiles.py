@@ -261,6 +261,52 @@ class LenderProfile:
 
 
 @dataclass(frozen=True)
+class ClearinghouseProfile:
+    """Tunable parameters for the clearinghouse certificate facility (Plan 060).
+
+    This is an experiment-layer convenience container mirroring LenderProfile.
+    The v2 kernel does NOT read this dataclass — it reads the scenario's
+    `clearinghouse:` block (mode "certificates"); the sweep pipeline emits
+    that block from these tunables. The clearinghouse itself is rule-based
+    (no optimization): members pledge receivables against post-netting
+    shortfalls and receive haircut, interest-bearing bearer certificates.
+
+    Attributes:
+        cert_haircut: Certificates issued = (1 - haircut) x pledged face
+        cert_rate: Interest (annual-equivalent) accruing to the CH against
+            the pledging member; converted per-diem by the kernel
+        max_issuance_per_member: Cap on cumulative issuance per member per
+            day, as a fraction of the member's gross dues today
+        cert_max_tenor: Receivables due within N days are eligible collateral;
+            None = scenario maturity_days (all ring receivables eligible)
+        mandatory_acceptance: Stage 2 fixes acceptance as mandatory (the
+            historical clearinghouse association rule); the field exists so a
+            voluntary stage 3 is a behavior change, not a schema change
+    """
+
+    cert_haircut: Decimal = Decimal("0.25")
+    cert_rate: Decimal = Decimal("0.06")
+    max_issuance_per_member: Decimal = Decimal("1.0")
+    cert_max_tenor: int | None = None
+    mandatory_acceptance: bool = True
+
+    def __post_init__(self) -> None:
+        if not (Decimal("0") <= self.cert_haircut < Decimal("1")):
+            raise ValueError("cert_haircut must be in [0, 1)")
+        if self.cert_rate < Decimal("0"):
+            raise ValueError("cert_rate cannot be negative")
+        if self.max_issuance_per_member <= Decimal("0"):
+            raise ValueError("max_issuance_per_member must be positive")
+        if self.cert_max_tenor is not None and self.cert_max_tenor < 1:
+            raise ValueError("cert_max_tenor must be >= 1 when provided")
+        if not self.mandatory_acceptance:
+            raise ValueError(
+                "mandatory_acceptance must be True in stage 2 "
+                "(voluntary acceptance is a stage-3 extension)"
+            )
+
+
+@dataclass(frozen=True)
 class BankProfile:
     """Treynor pricing parameters for active banks in the Kalecki ring.
 

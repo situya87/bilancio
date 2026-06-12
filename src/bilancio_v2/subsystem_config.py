@@ -115,6 +115,12 @@ class CleanDealerConfig:
 @dataclass(frozen=True)
 class CleanClearingConfig:
     mode: str = "netting"
+    # Certificate-facility parameters (Plan 060; read only when mode == "certificates").
+    cert_haircut: Decimal = Decimal("0.25")
+    cert_rate: Decimal = Decimal("0.06")
+    max_issuance_per_member: Decimal = Decimal("1.0")
+    cert_max_tenor: int | None = None
+    mandatory_acceptance: bool = True
 
 
 @dataclass(frozen=True)
