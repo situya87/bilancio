@@ -583,3 +583,170 @@ def test_pledged_receivable_excluded_from_netting_and_reassignment() -> None:
     reassign_receivables(ledger, "F1", {})
     assert plain.settled is True
     assert pledged.settled is False  # stays alive, routed to the clearinghouse
+
+
+class TestReviewFixes:
+    """Regression tests for the PR #172 adversarial-review findings."""
+
+    def test_reassigned_to_clearinghouse_claims_do_not_roll_over(self):
+        """Review finding 2: a claim whose creditor is CH1 (e.g. reassigned
+        after a collateral default) must not enter the rollover loop, which
+        would bounce the recovery back to the payer forever."""
+        # F1 owes F2 day 1; F2 has no cash but a day-3 receivable on F3 to
+        # pledge. F3 (collateral debtor) has nothing and will default, F3's
+        # own receivable on F4 reassigns to CH1. F4 then pays CH1 on day 4.
+        config = cert_scenario(
+            [
+                ("F2", "F1", 60, 1),
+                ("F3", "F2", 100, 3),
+                ("F4", "F3", 100, 4),
+            ],
+            cash={"F1": 5, "F4": 100},
+            rollover=True,
+            max_days=8,
+        )
+        result = run_scenario(config)
+        rolled = [
+            event
+            for event in result.events
+            if event["kind"] in ("PayableRolledOver", "RolloverPartial")
+            and event.get("creditor") == "CH1"
+        ]
+        assert rolled == [], f"claims held by CH1 must not roll over: {rolled}"
+
+    def test_certificate_paid_face_returns_certificates_on_rollover(self):
+        """Review finding 3: rollover re-lends what was repaid — face settled
+        in certificates must return as certificates, not silently vanish."""
+        # F1 owes F2 80 on day 1, holds zero cash but pledges a day-3
+        # receivable on F3 (face 100, haircut 0.25 -> 75 certificates) plus 5
+        # cash to cover the due. F3 is funded, so the collateral performs.
+        config = cert_scenario(
+            [
+                ("F1", "F2", 80, 1),
+                ("F3", "F1", 100, 3),
+            ],
+            cash={"F1": 5, "F3": 100},
+            rollover=True,
+            max_days=8,
+        )
+        result = run_scenario(config)
+        transfers = events_of(result, "CertificatesTransferred")
+        # The settlement leg pays F2 75 in certificates; the rollover
+        # return-flow must hand them back to F1.
+        returned = [
+            event for event in transfers if event.get("frm") == "F2" and event.get("to") == "F1"
+        ]
+        assert returned, f"no certificate return-flow in rollover: {transfers}"
+        # And no manufactured default: F1 settled day 1 in full.
+        assert not [
+            event
+            for event in events_of(result, "AgentDefaulted")
+            if event.get("agent") == "F1" or event.get("agent_id") == "F1"
+        ]
+
+    @pytest.mark.parametrize("arm", ["lender", "dealer"])
+    def test_certificates_mode_rejects_lender_and_dealer(self, arm):
+        """Review finding 8: stage-2 scope — certificates exist for the pure
+        ring only; combined arms are rejected at validation."""
+        data = cert_scenario([("F1", "F2", 50, 1)], cash={"F1": 50}).model_dump()
+        data[arm] = {"enabled": True}
+        config = ScenarioConfig.model_validate(data)
+        with pytest.raises(ConfigurationError, match="cannot be combined"):
+            build_clearing_config(config)
+
+    def test_certificates_mode_rejects_banking(self):
+        """Banking arrives via prepare_scenario's banking_config, so the gate
+        lives in the engine."""
+        from bilancio_v2.subsystem_config import CleanBankingConfig
+
+        config = cert_scenario([("F1", "F2", 50, 1)], cash={"F1": 50})
+        with pytest.raises(ConfigurationError, match="cannot be combined"):
+            prepare_scenario(config, banking_config=CleanBankingConfig())
+
+    def test_finalize_resolves_open_recourse(self):
+        """Review finding 6: a recourse payable created on the final day must
+        not vanish — finalize burns the member's certificates at par and
+        writes down the remainder."""
+        ledger = Ledger()
+        ledger.register_agent("CH1", "clearinghouse", "Clearinghouse")
+        ledger.register_agent("F1", "firm", "Firm 1")
+        ledger.register_agent("F2", "firm", "Firm 2")
+        ledger.clearing_config = CleanClearingConfig(
+            mode="certificates",
+            cert_haircut=Decimal("0.25"),
+            cert_rate=Decimal("0.06"),
+            max_issuance_per_member=Decimal("1.0"),
+            cert_max_tenor=None,
+            mandatory_acceptance=True,
+        )
+        ledger.issue_certificates("F1", D(30), pledge_id="CP_test")
+        ledger.transfer_certificates("F1", "F2", D(20))  # 20 circulated away
+        recourse = ledger.create_payable(
+            payable_id="PAY_recourse_t",
+            debtor="F1",
+            creditor="CH1",
+            amount=D(30),
+            due_day=9,
+            maturity_distance=1,
+            reason="certificate_recourse",
+        )
+        ledger.certificate_recourse_ids.add("PAY_recourse_t")
+
+        from bilancio_v2.plugins.certificates import finalize_certificates
+
+        finalize_certificates(ledger, final_day=8)
+
+        assert recourse.settled
+        # F1's remaining 10 burned at par; 20 written down via holder haircut.
+        retired = events_of_ledger(ledger, "CertificatesRetired")
+        assert any(event.get("reason") == "recourse_finalize_burn" for event in retired)
+        haircuts = events_of_ledger(ledger, "CertificateHaircutApplied")
+        assert len(haircuts) == 1
+        assert haircuts[0]["loss"] == D(20)
+        ledger.check_invariants()
+
+    def test_dealer_ticket_fence_skips_pledged_and_recourse(self):
+        """Review finding 1: pledged collateral and recourse claims never
+        become tradeable dealer tickets (defense in depth behind the gate)."""
+        from bilancio_v2.plugins.dealer import convert_payables_to_tickets
+
+        ledger = Ledger()
+        for agent_id in ("F1", "F2", "CH1"):
+            ledger.register_agent(agent_id, "clearinghouse" if agent_id == "CH1" else "firm", agent_id)
+        ledger.day = 1
+        plain = ledger.create_payable(
+            payable_id="PAY_plain", debtor="F1", creditor="F2", amount=D(50), due_day=3, maturity_distance=2
+        )
+        pledged = ledger.create_payable(
+            payable_id="PAY_pledged", debtor="F1", creditor="F2", amount=D(50), due_day=3, maturity_distance=2
+        )
+        pledged.pledged_to = "CH1"
+        recourse = ledger.create_payable(
+            payable_id="PAY_recourse_x", debtor="F1", creditor="CH1", amount=D(20), due_day=3, maturity_distance=2
+        )
+        ledger.certificate_recourse_ids.add(recourse.id)
+
+        class FakeSubsystem:
+            payable_to_ticket: dict = {}
+
+            def __init__(self):
+                self.added = []
+
+        captured: list[str] = []
+
+        import bilancio_v2.plugins.dealer as dealer_mod
+
+        original = dealer_mod.add_ticket_for_payable
+        try:
+            dealer_mod.add_ticket_for_payable = (
+                lambda ledger, dealer_config, subsystem, payable: captured.append(payable.id)
+            )
+            convert_payables_to_tickets(ledger, dealer_config=None, subsystem=FakeSubsystem())
+        finally:
+            dealer_mod.add_ticket_for_payable = original
+
+        assert captured == [plain.id]
+
+
+def events_of_ledger(ledger: Ledger, kind: str) -> list[dict]:
+    return [event for event in ledger.journal.as_dicts() if event["kind"] == kind]

@@ -459,3 +459,35 @@ dues on a ring), cutting δ by up to 30pp with the recourse/waterfall path exerc
   `proceeds − (issued + interest − burned)`; recourse detection inside `expel_agent` with
   per-contract recovery amounts; defaulted members' redemption excess stays in the CH pool;
   recourse payables excluded from rollover.
+
+### Adversarial review round (PR #172, 2026-06-12)
+
+An independent review verified conservation end-to-end (certificate totals, no proceeds
+double-count, pledged fences in netting/reassignment, checkpoint/restore, inert-when-off,
+059 quantization) and produced 15 findings. Fixed in the review commit:
+
+1. **CH1-creditor rollover loop** (HIGH): claims reassigned to the clearinghouse entered the
+   perpetual rollover loop — recovery bounced back to the payer forever. Rollover now skips
+   any payable whose creditor is the clearinghouse.
+2. **Certificate-paid face rolled at full value** (HIGH): rollover returned only cash/deposits,
+   so face settled in certificates left the debtor owing the rolled face twice — manufactured
+   defaults. **Decision: Q5 overturned** — the rollover return-flow now returns certificates
+   after deposits and cash (rollover re-lends what was repaid, whatever its form).
+3. **Dealer ticket fence** (HIGH): pledged collateral and recourse claims are skipped by
+   `convert_payables_to_tickets` (defense in depth), and
+4. **stage-2 arm gating** (MEDIUM): certificates mode now rejects lender/dealer at
+   `build_clearing_config` and banking at `prepare_scenario` with `ConfigurationError`.
+5. **Final-day recourse** (MEDIUM): `finalize_certificates` resolves open recourse payables
+   (member's certificates burn at par, remainder through the waterfall) so deficiencies can't
+   silently vanish at simulation end.
+6. **defaultdict hygiene** (NIT): certificate balance queries use `.get`, avoiding spurious
+   zero entries copied into every checkpoint.
+
+Documented as stage-2 semantics (not fixed): writedown conservatism — losses are recognized at
+default while reassigned-to-CH claims replenish the redemption pool only when they later pay
+(review #4); commingled redemption pool, historical-association style (#5); CH cash stranded at
+end of run when holders are gone (#7); per-diem interest truncates to 0 at small scale, so the
+margin layer of the waterfall binds only at scale (#9); `certificates_outstanding_peak` is an
+end-of-day peak (#11); stability can end a certificates run with open pledges — finalize
+redeems them (#10). Validation sweep re-run after the fixes: headline table unchanged (the two
+rollover paths are latent in this grid; covered by regression tests instead).

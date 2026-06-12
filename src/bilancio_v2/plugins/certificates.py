@@ -240,7 +240,7 @@ def run_redemption_window(ledger: Ledger) -> None:
             break
         if holder == ch_id or holder in ledger.defaulted_agent_ids:
             continue
-        amount = min(ledger.certificates[holder], ledger.cash[ch_id])
+        amount = min(ledger.certificates.get(holder, ZERO), ledger.cash[ch_id])
         if amount <= ZERO:
             continue
         ledger.transfer_cash(ch_id, holder, amount)
@@ -251,15 +251,40 @@ def run_redemption_window(ledger: Ledger) -> None:
 def finalize_certificates(ledger: Ledger, *, final_day: int) -> None:
     """End-of-run unconditional redemption (mirrors ``finalize_banking``).
 
-    Pledges that matured on the final simulated day are redeemed, then any
-    remaining clearinghouse cash redeems circulating certificates.
+    Pledges that matured on the final simulated day are redeemed, open
+    recourse payables are resolved (the member's own certificates settle at
+    par; the remainder routes through the loss waterfall), then any remaining
+    clearinghouse cash redeems circulating certificates.
     """
     config = ledger.clearing_config
     if config is None or config.mode != "certificates":
         return
     ledger.day = final_day
     process_redemptions(ledger, config)
+    resolve_open_recourse(ledger)
     run_redemption_window(ledger)
+
+
+def resolve_open_recourse(ledger: Ledger) -> None:
+    """Resolve recourse payables still open at simulation end.
+
+    A recourse payable created on the final day (due ``final_day + 1``) never
+    reaches settlement; without this hook its deficiency would silently
+    vanish — no haircut, ``cert_default_losses`` understated. The member's
+    own certificate holdings settle at par (burned); the remainder is written
+    down through the waterfall.
+    """
+    for payable in ledger.payables:
+        if payable.settled or payable.id not in ledger.certificate_recourse_ids:
+            continue
+        remaining = payable.amount
+        burned = min(ledger.certificates.get(payable.debtor, ZERO), remaining)
+        if burned > ZERO:
+            ledger.retire_certificates(payable.debtor, burned, reason="recourse_finalize_burn")
+            remaining -= burned
+        payable.settled = True
+        if remaining > ZERO:
+            apply_certificate_writedown(ledger, payable.debtor, remaining, trigger=payable.id)
 
 
 # ---------------------------------------------------------------------------

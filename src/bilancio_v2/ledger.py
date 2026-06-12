@@ -980,8 +980,9 @@ class Ledger:
             ZERO,
         )
         # Certificates count as liquid means of payment (Plan 060); the term
-        # is identically zero outside certificates mode.
-        return self.cash[agent_id] + deposits + self.certificates[agent_id]
+        # is identically zero outside certificates mode. Read with .get so a
+        # query never seeds spurious zero entries into the balance map.
+        return self.cash[agent_id] + deposits + self.certificates.get(agent_id, ZERO)
 
     # -- checkpoint / rollback ----------------------------------------------------
 

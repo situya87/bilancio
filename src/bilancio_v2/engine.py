@@ -142,6 +142,16 @@ def prepare_scenario(
     clearing_config = build_clearing_config(config)
     certificates_mode = clearing_config is not None and clearing_config.mode == "certificates"
     if certificates_mode:
+        if banking_config is not None:
+            from bilancio.core.errors import ConfigurationError
+
+            # Stage-2 scope: certificate issuance reads cash+certificates
+            # only, so banking deposits would be invisible to the shortfall
+            # computation (over-issuance). Lender/dealer are gated in
+            # build_clearing_config.
+            raise ConfigurationError(
+                "clearinghouse mode 'certificates' cannot be combined with banking (stage 2 scope)"
+            )
         policy = policy.with_certificate_mop()
 
     ledger = Ledger()

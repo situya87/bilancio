@@ -127,12 +127,19 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[b
     )
     update_dealer_risk_history(ledger, issuer_id=payable.debtor, defaulted=False)
     rollover_info = None
-    if ctx.rollover_enabled and payable.pledged_to is None and payable.id not in ledger.certificate_recourse_ids:
+    if (
+        ctx.rollover_enabled
+        and payable.pledged_to is None
+        and payable.id not in ledger.certificate_recourse_ids
+        and not is_clearinghouse(ledger, payable.creditor)
+    ):
         # Partially netted payables roll at full original face; only the
         # cash-settled residual generates a cash return-flow. Pledged
         # collateral never rolls (its proceeds belong to the clearinghouse),
-        # and neither do certificate recourse payables (the clearinghouse
-        # would otherwise return the recovered cash to the member).
+        # neither do certificate recourse payables (the clearinghouse would
+        # otherwise return the recovered cash to the member), and neither do
+        # claims reassigned to the clearinghouse itself (rolling one would
+        # bounce the recovery back to the payer forever).
         rollover_info = (
             payable.debtor,
             payable.creditor,
@@ -704,6 +711,16 @@ def rollover_single_payable(
             if cash_paid > ZERO:
                 ledger.transfer_cash(creditor_id, debtor_id, cash_paid)
                 cash_transferred += cash_paid
+                remaining -= cash_paid
+        if remaining > ZERO:
+            # Certificates return last (Plan 060): rollover re-lends what was
+            # repaid, and face settled in certificates must flow back the same
+            # way or the debtor would owe the rolled face twice over.
+            cert_balance = ledger.certificates.get(creditor_id, ZERO)
+            cert_paid = min(cert_balance, remaining)
+            if cert_paid > ZERO:
+                ledger.transfer_certificates(creditor_id, debtor_id, cert_paid)
+                cash_transferred += cert_paid
 
     if cash_return == ZERO:
         # Fully-netted face: the gross roll happens with no cash return-flow.
