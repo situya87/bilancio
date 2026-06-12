@@ -334,9 +334,11 @@ def ccp_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal, int]:
       ``VMGHHaircutApplied`` events — losses passed to receiving members via
       variation-margin-gains haircutting on fund-exhaustion days.
     - ``ccp_member_defaults``: count of distinct agents with an
-      ``AgentDefaulted`` event. In ccp mode every default is a member-vs-CCP
-      expulsion (the CCP itself cannot default in stage 1), so this equals
-      the number of member expulsions.
+      ``AgentDefaulted`` event, reported ONLY when the stream contains CCP
+      fund events (every run has AgentDefaulted events; non-ccp arms must
+      stay at 0). In ccp mode every default is a member-vs-CCP expulsion
+      (the CCP itself cannot default in stage 1), so this equals the number
+      of member expulsions.
 
     Returns (0, 0, 0) when no CCP events are present, so the metrics are
     inert for non-ccp runs.
@@ -344,20 +346,27 @@ def ccp_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal, int]:
     fund_drawdowns_total = Decimal("0")
     vmgh_haircut_total = Decimal("0")
     defaulted: set[str] = set()
+    ccp_run = False
 
     for e in events:
         kind = e.get("kind")
         if kind == "CCPFundDrawdown":
             fund_drawdowns_total += Decimal(str(e.get("own_tranche", 0) or 0))
             fund_drawdowns_total += Decimal(str(e.get("mutualized_tranche", 0) or 0))
-        elif kind == "VMGHHaircutApplied":
-            vmgh_haircut_total += Decimal(str(e.get("haircut", 0) or 0))
+            ccp_run = True
+        elif kind in ("CCPFundContribution", "CCPFundReplenished", "VMGHHaircutApplied"):
+            ccp_run = True
+            if kind == "VMGHHaircutApplied":
+                vmgh_haircut_total += Decimal(str(e.get("haircut", 0) or 0))
         elif kind == "AgentDefaulted":
             agent = _agent_from_event(e)
             if agent:
                 defaulted.add(agent)
 
-    return fund_drawdowns_total, vmgh_haircut_total, len(defaulted)
+    # ccp_member_defaults only counts in ccp runs (identified by CCP fund
+    # events): every run has AgentDefaulted events, and reporting them here
+    # for other arms would violate the inert-when-off contract.
+    return fund_drawdowns_total, vmgh_haircut_total, (len(defaulted) if ccp_run else 0)
 
 
 def replay_intraday_peak(

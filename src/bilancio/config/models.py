@@ -1146,7 +1146,7 @@ class ClearinghouseConfig(BaseModel):
         description="Certificates must be accepted in settlement (stage 2 supports only true)",
     )
     ccp_fund_share: Decimal = Field(
-        default=Decimal("0.05"), ge=Decimal("0"), le=Decimal("1"),
+        default=Decimal("0.05"), ge=Decimal("0"), lt=Decimal("1"),
         description="Default-fund contribution as a fraction of each member's cash at collection (ccp mode)",
     )
     vmgh_enabled: bool = Field(

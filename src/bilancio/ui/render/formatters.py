@@ -171,6 +171,51 @@ def format_payable_netted(event: dict[str, Any]) -> tuple[str, list[str], str]:
     return title, lines, "[NET]"
 
 
+@registry.register("CCPFundContribution")
+def format_ccp_fund_contribution(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format CCP default-fund contributions (Plan 061)."""
+    member = event.get("member", "Unknown")
+    amount = event.get("amount", 0)
+    title = f"[CCP] Fund Contribution: ${amount:,}"
+    lines = [f"{member} → fund (total: ${event.get('fund_total', 0):,})"]
+    return title, lines, "[CCP]"
+
+
+@registry.register("CCPFundDrawdown")
+def format_ccp_fund_drawdown(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format CCP default-fund drawdowns (Plan 061 waterfall)."""
+    member = event.get("member") or "structural gap"
+    own = event.get("own_tranche", 0)
+    mutual = event.get("mutualized_tranche", 0)
+    title = f"[CCP] Fund Drawdown: ${own + mutual:,}"
+    lines = [
+        f"for {member}: own ${own:,}, mutualized ${mutual:,}",
+        f"VMGH residual: ${event.get('vmgh_residual', 0):,} (fund left: ${event.get('fund_total', 0):,})",
+    ]
+    return title, lines, "[CCP]"
+
+
+@registry.register("CCPFundReplenished")
+def format_ccp_fund_replenished(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format CCP default-fund replenishments (Plan 061)."""
+    member = event.get("member", "Unknown")
+    amount = event.get("amount", 0)
+    title = f"[CCP] Fund Replenished: ${amount:,}"
+    lines = [f"{member} → fund (gap left: ${event.get('gap_remaining', 0):,})"]
+    return title, lines, "[CCP]"
+
+
+@registry.register("VMGHHaircutApplied")
+def format_vmgh_haircut(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format variation-margin-gains haircuts on CCP payouts (Plan 061)."""
+    creditor = event.get("creditor", "Unknown")
+    paid = event.get("paid", 0)
+    haircut = event.get("haircut", 0)
+    title = f"[CCP] VMGH Haircut: ${haircut:,}"
+    lines = [f"{creditor} paid ${paid:,} of ${event.get('face', 0):,} (h={event.get('haircut_factor', 0):.3f})"]
+    return title, lines, "[CCP]"
+
+
 @registry.register("ClearingExecuted")
 def format_clearing_executed(event: dict[str, Any]) -> tuple[str, list[str], str]:
     """Format clearinghouse daily netting summary events."""

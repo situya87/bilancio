@@ -220,18 +220,19 @@ def test_scheduled_action_is_novated() -> None:
     assert_novation_invariant(runtime.ledger)
 
 
-def test_member_to_nonmember_payable_is_not_novated() -> None:
+def test_member_to_nonmember_payable_is_rejected() -> None:
+    """Originally these passed through un-novated, but the PR #173 review
+    showed they leak the mutualized fund to non-members on expulsion
+    (reassignment creates a CCP1->non-member payable funded by members).
+    Stage 1 rejects them outright."""
     config = ccp_scenario(
         [],
         cash={"F1": 100},
         extra_agents=[{"id": "L1", "kind": "non_bank_lender", "name": "Lender"}],
     )
     config.initial_actions.append({"create_payable": {"from": "F1", "to": "L1", "amount": 40, "due_day": 2}})
-    runtime = prepare_scenario(config)
-    assert len(runtime.ledger.payables) == 1
-    payable = runtime.ledger.payables[0]
-    assert (payable.debtor, payable.creditor) == ("F1", "L1")
-    assert payable.origin_debtor is None
+    with pytest.raises(ConfigurationError, match="member and a non-member"):
+        prepare_scenario(config)
 
 
 # -- novation invariant and leg-face reconciliation (acceptance criterion 1) ---
@@ -346,3 +347,84 @@ def test_golden_example_matches_capture() -> None:
     assert result.reached_stable
     assert sorted(result.ledger.defaulted_agent_ids) == ["F1"]
     assert_novation_invariant(result.ledger)
+
+
+class TestReviewFixes:
+    """Regression tests for the PR #173 adversarial-review findings."""
+
+    def test_bank_agents_rejected_in_ccp_mode(self):
+        """Finding 1: deposit collections credit the CCP's deposit account,
+        invisible to the cash-only payout pool — banks are gated out."""
+        config = ccp_scenario(
+            [("F1", "F2", 50, 1)],
+            cash={"F1": 50},
+            extra_agents=[{"id": "B1", "kind": "bank", "name": "Bank"}],
+        )
+        with pytest.raises(ConfigurationError, match="bank agents"):
+            prepare_scenario(config)
+
+    def test_transfer_claim_of_novated_leg_rejected(self):
+        """Finding 2: moving a novated leg re-links the star."""
+        config = ccp_scenario(
+            [("F1", "F2", 50, 2)],
+            cash={"F1": 50},
+            scheduled=[(1, {"transfer_claim": {"contract_alias": None, "contract_id": "PAY_0", "to_agent": "F3"}})],
+        )
+        runtime = prepare_scenario(config)
+        # Resolve the actual in-leg id from the ledger (novation renames).
+        in_leg = next(p for p in runtime.ledger.payables if p.origin_debtor == "F1" and p.debtor == "F1")
+        config2 = ccp_scenario(
+            [("F1", "F2", 50, 2)],
+            cash={"F1": 50},
+            scheduled=[(1, {"transfer_claim": {"contract_id": in_leg.id, "to_agent": "F3"}})],
+        )
+        with pytest.raises(ConfigurationError, match="novated CCP leg"):
+            run_scenario(config2)
+
+    def test_member_to_nonmember_payable_rejected_in_ccp_mode(self):
+        """Finding 5: a member with a non-member payable creditor breaks the
+        star (mutualized fund would leak via reassignment)."""
+        config = ccp_scenario(
+            [("F1", "CB", 50, 1)],
+            cash={"F1": 50},
+        )
+        with pytest.raises(ConfigurationError, match="member and a non-member"):
+            prepare_scenario(config)
+
+    def test_reserved_ccp_id_collision_rejected(self):
+        """Finding 7: a scenario declaring CCP1 with another kind must not be
+        silently overwritten/merged."""
+        config = ccp_scenario(
+            [("F1", "F2", 50, 1)],
+            cash={"F1": 50},
+            extra_agents=[{"id": "CCP1", "kind": "firm", "name": "Impostor"}],
+        )
+        with pytest.raises(ConfigurationError, match="reserved"):
+            prepare_scenario(config)
+
+    def test_replenishment_reserves_due_today_payins(self):
+        """Finding 4: the fund top-up must not grab cash a member needs for
+        its pay-in due today (bookkeeping must not manufacture defaults)."""
+        # F1 contributes on day 0, F2 defaults day 1 draining the fund
+        # (mutualized tranche), F1 then owes a pay-in on day 2 while
+        # replenishment wants to top the fund back up the same day.
+        config = ccp_scenario(
+            [("F2", "F1", 80, 1), ("F1", "F3", 95, 2)],
+            cash={"F1": 100, "F2": 10, "F3": 10},
+            clearinghouse={"ccp_fund_share": "0.05"},
+            max_days=6,
+        )
+        result = run_scenario(config)
+        defaulted = {e.get("agent") or e.get("agent_id") for e in result.events if e["kind"] == "AgentDefaulted"}
+        assert "F1" not in defaulted, "replenishment took cash F1 needed for its due-today pay-in"
+
+    def test_ccp_totals_inert_for_non_ccp_runs(self):
+        from bilancio.analysis.metrics import ccp_totals
+
+        events = [
+            {"kind": "AgentDefaulted", "agent": "F1", "day": 1},
+            {"kind": "AgentDefaulted", "agent": "F2", "day": 2},
+        ]
+        assert ccp_totals(events) == (Decimal("0"), Decimal("0"), 0)
+        events.append({"kind": "CCPFundContribution", "member": "F1", "amount": "5", "day": 0})
+        assert ccp_totals(events)[2] == 2

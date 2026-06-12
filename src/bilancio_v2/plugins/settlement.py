@@ -242,6 +242,10 @@ def settle_ccp_payouts(ledger: Ledger, ccp: str, ctx: RunContext) -> bool:
         return impactful
 
     # VMGH haircut day: pay h·amount per leg, conserving the pool exactly.
+    if not (ledger.clearing_config is None or ledger.clearing_config.vmgh_enabled):
+        # Stage 1 cannot close the books without VMGH; the schema validator
+        # rejects vmgh_enabled=False, this guards direct kernel construction.
+        raise InvariantViolation("ccp payout pool short and VMGH is disabled (stage 1 requires vmgh_enabled)")
     pool = available
     haircut_factor = float(pool / required)
     shares = allocate_pro_rata([(payable.id, payable.amount) for payable in due_out], pool)
@@ -383,7 +387,9 @@ def handle_payable_default(ledger: Ledger, payable: Payable, remaining: Decimal,
     payable.settled = True
     ccp = active_ccp_id(ledger)
     ccp_pay_in_shortfall = ccp is not None and payable.creditor == ccp
-    ccp_liquid_before = ledger.agent_liquid_assets(ccp) if ccp_pay_in_shortfall else ZERO
+    # Recovery is measured in spendable cash: deposits/certificates recovered
+    # by the CCP cannot fund the cash payout pool (review finding, PR #173).
+    ccp_liquid_before = ledger.cash[ccp] if ccp_pay_in_shortfall else ZERO
     expel_agent(
         ledger,
         payable.debtor,
@@ -398,7 +404,7 @@ def handle_payable_default(ledger: Ledger, payable: Payable, remaining: Decimal,
         # absorbed by recovery (already routed to CCP1 by the expel
         # machinery), then its own fund contribution, then the mutualized
         # tranche; any residue shrinks the same day's payout pool (VMGH).
-        recovery = ledger.agent_liquid_assets(ccp) - ccp_liquid_before
+        recovery = ledger.cash[ccp] - ccp_liquid_before
         apply_ccp_waterfall(ledger, member=payable.debtor, shortfall=remaining, recovery=recovery)
     if payable.id in ledger.certificate_recourse_ids:
         # Member defaulted on a certificate recourse payable: the unpaid

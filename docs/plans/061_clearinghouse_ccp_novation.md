@@ -303,3 +303,34 @@ haircut-induced knock-ons (attributed via origin pairs), not member↔member re-
 - **D6 (windfall symmetry, documented)**: when an origin creditor dies, the surviving A→CCP1
   in-leg still collects while the offsetting out-leg is written off — that cash stays with the
   CCP as free cash and reduces future haircuts (mirror image of mutualization).
+
+### Adversarial review round (PR #173, 2026-06-12)
+
+An independent review verified cash conservation, CCP atomicity, novation completeness for
+`create_payable`, inert-when-off, origin-aware δ consistency, checkpoint/restore, and
+determinism — and produced 12 findings. Fixed in the review commit:
+
+1. **Deposit-channel blindness** (HIGH): a pay-in collected in bank deposits credited the CCP's
+   deposit account, invisible to the cash-only payout pool → spurious 100% VMGH haircut with
+   zero defaults. Stage-1 fix: ccp mode rejects bank agents outright, and waterfall recovery is
+   measured in spendable **cash** (not liquid assets).
+2. **`transfer_claim` novation escape** (HIGH): transferring a novated leg (or any claim that
+   would re-link two members) is rejected with `ConfigurationError`.
+3. **`ccp_member_defaults` not inert** (MEDIUM): now reported only when CCP fund events are
+   present in the stream — other arms stay at 0.
+4. **Replenishment manufacturing same-day defaults** (MEDIUM): the top-up now reserves the
+   member's pay-ins due today (`min(gap, cash − dues_today)`).
+5. **Member↔non-member payables rejected** (MEDIUM): they would leak the mutualized fund to
+   non-members via reassignment on expulsion; stage 1 requires payables to link two members or
+   no members.
+6. **Reserved-id collision** (LOW): scenarios declaring `CCP1`/`CH1` with another kind are
+   rejected instead of silently merged; `vmgh_enabled` is now asserted in the kernel payout
+   path; `ccp_fund_share < 1` aligned across schema and profile; duplicate `Checkpoint` fields
+   deduped; render formatters added for the four CCP events.
+
+Documented as stage-1 semantics (not fixed): multi-leg same-day defaults split the waterfall
+attribution between a member-labeled drawdown (trigger leg) and an anonymous structural draw
+(written-off sibling legs) — books close exactly, attribution is coarse (review #6);
+replenishment-only days count as quiet for stability (#12). Validation sweep re-run after the
+fixes: headline table unchanged (findings were latent in the grid; regression tests cover each
+fixed path).

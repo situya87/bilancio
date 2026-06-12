@@ -210,10 +210,6 @@ class Checkpoint:
     ccp_fund_contribution: dict[str, Decimal]
     ccp_fund_target: dict[str, Decimal]
     ccp_fund_total: Decimal
-    # CCP default-fund accounting (Plan 061). Empty/zero outside ccp mode.
-    ccp_fund_contribution: dict[str, Decimal]
-    ccp_fund_target: dict[str, Decimal]
-    ccp_fund_total: Decimal
 
 
 # ---------------------------------------------------------------------------

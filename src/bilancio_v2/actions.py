@@ -133,6 +133,15 @@ def apply_action(ledger: Ledger, action: dict[str, Any], *, index: int, setup: b
                     index=index,
                 )
                 return
+            if is_member(ledger, debtor) != is_member(ledger, creditor):
+                from bilancio.core.errors import ConfigurationError
+
+                # A member with a non-member payable counterparty breaks the
+                # star: on expulsion the mutualized fund would leak to the
+                # non-member via reassignment (PR #173 review, stage 1 scope).
+                raise ConfigurationError(
+                    "payables linking a clearing member and a non-member are not supported in ccp mode (stage 1 scope)"
+                )
         ledger.create_payable(
             payable_id=ledger.unique_contract_id("PAY", index),
             debtor=debtor,
@@ -226,6 +235,21 @@ def _apply_transfer_claim(ledger: Ledger, payload: dict[str, Any], *, setup: boo
     for payable in ledger.payables:
         if payable.id != resolved_id:
             continue
+        if ledger.clearing_config is not None and getattr(ledger.clearing_config, "mode", None) == "ccp":
+            from bilancio.core.errors import ConfigurationError
+            from bilancio_v2.plugins.clearinghouse_ccp import is_member
+
+            # Novation escape hatch (PR #173 review): transferring a novated
+            # leg re-links the star, and transferring any claim to a member
+            # whose debtor is also a member recreates a member<->member edge.
+            if payable.origin_debtor is not None:
+                raise ConfigurationError(
+                    "transfer_claim cannot move a novated CCP leg (stage 1 ccp scope)"
+                )
+            if is_member(ledger, payable.debtor) and is_member(ledger, to_agent):
+                raise ConfigurationError(
+                    "transfer_claim would create a member-to-member payable in ccp mode (stage 1 scope)"
+                )
         old_holder = payable.creditor
         payable.creditor = to_agent
         ledger.record(

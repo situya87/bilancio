@@ -182,9 +182,10 @@ def collect_initial_contributions(ledger: Ledger, config: CleanClearingConfig, c
 def replenish_fund(ledger: Ledger, ccp: str) -> None:
     """Surviving members top up toward their original contribution.
 
-    Capped at available member cash (an uncapped top-up would manufacture
-    defaults inside a bookkeeping step); the shortfall carries forward
-    implicitly as the remaining target gap.
+    Capped at available member cash NET of the member's pay-ins due today
+    (an uncapped top-up — or one that grabs cash a member needs for today's
+    settlement — would manufacture defaults inside a bookkeeping step); the
+    shortfall carries forward implicitly as the remaining target gap.
     """
     for member_id in sorted(ledger.ccp_fund_target):
         if member_id in ledger.defaulted_agent_ids:
@@ -192,7 +193,15 @@ def replenish_fund(ledger: Ledger, ccp: str) -> None:
         gap = ledger.ccp_fund_target[member_id] - ledger.ccp_fund_contribution.get(member_id, ZERO)
         if gap <= ZERO:
             continue
-        top_up = min(gap, ledger.cash[member_id])
+        dues_today = sum(
+            (
+                payable.amount
+                for payable in ledger.payables
+                if not payable.settled and payable.due_day == ledger.day and payable.debtor == member_id
+            ),
+            ZERO,
+        )
+        top_up = min(gap, ledger.cash[member_id] - dues_today)
         if top_up <= ZERO:
             continue
         ledger.transfer_cash(member_id, ccp, top_up)

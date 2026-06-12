@@ -112,7 +112,10 @@ class TestCCPTotals:
         assert defaults == 0
 
     def test_member_defaults_counts_distinct_agents(self):
+        # A CCP fund event must be present: AgentDefaulted alone is not a CCP
+        # signal, and non-ccp arms must stay at 0 (PR #173 review finding).
         events = [
+            {"kind": "CCPFundContribution", "day": 0, "member": "H1", "amount": "5"},
             {"kind": "AgentDefaulted", "day": 2, "agent": "H1"},
             {"kind": "AgentDefaulted", "day": 2, "agent": "H1"},  # duplicate
             {"kind": "AgentDefaulted", "day": 3, "agent": "H3"},
@@ -120,6 +123,13 @@ class TestCCPTotals:
         ]
         drawdowns, vmgh, defaults = ccp_totals(events)
         assert defaults == 3
+
+    def test_member_defaults_zero_without_ccp_events(self):
+        events = [
+            {"kind": "AgentDefaulted", "day": 2, "agent": "H1"},
+            {"kind": "AgentDefaulted", "day": 3, "agent": "H3"},
+        ]
+        assert ccp_totals(events) == (Decimal("0"), Decimal("0"), 0)
 
     def test_mixed_stream(self):
         events = [

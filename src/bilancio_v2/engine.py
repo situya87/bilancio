@@ -116,6 +116,22 @@ class RunResult:
         return self.final_day
 
 
+def _reserve_agent_id(ledger: Ledger, agent_id: str, expected_kind: str) -> None:
+    """Reject scenarios that declare the reserved institution id with another kind.
+
+    ``register_agent`` overwrites silently, which would merge a member's
+    balance sheet into the institution (PR #173 review).
+    """
+    existing = ledger.agents.get(agent_id)
+    if existing is not None and existing.kind != expected_kind:
+        from bilancio.core.errors import ConfigurationError
+
+        raise ConfigurationError(
+            f"agent id {agent_id!r} is reserved for kind {expected_kind!r} in this clearinghouse mode "
+            f"(scenario declares kind {existing.kind!r})"
+        )
+
+
 def _unsupported_reason(config: ScenarioConfig) -> str | None:
     # The clean-core gate functions define the supported domain; v2 matches
     # it exactly so both engines accept and reject the same scenarios.
@@ -172,12 +188,23 @@ def prepare_scenario(
         ledger.register_agent(agent_spec.id, str(agent_spec.kind), agent_spec.name)
     if certificates_mode:
         ledger.clearing_config = clearing_config
+        _reserve_agent_id(ledger, CLEARINGHOUSE_AGENT_ID, CLEARINGHOUSE_AGENT_KIND)
         if not any(agent.kind == CLEARINGHOUSE_AGENT_KIND for agent in ledger.agents.values()):
             ledger.register_agent(CLEARINGHOUSE_AGENT_ID, CLEARINGHOUSE_AGENT_KIND, CLEARINGHOUSE_AGENT_NAME)
     if ccp_mode:
+        if any(agent.kind == "bank" for agent in ledger.agents.values()):
+            from bilancio.core.errors import ConfigurationError
+
+            # PR #173 review: deposit collections credit the CCP's deposit
+            # account, which the cash-only payout pool cannot spend — a fully
+            # collected pay-in would still trigger a 100% VMGH haircut.
+            raise ConfigurationError(
+                "clearinghouse mode 'ccp' cannot be combined with bank agents (stage 1 scope)"
+            )
         # The config (and the CCP agent) must be on the ledger BEFORE initial
         # actions run: novation rewrites payable creation at setup time.
         ledger.clearing_config = clearing_config
+        _reserve_agent_id(ledger, CCP_AGENT_ID, CCP_AGENT_KIND)
         if not any(agent.kind == CCP_AGENT_KIND for agent in ledger.agents.values()):
             ledger.register_agent(CCP_AGENT_ID, CCP_AGENT_KIND, CCP_AGENT_NAME)
 
