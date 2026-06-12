@@ -49,6 +49,11 @@ class CapabilityMatrix:
                 # and, like the central bank, cannot default (Plan 060). The
                 # row is inert unless a clearinghouse agent exists.
                 "clearinghouse": AgentCapabilities(mop_order=(MOP_CASH,), can_default=False),
+                # The central counterparty (Plan 061) is a matched-book
+                # novator: cash-only, and the stage-1 no-failure choice is
+                # encoded here (VMGH always closes its books). Inert unless
+                # a central_counterparty agent exists.
+                "central_counterparty": AgentCapabilities(mop_order=(MOP_CASH,), can_default=False),
             }
         )
 

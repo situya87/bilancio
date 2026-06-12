@@ -20,12 +20,19 @@ from typing import Any
 
 from bilancio.core.errors import DefaultError
 from bilancio_v2.actions import action_references_agent
-from bilancio_v2.ledger import ZERO, DeliveryObligation, Ledger, Payable
+from bilancio_v2.ledger import ZERO, DeliveryObligation, InvariantViolation, Ledger, Payable
 from bilancio_v2.plugins.base import RunContext
 from bilancio_v2.plugins.certificates import (
     apply_certificate_writedown,
     close_pledges_for_defaulted_debtor,
     is_clearinghouse,
+)
+from bilancio_v2.plugins.clearinghouse_ccp import (
+    active_ccp_id,
+    allocate_pro_rata,
+    apply_ccp_waterfall,
+    draw_fund_for_payout_gap,
+    is_member,
 )
 from bilancio_v2.policy import MOP_CLEARINGHOUSE_CERT
 
@@ -51,9 +58,28 @@ class SettlementPhase:
                     for debtor, creditor, face, maturity_distance in ledger.netted_rollover_queue
                 )
             ledger.netted_rollover_queue.clear()
+        ccp = active_ccp_id(ledger)
+        if ccp is not None:
+            # Two-leg settlement day (Plan 061 §2.2): pay-ins (creditor ==
+            # CCP1) settle first via the normal mop path (shortfalls run the
+            # waterfall inside the default machinery), then the CCP payout
+            # leg (with VMGH haircut if the pool is short), then all other
+            # payables exactly as today. CCP legs are atomic per day: the
+            # CCP never pays before collecting, so cash[CCP1] ≥ 0 holds by
+            # construction.
+            for payable in list(ledger.payables):
+                if payable.settled or payable.due_day != ledger.day or payable.creditor != ccp:
+                    continue
+                settled, rollover_info = settle_payable(ledger, payable, ctx)
+                impactful = settled or impactful
+                if rollover_info is not None:
+                    settled_for_rollover.append(rollover_info)
+            impactful = settle_ccp_payouts(ledger, ccp, ctx) or impactful
         for payable in list(ledger.payables):
             if payable.settled or payable.due_day != ledger.day:
                 continue
+            if ccp is not None and (payable.creditor == ccp or payable.debtor == ccp):
+                continue  # CCP legs already handled atomically above
             settled, rollover_info = settle_payable(ledger, payable, ctx)
             impactful = settled or impactful
             if rollover_info is not None:
@@ -140,13 +166,34 @@ def settle_payable(ledger: Ledger, payable: Payable, ctx: RunContext) -> tuple[b
         # otherwise return the recovered cash to the member), and neither do
         # claims reassigned to the clearinghouse itself (rolling one would
         # bounce the recovery back to the payer forever).
-        rollover_info = (
-            payable.debtor,
-            payable.creditor,
-            payable.amount + payable.netted_amount,
-            payable.maturity_distance,
-            payable.amount,
-        )
+        ccp = active_ccp_id(ledger)
+        if ccp is not None and payable.debtor == ccp:
+            # CCP1→B out-legs NEVER enqueue rollover (Plan 061 §2.3): they
+            # have no independent economic life — the origin pair rolls
+            # once, recorded from the A→CCP1 in-leg.
+            rollover_info = None
+        elif ccp is not None and payable.creditor == ccp:
+            if payable.origin_debtor is None or payable.origin_creditor is None:
+                raise InvariantViolation(f"ccp in-leg {payable.id} is missing its origin pair")
+            # Roll the ORIGIN pair at gross face; the cash return-flow is
+            # the cash-settled portion of this in-leg and runs B→A directly
+            # (refinancing is a new bilateral credit decision — only the
+            # resulting payable is re-novated).
+            rollover_info = (
+                payable.origin_debtor,
+                payable.origin_creditor,
+                payable.amount + payable.netted_amount,
+                payable.maturity_distance,
+                payable.amount,
+            )
+        else:
+            rollover_info = (
+                payable.debtor,
+                payable.creditor,
+                payable.amount + payable.netted_amount,
+                payable.maturity_distance,
+                payable.amount,
+            )
     return True, rollover_info
 
 
@@ -160,6 +207,63 @@ def record_pledge_proceeds(ledger: Ledger, payable: Payable, paid: Decimal, *, f
         if fully_settled:
             pledge.settlement_day = ledger.day
         return
+
+
+def settle_ccp_payouts(ledger: Ledger, ccp: str, ctx: RunContext) -> bool:
+    """The CCP payout leg (Plan 061 §2.2 step 2), after all pay-ins.
+
+    The payout pool is the CCP's free cash (cash minus the fund) — i.e.
+    today's collections, recoveries, and any prior surplus. If the pool is
+    short, the remaining fund is drawn pro-rata (structural gaps from past
+    defaults); if it is still short, VMGH applies haircut factor
+    ``h = pool/required`` pro-rata across every payout (largest-remainder in
+    whole units, conserving the pool exactly), each leg is marked settled,
+    and the haircut residue is a final loss to the receiving member.
+    """
+    due_out = [
+        payable
+        for payable in ledger.payables
+        if not payable.settled and payable.due_day == ledger.day and payable.debtor == ccp
+    ]
+    if not due_out:
+        return False
+    required = sum((payable.amount for payable in due_out), ZERO)
+    available = ledger.cash[ccp] - ledger.ccp_fund_total
+    if available < required:
+        available += draw_fund_for_payout_gap(ledger, required - available)
+
+    if available >= required:
+        impactful = False
+        for payable in due_out:
+            settled, rollover_info = settle_payable(ledger, payable, ctx)
+            if rollover_info is not None:
+                raise InvariantViolation(f"ccp out-leg {payable.id} produced a rollover entry")
+            impactful = settled or impactful
+        return impactful
+
+    # VMGH haircut day: pay h·amount per leg, conserving the pool exactly.
+    if not (ledger.clearing_config is None or ledger.clearing_config.vmgh_enabled):
+        # Stage 1 cannot close the books without VMGH; the schema validator
+        # rejects vmgh_enabled=False, this guards direct kernel construction.
+        raise InvariantViolation("ccp payout pool short and VMGH is disabled (stage 1 requires vmgh_enabled)")
+    pool = available
+    haircut_factor = float(pool / required)
+    shares = allocate_pro_rata([(payable.id, payable.amount) for payable in due_out], pool)
+    for payable in due_out:
+        paid = shares.get(payable.id, ZERO)
+        if paid > ZERO:
+            ledger.transfer_cash(ccp, payable.creditor, paid)
+        payable.settled = True
+        ledger.log(
+            "VMGHHaircutApplied",
+            contract_id=payable.id,
+            creditor=payable.creditor,
+            face=payable.amount,
+            paid=paid,
+            haircut=payable.amount - paid,
+            haircut_factor=haircut_factor,
+        )
+    return True
 
 
 def pay_with_deposit(
@@ -281,6 +385,11 @@ def handle_payable_default(ledger: Ledger, payable: Payable, remaining: Decimal,
     )
     creditor_weights = collect_creditor_weights(ledger, payable.debtor)
     payable.settled = True
+    ccp = active_ccp_id(ledger)
+    ccp_pay_in_shortfall = ccp is not None and payable.creditor == ccp
+    # Recovery is measured in spendable cash: deposits/certificates recovered
+    # by the CCP cannot fund the cash payout pool (review finding, PR #173).
+    ccp_liquid_before = ledger.cash[ccp] if ccp_pay_in_shortfall else ZERO
     expel_agent(
         ledger,
         payable.debtor,
@@ -290,6 +399,13 @@ def handle_payable_default(ledger: Ledger, payable: Payable, remaining: Decimal,
     )
     update_dealer_risk_history(ledger, issuer_id=payable.debtor, defaulted=True)
     reassign_receivables(ledger, payable.debtor, creditor_weights)
+    if ccp_pay_in_shortfall:
+        # Loss waterfall (Plan 061 §2.5): the member's missed pay-in is
+        # absorbed by recovery (already routed to CCP1 by the expel
+        # machinery), then its own fund contribution, then the mutualized
+        # tranche; any residue shrinks the same day's payout pool (VMGH).
+        recovery = ledger.cash[ccp] - ccp_liquid_before
+        apply_ccp_waterfall(ledger, member=payable.debtor, shortfall=remaining, recovery=recovery)
     if payable.id in ledger.certificate_recourse_ids:
         # Member defaulted on a certificate recourse payable: the unpaid
         # remainder routes through the clearinghouse loss waterfall
@@ -537,6 +653,21 @@ def reassign_receivables(
             new_amount = Decimal(int(original_amount * weight))
             if new_amount < Decimal("1"):
                 continue
+            if (
+                active_ccp_id(ledger) is not None
+                and is_member(ledger, receivable.debtor)
+                and is_member(ledger, creditor_id)
+            ):
+                # Star guard (Plan 061 §3): under ccp mode a defaulted
+                # member's receivables are all CCP1→m legs, and CCP1 is the
+                # sole creditor weight, so the skip rule above offsets them.
+                # Reaching this branch would re-link two members and break
+                # the novation invariant — it must be structurally
+                # unreachable.
+                raise InvariantViolation(
+                    f"reassignment of {defaulted_agent_id}'s receivable {old_payable_id} would create "
+                    f"a member↔member payable ({receivable.debtor} → {creditor_id}) in ccp mode"
+                )
             new_payable_id = f"PAY_reassigned_{len(ledger.payables)}"
             ledger.log(
                 "ReceivableReassigned",
@@ -663,7 +794,12 @@ def rollover_settled_payables(ledger: Ledger, settled_payables: list[tuple[str, 
             max_due_day = payable.due_day
 
     new_payable_ids: list[str] = []
+    ccp = active_ccp_id(ledger)
     for debtor_id, creditor_id, amount, maturity_distance, cash_return in settled_payables:
+        if ccp is not None and ccp in (debtor_id, creditor_id):
+            # Rollover entries in ccp mode are origin pairs (Plan 061 §2.3);
+            # a CCP leg in the queue means an out-leg enqueued itself — a bug.
+            raise InvariantViolation(f"ccp leg ({debtor_id} → {creditor_id}) reached the rollover queue")
         payable_id = rollover_single_payable(
             ledger,
             debtor_id,
@@ -694,13 +830,40 @@ def rollover_single_payable(
     if creditor_id not in ledger.agents or creditor_id in ledger.defaulted_agent_ids:
         return None
 
-    new_payable = ledger.add_rollover_payable(
-        debtor=debtor_id,
-        creditor=creditor_id,
-        amount=amount,
-        due_day=new_due_day,
-        maturity_distance=maturity_distance,
-    )
+    ccp = active_ccp_id(ledger)
+    if ccp is not None and is_member(ledger, debtor_id) and is_member(ledger, creditor_id):
+        # Re-novation at roll time (Plan 061 §2.3): rollover entries in ccp
+        # mode are origin pairs, so the rolled payable is recreated as fresh
+        # A→CCP1 + CCP1→B legs. Like all rollover payables they emit no
+        # PayableCreated event (observable through PayableRolledOver, whose
+        # payable_id is the in-leg); the cash return-flow below runs B→A
+        # directly, unchanged.
+        new_payable = ledger.add_rollover_payable(
+            debtor=debtor_id,
+            creditor=ccp,
+            amount=amount,
+            due_day=new_due_day,
+            maturity_distance=maturity_distance,
+            origin_debtor=debtor_id,
+            origin_creditor=creditor_id,
+        )
+        ledger.add_rollover_payable(
+            debtor=ccp,
+            creditor=creditor_id,
+            amount=amount,
+            due_day=new_due_day,
+            maturity_distance=maturity_distance,
+            origin_debtor=debtor_id,
+            origin_creditor=creditor_id,
+        )
+    else:
+        new_payable = ledger.add_rollover_payable(
+            debtor=debtor_id,
+            creditor=creditor_id,
+            amount=amount,
+            due_day=new_due_day,
+            maturity_distance=maturity_distance,
+        )
 
     cash_transferred = ZERO
     if cash_return > ZERO:

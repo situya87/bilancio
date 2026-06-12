@@ -252,3 +252,85 @@ No default-*lineage* attribution exists today. `analysis/metrics.py::cascade_fra
 - **Requires Plan 059** (`ClearingPhase`, `net_payable`, clearinghouse block, gross-roll rollover with `cash_return`, netting-aware `phi_delta`). Independent of **Plan 060**, but shares the block schema and must not collide with 060's `clearinghouse` agent kind (distinct `central_counterparty` kind recommended). Order: 059 → 060 → 061. Reconcile naming (`ClearinghouseConfig` vs `ClearinghouseScenarioConfig`) with whatever 059 lands.
 - **Conflict surface**: this plan and the in-flight Treynor bank-dealer work both touch `settlement.py`'s expel/reassign paths (`docs/analysis/treynor_dealer_and_bank_model.md`, `ui/cli/treynor.py`); the dealer plugin's in-place `payable.creditor` mutation is the sharpest contact point. Coordinate merge order; whoever merges second re-verifies `prepare_scenario` phase order and the expel-path tests.
 - **OPEN QUESTIONS — RESOLVED (2026-06-11)**: 1 fund sizing basis → **DECIDED** cash-proportional; 2 rollover return-flow routing → **DECIDED** direct B→A, re-novate the payable; 3 κ drain from contributions → **DECIDED (user-confirmed)** accept and report effective κ; 4 replenishment cash cap → **DECIDED** yes, carry shortfall; 5 mode exclusivity → **DECIDED (user-confirmed)** netting/certificates/ccp are exclusive variants of one block, and ccp mode rejects dealer/lender/banking arms at validation; 6 paired-arm runner → **DECIDED** no, two sweeps at matched seeds.
+
+## Implementation findings & decisions (2026-06-12, autonomous run)
+
+### Smoke sweep (acceptance criterion 10, extended grid)
+
+Matched `sweep ring` arms (n=10, maturity_days=5, c=1, κ ∈ {0.25, 0.5, 1, 2}, μ ∈ {0, 0.5},
+seed 42, `--default-handling expel-agent`), 059-netting vs `--clearing-ccp`:
+
+| κ | μ | δ netting | δ ccp | depth netting | depth ccp |
+|---|---|-----------|-------|---------------|-----------|
+| 0.25 | 0 | 0.818 | 0.564 | 7 | **1** |
+| 0.5 | 0 | 0.830 | 0.486 | 2 | 2 |
+| 1 | 0 | 0.690 | 0.604 | 3 | 3 |
+| 2 | 0 | 0.828 | 0.628 | 8 | **1** |
+| 0.25–1 | 0.5 | 0.93–0.99 | 1.000 | 3–4 | 3 |
+| 2 | 0.5 | 0.968 | 0.900 | 3 | 2 |
+
+**Headline confirmed**: where the baseline shows long serial cascades (depth 7–8), novation
+collapses them to depth 1 — defaults become independent member-vs-CCP events — and δ falls by
+19–34pp. Mutualization is visible in `fund_drawdowns_total` (6–200) and `vmgh_haircut_total`
+(175–305) being active in every stressed cell. Depth > 1 under ccp reflects genuine
+haircut-induced knock-ons (attributed via origin pairs), not member↔member re-links.
+
+### Decisions taken (autonomous)
+
+- **D1 (origin-aware δ)**: novation doubles the raw `PayableCreated` book (in-leg + out-leg per
+  obligation), which would double `gross_face_due` and debit δ for an in-leg default even when
+  the fund made the end creditor whole. `dues_for_day` / `netting_totals` now skip novated
+  in-legs (`debtor == origin_debtor`): each obligation counts once, on the out-leg — δ measures
+  **end-creditor losses** on the same denominator as the baseline arms.
+- **D2 (VMGH legs and δ)**: a haircut payout (paid = h·face < face) is marked settled by
+  `VMGHHaircutApplied` without a `PayableSettled` event, so it earns **zero** φ credit — the
+  binary-completion convention every arm uses (baseline partial settlements also earn zero).
+  Consequence: μ-skewed stressed cells can show δ_ccp = 1.0 while end creditors actually
+  received h ≈ pool/required of face each day; read `vmgh_haircut_total` (the actual severity)
+  alongside δ. The loss-weighted-δ metric remains the roadmap's separate open item.
+- **D3 (fund collection in the kernel)**: contributions are collected on day 0 at the top of
+  `ClearingPhase` (int(share × member cash), `CCPFundContribution` events) instead of
+  compiler-emitted `transfer_cash` setup actions — one implementation point that also covers
+  hand-written scenarios. Effective κ is reduced by the contribution, as decided (accept and
+  report).
+- **D4 (no kernel CCPProfile)**: the kernel reads `CleanClearingConfig` (060 precedent);
+  `CCPProfile` exists at the experiment layer (`bilancio/decision/profiles.py`) as the
+  documented tunables container.
+- **D5 (structural-gap draws)**: out-legs of dead origin debtors maturing later draw the
+  remaining whole fund pro-rata (`CCPFundDrawdown` with `member=None`) before VMGH — the plan's
+  "funded at maturity by fund/VMGH" made concrete; dead members' leftover contributions are
+  reachable only by this draw.
+- **D6 (windfall symmetry, documented)**: when an origin creditor dies, the surviving A→CCP1
+  in-leg still collects while the offsetting out-leg is written off — that cash stays with the
+  CCP as free cash and reduces future haircuts (mirror image of mutualization).
+
+### Adversarial review round (PR #173, 2026-06-12)
+
+An independent review verified cash conservation, CCP atomicity, novation completeness for
+`create_payable`, inert-when-off, origin-aware δ consistency, checkpoint/restore, and
+determinism — and produced 12 findings. Fixed in the review commit:
+
+1. **Deposit-channel blindness** (HIGH): a pay-in collected in bank deposits credited the CCP's
+   deposit account, invisible to the cash-only payout pool → spurious 100% VMGH haircut with
+   zero defaults. Stage-1 fix: ccp mode rejects bank agents outright, and waterfall recovery is
+   measured in spendable **cash** (not liquid assets).
+2. **`transfer_claim` novation escape** (HIGH): transferring a novated leg (or any claim that
+   would re-link two members) is rejected with `ConfigurationError`.
+3. **`ccp_member_defaults` not inert** (MEDIUM): now reported only when CCP fund events are
+   present in the stream — other arms stay at 0.
+4. **Replenishment manufacturing same-day defaults** (MEDIUM): the top-up now reserves the
+   member's pay-ins due today (`min(gap, cash − dues_today)`).
+5. **Member↔non-member payables rejected** (MEDIUM): they would leak the mutualized fund to
+   non-members via reassignment on expulsion; stage 1 requires payables to link two members or
+   no members.
+6. **Reserved-id collision** (LOW): scenarios declaring `CCP1`/`CH1` with another kind are
+   rejected instead of silently merged; `vmgh_enabled` is now asserted in the kernel payout
+   path; `ccp_fund_share < 1` aligned across schema and profile; duplicate `Checkpoint` fields
+   deduped; render formatters added for the four CCP events.
+
+Documented as stage-1 semantics (not fixed): multi-leg same-day defaults split the waterfall
+attribution between a member-labeled drawdown (trigger leg) and an anonymous structural draw
+(written-off sibling legs) — books close exactly, attribution is coarse (review #6);
+replenishment-only days count as quiet for stability (#12). Validation sweep re-run after the
+fixes: headline table unchanged (findings were latent in the grid; regression tests cover each
+fixed path).

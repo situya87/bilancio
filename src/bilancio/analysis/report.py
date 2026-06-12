@@ -17,7 +17,9 @@ from bilancio.analysis.metrics import (
     alpha as alpha_fn,
 )
 from bilancio.analysis.metrics import (
+    cascade_depth_max,
     cascade_fraction,
+    ccp_totals,
     certificate_totals,
     count_defaults,
     creditor_hhi_plus,
@@ -283,9 +285,15 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
     # certificate events are present (non-certificates runs are inert).
     cert_issued_total, cert_outstanding_peak, cert_default_losses = certificate_totals(events)
 
+    # CCP metrics (Plan 061); all zero when no CCP events are present
+    # (non-ccp runs are inert). cascade_depth_max needs no new events and is
+    # computed for every run so with/without-CCP comparisons exist.
+    fund_drawdowns_total, vmgh_haircut_total, ccp_member_defaults = ccp_totals(events)
+
     return {
         "n_defaults": count_defaults(events),
         "cascade_fraction": cascade_fraction(events),
+        "cascade_depth_max": cascade_depth_max(events),
         "cb_loans_created_count": cb_loans_created_count,
         "cb_interest_total_paid": cb_interest_total_paid,
         "cb_loans_outstanding_pre_final": cb_loans_outstanding_pre_final,
@@ -308,6 +316,9 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         "certificates_issued_total": float(cert_issued_total),
         "certificates_outstanding_peak": float(cert_outstanding_peak),
         "cert_default_losses": float(cert_default_losses),
+        "fund_drawdowns_total": float(fund_drawdowns_total),
+        "vmgh_haircut_total": float(vmgh_haircut_total),
+        "ccp_member_defaults": int(ccp_member_defaults),
     }
 
 
@@ -818,6 +829,14 @@ def aggregate_runs(
         certificates_outstanding_peak_val = entry.get("certificates_outstanding_peak") or 0.0
         cert_default_losses_val = entry.get("cert_default_losses") or 0.0
 
+        # CCP metrics (Plan 061), same event-derived pattern; 0.0 when the
+        # registry predates the columns. cascade_depth_max is int-valued but
+        # carried as a float for column-type uniformity.
+        fund_drawdowns_total_val = entry.get("fund_drawdowns_total") or 0.0
+        vmgh_haircut_total_val = entry.get("vmgh_haircut_total") or 0.0
+        ccp_member_defaults_val = entry.get("ccp_member_defaults") or 0.0
+        cascade_depth_max_val = entry.get("cascade_depth_max") or 0.0
+
         rows.append(
             {
                 "run_id": entry.get("run_id"),
@@ -844,6 +863,10 @@ def aggregate_runs(
                 "certificates_issued_total": certificates_issued_total_val,
                 "certificates_outstanding_peak": certificates_outstanding_peak_val,
                 "cert_default_losses": cert_default_losses_val,
+                "fund_drawdowns_total": fund_drawdowns_total_val,
+                "vmgh_haircut_total": vmgh_haircut_total_val,
+                "ccp_member_defaults": ccp_member_defaults_val,
+                "cascade_depth_max": cascade_depth_max_val,
                 "time_to_stability": entry.get("time_to_stability")
                 or str(summary.get("max_day", "")),
                 "metrics_csv": metrics_rel,
@@ -875,6 +898,10 @@ def aggregate_runs(
         "certificates_issued_total",
         "certificates_outstanding_peak",
         "cert_default_losses",
+        "fund_drawdowns_total",
+        "vmgh_haircut_total",
+        "ccp_member_defaults",
+        "cascade_depth_max",
         "time_to_stability",
         "metrics_csv",
     ]

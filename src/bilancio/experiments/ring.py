@@ -96,6 +96,12 @@ class RingRunSummary:
     certificates_issued_total: float = 0.0
     certificates_outstanding_peak: float = 0.0
     cert_default_losses: float = 0.0
+    # Clearinghouse CCP metrics (Plan 061); cascade_depth_max is computed
+    # for ALL arms (it needs no CCP events), the rest are 0 in non-ccp runs.
+    fund_drawdowns_total: float = 0.0
+    vmgh_haircut_total: float = 0.0
+    ccp_member_defaults: int = 0
+    cascade_depth_max: int = 0
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -238,6 +244,8 @@ class _RingSweepRunnerConfig(BaseModel):
     cert_haircut: Decimal | None = None
     cert_rate: Decimal | None = None
     cert_max_issuance: Decimal | None = None
+    clearing_ccp: bool = False
+    ccp_fund_share: Decimal | None = None
 
 
 class RingSweepConfig(BaseModel):
@@ -303,6 +311,8 @@ class RingSweepRunner:
         cert_haircut: Decimal = Decimal("0.25"),
         cert_rate: Decimal = Decimal("0.06"),
         cert_max_issuance: Decimal = Decimal("1.0"),
+        clearing_ccp: bool = False,
+        ccp_fund_share: Decimal = Decimal("0.05"),
         risk_assessment_enabled: bool = True,
         risk_assessment_config: dict[str, Any] | None = None,
         balanced_mode: bool = False,
@@ -386,13 +396,27 @@ class RingSweepRunner:
         self.default_handling = default_handling
         self.dealer_enabled = dealer_enabled
         self.dealer_config = dealer_config
+        # CCP mode (Plan 061) is an exclusive variant of the clearinghouse
+        # block: it subsumes netting (the kernel runs the clearing phase on
+        # the novated star automatically) and cannot compose with the
+        # netting or certificates modes.
+        if clearing_ccp and (clearing_enabled or clearing_certificates):
+            raise ValueError(
+                "clearing_ccp is mutually exclusive with clearing_enabled and "
+                "clearing_certificates: netting/certificates/ccp are exclusive "
+                "variants of the clearinghouse block (Plan 061)"
+            )
         # Certificates mode (Plan 060) implies the clearing phase (Plan 059):
         # netting runs first, certificates cover the post-netting shortfall.
+        # CCP mode deliberately does NOT set clearing_enabled — the kernel
+        # runs netting automatically in ccp mode without the netting block.
         self.clearing_enabled = clearing_enabled or clearing_certificates
         self.clearing_certificates = clearing_certificates
         self.cert_haircut = cert_haircut
         self.cert_rate = cert_rate
         self.cert_max_issuance = cert_max_issuance
+        self.clearing_ccp = clearing_ccp
+        self.ccp_fund_share = ccp_fund_share
         self.risk_assessment_enabled = risk_assessment_enabled
         self.risk_assessment_config = risk_assessment_config
         self.balanced_mode = balanced_mode
@@ -545,6 +569,7 @@ class RingSweepRunner:
             "dealer_enabled",
             "clearing_enabled",
             "clearing_certificates",
+            "clearing_ccp",
             "phi_total",
             "delta_total",
             "gross_face_due",
@@ -552,6 +577,10 @@ class RingSweepRunner:
             "certificates_issued_total",
             "certificates_outstanding_peak",
             "cert_default_losses",
+            "fund_drawdowns_total",
+            "vmgh_haircut_total",
+            "ccp_member_defaults",
+            "cascade_depth_max",
             "time_to_stability",
             "scenario_yaml",
             "events_jsonl",
@@ -565,12 +594,20 @@ class RingSweepRunner:
             writer.writeheader()
 
     def _clearinghouse_block(self) -> dict[str, Any] | None:
-        """Build the scenario `clearinghouse:` block (Plans 059/060).
+        """Build the scenario `clearinghouse:` block (Plans 059/060/061).
 
-        Returns None when no clearing is requested. With certificates mode
-        the block carries the certificate facility parameters; otherwise it
-        is the plain netting block from Plan 059.
+        Returns None when no clearing is requested. With ccp mode the block
+        carries the default-fund share (Plan 061); with certificates mode it
+        carries the certificate facility parameters; otherwise it is the
+        plain netting block from Plan 059. The three modes are mutually
+        exclusive (enforced in __init__).
         """
+        if self.clearing_ccp:
+            return {
+                "enabled": True,
+                "mode": "ccp",
+                "ccp_fund_share": float(self.ccp_fund_share),
+            }
         if self.clearing_certificates:
             return {
                 "enabled": True,
@@ -864,6 +901,7 @@ class RingSweepRunner:
             "dealer_enabled": self.dealer_enabled,
             "clearing_enabled": self.clearing_enabled,
             "clearing_certificates": self.clearing_certificates,
+            "clearing_ccp": self.clearing_ccp,
         }
 
         # Initial "running" status
@@ -1188,6 +1226,13 @@ class RingSweepRunner:
         )
         cert_default_losses = float(bundle.summary.get("cert_default_losses", 0.0) or 0.0)
 
+        # Clearinghouse CCP metrics (Plan 061); cascade_depth_max is computed
+        # for all arms, the others are 0 in non-ccp runs.
+        fund_drawdowns_total = float(bundle.summary.get("fund_drawdowns_total", 0.0) or 0.0)
+        vmgh_haircut_total = float(bundle.summary.get("vmgh_haircut_total", 0.0) or 0.0)
+        ccp_member_defaults = int(bundle.summary.get("ccp_member_defaults", 0) or 0)
+        cascade_depth_max_val = int(bundle.summary.get("cascade_depth_max", 0) or 0)
+
         # Read dealer metrics if available (treatment runs with dealer enabled)
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = out_dir / "dealer_metrics.json"
@@ -1214,6 +1259,10 @@ class RingSweepRunner:
             "certificates_issued_total": str(certificates_issued_total),
             "certificates_outstanding_peak": str(certificates_outstanding_peak),
             "cert_default_losses": str(cert_default_losses),
+            "fund_drawdowns_total": str(fund_drawdowns_total),
+            "vmgh_haircut_total": str(vmgh_haircut_total),
+            "ccp_member_defaults": str(ccp_member_defaults),
+            "cascade_depth_max": str(cascade_depth_max_val),
         }
         self._upsert_registry(
             run_id=run_id,
@@ -1266,6 +1315,10 @@ class RingSweepRunner:
             certificates_issued_total=certificates_issued_total,
             certificates_outstanding_peak=certificates_outstanding_peak,
             cert_default_losses=cert_default_losses,
+            fund_drawdowns_total=fund_drawdowns_total,
+            vmgh_haircut_total=vmgh_haircut_total,
+            ccp_member_defaults=ccp_member_defaults,
+            cascade_depth_max=cascade_depth_max_val,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
@@ -1330,6 +1383,7 @@ class RingSweepRunner:
             "dealer_enabled": self.dealer_enabled,
             "clearing_enabled": self.clearing_enabled,
             "clearing_certificates": self.clearing_certificates,
+            "clearing_ccp": self.clearing_ccp,
         }
 
         # Initial "running" status (skip for cloud-only mode)
@@ -1711,6 +1765,18 @@ class RingSweepRunner:
                 cert_default_losses=float(
                     result.metrics.get("cert_default_losses", 0.0) or 0.0
                 ),
+                fund_drawdowns_total=float(
+                    result.metrics.get("fund_drawdowns_total", 0.0) or 0.0
+                ),
+                vmgh_haircut_total=float(
+                    result.metrics.get("vmgh_haircut_total", 0.0) or 0.0
+                ),
+                ccp_member_defaults=int(
+                    result.metrics.get("ccp_member_defaults", 0) or 0
+                ),
+                cascade_depth_max=int(
+                    result.metrics.get("cascade_depth_max", 0) or 0
+                ),
                 nbfi_loan_loss=int(result.metrics.get("nbfi_loan_loss", 0)),
                 nbfi_loans_created=int(result.metrics.get("nbfi_loans_created", 0)),
                 bank_credit_loss=int(result.metrics.get("bank_credit_loss", 0)),
@@ -1770,6 +1836,13 @@ class RingSweepRunner:
         )
         cert_default_losses = float(bundle.summary.get("cert_default_losses", 0.0) or 0.0)
 
+        # Clearinghouse CCP metrics (Plan 061); cascade_depth_max is computed
+        # for all arms, the others are 0 in non-ccp runs.
+        fund_drawdowns_total = float(bundle.summary.get("fund_drawdowns_total", 0.0) or 0.0)
+        vmgh_haircut_total = float(bundle.summary.get("vmgh_haircut_total", 0.0) or 0.0)
+        ccp_member_defaults = int(bundle.summary.get("ccp_member_defaults", 0) or 0)
+        cascade_depth_max_val = int(bundle.summary.get("cascade_depth_max", 0) or 0)
+
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = prepared.out_dir / "dealer_metrics.json"
         if dealer_metrics_path.exists():
@@ -1794,6 +1867,10 @@ class RingSweepRunner:
             "certificates_issued_total": str(certificates_issued_total),
             "certificates_outstanding_peak": str(certificates_outstanding_peak),
             "cert_default_losses": str(cert_default_losses),
+            "fund_drawdowns_total": str(fund_drawdowns_total),
+            "vmgh_haircut_total": str(vmgh_haircut_total),
+            "ccp_member_defaults": str(ccp_member_defaults),
+            "cascade_depth_max": str(cascade_depth_max_val),
         }
         self._upsert_registry(
             run_id=prepared.run_id,
@@ -1851,6 +1928,10 @@ class RingSweepRunner:
             certificates_issued_total=certificates_issued_total,
             certificates_outstanding_peak=certificates_outstanding_peak,
             cert_default_losses=cert_default_losses,
+            fund_drawdowns_total=fund_drawdowns_total,
+            vmgh_haircut_total=vmgh_haircut_total,
+            ccp_member_defaults=ccp_member_defaults,
+            cascade_depth_max=cascade_depth_max_val,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),

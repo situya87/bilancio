@@ -54,16 +54,33 @@ Event = dict[str, Any]
 AgentId = str
 
 
+def _is_novated_in_leg(e: Event) -> bool:
+    """True for the member→CCP leg of a novated payable (Plan 061).
+
+    Novation splits every original A→B obligation into A→CCP1 + CCP1→B legs
+    carrying ``origin_debtor``/``origin_creditor``. Counting both legs would
+    double the dues denominator and debit δ for an in-leg default even when
+    the fund made the end creditor whole. Metrics therefore count each
+    obligation once, on its OUT-leg (the end-creditor's claim): the in-leg —
+    identifiable as ``debtor == origin_debtor`` — is skipped.
+    """
+    origin_debtor = e.get("origin_debtor")
+    return origin_debtor is not None and (e.get("debtor") or e.get("from")) == origin_debtor
+
+
 def dues_for_day(events: Iterable[Event], t: int) -> list[dict[str, Any]]:
     """Return dues maturing on day t from creation events.
 
     We look for PayableCreated (or similarly named) events that carry a due_day.
     Output items minimally include: debtor, creditor, amount, due_day, and ids if present.
+    Novated in-legs are excluded (see ``_is_novated_in_leg``).
     """
     dues: list[dict[str, Any]] = []
     for e in events:
         kind = e.get("kind")
         if kind == "PayableCreated" and int(e.get("due_day", -1)) == int(t):
+            if _is_novated_in_leg(e):
+                continue
             dues.append(
                 {
                     "debtor": e.get("debtor") or e.get("from"),
@@ -217,13 +234,17 @@ def netting_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal]:
     """Return (gross_face_due, face_extinguished_by_netting) for a run.
 
     gross_face_due sums all PayableCreated face; face_extinguished_by_netting
-    sums PayableNetted reductions applied on the payable's due day.
+    sums PayableNetted reductions applied on the payable's due day. Novated
+    in-legs are excluded so each obligation counts once (see
+    ``_is_novated_in_leg``).
     """
     events_list = list(events)
     gross = Decimal("0")
     id_to_due: dict[str, int] = {}
     for e in events_list:
         if e.get("kind") != "PayableCreated":
+            continue
+        if _is_novated_in_leg(e):
             continue
         gross += Decimal(e.get("amount", 0))
         due = int(e.get("due_day", -1))
@@ -298,6 +319,54 @@ def certificate_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal, Decim
             peak = outstanding
 
     return issued_total, peak, default_losses
+
+
+def ccp_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal, int]:
+    """Return (fund_drawdowns_total, vmgh_haircut_total, ccp_member_defaults) (Plan 061).
+
+    Central-counterparty metrics, derived purely from the CCP event stream:
+
+    - ``fund_drawdowns_total``: sum of ``own_tranche + mutualized_tranche``
+      over all ``CCPFundDrawdown`` events — the default-fund face consumed by
+      the loss waterfall (the ``vmgh_residual`` part is captured separately
+      below via the haircut events it causes).
+    - ``vmgh_haircut_total``: sum of ``haircut`` over all
+      ``VMGHHaircutApplied`` events — losses passed to receiving members via
+      variation-margin-gains haircutting on fund-exhaustion days.
+    - ``ccp_member_defaults``: count of distinct agents with an
+      ``AgentDefaulted`` event, reported ONLY when the stream contains CCP
+      fund events (every run has AgentDefaulted events; non-ccp arms must
+      stay at 0). In ccp mode every default is a member-vs-CCP expulsion
+      (the CCP itself cannot default in stage 1), so this equals the number
+      of member expulsions.
+
+    Returns (0, 0, 0) when no CCP events are present, so the metrics are
+    inert for non-ccp runs.
+    """
+    fund_drawdowns_total = Decimal("0")
+    vmgh_haircut_total = Decimal("0")
+    defaulted: set[str] = set()
+    ccp_run = False
+
+    for e in events:
+        kind = e.get("kind")
+        if kind == "CCPFundDrawdown":
+            fund_drawdowns_total += Decimal(str(e.get("own_tranche", 0) or 0))
+            fund_drawdowns_total += Decimal(str(e.get("mutualized_tranche", 0) or 0))
+            ccp_run = True
+        elif kind in ("CCPFundContribution", "CCPFundReplenished", "VMGHHaircutApplied"):
+            ccp_run = True
+            if kind == "VMGHHaircutApplied":
+                vmgh_haircut_total += Decimal(str(e.get("haircut", 0) or 0))
+        elif kind == "AgentDefaulted":
+            agent = _agent_from_event(e)
+            if agent:
+                defaulted.add(agent)
+
+    # ccp_member_defaults only counts in ccp runs (identified by CCP fund
+    # events): every run has AgentDefaulted events, and reporting them here
+    # for other arms would violate the inert-when-off contract.
+    return fund_drawdowns_total, vmgh_haircut_total, (len(defaulted) if ccp_run else 0)
 
 
 def replay_intraday_peak(
@@ -517,3 +586,71 @@ def cascade_fraction(events: Iterable[Event]) -> Decimal | None:
         seen.add(agent)
 
     return Decimal(str(secondary)) / Decimal(str(total))
+
+
+def cascade_depth_max(events: Iterable[Event]) -> int:
+    """Longest default-precedence chain, measured in defaults (Plan 061).
+
+    Builds a precedence DAG by chronological replay of ``PayableCreated`` +
+    ``AgentDefaulted`` events (the same replay approach as
+    :func:`cascade_fraction`). An edge runs from a defaulted debtor to its
+    payable creditor when the creditor defaulted *strictly later*: the
+    debtor's failure starved the creditor before the creditor's own default.
+
+    Obligation pairs honour novation attribution: when a ``PayableCreated``
+    event carries ``origin_debtor``/``origin_creditor`` (novated CCP legs),
+    the ORIGIN pair is used instead of the literal debtor/creditor, so
+    novated runs attribute precedence to the underlying economic pair rather
+    than to CCP1.
+
+    This is attribution-by-precedence, not true causal lineage — a creditor
+    that defaults after its debtor is counted as downstream even if the
+    starved inflow was not decisive.
+
+    Precondition:
+        Events must be in chronological order (as produced by the engine).
+
+    Returns:
+        The number of defaults on the longest path: 0 when there are no
+        defaults, 1 when every default is isolated (no defaulted debtor
+        precedes its defaulted creditor), >= 2 for chains.
+    """
+    events_list = list(events)
+
+    # 1. Obligation graph: creditor -> set of debtors, with novated legs
+    #    attributed to the origin pair.
+    creditor_to_debtors: dict[str, set[str]] = defaultdict(set)
+    for e in events_list:
+        if e.get("kind") != "PayableCreated":
+            continue
+        debtor = e.get("origin_debtor") or e.get("debtor") or e.get("from")
+        creditor = e.get("origin_creditor") or e.get("creditor") or e.get("to")
+        if debtor and creditor:
+            creditor_to_debtors[str(creditor)].add(str(debtor))
+
+    # 2. Default order (deduplicated, chronological).
+    defaulted_so_far: set[str] = set()
+    default_order: list[str] = []
+    for e in events_list:
+        if e.get("kind") == "AgentDefaulted":
+            agent = _agent_from_event(e)
+            if agent and agent not in defaulted_so_far:
+                default_order.append(agent)
+                defaulted_so_far.add(agent)
+
+    if not default_order:
+        return 0
+
+    # 3. Longest path via DP in default order. Edges only run from earlier
+    #    defaults to strictly later ones, so the precedence graph is a DAG
+    #    and a single forward pass suffices. O(defaults^2) worst case.
+    depth: dict[str, int] = {}
+    for agent in default_order:
+        upstream = creditor_to_debtors.get(agent, set())
+        best = 0
+        for debtor in upstream:
+            if debtor != agent and debtor in depth:
+                best = max(best, depth[debtor])
+        depth[agent] = best + 1
+
+    return max(depth.values())

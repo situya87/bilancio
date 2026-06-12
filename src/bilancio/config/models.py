@@ -122,7 +122,15 @@ class AgentSpec(BaseModel):
 
     id: str = Field(..., description="Unique identifier for the agent")
     kind: Literal[
-        "central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency", "clearinghouse"
+        "central_bank",
+        "bank",
+        "household",
+        "firm",
+        "treasury",
+        "non_bank_lender",
+        "rating_agency",
+        "clearinghouse",
+        "central_counterparty",
     ] = Field(..., description="Type of agent")
     name: str = Field(..., description="Human-readable name for the agent")
     jurisdiction: str | None = Field(None, description="Jurisdiction this agent belongs to")
@@ -1109,9 +1117,13 @@ class ClearinghouseConfig(BaseModel):
     """Clearinghouse configuration within a scenario (Plans 059/060)."""
 
     enabled: bool = Field(default=False, description="Enable the clearinghouse phase")
-    mode: Literal["netting", "certificates"] = Field(
+    mode: Literal["netting", "certificates", "ccp"] = Field(
         default="netting",
-        description="Clearinghouse mode: 'netting' (stage 1) or 'certificates' (stage 2; netting still runs first)",
+        description=(
+            "Clearinghouse mode: 'netting' (stage 1), 'certificates' (stage 2) or "
+            "'ccp' (stage 3: novation to a central counterparty); netting always runs first. "
+            "Modes are exclusive variants of this single block."
+        ),
     )
     cert_haircut: Decimal = Field(
         default=Decimal("0.25"), ge=Decimal("0"), lt=Decimal("1"),
@@ -1133,6 +1145,22 @@ class ClearinghouseConfig(BaseModel):
         default=True,
         description="Certificates must be accepted in settlement (stage 2 supports only true)",
     )
+    ccp_fund_share: Decimal = Field(
+        default=Decimal("0.05"), ge=Decimal("0"), lt=Decimal("1"),
+        description="Default-fund contribution as a fraction of each member's cash at collection (ccp mode)",
+    )
+    vmgh_enabled: bool = Field(
+        default=True,
+        description="Variation-margin-gains haircutting closes the CCP payout leg (stage 1 supports only true)",
+    )
+    replenishment_enabled: bool = Field(
+        default=True,
+        description="Members top the default fund back up toward their original contribution, capped at available cash",
+    )
+    ccp_can_fail: bool = Field(
+        default=False,
+        description="Reserved: CCP failure modeling (stage 1 supports only false)",
+    )
 
     @field_validator("mandatory_acceptance")
     @classmethod
@@ -1142,6 +1170,27 @@ class ClearinghouseConfig(BaseModel):
                 "mandatory_acceptance=false is not supported: stage 2 certificate acceptance "
                 "is mandatory (the parameter exists so a voluntary stage 3 is a behavior "
                 "change, not a schema change)"
+            )
+        return v
+
+    @field_validator("vmgh_enabled")
+    @classmethod
+    def vmgh_required(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError(
+                "vmgh_enabled=false is not supported: in stage 1 the CCP's books could not "
+                "close without the VMGH backstop (the parameter exists so the reserved "
+                "ccp_can_fail stage is a behavior change, not a schema change)"
+            )
+        return v
+
+    @field_validator("ccp_can_fail")
+    @classmethod
+    def ccp_cannot_fail(cls, v: bool) -> bool:
+        if v:
+            raise ValueError(
+                "ccp_can_fail=true is not supported: the stage-1 central counterparty cannot "
+                "fail (VMGH always closes its books); CCP failure is a reserved later stage"
             )
         return v
 

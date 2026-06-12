@@ -25,6 +25,11 @@ IMPACT_EVENTS = {
     "InterbankCleared",
     "InterbankOvernightCreated",
     "InterbankAuctionTrade",
+    # Plan 061 (CCP): waterfall drawdowns and VMGH haircuts are economically
+    # impactful days — counted so the v2 engine's stability tracker
+    # (bilancio_v2.engine.impacted_on_day) does not treat them as quiet.
+    "CCPFundDrawdown",
+    "VMGHHaircutApplied",
 }
 
 DEFAULT_EVENTS = {

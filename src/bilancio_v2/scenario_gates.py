@@ -301,9 +301,9 @@ def build_clearing_config(config: ScenarioConfig) -> CleanClearingConfig | None:
     clearinghouse = config.clearinghouse
     if clearinghouse is None or not clearinghouse.enabled:
         return None
-    if clearinghouse.mode not in ("netting", "certificates"):
+    if clearinghouse.mode not in ("netting", "certificates", "ccp"):
         raise ConfigurationError(
-            f"clearinghouse mode {clearinghouse.mode!r} is not supported; supported modes: 'netting', 'certificates'"
+            f"clearinghouse mode {clearinghouse.mode!r} is not supported; supported modes: 'netting', 'certificates', 'ccp'"
         )
     if not clearinghouse.mandatory_acceptance:
         raise ConfigurationError(
@@ -322,9 +322,24 @@ def build_clearing_config(config: ScenarioConfig) -> CleanClearingConfig | None:
             raise ConfigurationError(
                 "clearinghouse mode 'certificates' cannot be combined with a dealer (stage 2 scope)"
             )
-    # mode "certificates" implies netting still runs first (ClearingPhase is
-    # always built when this config is present; the certificate facility is
-    # appended after it in engine.prepare_scenario).
+    if clearinghouse.mode == "ccp":
+        # Stage-1 scope (Plan 061 item 8): the ccp arm is mutually exclusive
+        # with the dealer (in-place payable.creditor mutation bypasses the
+        # novation invariant), the NBFI lender (NonBankLoan bypasses novation
+        # and breaks the {CCP1: 1} creditor-weight argument on expulsion),
+        # and banking (gated in engine.prepare_scenario, where the separate
+        # banking_config is available).
+        if config.lender is not None and config.lender.enabled:
+            raise ConfigurationError("clearinghouse mode 'ccp' cannot be combined with a lender (stage 1 scope)")
+        if config.dealer is not None and config.dealer.enabled:
+            raise ConfigurationError("clearinghouse mode 'ccp' cannot be combined with a dealer (stage 1 scope)")
+        if config.balanced_dealer is not None and config.balanced_dealer.enabled and config.balanced_dealer.mode != "passive":
+            raise ConfigurationError(
+                "clearinghouse mode 'ccp' cannot be combined with an active balanced dealer (stage 1 scope)"
+            )
+    # mode "certificates"/"ccp" implies netting still runs first (ClearingPhase
+    # is always built when this config is present; on the novated star it
+    # degenerates to one net direction per member per due day).
     return CleanClearingConfig(
         mode=clearinghouse.mode,
         cert_haircut=clearinghouse.cert_haircut,
@@ -332,6 +347,9 @@ def build_clearing_config(config: ScenarioConfig) -> CleanClearingConfig | None:
         max_issuance_per_member=clearinghouse.max_issuance_per_member,
         cert_max_tenor=clearinghouse.cert_max_tenor,
         mandatory_acceptance=clearinghouse.mandatory_acceptance,
+        ccp_fund_share=clearinghouse.ccp_fund_share,
+        vmgh_enabled=clearinghouse.vmgh_enabled,
+        replenishment_enabled=clearinghouse.replenishment_enabled,
     )
 
 

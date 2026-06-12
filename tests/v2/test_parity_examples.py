@@ -26,6 +26,7 @@ SUPPORTED = [
     "intraday_netting",
     "payment_demo",
     "rich_simulation",
+    "ring_ccp",
     "ring_with_action_specs",
     "sasa_scenario",
     "simple_bank",
