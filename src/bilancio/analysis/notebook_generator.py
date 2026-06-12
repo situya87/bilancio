@@ -36,7 +36,7 @@ COVERED_INSTRUMENT_KINDS: frozenset[str] = frozenset({
 
 COVERED_PROFILES: frozenset[str] = frozenset({
     "TraderProfile", "VBTProfile", "LenderProfile", "BankProfile", "RatingProfile",
-    "ClearinghouseProfile",
+    "ClearinghouseProfile", "CCPProfile",
 })
 
 HANDLED_SWEEP_TYPES: frozenset[str] = frozenset({"dealer", "bank", "nbfi"})

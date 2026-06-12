@@ -24,7 +24,7 @@ from bilancio.engines.termination import (
     StopReason,
 )
 from bilancio_v2.actions import apply_action
-from bilancio_v2.ledger import Ledger
+from bilancio_v2.ledger import CCP_AGENT_KIND, Ledger
 from bilancio_v2.plugins.banking import (
     BankLendingPhase,
     BankQuotesPhase,
@@ -40,6 +40,10 @@ from bilancio_v2.plugins.certificates import (
     finalize_certificates,
 )
 from bilancio_v2.plugins.clearing import ClearingPhase
+from bilancio_v2.plugins.clearinghouse_ccp import (
+    CCP_AGENT_ID,
+    CCP_AGENT_NAME,
+)
 from bilancio_v2.plugins.dealer import (
     DealerPhase,
     initialize_active_dealer_subsystem,
@@ -141,6 +145,7 @@ def prepare_scenario(
 
     clearing_config = build_clearing_config(config)
     certificates_mode = clearing_config is not None and clearing_config.mode == "certificates"
+    ccp_mode = clearing_config is not None and clearing_config.mode == "ccp"
     if certificates_mode:
         if banking_config is not None:
             from bilancio.core.errors import ConfigurationError
@@ -153,6 +158,14 @@ def prepare_scenario(
                 "clearinghouse mode 'certificates' cannot be combined with banking (stage 2 scope)"
             )
         policy = policy.with_certificate_mop()
+    if ccp_mode and banking_config is not None:
+        from bilancio.core.errors import ConfigurationError
+
+        # Stage-1 scope (Plan 061 item 8): bank loans bypass novation and a
+        # member with a bank creditor breaks the {CCP1: 1} creditor-weight
+        # argument on expulsion. Lender/dealer are gated in
+        # build_clearing_config.
+        raise ConfigurationError("clearinghouse mode 'ccp' cannot be combined with banking (stage 1 scope)")
 
     ledger = Ledger()
     for agent_spec in config.agents:
@@ -161,6 +174,12 @@ def prepare_scenario(
         ledger.clearing_config = clearing_config
         if not any(agent.kind == CLEARINGHOUSE_AGENT_KIND for agent in ledger.agents.values()):
             ledger.register_agent(CLEARINGHOUSE_AGENT_ID, CLEARINGHOUSE_AGENT_KIND, CLEARINGHOUSE_AGENT_NAME)
+    if ccp_mode:
+        # The config (and the CCP agent) must be on the ledger BEFORE initial
+        # actions run: novation rewrites payable creation at setup time.
+        ledger.clearing_config = clearing_config
+        if not any(agent.kind == CCP_AGENT_KIND for agent in ledger.agents.values()):
+            ledger.register_agent(CCP_AGENT_ID, CCP_AGENT_KIND, CCP_AGENT_NAME)
 
     for scheduled in config.scheduled_actions:
         ledger.scheduled_actions_by_day.setdefault(scheduled.day, []).append(scheduled.action)

@@ -111,8 +111,10 @@ def test_enabled_registers_phase_immediately_before_settlement() -> None:
 
 
 def test_unknown_mode_raises_configuration_error() -> None:
+    # "ccp" became a supported mode in Plan 061, so the unknown-mode probe
+    # (bypassing schema validation via model_construct) uses a made-up one.
     config = ring_scenario([100] * 5, clearing=False)
-    config = config.model_copy(update={"clearinghouse": ClearinghouseConfig.model_construct(enabled=True, mode="ccp")})
+    config = config.model_copy(update={"clearinghouse": ClearinghouseConfig.model_construct(enabled=True, mode="swaps")})
     with pytest.raises(ConfigurationError):
         build_clearing_config(config)
 

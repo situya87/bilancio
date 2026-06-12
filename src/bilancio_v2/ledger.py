@@ -27,6 +27,12 @@ from bilancio_v2.events import EventJournal
 
 ZERO = Decimal("0")
 
+# Central-counterparty constants (Plan 061). They live here (not in the ccp
+# plugin) because the ledger's invariant check needs them and plugins import
+# the ledger, never the reverse.
+CCP_AGENT_KIND = "central_counterparty"
+CCP_MEMBER_KINDS = ("household", "firm")
+
 
 class InsufficientFundsError(ValueError):
     """A ledger operation required more funds than the agent holds."""
@@ -63,6 +69,12 @@ class Payable:
     # proceeds are redirected to this agent (the clearinghouse) and the
     # payable is fenced off from netting, rollover, and reassignment.
     pledged_to: str | None = None
+    # Novation markers (Plan 061): set only on the two legs a member↔member
+    # payable is rewritten into under ccp mode (A→CCP1 and CCP1→B both carry
+    # origin_debtor=A, origin_creditor=B). None everywhere else, so existing
+    # constructors and event payloads are untouched.
+    origin_debtor: str | None = None
+    origin_creditor: str | None = None
 
 
 @dataclass
@@ -192,6 +204,16 @@ class Checkpoint:
     certificates_issued_total: Decimal
     certificates_retired_total: Decimal
     cert_interest_margin: Decimal
+    # CCP fund state (Plan 061): mutable inside a settlement attempt only in
+    # expel-agent mode (the waterfall), but snapshotted unconditionally so
+    # fail-fast rollback always covers it. Empty/zero outside ccp mode.
+    ccp_fund_contribution: dict[str, Decimal]
+    ccp_fund_target: dict[str, Decimal]
+    ccp_fund_total: Decimal
+    # CCP default-fund accounting (Plan 061). Empty/zero outside ccp mode.
+    ccp_fund_contribution: dict[str, Decimal]
+    ccp_fund_target: dict[str, Decimal]
+    ccp_fund_total: Decimal
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +243,15 @@ class Ledger:
     # CleanClearingConfig when a clearinghouse block is active (consulted by
     # settlement for recourse interest and by the finalize hook).
     clearing_config: Any | None = None
+
+    # CCP default fund (Plan 061): accounting-only segregation of cash that
+    # physically sits in CCP1's single cash balance. ``ccp_fund_target`` pins
+    # each member's original day-0 contribution (the replenishment target);
+    # ``ccp_fund_contribution`` tracks current per-member balances and
+    # ``ccp_fund_total`` their sum (invariant-checked daily, ≤ cash[CCP1]).
+    ccp_fund_contribution: dict[str, Decimal] = field(default_factory=dict)
+    ccp_fund_target: dict[str, Decimal] = field(default_factory=dict)
+    ccp_fund_total: Decimal = ZERO
 
     payables: list[Payable] = field(default_factory=list)
     cb_loans: list[CBLoan] = field(default_factory=list)
@@ -524,6 +555,8 @@ class Ledger:
         alias: str | None = None,
         setup: bool = False,
         reason: str | None = None,
+        origin_debtor: str | None = None,
+        origin_creditor: str | None = None,
     ) -> Payable:
         payable = Payable(
             id=payable_id,
@@ -533,6 +566,8 @@ class Ledger:
             due_day=due_day,
             maturity_distance=maturity_distance,
             alias=alias,
+            origin_debtor=origin_debtor,
+            origin_creditor=origin_creditor,
         )
         self.payables.append(payable)
         # Two observable payload shapes exist: scenario-created payables and
@@ -557,6 +592,11 @@ class Ledger:
                 "maturity_distance": maturity_distance,
                 "reason": reason,
             }
+        if origin_debtor is not None:
+            # Present only on novated CCP legs (Plan 061); absent otherwise,
+            # so non-ccp event shapes stay byte-identical.
+            data["origin_debtor"] = origin_debtor
+            data["origin_creditor"] = origin_creditor
         self.record("PayableCreated", setup=setup, **data)
         return payable
 
@@ -734,6 +774,8 @@ class Ledger:
         amount: Decimal,
         due_day: int,
         maturity_distance: int,
+        origin_debtor: str | None = None,
+        origin_creditor: str | None = None,
     ) -> Payable:
         """Append a rollover-refinanced payable without a creation event.
 
@@ -748,6 +790,8 @@ class Ledger:
             amount=amount,
             due_day=due_day,
             maturity_distance=maturity_distance,
+            origin_debtor=origin_debtor,
+            origin_creditor=origin_creditor,
         )
         self.payables.append(payable)
         return payable
@@ -1008,6 +1052,9 @@ class Ledger:
             certificates_issued_total=self.certificates_issued_total,
             certificates_retired_total=self.certificates_retired_total,
             cert_interest_margin=self.cert_interest_margin,
+            ccp_fund_contribution=dict(self.ccp_fund_contribution),
+            ccp_fund_target=dict(self.ccp_fund_target),
+            ccp_fund_total=self.ccp_fund_total,
         )
 
     def restore(self, checkpoint: Checkpoint, *, restore_stocks: bool = False) -> None:
@@ -1020,6 +1067,9 @@ class Ledger:
         self.certificates_issued_total = checkpoint.certificates_issued_total
         self.certificates_retired_total = checkpoint.certificates_retired_total
         self.cert_interest_margin = checkpoint.cert_interest_margin
+        self.ccp_fund_contribution = checkpoint.ccp_fund_contribution
+        self.ccp_fund_target = checkpoint.ccp_fund_target
+        self.ccp_fund_total = checkpoint.ccp_fund_total
         if restore_stocks:
             self.stocks = checkpoint.stocks
         self.journal.truncate(checkpoint.journal_length)
@@ -1060,3 +1110,39 @@ class Ledger:
                 f"certificate conservation broken: in circulation {certificates_in_circulation}, "
                 f"issued-retired {expected_certificates}"
             )
+        if self.clearing_config is not None and getattr(self.clearing_config, "mode", None) == "ccp":
+            self._check_ccp_invariants()
+
+    def _check_ccp_invariants(self) -> None:
+        """End-of-day CCP invariants (Plan 061): fund conservation and novation."""
+        for member, balance in self.ccp_fund_contribution.items():
+            if balance < ZERO:
+                raise InvariantViolation(f"negative ccp fund contribution for {member}: {balance}")
+        fund_sum = sum(self.ccp_fund_contribution.values(), ZERO)
+        if fund_sum != self.ccp_fund_total:
+            raise InvariantViolation(
+                f"ccp fund conservation broken: contributions sum to {fund_sum}, fund total is {self.ccp_fund_total}"
+            )
+        ccp_id = next(
+            (agent_id for agent_id in sorted(self.agents) if self.agents[agent_id].kind == CCP_AGENT_KIND),
+            None,
+        )
+        if ccp_id is not None and self.ccp_fund_total > self.cash.get(ccp_id, ZERO):
+            raise InvariantViolation(
+                f"ccp fund {self.ccp_fund_total} exceeds {ccp_id} cash {self.cash.get(ccp_id, ZERO)}"
+            )
+        for payable in self.payables:
+            if payable.settled:
+                continue
+            debtor = self.agents.get(payable.debtor)
+            creditor = self.agents.get(payable.creditor)
+            if (
+                debtor is not None
+                and creditor is not None
+                and debtor.kind in CCP_MEMBER_KINDS
+                and creditor.kind in CCP_MEMBER_KINDS
+            ):
+                raise InvariantViolation(
+                    f"novation invariant broken: member↔member payable {payable.id} "
+                    f"({payable.debtor} → {payable.creditor}) is live in ccp mode"
+                )

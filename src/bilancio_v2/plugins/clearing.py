@@ -21,6 +21,7 @@ from decimal import ROUND_FLOOR, Decimal
 
 from bilancio_v2.ledger import ZERO, InvariantViolation, Ledger, Payable
 from bilancio_v2.plugins.base import RunContext
+from bilancio_v2.plugins.clearinghouse_ccp import ccp_agent_id, run_ccp_fund_step
 from bilancio_v2.subsystem_config import CleanClearingConfig
 
 Edge = tuple[str, str]
@@ -32,6 +33,11 @@ class ClearingPhase:
     config: CleanClearingConfig
 
     def run(self, ledger: Ledger, ctx: RunContext) -> bool:
+        if self.config.mode == "ccp":
+            # CCP fund step (Plan 061), hosted here like 060 hosts the
+            # certificate facility: day-0 contribution collection, then
+            # daily replenishment — before netting touches the book.
+            run_ccp_fund_step(ledger, self.config)
         due = collect_due_payables(ledger)
         if not due:
             return False
@@ -61,9 +67,7 @@ class ClearingPhase:
             if payable.settled:
                 n_fully_netted += 1
                 if ctx.rollover_enabled:
-                    ledger.netted_rollover_queue.append(
-                        (payable.debtor, payable.creditor, payable.netted_amount, payable.maturity_distance)
-                    )
+                    self._enqueue_netted_rollover(ledger, payable)
 
         edge_total = sum(reductions.values(), ZERO)
         if face_extinguished != edge_total:
@@ -87,6 +91,26 @@ class ClearingPhase:
                 n_fully_netted=n_fully_netted,
             )
         return face_extinguished > ZERO
+
+    def _enqueue_netted_rollover(self, ledger: Ledger, payable: Payable) -> None:
+        """Queue a fully-netted payable for the gross-roll ("net-settle,
+        gross-roll", Plan 059). In ccp mode (Plan 061) the entry is the
+        ORIGIN pair, recorded once from the in-leg; CCP1→B out-legs never
+        enqueue (they have no independent economic life)."""
+        if self.config.mode == "ccp":
+            ccp = ccp_agent_id(ledger)
+            if payable.debtor == ccp:
+                return
+            if payable.creditor == ccp:
+                if payable.origin_debtor is None or payable.origin_creditor is None:
+                    raise InvariantViolation(f"ccp in-leg {payable.id} is missing its origin pair")
+                ledger.netted_rollover_queue.append(
+                    (payable.origin_debtor, payable.origin_creditor, payable.netted_amount, payable.maturity_distance)
+                )
+                return
+        ledger.netted_rollover_queue.append(
+            (payable.debtor, payable.creditor, payable.netted_amount, payable.maturity_distance)
+        )
 
 
 def collect_due_payables(ledger: Ledger) -> list[Payable]:

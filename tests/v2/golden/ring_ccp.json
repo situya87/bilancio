@@ -1,0 +1,744 @@
+{
+ "events": [
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F1",
+   "amount": "80"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F2",
+   "amount": "100"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F3",
+   "amount": "100"
+  },
+  {
+   "kind": "CashMinted",
+   "day": 0,
+   "phase": "setup",
+   "to": "F4",
+   "amount": "100"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F1",
+   "creditor": "CCP1",
+   "amount": "100",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_4",
+   "alias": "F1_to_F2",
+   "origin_debtor": "F1",
+   "origin_creditor": "F2"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "CCP1",
+   "creditor": "F2",
+   "amount": "100",
+   "due_day": 1,
+   "maturity_distance": 1,
+   "payable_id": "PAY_4_out",
+   "alias": null,
+   "origin_debtor": "F1",
+   "origin_creditor": "F2"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F2",
+   "creditor": "CCP1",
+   "amount": "100",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_5",
+   "alias": "F2_to_F3",
+   "origin_debtor": "F2",
+   "origin_creditor": "F3"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "CCP1",
+   "creditor": "F3",
+   "amount": "100",
+   "due_day": 2,
+   "maturity_distance": 2,
+   "payable_id": "PAY_5_out",
+   "alias": null,
+   "origin_debtor": "F2",
+   "origin_creditor": "F3"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F3",
+   "creditor": "CCP1",
+   "amount": "100",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_6",
+   "alias": "F3_to_F4",
+   "origin_debtor": "F3",
+   "origin_creditor": "F4"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "CCP1",
+   "creditor": "F4",
+   "amount": "100",
+   "due_day": 3,
+   "maturity_distance": 3,
+   "payable_id": "PAY_6_out",
+   "alias": null,
+   "origin_debtor": "F3",
+   "origin_creditor": "F4"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "F4",
+   "creditor": "CCP1",
+   "amount": "100",
+   "due_day": 4,
+   "maturity_distance": 4,
+   "payable_id": "PAY_7",
+   "alias": "F4_to_F1",
+   "origin_debtor": "F4",
+   "origin_creditor": "F1"
+  },
+  {
+   "kind": "PayableCreated",
+   "day": 0,
+   "phase": "setup",
+   "debtor": "CCP1",
+   "creditor": "F1",
+   "amount": "100",
+   "due_day": 4,
+   "maturity_distance": 4,
+   "payable_id": "PAY_7_out",
+   "alias": null,
+   "origin_debtor": "F4",
+   "origin_creditor": "F1"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 0,
+   "phase": "simulation",
+   "frm": "F1",
+   "to": "CCP1",
+   "amount": "4"
+  },
+  {
+   "kind": "CCPFundContribution",
+   "day": 0,
+   "phase": "simulation",
+   "member": "F1",
+   "amount": "4",
+   "fund_total": "4"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 0,
+   "phase": "simulation",
+   "frm": "F2",
+   "to": "CCP1",
+   "amount": "5"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 0,
+   "phase": "simulation",
+   "keep": "cash:CCP1",
+   "removed": "cash:CCP1:merged:0:0"
+  },
+  {
+   "kind": "CCPFundContribution",
+   "day": 0,
+   "phase": "simulation",
+   "member": "F2",
+   "amount": "5",
+   "fund_total": "9"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 0,
+   "phase": "simulation",
+   "frm": "F3",
+   "to": "CCP1",
+   "amount": "5"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 0,
+   "phase": "simulation",
+   "keep": "cash:CCP1",
+   "removed": "cash:CCP1:merged:0:0"
+  },
+  {
+   "kind": "CCPFundContribution",
+   "day": 0,
+   "phase": "simulation",
+   "member": "F3",
+   "amount": "5",
+   "fund_total": "14"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 0,
+   "phase": "simulation",
+   "frm": "F4",
+   "to": "CCP1",
+   "amount": "5"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 0,
+   "phase": "simulation",
+   "keep": "cash:CCP1",
+   "removed": "cash:CCP1:merged:0:0"
+  },
+  {
+   "kind": "CCPFundContribution",
+   "day": 0,
+   "phase": "simulation",
+   "member": "F4",
+   "amount": "5",
+   "fund_total": "19"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 0,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "F1",
+   "to": "CCP1",
+   "amount": "76"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 1,
+   "phase": "simulation",
+   "keep": "cash:CCP1",
+   "removed": "cash:CCP1:merged:1:0"
+  },
+  {
+   "kind": "PartialSettlement",
+   "day": 1,
+   "phase": "simulation",
+   "contract_id": "PAY_4",
+   "alias": "F1_to_F2",
+   "debtor": "F1",
+   "creditor": "CCP1",
+   "contract_kind": "payable",
+   "settlement_kind": "payable",
+   "amount_paid": "76",
+   "shortfall": "24",
+   "original_amount": "100",
+   "distribution": [
+    {
+     "method": "cash",
+     "amount": "76"
+    }
+   ]
+  },
+  {
+   "kind": "ObligationDefaulted",
+   "day": 1,
+   "phase": "simulation",
+   "contract_id": "PAY_4",
+   "alias": "F1_to_F2",
+   "debtor": "F1",
+   "creditor": "CCP1",
+   "contract_kind": "payable",
+   "shortfall": "24",
+   "amount_paid": "76",
+   "original_amount": "100",
+   "amount": "24"
+  },
+  {
+   "kind": "AgentDefaulted",
+   "day": 1,
+   "phase": "simulation",
+   "agent": "F1",
+   "frm": "F1",
+   "trigger_contract": "PAY_4",
+   "contract_kind": "payable",
+   "shortfall": "24",
+   "mode": "expel-agent"
+  },
+  {
+   "kind": "CCPFundDrawdown",
+   "day": 1,
+   "phase": "simulation",
+   "member": "F1",
+   "own_tranche": "4",
+   "mutualized_tranche": "15",
+   "vmgh_residual": "5",
+   "recovery_credit": "0",
+   "fund_total": "0"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 1,
+   "phase": "simulation",
+   "frm": "CCP1",
+   "to": "F2",
+   "amount": "95"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 1,
+   "phase": "simulation",
+   "keep": "cash:F2",
+   "removed": "cash:F2:merged:1:0"
+  },
+  {
+   "kind": "VMGHHaircutApplied",
+   "day": 1,
+   "phase": "simulation",
+   "contract_id": "PAY_4_out",
+   "creditor": "F2",
+   "face": "100",
+   "paid": "95",
+   "haircut": "5",
+   "haircut_factor": 0.95
+  },
+  {
+   "kind": "PhaseC",
+   "day": 1,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "F2",
+   "to": "CCP1",
+   "amount": "5"
+  },
+  {
+   "kind": "CCPFundReplenished",
+   "day": 2,
+   "phase": "simulation",
+   "member": "F2",
+   "amount": "5",
+   "gap_remaining": "0",
+   "fund_total": "5"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "F3",
+   "to": "CCP1",
+   "amount": "5"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:CCP1",
+   "removed": "cash:CCP1:merged:2:0"
+  },
+  {
+   "kind": "CCPFundReplenished",
+   "day": 2,
+   "phase": "simulation",
+   "member": "F3",
+   "amount": "5",
+   "gap_remaining": "0",
+   "fund_total": "10"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "F4",
+   "to": "CCP1",
+   "amount": "5"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:CCP1",
+   "removed": "cash:CCP1:merged:2:0"
+  },
+  {
+   "kind": "CCPFundReplenished",
+   "day": 2,
+   "phase": "simulation",
+   "member": "F4",
+   "amount": "5",
+   "gap_remaining": "0",
+   "fund_total": "15"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "F2",
+   "to": "CCP1",
+   "amount": "100"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:CCP1",
+   "removed": "cash:CCP1:merged:2:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_5",
+   "contract_id": "PAY_5",
+   "alias": "F2_to_F3",
+   "debtor": "F2",
+   "creditor": "CCP1",
+   "amount": "100"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 2,
+   "phase": "simulation",
+   "frm": "CCP1",
+   "to": "F3",
+   "amount": "100"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 2,
+   "phase": "simulation",
+   "keep": "cash:F3",
+   "removed": "cash:F3:merged:2:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 2,
+   "phase": "simulation",
+   "pid": "PAY_5_out",
+   "contract_id": "PAY_5_out",
+   "alias": null,
+   "debtor": "CCP1",
+   "creditor": "F3",
+   "amount": "100"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 2,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "F3",
+   "to": "CCP1",
+   "amount": "100"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:CCP1",
+   "removed": "cash:CCP1:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_6",
+   "contract_id": "PAY_6",
+   "alias": "F3_to_F4",
+   "debtor": "F3",
+   "creditor": "CCP1",
+   "amount": "100"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 3,
+   "phase": "simulation",
+   "frm": "CCP1",
+   "to": "F4",
+   "amount": "100"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 3,
+   "phase": "simulation",
+   "keep": "cash:F4",
+   "removed": "cash:F4:merged:3:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 3,
+   "phase": "simulation",
+   "pid": "PAY_6_out",
+   "contract_id": "PAY_6_out",
+   "alias": null,
+   "debtor": "CCP1",
+   "creditor": "F4",
+   "amount": "100"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 3,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "CashTransferred",
+   "day": 4,
+   "phase": "simulation",
+   "frm": "F4",
+   "to": "CCP1",
+   "amount": "100"
+  },
+  {
+   "kind": "InstrumentMerged",
+   "day": 4,
+   "phase": "simulation",
+   "keep": "cash:CCP1",
+   "removed": "cash:CCP1:merged:4:0"
+  },
+  {
+   "kind": "PayableSettled",
+   "day": 4,
+   "phase": "simulation",
+   "pid": "PAY_7",
+   "contract_id": "PAY_7",
+   "alias": "F4_to_F1",
+   "debtor": "F4",
+   "creditor": "CCP1",
+   "amount": "100"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 4,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 5,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseA",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseB",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB1",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB_Clearing",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "SubphaseB2",
+   "day": 6,
+   "phase": "simulation"
+  },
+  {
+   "kind": "PhaseC",
+   "day": 6,
+   "phase": "simulation"
+  }
+ ],
+ "balances": {
+  "cash": {
+   "CCP1": "115",
+   "F2": "85",
+   "F3": "90",
+   "F4": "90"
+  },
+  "reserves": {},
+  "deposits": {},
+  "defaulted": [
+   "F1"
+  ]
+ }
+}

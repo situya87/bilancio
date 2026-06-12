@@ -307,6 +307,52 @@ class ClearinghouseProfile:
 
 
 @dataclass(frozen=True)
+class CCPProfile:
+    """Tunable parameters for the central counterparty (Plan 061).
+
+    Experiment-layer convenience container mirroring ClearinghouseProfile.
+    The v2 kernel does NOT read this dataclass — it reads the scenario's
+    `clearinghouse:` block (mode "ccp"); the sweep pipeline emits that block
+    from these tunables. The CCP is rule-based with zero discretion (novate
+    everything, collect-then-pay, mechanical waterfall): deliberately no
+    behavioral risk parameters in stage 1, so the with/without-CCP comparison
+    isolates the mechanical effect of changing contagion topology.
+
+    Attributes:
+        ccp_fund_share: Each member contributes this fraction of its initial
+            cash to the prefunded default fund at setup
+        vmgh_enabled: Variation-margin-gains haircutting closes the books on
+            fund-exhaustion days; stage 1 requires True (the books could not
+            close otherwise), so False is rejected at validation
+        replenishment_enabled: Surviving members top the fund back up
+            pro-rata (capped at available cash) on the day after a drawdown
+        ccp_can_fail: Reserved for a later stage; stage 1 hardwires the CCP
+            as unable to fail, so True is rejected at validation
+    """
+
+    ccp_fund_share: Decimal = Decimal("0.05")
+    vmgh_enabled: bool = True
+    replenishment_enabled: bool = True
+    ccp_can_fail: bool = False
+
+    def __post_init__(self) -> None:
+        if not (Decimal("0") <= self.ccp_fund_share < Decimal("1")):
+            raise ValueError("ccp_fund_share must be in [0, 1)")
+        if not self.vmgh_enabled:
+            raise ValueError(
+                "vmgh_enabled must be True in stage 1: without VMGH the CCP's "
+                "books cannot close on fund-exhaustion days (reserved for the "
+                "ccp_can_fail stage)"
+            )
+        if self.ccp_can_fail:
+            raise ValueError(
+                "ccp_can_fail=True is not supported: stage 1 hardwires the CCP "
+                "as unable to fail (the parameter exists so CCP failure is a "
+                "behavior change, not a schema change)"
+            )
+
+
+@dataclass(frozen=True)
 class BankProfile:
     """Treynor pricing parameters for active banks in the Kalecki ring.
 

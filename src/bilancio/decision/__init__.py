@@ -57,6 +57,7 @@ from bilancio.decision.intentions import (
 from bilancio.decision.presets import AGGRESSIVE, BASELINE, CAUTIOUS
 from bilancio.decision.profile_factory import build_profile
 from bilancio.decision.profiles import (
+    CCPProfile,
     ClearinghouseProfile,
     LenderProfile,
     RatingProfile,
@@ -157,6 +158,7 @@ __all__ = [
     "CreditAdjustedVBTPricing",
     "EVHoldValuer",
     # Profiles
+    "CCPProfile",
     "ClearinghouseProfile",
     "LenderProfile",
     "RatingProfile",

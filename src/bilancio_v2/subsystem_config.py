@@ -121,6 +121,13 @@ class CleanClearingConfig:
     max_issuance_per_member: Decimal = Decimal("1.0")
     cert_max_tenor: int | None = None
     mandatory_acceptance: bool = True
+    # Central-counterparty parameters (Plan 061; read only when mode == "ccp").
+    # vmgh_enabled is schema-validated to True in stage 1 (books must close);
+    # it exists so the reserved ccp_can_fail stage is a behavior change, not
+    # a schema change.
+    ccp_fund_share: Decimal = Decimal("0.05")
+    vmgh_enabled: bool = True
+    replenishment_enabled: bool = True
 
 
 @dataclass(frozen=True)

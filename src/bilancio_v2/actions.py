@@ -110,13 +110,36 @@ def apply_action(ledger: Ledger, action: dict[str, Any], *, index: int, setup: b
         )
     elif action_name == "create_payable":
         due_day = int(payload["due_day"])
+        debtor = payload["from"]
+        creditor = payload["to"]
+        amount = as_amount(payload["amount"])
+        maturity_distance = int(payload.get("maturity_distance") or payload["due_day"])
+        if ledger.clearing_config is not None and getattr(ledger.clearing_config, "mode", None) == "ccp":
+            # Novation chokepoint (Plan 061): member↔member payables are
+            # rewritten into A→CCP1 + CCP1→B legs at creation time. Lazy
+            # import: the plugin imports the ledger, never actions.
+            from bilancio_v2.plugins.clearinghouse_ccp import is_member, novate_payable_creation
+
+            if is_member(ledger, debtor) and is_member(ledger, creditor):
+                novate_payable_creation(
+                    ledger,
+                    debtor=debtor,
+                    creditor=creditor,
+                    amount=amount,
+                    due_day=due_day,
+                    maturity_distance=maturity_distance,
+                    alias=payload.get("alias"),
+                    setup=setup,
+                    index=index,
+                )
+                return
         ledger.create_payable(
             payable_id=ledger.unique_contract_id("PAY", index),
-            debtor=payload["from"],
-            creditor=payload["to"],
-            amount=as_amount(payload["amount"]),
+            debtor=debtor,
+            creditor=creditor,
+            amount=amount,
             due_day=due_day,
-            maturity_distance=int(payload.get("maturity_distance") or payload["due_day"]),
+            maturity_distance=maturity_distance,
             alias=payload.get("alias"),
             setup=setup,
         )

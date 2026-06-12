@@ -102,6 +102,21 @@ def _deps() -> Any:
     default=1.0,
     help="Max certificate issuance per member as fraction of its gross dues today",
 )
+@click.option(
+    "--clearing-ccp",
+    is_flag=True,
+    default=False,
+    help=(
+        "Enable the central counterparty via novation (Plan 061; v2 engine only). "
+        "Mutually exclusive with --clearing and --clearing-certificates"
+    ),
+)
+@click.option(
+    "--ccp-fund-share",
+    type=float,
+    default=0.05,
+    help="CCP default-fund contribution as a fraction of each member's initial cash",
+)
 @click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
 @click.option(
     "--perf-preset",
@@ -155,6 +170,8 @@ def sweep_ring(
     cert_haircut: float,
     cert_rate: float,
     cert_max_issuance: float,
+    clearing_ccp: bool,
+    ccp_fund_share: float,
     job_id: str | None,
     perf_preset: str | None,
     fast_atomic: bool,
@@ -204,8 +221,20 @@ def sweep_ring(
             cert_rate = float(runner_cfg.cert_rate)
         if runner_cfg.cert_max_issuance is not None and parameter_uses_default(ctx, "cert_max_issuance"):
             cert_max_issuance = float(runner_cfg.cert_max_issuance)
+        if runner_cfg.clearing_ccp and parameter_uses_default(ctx, "clearing_ccp"):
+            clearing_ccp = runner_cfg.clearing_ccp
+        if runner_cfg.ccp_fund_share is not None and parameter_uses_default(ctx, "ccp_fund_share"):
+            ccp_fund_share = float(runner_cfg.ccp_fund_share)
         dealer_enabled = runner_cfg.dealer_enabled
         dealer_config = runner_cfg.dealer_config
+
+    if clearing_ccp and (clearing or clearing_certificates):
+        raise click.UsageError(
+            "--clearing-ccp is mutually exclusive with --clearing and "
+            "--clearing-certificates: netting, certificates, and ccp are "
+            "exclusive variants of the clearinghouse block (Plan 061). "
+            "Run separate sweeps at matched seeds to compare modes."
+        )
 
     if sweep_config is not None and sweep_config.grid is not None:
         grid_cfg = sweep_config.grid
@@ -351,6 +380,8 @@ def sweep_ring(
         cert_haircut=Decimal(str(cert_haircut)),
         cert_rate=Decimal(str(cert_rate)),
         cert_max_issuance=Decimal(str(cert_max_issuance)),
+        clearing_ccp=clearing_ccp,
+        ccp_fund_share=Decimal(str(ccp_fund_share)),
         executor=executor,
         performance=performance,
     )
