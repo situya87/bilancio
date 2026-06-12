@@ -1,6 +1,6 @@
 # Bilancio Codebase Documentation
 
-Generated: 2026-06-12 02:00:53 UTC | Branch: main | Commit: 9e123eab
+Generated: 2026-06-12 03:10:25 UTC | Branch: main | Commit: cab7597e
 
 This document contains the complete codebase structure and content for LLM ingestion.
 
@@ -2336,7 +2336,8 @@ This document contains the complete codebase structure and content for LLM inges
 │   │   │   ├── README.md
 │   │   │   ├── comparison.csv
 │   │   │   └── summary.json
-│   │   └── bank_idle_vs_bank_lend_specification.md
+│   │   ├── bank_idle_vs_bank_lend_specification.md
+│   │   └── clearinghouse_suite_comparison.md
 │   ├── architecture.md
 │   ├── architecture_viz.html
 │   ├── archive
@@ -2527,6 +2528,7 @@ This document contains the complete codebase structure and content for LLM inges
 │       ├── kalecki_with_dealer.yaml
 │       ├── payment_demo.yaml
 │       ├── rich_simulation.yaml
+│       ├── ring_ccp.yaml
 │       ├── ring_with_action_specs.yaml
 │       ├── sasa_scenario.yaml
 │       ├── simple_bank.yaml
@@ -32125,6 +32127,7 @@ This document contains the complete codebase structure and content for LLM inges
 │       │   ├── base.py
 │       │   ├── certificates.py
 │       │   ├── clearing.py
+│       │   ├── clearinghouse_ccp.py
 │       │   ├── dealer.py
 │       │   ├── interbank.py
 │       │   ├── lending.py
@@ -32338,6 +32341,7 @@ This document contains the complete codebase structure and content for LLM inges
     │   ├── test_adaptive_preset_e2e.py
     │   ├── test_adaptive_wiring.py
     │   ├── test_banking_ops.py
+    │   ├── test_ccp_pipeline.py
     │   ├── test_clearing_phase_c.py
     │   ├── test_clearinghouse_certificates.py
     │   ├── test_day_simulation.py
@@ -32357,6 +32361,7 @@ This document contains the complete codebase structure and content for LLM inges
     │   └── test_stock_ops.py
     ├── property
     │   ├── __init__.py
+    │   ├── test_ccp_invariants.py
     │   └── test_invariants_property.py
     ├── regression
     │   ├── __init__.py
@@ -32460,6 +32465,7 @@ This document contains the complete codebase structure and content for LLM inges
         │   ├── intraday_netting.json
         │   ├── payment_demo.json
         │   ├── rich_simulation.json
+        │   ├── ring_ccp.json
         │   ├── ring_with_action_specs.json
         │   ├── sasa_scenario.json
         │   ├── simple_bank.json
@@ -32486,6 +32492,9 @@ This document contains the complete codebase structure and content for LLM inges
         ├── golden_cases.py
         ├── golden_io.py
         ├── test_banking_parity.py
+        ├── test_ccp_expel.py
+        ├── test_ccp_novation.py
+        ├── test_ccp_waterfall.py
         ├── test_certificates.py
         ├── test_clearing.py
         ├── test_clearing_integration.py
@@ -32499,7 +32508,7 @@ This document contains the complete codebase structure and content for LLM inges
         ├── test_rollover_parity.py
         └── test_settlement.py
 
-6901 directories, 25588 files
+6901 directories, 25597 files
 
 ```
 
@@ -39431,6 +39440,53 @@ Complete git history from oldest to newest:
   independently verified correct. Validation sweep re-run: headline numbers
   unchanged; new regression tests cover each fixed path. Run-artifact
   events.jsonl files restored to main's versions.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  ---------
+  Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
+
+- **1bb2a812** (2026-06-12) by github-actions[bot]
+  chore(docs): update codebase_for_llm.md
+
+- **cab7597e** (2026-06-12) by situya87
+  Clearinghouse stage 3: central counterparty via novation (Plan 061) (#173)
+  * feat(ccp): central counterparty via novation for the Kalecki ring (Plan 061)
+  Novation turns the ring into a star: every member-to-member payable is
+  rewritten at creation into A->CCP1 + CCP1->B legs carrying the origin
+  pair; 059's netting runs unchanged and degenerates to per-member nets.
+  Settlement becomes a two-leg day (collect pay-ins, then pay out, atomic:
+  the CCP never pays before collecting, cash[CCP1] >= 0 by construction)
+  with a three-tier waterfall on member shortfalls — own contribution,
+  mutualized fund pro-rata, then variation-margin-gains haircutting that
+  closes the books exactly. Day-0 cash-proportional default fund, next-day
+  capped replenishment, star-guarded expulsion (reassignment can never
+  re-link members), origin-pair rollover with re-novation. CCP cannot fail
+  in stage 1; mode is exclusive with banking/lender/dealer arms.
+  Pipeline: --clearing-ccp + --ccp-fund-share (mutually exclusive with the
+  other clearing flags), ccp_totals metrics (fund_drawdowns_total,
+  vmgh_haircut_total, ccp_member_defaults) and a new cascade_depth_max
+  metric computed for ALL arms; origin-aware delta (each novated obligation
+  counts once, on the end-creditor leg).
+  Validation (matched seeds, expel-agent): cascade depth collapses 7-8 -> 1
+  in the synchronized stressed cells with delta down 19-34pp; VMGH and fund
+  draws exercised everywhere. Off by default; goldens unchanged except the
+  new pinned ring_ccp scenario. 6711 tests green.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * fix(ccp): adversarial-review fixes — deposit blindness, novation escapes, metric inertness
+  PR #173 review fixes: ccp mode rejects bank agents (deposit collections
+  were invisible to the cash-only payout pool, causing spurious total VMGH
+  haircuts) and measures waterfall recovery in spendable cash;
+  transfer_claim can no longer move a novated leg or re-link two members;
+  member-to-non-member payables are rejected (reassignment would leak the
+  mutualized fund to non-members); ccp_member_defaults reports only when
+  CCP fund events are present; replenishment reserves pay-ins due today so
+  bookkeeping cannot manufacture defaults; reserved institution ids
+  (CCP1/CH1) collide loudly instead of silently merging; vmgh_enabled is
+  asserted in the kernel; fund-share bounds aligned; checkpoint field dupes
+  removed; render formatters added for the four CCP events.
+  Validation sweep unchanged (findings latent in the grid); regression
+  tests cover each fixed path. 6718 tests green.
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+  * docs: clearinghouse suite final comparison — netting vs certificates vs ccp, 4 arms x 3 seeds
   Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
   ---------
   Co-authored-by: Claude Fable 5 <noreply@anthropic.com>
@@ -47091,16 +47147,33 @@ Event = dict[str, Any]
 AgentId = str
 
 
+def _is_novated_in_leg(e: Event) -> bool:
+    """True for the member→CCP leg of a novated payable (Plan 061).
+
+    Novation splits every original A→B obligation into A→CCP1 + CCP1→B legs
+    carrying ``origin_debtor``/``origin_creditor``. Counting both legs would
+    double the dues denominator and debit δ for an in-leg default even when
+    the fund made the end creditor whole. Metrics therefore count each
+    obligation once, on its OUT-leg (the end-creditor's claim): the in-leg —
+    identifiable as ``debtor == origin_debtor`` — is skipped.
+    """
+    origin_debtor = e.get("origin_debtor")
+    return origin_debtor is not None and (e.get("debtor") or e.get("from")) == origin_debtor
+
+
 def dues_for_day(events: Iterable[Event], t: int) -> list[dict[str, Any]]:
     """Return dues maturing on day t from creation events.
 
     We look for PayableCreated (or similarly named) events that carry a due_day.
     Output items minimally include: debtor, creditor, amount, due_day, and ids if present.
+    Novated in-legs are excluded (see ``_is_novated_in_leg``).
     """
     dues: list[dict[str, Any]] = []
     for e in events:
         kind = e.get("kind")
         if kind == "PayableCreated" and int(e.get("due_day", -1)) == int(t):
+            if _is_novated_in_leg(e):
+                continue
             dues.append(
                 {
                     "debtor": e.get("debtor") or e.get("from"),
@@ -47254,13 +47327,17 @@ def netting_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal]:
     """Return (gross_face_due, face_extinguished_by_netting) for a run.
 
     gross_face_due sums all PayableCreated face; face_extinguished_by_netting
-    sums PayableNetted reductions applied on the payable's due day.
+    sums PayableNetted reductions applied on the payable's due day. Novated
+    in-legs are excluded so each obligation counts once (see
+    ``_is_novated_in_leg``).
     """
     events_list = list(events)
     gross = Decimal("0")
     id_to_due: dict[str, int] = {}
     for e in events_list:
         if e.get("kind") != "PayableCreated":
+            continue
+        if _is_novated_in_leg(e):
             continue
         gross += Decimal(e.get("amount", 0))
         due = int(e.get("due_day", -1))
@@ -47335,6 +47412,54 @@ def certificate_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal, Decim
             peak = outstanding
 
     return issued_total, peak, default_losses
+
+
+def ccp_totals(events: Iterable[Event]) -> tuple[Decimal, Decimal, int]:
+    """Return (fund_drawdowns_total, vmgh_haircut_total, ccp_member_defaults) (Plan 061).
+
+    Central-counterparty metrics, derived purely from the CCP event stream:
+
+    - ``fund_drawdowns_total``: sum of ``own_tranche + mutualized_tranche``
+      over all ``CCPFundDrawdown`` events — the default-fund face consumed by
+      the loss waterfall (the ``vmgh_residual`` part is captured separately
+      below via the haircut events it causes).
+    - ``vmgh_haircut_total``: sum of ``haircut`` over all
+      ``VMGHHaircutApplied`` events — losses passed to receiving members via
+      variation-margin-gains haircutting on fund-exhaustion days.
+    - ``ccp_member_defaults``: count of distinct agents with an
+      ``AgentDefaulted`` event, reported ONLY when the stream contains CCP
+      fund events (every run has AgentDefaulted events; non-ccp arms must
+      stay at 0). In ccp mode every default is a member-vs-CCP expulsion
+      (the CCP itself cannot default in stage 1), so this equals the number
+      of member expulsions.
+
+    Returns (0, 0, 0) when no CCP events are present, so the metrics are
+    inert for non-ccp runs.
+    """
+    fund_drawdowns_total = Decimal("0")
+    vmgh_haircut_total = Decimal("0")
+    defaulted: set[str] = set()
+    ccp_run = False
+
+    for e in events:
+        kind = e.get("kind")
+        if kind == "CCPFundDrawdown":
+            fund_drawdowns_total += Decimal(str(e.get("own_tranche", 0) or 0))
+            fund_drawdowns_total += Decimal(str(e.get("mutualized_tranche", 0) or 0))
+            ccp_run = True
+        elif kind in ("CCPFundContribution", "CCPFundReplenished", "VMGHHaircutApplied"):
+            ccp_run = True
+            if kind == "VMGHHaircutApplied":
+                vmgh_haircut_total += Decimal(str(e.get("haircut", 0) or 0))
+        elif kind == "AgentDefaulted":
+            agent = _agent_from_event(e)
+            if agent:
+                defaulted.add(agent)
+
+    # ccp_member_defaults only counts in ccp runs (identified by CCP fund
+    # events): every run has AgentDefaulted events, and reporting them here
+    # for other arms would violate the inert-when-off contract.
+    return fund_drawdowns_total, vmgh_haircut_total, (len(defaulted) if ccp_run else 0)
 
 
 def replay_intraday_peak(
@@ -47554,6 +47679,74 @@ def cascade_fraction(events: Iterable[Event]) -> Decimal | None:
         seen.add(agent)
 
     return Decimal(str(secondary)) / Decimal(str(total))
+
+
+def cascade_depth_max(events: Iterable[Event]) -> int:
+    """Longest default-precedence chain, measured in defaults (Plan 061).
+
+    Builds a precedence DAG by chronological replay of ``PayableCreated`` +
+    ``AgentDefaulted`` events (the same replay approach as
+    :func:`cascade_fraction`). An edge runs from a defaulted debtor to its
+    payable creditor when the creditor defaulted *strictly later*: the
+    debtor's failure starved the creditor before the creditor's own default.
+
+    Obligation pairs honour novation attribution: when a ``PayableCreated``
+    event carries ``origin_debtor``/``origin_creditor`` (novated CCP legs),
+    the ORIGIN pair is used instead of the literal debtor/creditor, so
+    novated runs attribute precedence to the underlying economic pair rather
+    than to CCP1.
+
+    This is attribution-by-precedence, not true causal lineage — a creditor
+    that defaults after its debtor is counted as downstream even if the
+    starved inflow was not decisive.
+
+    Precondition:
+        Events must be in chronological order (as produced by the engine).
+
+    Returns:
+        The number of defaults on the longest path: 0 when there are no
+        defaults, 1 when every default is isolated (no defaulted debtor
+        precedes its defaulted creditor), >= 2 for chains.
+    """
+    events_list = list(events)
+
+    # 1. Obligation graph: creditor -> set of debtors, with novated legs
+    #    attributed to the origin pair.
+    creditor_to_debtors: dict[str, set[str]] = defaultdict(set)
+    for e in events_list:
+        if e.get("kind") != "PayableCreated":
+            continue
+        debtor = e.get("origin_debtor") or e.get("debtor") or e.get("from")
+        creditor = e.get("origin_creditor") or e.get("creditor") or e.get("to")
+        if debtor and creditor:
+            creditor_to_debtors[str(creditor)].add(str(debtor))
+
+    # 2. Default order (deduplicated, chronological).
+    defaulted_so_far: set[str] = set()
+    default_order: list[str] = []
+    for e in events_list:
+        if e.get("kind") == "AgentDefaulted":
+            agent = _agent_from_event(e)
+            if agent and agent not in defaulted_so_far:
+                default_order.append(agent)
+                defaulted_so_far.add(agent)
+
+    if not default_order:
+        return 0
+
+    # 3. Longest path via DP in default order. Edges only run from earlier
+    #    defaults to strictly later ones, so the precedence graph is a DAG
+    #    and a single forward pass suffices. O(defaults^2) worst case.
+    depth: dict[str, int] = {}
+    for agent in default_order:
+        upstream = creditor_to_debtors.get(agent, set())
+        best = 0
+        for debtor in upstream:
+            if debtor != agent and debtor in depth:
+                best = max(best, depth[debtor])
+        depth[agent] = best + 1
+
+    return max(depth.values())
 
 ```
 
@@ -48224,7 +48417,7 @@ COVERED_INSTRUMENT_KINDS: frozenset[str] = frozenset({
 
 COVERED_PROFILES: frozenset[str] = frozenset({
     "TraderProfile", "VBTProfile", "LenderProfile", "BankProfile", "RatingProfile",
-    "ClearinghouseProfile",
+    "ClearinghouseProfile", "CCPProfile",
 })
 
 HANDLED_SWEEP_TYPES: frozenset[str] = frozenset({"dealer", "bank", "nbfi"})
@@ -51696,7 +51889,9 @@ from bilancio.analysis.metrics import (
     alpha as alpha_fn,
 )
 from bilancio.analysis.metrics import (
+    cascade_depth_max,
     cascade_fraction,
+    ccp_totals,
     certificate_totals,
     count_defaults,
     creditor_hhi_plus,
@@ -51962,9 +52157,15 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
     # certificate events are present (non-certificates runs are inert).
     cert_issued_total, cert_outstanding_peak, cert_default_losses = certificate_totals(events)
 
+    # CCP metrics (Plan 061); all zero when no CCP events are present
+    # (non-ccp runs are inert). cascade_depth_max needs no new events and is
+    # computed for every run so with/without-CCP comparisons exist.
+    fund_drawdowns_total, vmgh_haircut_total, ccp_member_defaults = ccp_totals(events)
+
     return {
         "n_defaults": count_defaults(events),
         "cascade_fraction": cascade_fraction(events),
+        "cascade_depth_max": cascade_depth_max(events),
         "cb_loans_created_count": cb_loans_created_count,
         "cb_interest_total_paid": cb_interest_total_paid,
         "cb_loans_outstanding_pre_final": cb_loans_outstanding_pre_final,
@@ -51987,6 +52188,9 @@ def compute_run_level_metrics(events: Sequence[dict[str, Any]]) -> dict[str, Any
         "certificates_issued_total": float(cert_issued_total),
         "certificates_outstanding_peak": float(cert_outstanding_peak),
         "cert_default_losses": float(cert_default_losses),
+        "fund_drawdowns_total": float(fund_drawdowns_total),
+        "vmgh_haircut_total": float(vmgh_haircut_total),
+        "ccp_member_defaults": int(ccp_member_defaults),
     }
 
 
@@ -52497,6 +52701,14 @@ def aggregate_runs(
         certificates_outstanding_peak_val = entry.get("certificates_outstanding_peak") or 0.0
         cert_default_losses_val = entry.get("cert_default_losses") or 0.0
 
+        # CCP metrics (Plan 061), same event-derived pattern; 0.0 when the
+        # registry predates the columns. cascade_depth_max is int-valued but
+        # carried as a float for column-type uniformity.
+        fund_drawdowns_total_val = entry.get("fund_drawdowns_total") or 0.0
+        vmgh_haircut_total_val = entry.get("vmgh_haircut_total") or 0.0
+        ccp_member_defaults_val = entry.get("ccp_member_defaults") or 0.0
+        cascade_depth_max_val = entry.get("cascade_depth_max") or 0.0
+
         rows.append(
             {
                 "run_id": entry.get("run_id"),
@@ -52523,6 +52735,10 @@ def aggregate_runs(
                 "certificates_issued_total": certificates_issued_total_val,
                 "certificates_outstanding_peak": certificates_outstanding_peak_val,
                 "cert_default_losses": cert_default_losses_val,
+                "fund_drawdowns_total": fund_drawdowns_total_val,
+                "vmgh_haircut_total": vmgh_haircut_total_val,
+                "ccp_member_defaults": ccp_member_defaults_val,
+                "cascade_depth_max": cascade_depth_max_val,
                 "time_to_stability": entry.get("time_to_stability")
                 or str(summary.get("max_day", "")),
                 "metrics_csv": metrics_rel,
@@ -52554,6 +52770,10 @@ def aggregate_runs(
         "certificates_issued_total",
         "certificates_outstanding_peak",
         "cert_default_losses",
+        "fund_drawdowns_total",
+        "vmgh_haircut_total",
+        "ccp_member_defaults",
+        "cascade_depth_max",
         "time_to_stability",
         "metrics_csv",
     ]
@@ -64345,7 +64565,15 @@ class AgentSpec(BaseModel):
 
     id: str = Field(..., description="Unique identifier for the agent")
     kind: Literal[
-        "central_bank", "bank", "household", "firm", "treasury", "non_bank_lender", "rating_agency", "clearinghouse"
+        "central_bank",
+        "bank",
+        "household",
+        "firm",
+        "treasury",
+        "non_bank_lender",
+        "rating_agency",
+        "clearinghouse",
+        "central_counterparty",
     ] = Field(..., description="Type of agent")
     name: str = Field(..., description="Human-readable name for the agent")
     jurisdiction: str | None = Field(None, description="Jurisdiction this agent belongs to")
@@ -65332,9 +65560,13 @@ class ClearinghouseConfig(BaseModel):
     """Clearinghouse configuration within a scenario (Plans 059/060)."""
 
     enabled: bool = Field(default=False, description="Enable the clearinghouse phase")
-    mode: Literal["netting", "certificates"] = Field(
+    mode: Literal["netting", "certificates", "ccp"] = Field(
         default="netting",
-        description="Clearinghouse mode: 'netting' (stage 1) or 'certificates' (stage 2; netting still runs first)",
+        description=(
+            "Clearinghouse mode: 'netting' (stage 1), 'certificates' (stage 2) or "
+            "'ccp' (stage 3: novation to a central counterparty); netting always runs first. "
+            "Modes are exclusive variants of this single block."
+        ),
     )
     cert_haircut: Decimal = Field(
         default=Decimal("0.25"), ge=Decimal("0"), lt=Decimal("1"),
@@ -65356,6 +65588,22 @@ class ClearinghouseConfig(BaseModel):
         default=True,
         description="Certificates must be accepted in settlement (stage 2 supports only true)",
     )
+    ccp_fund_share: Decimal = Field(
+        default=Decimal("0.05"), ge=Decimal("0"), lt=Decimal("1"),
+        description="Default-fund contribution as a fraction of each member's cash at collection (ccp mode)",
+    )
+    vmgh_enabled: bool = Field(
+        default=True,
+        description="Variation-margin-gains haircutting closes the CCP payout leg (stage 1 supports only true)",
+    )
+    replenishment_enabled: bool = Field(
+        default=True,
+        description="Members top the default fund back up toward their original contribution, capped at available cash",
+    )
+    ccp_can_fail: bool = Field(
+        default=False,
+        description="Reserved: CCP failure modeling (stage 1 supports only false)",
+    )
 
     @field_validator("mandatory_acceptance")
     @classmethod
@@ -65365,6 +65613,27 @@ class ClearinghouseConfig(BaseModel):
                 "mandatory_acceptance=false is not supported: stage 2 certificate acceptance "
                 "is mandatory (the parameter exists so a voluntary stage 3 is a behavior "
                 "change, not a schema change)"
+            )
+        return v
+
+    @field_validator("vmgh_enabled")
+    @classmethod
+    def vmgh_required(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError(
+                "vmgh_enabled=false is not supported: in stage 1 the CCP's books could not "
+                "close without the VMGH backstop (the parameter exists so the reserved "
+                "ccp_can_fail stage is a behavior change, not a schema change)"
+            )
+        return v
+
+    @field_validator("ccp_can_fail")
+    @classmethod
+    def ccp_cannot_fail(cls, v: bool) -> bool:
+        if v:
+            raise ValueError(
+                "ccp_can_fail=true is not supported: the stage-1 central counterparty cannot "
+                "fail (VMGH always closes its books); CCP failure is a reserved later stage"
             )
         return v
 
@@ -75158,6 +75427,7 @@ from bilancio.decision.intentions import (
 from bilancio.decision.presets import AGGRESSIVE, BASELINE, CAUTIOUS
 from bilancio.decision.profile_factory import build_profile
 from bilancio.decision.profiles import (
+    CCPProfile,
     ClearinghouseProfile,
     LenderProfile,
     RatingProfile,
@@ -75258,6 +75528,7 @@ __all__ = [
     "CreditAdjustedVBTPricing",
     "EVHoldValuer",
     # Profiles
+    "CCPProfile",
     "ClearinghouseProfile",
     "LenderProfile",
     "RatingProfile",
@@ -78083,6 +78354,52 @@ class ClearinghouseProfile:
             raise ValueError(
                 "mandatory_acceptance must be True in stage 2 "
                 "(voluntary acceptance is a stage-3 extension)"
+            )
+
+
+@dataclass(frozen=True)
+class CCPProfile:
+    """Tunable parameters for the central counterparty (Plan 061).
+
+    Experiment-layer convenience container mirroring ClearinghouseProfile.
+    The v2 kernel does NOT read this dataclass — it reads the scenario's
+    `clearinghouse:` block (mode "ccp"); the sweep pipeline emits that block
+    from these tunables. The CCP is rule-based with zero discretion (novate
+    everything, collect-then-pay, mechanical waterfall): deliberately no
+    behavioral risk parameters in stage 1, so the with/without-CCP comparison
+    isolates the mechanical effect of changing contagion topology.
+
+    Attributes:
+        ccp_fund_share: Each member contributes this fraction of its initial
+            cash to the prefunded default fund at setup
+        vmgh_enabled: Variation-margin-gains haircutting closes the books on
+            fund-exhaustion days; stage 1 requires True (the books could not
+            close otherwise), so False is rejected at validation
+        replenishment_enabled: Surviving members top the fund back up
+            pro-rata (capped at available cash) on the day after a drawdown
+        ccp_can_fail: Reserved for a later stage; stage 1 hardwires the CCP
+            as unable to fail, so True is rejected at validation
+    """
+
+    ccp_fund_share: Decimal = Decimal("0.05")
+    vmgh_enabled: bool = True
+    replenishment_enabled: bool = True
+    ccp_can_fail: bool = False
+
+    def __post_init__(self) -> None:
+        if not (Decimal("0") <= self.ccp_fund_share < Decimal("1")):
+            raise ValueError("ccp_fund_share must be in [0, 1)")
+        if not self.vmgh_enabled:
+            raise ValueError(
+                "vmgh_enabled must be True in stage 1: without VMGH the CCP's "
+                "books cannot close on fund-exhaustion days (reserved for the "
+                "ccp_can_fail stage)"
+            )
+        if self.ccp_can_fail:
+            raise ValueError(
+                "ccp_can_fail=True is not supported: stage 1 hardwires the CCP "
+                "as unable to fail (the parameter exists so CCP failure is a "
+                "behavior change, not a schema change)"
             )
 
 
@@ -93647,6 +93964,11 @@ IMPACT_EVENTS = {
     "InterbankCleared",
     "InterbankOvernightCreated",
     "InterbankAuctionTrade",
+    # Plan 061 (CCP): waterfall drawdowns and VMGH haircuts are economically
+    # impactful days — counted so the v2 engine's stability tracker
+    # (bilancio_v2.engine.impacted_on_day) does not treat them as quiet.
+    "CCPFundDrawdown",
+    "VMGHHaircutApplied",
 }
 
 DEFAULT_EVENTS = {
@@ -100778,6 +101100,12 @@ class RingRunSummary:
     certificates_issued_total: float = 0.0
     certificates_outstanding_peak: float = 0.0
     cert_default_losses: float = 0.0
+    # Clearinghouse CCP metrics (Plan 061); cascade_depth_max is computed
+    # for ALL arms (it needs no CCP events), the rest are 0 in non-ccp runs.
+    fund_drawdowns_total: float = 0.0
+    vmgh_haircut_total: float = 0.0
+    ccp_member_defaults: int = 0
+    cascade_depth_max: int = 0
     # Dealer metrics (only populated for treatment runs with dealer enabled)
     dealer_metrics: dict[str, Any] | None = None
     # Modal call ID for cloud execution debugging
@@ -100920,6 +101248,8 @@ class _RingSweepRunnerConfig(BaseModel):
     cert_haircut: Decimal | None = None
     cert_rate: Decimal | None = None
     cert_max_issuance: Decimal | None = None
+    clearing_ccp: bool = False
+    ccp_fund_share: Decimal | None = None
 
 
 class RingSweepConfig(BaseModel):
@@ -100985,6 +101315,8 @@ class RingSweepRunner:
         cert_haircut: Decimal = Decimal("0.25"),
         cert_rate: Decimal = Decimal("0.06"),
         cert_max_issuance: Decimal = Decimal("1.0"),
+        clearing_ccp: bool = False,
+        ccp_fund_share: Decimal = Decimal("0.05"),
         risk_assessment_enabled: bool = True,
         risk_assessment_config: dict[str, Any] | None = None,
         balanced_mode: bool = False,
@@ -101068,13 +101400,27 @@ class RingSweepRunner:
         self.default_handling = default_handling
         self.dealer_enabled = dealer_enabled
         self.dealer_config = dealer_config
+        # CCP mode (Plan 061) is an exclusive variant of the clearinghouse
+        # block: it subsumes netting (the kernel runs the clearing phase on
+        # the novated star automatically) and cannot compose with the
+        # netting or certificates modes.
+        if clearing_ccp and (clearing_enabled or clearing_certificates):
+            raise ValueError(
+                "clearing_ccp is mutually exclusive with clearing_enabled and "
+                "clearing_certificates: netting/certificates/ccp are exclusive "
+                "variants of the clearinghouse block (Plan 061)"
+            )
         # Certificates mode (Plan 060) implies the clearing phase (Plan 059):
         # netting runs first, certificates cover the post-netting shortfall.
+        # CCP mode deliberately does NOT set clearing_enabled — the kernel
+        # runs netting automatically in ccp mode without the netting block.
         self.clearing_enabled = clearing_enabled or clearing_certificates
         self.clearing_certificates = clearing_certificates
         self.cert_haircut = cert_haircut
         self.cert_rate = cert_rate
         self.cert_max_issuance = cert_max_issuance
+        self.clearing_ccp = clearing_ccp
+        self.ccp_fund_share = ccp_fund_share
         self.risk_assessment_enabled = risk_assessment_enabled
         self.risk_assessment_config = risk_assessment_config
         self.balanced_mode = balanced_mode
@@ -101227,6 +101573,7 @@ class RingSweepRunner:
             "dealer_enabled",
             "clearing_enabled",
             "clearing_certificates",
+            "clearing_ccp",
             "phi_total",
             "delta_total",
             "gross_face_due",
@@ -101234,6 +101581,10 @@ class RingSweepRunner:
             "certificates_issued_total",
             "certificates_outstanding_peak",
             "cert_default_losses",
+            "fund_drawdowns_total",
+            "vmgh_haircut_total",
+            "ccp_member_defaults",
+            "cascade_depth_max",
             "time_to_stability",
             "scenario_yaml",
             "events_jsonl",
@@ -101247,12 +101598,20 @@ class RingSweepRunner:
             writer.writeheader()
 
     def _clearinghouse_block(self) -> dict[str, Any] | None:
-        """Build the scenario `clearinghouse:` block (Plans 059/060).
+        """Build the scenario `clearinghouse:` block (Plans 059/060/061).
 
-        Returns None when no clearing is requested. With certificates mode
-        the block carries the certificate facility parameters; otherwise it
-        is the plain netting block from Plan 059.
+        Returns None when no clearing is requested. With ccp mode the block
+        carries the default-fund share (Plan 061); with certificates mode it
+        carries the certificate facility parameters; otherwise it is the
+        plain netting block from Plan 059. The three modes are mutually
+        exclusive (enforced in __init__).
         """
+        if self.clearing_ccp:
+            return {
+                "enabled": True,
+                "mode": "ccp",
+                "ccp_fund_share": float(self.ccp_fund_share),
+            }
         if self.clearing_certificates:
             return {
                 "enabled": True,
@@ -101546,6 +101905,7 @@ class RingSweepRunner:
             "dealer_enabled": self.dealer_enabled,
             "clearing_enabled": self.clearing_enabled,
             "clearing_certificates": self.clearing_certificates,
+            "clearing_ccp": self.clearing_ccp,
         }
 
         # Initial "running" status
@@ -101870,6 +102230,13 @@ class RingSweepRunner:
         )
         cert_default_losses = float(bundle.summary.get("cert_default_losses", 0.0) or 0.0)
 
+        # Clearinghouse CCP metrics (Plan 061); cascade_depth_max is computed
+        # for all arms, the others are 0 in non-ccp runs.
+        fund_drawdowns_total = float(bundle.summary.get("fund_drawdowns_total", 0.0) or 0.0)
+        vmgh_haircut_total = float(bundle.summary.get("vmgh_haircut_total", 0.0) or 0.0)
+        ccp_member_defaults = int(bundle.summary.get("ccp_member_defaults", 0) or 0)
+        cascade_depth_max_val = int(bundle.summary.get("cascade_depth_max", 0) or 0)
+
         # Read dealer metrics if available (treatment runs with dealer enabled)
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = out_dir / "dealer_metrics.json"
@@ -101896,6 +102263,10 @@ class RingSweepRunner:
             "certificates_issued_total": str(certificates_issued_total),
             "certificates_outstanding_peak": str(certificates_outstanding_peak),
             "cert_default_losses": str(cert_default_losses),
+            "fund_drawdowns_total": str(fund_drawdowns_total),
+            "vmgh_haircut_total": str(vmgh_haircut_total),
+            "ccp_member_defaults": str(ccp_member_defaults),
+            "cascade_depth_max": str(cascade_depth_max_val),
         }
         self._upsert_registry(
             run_id=run_id,
@@ -101948,6 +102319,10 @@ class RingSweepRunner:
             certificates_issued_total=certificates_issued_total,
             certificates_outstanding_peak=certificates_outstanding_peak,
             cert_default_losses=cert_default_losses,
+            fund_drawdowns_total=fund_drawdowns_total,
+            vmgh_haircut_total=vmgh_haircut_total,
+            ccp_member_defaults=ccp_member_defaults,
+            cascade_depth_max=cascade_depth_max_val,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
@@ -102012,6 +102387,7 @@ class RingSweepRunner:
             "dealer_enabled": self.dealer_enabled,
             "clearing_enabled": self.clearing_enabled,
             "clearing_certificates": self.clearing_certificates,
+            "clearing_ccp": self.clearing_ccp,
         }
 
         # Initial "running" status (skip for cloud-only mode)
@@ -102393,6 +102769,18 @@ class RingSweepRunner:
                 cert_default_losses=float(
                     result.metrics.get("cert_default_losses", 0.0) or 0.0
                 ),
+                fund_drawdowns_total=float(
+                    result.metrics.get("fund_drawdowns_total", 0.0) or 0.0
+                ),
+                vmgh_haircut_total=float(
+                    result.metrics.get("vmgh_haircut_total", 0.0) or 0.0
+                ),
+                ccp_member_defaults=int(
+                    result.metrics.get("ccp_member_defaults", 0) or 0
+                ),
+                cascade_depth_max=int(
+                    result.metrics.get("cascade_depth_max", 0) or 0
+                ),
                 nbfi_loan_loss=int(result.metrics.get("nbfi_loan_loss", 0)),
                 nbfi_loans_created=int(result.metrics.get("nbfi_loans_created", 0)),
                 bank_credit_loss=int(result.metrics.get("bank_credit_loss", 0)),
@@ -102452,6 +102840,13 @@ class RingSweepRunner:
         )
         cert_default_losses = float(bundle.summary.get("cert_default_losses", 0.0) or 0.0)
 
+        # Clearinghouse CCP metrics (Plan 061); cascade_depth_max is computed
+        # for all arms, the others are 0 in non-ccp runs.
+        fund_drawdowns_total = float(bundle.summary.get("fund_drawdowns_total", 0.0) or 0.0)
+        vmgh_haircut_total = float(bundle.summary.get("vmgh_haircut_total", 0.0) or 0.0)
+        ccp_member_defaults = int(bundle.summary.get("ccp_member_defaults", 0) or 0)
+        cascade_depth_max_val = int(bundle.summary.get("cascade_depth_max", 0) or 0)
+
         dealer_metrics: dict[str, Any] | None = None
         dealer_metrics_path = prepared.out_dir / "dealer_metrics.json"
         if dealer_metrics_path.exists():
@@ -102476,6 +102871,10 @@ class RingSweepRunner:
             "certificates_issued_total": str(certificates_issued_total),
             "certificates_outstanding_peak": str(certificates_outstanding_peak),
             "cert_default_losses": str(cert_default_losses),
+            "fund_drawdowns_total": str(fund_drawdowns_total),
+            "vmgh_haircut_total": str(vmgh_haircut_total),
+            "ccp_member_defaults": str(ccp_member_defaults),
+            "cascade_depth_max": str(cascade_depth_max_val),
         }
         self._upsert_registry(
             run_id=prepared.run_id,
@@ -102533,6 +102932,10 @@ class RingSweepRunner:
             certificates_issued_total=certificates_issued_total,
             certificates_outstanding_peak=certificates_outstanding_peak,
             cert_default_losses=cert_default_losses,
+            fund_drawdowns_total=fund_drawdowns_total,
+            vmgh_haircut_total=vmgh_haircut_total,
+            ccp_member_defaults=ccp_member_defaults,
+            cascade_depth_max=cascade_depth_max_val,
             nbfi_loan_loss=int(bundle.summary.get("nbfi_loan_loss", 0)),
             nbfi_loans_created=int(bundle.summary.get("nbfi_loans_created", 0)),
             bank_credit_loss=int(bundle.summary.get("bank_credit_loss", 0)),
@@ -118713,6 +119116,21 @@ def _deps() -> Any:
     default=1.0,
     help="Max certificate issuance per member as fraction of its gross dues today",
 )
+@click.option(
+    "--clearing-ccp",
+    is_flag=True,
+    default=False,
+    help=(
+        "Enable the central counterparty via novation (Plan 061; v2 engine only). "
+        "Mutually exclusive with --clearing and --clearing-certificates"
+    ),
+)
+@click.option(
+    "--ccp-fund-share",
+    type=float,
+    default=0.05,
+    help="CCP default-fund contribution as a fraction of each member's initial cash",
+)
 @click.option("--job-id", type=str, default=None, help="Job ID (auto-generated if not provided)")
 @click.option(
     "--perf-preset",
@@ -118766,6 +119184,8 @@ def sweep_ring(
     cert_haircut: float,
     cert_rate: float,
     cert_max_issuance: float,
+    clearing_ccp: bool,
+    ccp_fund_share: float,
     job_id: str | None,
     perf_preset: str | None,
     fast_atomic: bool,
@@ -118815,8 +119235,20 @@ def sweep_ring(
             cert_rate = float(runner_cfg.cert_rate)
         if runner_cfg.cert_max_issuance is not None and parameter_uses_default(ctx, "cert_max_issuance"):
             cert_max_issuance = float(runner_cfg.cert_max_issuance)
+        if runner_cfg.clearing_ccp and parameter_uses_default(ctx, "clearing_ccp"):
+            clearing_ccp = runner_cfg.clearing_ccp
+        if runner_cfg.ccp_fund_share is not None and parameter_uses_default(ctx, "ccp_fund_share"):
+            ccp_fund_share = float(runner_cfg.ccp_fund_share)
         dealer_enabled = runner_cfg.dealer_enabled
         dealer_config = runner_cfg.dealer_config
+
+    if clearing_ccp and (clearing or clearing_certificates):
+        raise click.UsageError(
+            "--clearing-ccp is mutually exclusive with --clearing and "
+            "--clearing-certificates: netting, certificates, and ccp are "
+            "exclusive variants of the clearinghouse block (Plan 061). "
+            "Run separate sweeps at matched seeds to compare modes."
+        )
 
     if sweep_config is not None and sweep_config.grid is not None:
         grid_cfg = sweep_config.grid
@@ -118962,6 +119394,8 @@ def sweep_ring(
         cert_haircut=Decimal(str(cert_haircut)),
         cert_rate=Decimal(str(cert_rate)),
         cert_max_issuance=Decimal(str(cert_max_issuance)),
+        clearing_ccp=clearing_ccp,
+        ccp_fund_share=Decimal(str(ccp_fund_share)),
         executor=executor,
         performance=performance,
     )
@@ -121880,6 +122314,51 @@ def format_payable_netted(event: dict[str, Any]) -> tuple[str, list[str], str]:
         lines.append(f"Remaining: ${remaining:,}")
 
     return title, lines, "[NET]"
+
+
+@registry.register("CCPFundContribution")
+def format_ccp_fund_contribution(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format CCP default-fund contributions (Plan 061)."""
+    member = event.get("member", "Unknown")
+    amount = event.get("amount", 0)
+    title = f"[CCP] Fund Contribution: ${amount:,}"
+    lines = [f"{member} → fund (total: ${event.get('fund_total', 0):,})"]
+    return title, lines, "[CCP]"
+
+
+@registry.register("CCPFundDrawdown")
+def format_ccp_fund_drawdown(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format CCP default-fund drawdowns (Plan 061 waterfall)."""
+    member = event.get("member") or "structural gap"
+    own = event.get("own_tranche", 0)
+    mutual = event.get("mutualized_tranche", 0)
+    title = f"[CCP] Fund Drawdown: ${own + mutual:,}"
+    lines = [
+        f"for {member}: own ${own:,}, mutualized ${mutual:,}",
+        f"VMGH residual: ${event.get('vmgh_residual', 0):,} (fund left: ${event.get('fund_total', 0):,})",
+    ]
+    return title, lines, "[CCP]"
+
+
+@registry.register("CCPFundReplenished")
+def format_ccp_fund_replenished(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format CCP default-fund replenishments (Plan 061)."""
+    member = event.get("member", "Unknown")
+    amount = event.get("amount", 0)
+    title = f"[CCP] Fund Replenished: ${amount:,}"
+    lines = [f"{member} → fund (gap left: ${event.get('gap_remaining', 0):,})"]
+    return title, lines, "[CCP]"
+
+
+@registry.register("VMGHHaircutApplied")
+def format_vmgh_haircut(event: dict[str, Any]) -> tuple[str, list[str], str]:
+    """Format variation-margin-gains haircuts on CCP payouts (Plan 061)."""
+    creditor = event.get("creditor", "Unknown")
+    paid = event.get("paid", 0)
+    haircut = event.get("haircut", 0)
+    title = f"[CCP] VMGH Haircut: ${haircut:,}"
+    lines = [f"{creditor} paid ${paid:,} of ${event.get('face', 0):,} (h={event.get('haircut_factor', 0):.3f})"]
+    return title, lines, "[CCP]"
 
 
 @registry.register("ClearingExecuted")
@@ -203388,6 +203867,841 @@ def test_insufficient_deposit_for_withdrawal():
 
 ---
 
+### 🧪 tests/integration/test_ccp_pipeline.py
+
+```python
+"""Sweep-pipeline tests for the central counterparty via novation (Plan 061).
+
+Covers:
+- the `ccp_totals` metrics helper on synthetic event lists,
+- the new `cascade_depth_max` metric (incl. origin_* attribution on novated legs),
+- run-level metric wiring (compute_run_level_metrics),
+- CLI wiring of `--clearing-ccp` / `--ccp-fund-share` down to the runner,
+- mutual exclusion with `--clearing` and `--clearing-certificates`,
+- the runner's clearinghouse block emission (mode "ccp"),
+- the new aggregate results columns (fund_drawdowns_total, vmgh_haircut_total,
+  ccp_member_defaults, cascade_depth_max) with 0.0 fallback for legacy registries.
+
+The kernel side (v2 novation, CCP fund/waterfall/VMGH, ClearinghouseConfig
+mode "ccp") is implemented separately; tests that would require a live kernel
+run are guarded so they skip until the kernel lands.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import get_args
+from unittest.mock import MagicMock, patch
+
+import pytest
+from click.testing import CliRunner
+
+from bilancio.analysis.metrics import cascade_depth_max, ccp_totals
+from bilancio.analysis.report import aggregate_runs, compute_run_level_metrics
+from bilancio.ui.cli import cli
+
+
+def _kernel_supports_ccp() -> bool:
+    """True once the v2 kernel's ClearinghouseConfig accepts mode='ccp'."""
+    from bilancio.config.models import ClearinghouseConfig
+
+    annotation = ClearinghouseConfig.model_fields["mode"].annotation
+    return "ccp" in get_args(annotation)
+
+
+# ---------------------------------------------------------------------------
+# ccp_totals helper
+# ---------------------------------------------------------------------------
+
+
+class TestCCPTotals:
+    def test_empty_events_returns_zeros(self):
+        assert ccp_totals([]) == (Decimal("0"), Decimal("0"), 0)
+
+    def test_non_ccp_events_ignored(self):
+        events = [
+            {"kind": "PayableCreated", "amount": "100", "due_day": 1},
+            {"kind": "PayableSettled", "day": 1, "amount": "100"},
+            {"kind": "CCPFundContribution", "day": 0, "member": "H1", "amount": "5"},
+            {"kind": "CCPFundReplenished", "day": 2, "member": "H2", "amount": "3"},
+        ]
+        # Contributions/replenishments move fund accounting but are not
+        # drawdowns, haircuts, or defaults.
+        assert ccp_totals(events) == (Decimal("0"), Decimal("0"), 0)
+
+    def test_drawdowns_sum_own_and_mutualized_tranches(self):
+        events = [
+            {
+                "kind": "CCPFundDrawdown",
+                "day": 2,
+                "member": "H1",
+                "own_tranche": "25",
+                "mutualized_tranche": "35",
+                "vmgh_residual": "0",
+                "fund_total": "40",
+            },
+            {
+                "kind": "CCPFundDrawdown",
+                "day": 4,
+                "member": "H3",
+                "own_tranche": "10",
+                "mutualized_tranche": "0",
+                "vmgh_residual": "5",
+                "fund_total": "30",
+            },
+        ]
+        drawdowns, vmgh, defaults = ccp_totals(events)
+        # vmgh_residual is NOT part of fund drawdowns — it is captured via
+        # the VMGHHaircutApplied events it causes.
+        assert drawdowns == Decimal("70")
+        assert vmgh == Decimal("0")
+        assert defaults == 0
+
+    def test_vmgh_sums_haircut_payloads(self):
+        events = [
+            {
+                "kind": "VMGHHaircutApplied",
+                "day": 2,
+                "creditor": "H4",
+                "face": "120",
+                "paid": "96",
+                "haircut": "24",
+                "haircut_factor": "0.8",
+            },
+            {
+                "kind": "VMGHHaircutApplied",
+                "day": 2,
+                "creditor": "H2",
+                "face": "30",
+                "paid": "24",
+                "haircut": "6",
+                "haircut_factor": "0.8",
+            },
+        ]
+        drawdowns, vmgh, defaults = ccp_totals(events)
+        assert drawdowns == Decimal("0")
+        assert vmgh == Decimal("30")
+        assert defaults == 0
+
+    def test_member_defaults_counts_distinct_agents(self):
+        # A CCP fund event must be present: AgentDefaulted alone is not a CCP
+        # signal, and non-ccp arms must stay at 0 (PR #173 review finding).
+        events = [
+            {"kind": "CCPFundContribution", "day": 0, "member": "H1", "amount": "5"},
+            {"kind": "AgentDefaulted", "day": 2, "agent": "H1"},
+            {"kind": "AgentDefaulted", "day": 2, "agent": "H1"},  # duplicate
+            {"kind": "AgentDefaulted", "day": 3, "agent": "H3"},
+            {"kind": "AgentDefaulted", "day": 4, "frm": "H5"},  # legacy key
+        ]
+        drawdowns, vmgh, defaults = ccp_totals(events)
+        assert defaults == 3
+
+    def test_member_defaults_zero_without_ccp_events(self):
+        events = [
+            {"kind": "AgentDefaulted", "day": 2, "agent": "H1"},
+            {"kind": "AgentDefaulted", "day": 3, "agent": "H3"},
+        ]
+        assert ccp_totals(events) == (Decimal("0"), Decimal("0"), 0)
+
+    def test_mixed_stream(self):
+        events = [
+            {"kind": "CCPFundContribution", "day": 0, "member": "H1", "amount": "25"},
+            {"kind": "AgentDefaulted", "day": 2, "agent": "H1"},
+            {
+                "kind": "CCPFundDrawdown",
+                "day": 2,
+                "member": "H1",
+                "own_tranche": "25",
+                "mutualized_tranche": "5",
+                "vmgh_residual": "30",
+                "fund_total": "0",
+            },
+            {
+                "kind": "VMGHHaircutApplied",
+                "day": 2,
+                "creditor": "H4",
+                "face": "150",
+                "paid": "120",
+                "haircut": "30",
+                "haircut_factor": "0.8",
+            },
+        ]
+        assert ccp_totals(events) == (Decimal("30"), Decimal("30"), 1)
+
+
+# ---------------------------------------------------------------------------
+# cascade_depth_max metric
+# ---------------------------------------------------------------------------
+
+
+def _payable(debtor, creditor, *, origin_debtor=None, origin_creditor=None):
+    e = {"kind": "PayableCreated", "debtor": debtor, "creditor": creditor, "amount": "10", "due_day": 1}
+    if origin_debtor is not None:
+        e["origin_debtor"] = origin_debtor
+    if origin_creditor is not None:
+        e["origin_creditor"] = origin_creditor
+    return e
+
+
+def _default(agent, day=1):
+    return {"kind": "AgentDefaulted", "day": day, "agent": agent}
+
+
+class TestCascadeDepthMax:
+    def test_no_defaults_returns_zero(self):
+        events = [_payable("A", "B"), _payable("B", "C")]
+        assert cascade_depth_max(events) == 0
+
+    def test_empty_events_returns_zero(self):
+        assert cascade_depth_max([]) == 0
+
+    def test_isolated_default_returns_one(self):
+        events = [
+            _payable("A", "B"),
+            _payable("B", "C"),
+            _default("B"),
+        ]
+        # B's debtor A never defaulted -> isolated.
+        assert cascade_depth_max(events) == 1
+
+    def test_chain_of_three(self):
+        # Ring precedence A -> B -> C (A owes B, B owes C), defaults in order.
+        events = [
+            _payable("A", "B"),
+            _payable("B", "C"),
+            _default("A", day=1),
+            _default("B", day=2),
+            _default("C", day=3),
+        ]
+        assert cascade_depth_max(events) == 3
+
+    def test_creditor_defaulting_first_breaks_precedence(self):
+        # C defaults BEFORE its debtor B: no edge B -> C; both isolated.
+        events = [
+            _payable("B", "C"),
+            _default("C", day=1),
+            _default("B", day=2),
+        ]
+        assert cascade_depth_max(events) == 1
+
+    def test_parallel_chains_take_longest(self):
+        # Chain 1: A -> B (depth 2). Chain 2: X alone (depth 1).
+        events = [
+            _payable("A", "B"),
+            _payable("X", "Y"),
+            _default("A", day=1),
+            _default("X", day=1),
+            _default("B", day=2),
+        ]
+        assert cascade_depth_max(events) == 2
+
+    def test_duplicate_default_events_count_once(self):
+        events = [
+            _payable("A", "B"),
+            _default("A", day=1),
+            _default("A", day=1),
+            _default("B", day=2),
+            _default("B", day=3),
+        ]
+        assert cascade_depth_max(events) == 2
+
+    def test_novated_run_uses_origin_pair(self):
+        # Novated star: A -> CCP1 and CCP1 -> B legs, both carrying the
+        # origin pair (A, B). Defaults A then B must attribute the edge to
+        # the ORIGIN pair (depth 2), not to CCP1 (which never defaults).
+        events = [
+            _payable("A", "CCP1", origin_debtor="A", origin_creditor="B"),
+            _payable("CCP1", "B", origin_debtor="A", origin_creditor="B"),
+            _payable("B", "CCP1", origin_debtor="B", origin_creditor="C"),
+            _payable("CCP1", "C", origin_debtor="B", origin_creditor="C"),
+            _default("A", day=1),
+            _default("B", day=2),
+        ]
+        assert cascade_depth_max(events) == 2
+
+    def test_non_novated_star_attributes_to_ccp_only(self):
+        # Same star WITHOUT origin keys: B's only debtor is CCP1, which never
+        # defaults, so the two defaults are independent (depth 1). This is
+        # exactly the misattribution the origin_* keys exist to fix.
+        events = [
+            _payable("A", "CCP1"),
+            _payable("CCP1", "B"),
+            _default("A", day=1),
+            _default("B", day=2),
+        ]
+        assert cascade_depth_max(events) == 1
+
+
+# ---------------------------------------------------------------------------
+# Run-level metric wiring
+# ---------------------------------------------------------------------------
+
+
+class TestRunLevelMetricsWiring:
+    def test_ccp_keys_present_and_zero_without_events(self):
+        summary = compute_run_level_metrics([])
+        assert summary["fund_drawdowns_total"] == 0.0
+        assert summary["vmgh_haircut_total"] == 0.0
+        assert summary["ccp_member_defaults"] == 0
+        assert summary["cascade_depth_max"] == 0
+
+    def test_ccp_key_types(self):
+        events = [
+            {
+                "kind": "CCPFundDrawdown",
+                "day": 2,
+                "member": "H1",
+                "own_tranche": "25",
+                "mutualized_tranche": "35",
+                "vmgh_residual": "0",
+                "fund_total": "40",
+            },
+            {
+                "kind": "VMGHHaircutApplied",
+                "day": 2,
+                "creditor": "H4",
+                "face": "120",
+                "paid": "96",
+                "haircut": "24",
+                "haircut_factor": "0.8",
+            },
+            {"kind": "AgentDefaulted", "day": 2, "agent": "H1"},
+        ]
+        summary = compute_run_level_metrics(events)
+        assert summary["fund_drawdowns_total"] == 60.0
+        assert summary["vmgh_haircut_total"] == 24.0
+        assert summary["ccp_member_defaults"] == 1
+        assert summary["cascade_depth_max"] == 1
+        assert isinstance(summary["fund_drawdowns_total"], float)
+        assert isinstance(summary["vmgh_haircut_total"], float)
+        assert isinstance(summary["ccp_member_defaults"], int)
+        assert isinstance(summary["cascade_depth_max"], int)
+
+    def test_cascade_depth_computed_for_non_ccp_runs(self):
+        # cascade_depth_max needs no CCP events: a plain ring chain must
+        # produce a depth so the with/without-CCP comparison exists.
+        events = [
+            {"kind": "PayableCreated", "debtor": "A", "creditor": "B", "amount": "10", "due_day": 1},
+            {"kind": "PayableCreated", "debtor": "B", "creditor": "C", "amount": "10", "due_day": 1},
+            {"kind": "AgentDefaulted", "day": 1, "agent": "A"},
+            {"kind": "AgentDefaulted", "day": 2, "agent": "B"},
+            {"kind": "AgentDefaulted", "day": 3, "agent": "C"},
+        ]
+        summary = compute_run_level_metrics(events)
+        assert summary["cascade_depth_max"] == 3
+        assert summary["fund_drawdowns_total"] == 0.0
+        assert summary["vmgh_haircut_total"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# CLI wiring (--clearing-ccp / --ccp-fund-share)
+# ---------------------------------------------------------------------------
+
+
+class TestSweepRingCCPCLI:
+    def test_sweep_ring_help_lists_ccp_options(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["sweep", "ring", "--help"])
+        assert result.exit_code == 0
+        assert "--clearing-ccp" in result.output
+        assert "--ccp-fund-share" in result.output
+
+    @patch("bilancio.ui.cli.sweep.aggregate_runs")
+    @patch("bilancio.ui.cli.sweep.render_dashboard")
+    @patch("bilancio.ui.cli.sweep.RingSweepRunner")
+    @patch("bilancio.ui.cli.sweep.create_job_manager")
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-ccp-job")
+    def test_clearing_ccp_flag_passed_to_runner(
+        self,
+        mock_gen_id,
+        mock_create_jm,
+        mock_runner_cls,
+        mock_render,
+        mock_agg,
+        tmp_path,
+    ):
+        mock_create_jm.return_value = MagicMock()
+        mock_runner = MagicMock()
+        mock_runner.registry_dir = tmp_path / "registry"
+        mock_runner.aggregate_dir = tmp_path / "aggregate"
+        (tmp_path / "registry").mkdir()
+        (tmp_path / "aggregate").mkdir()
+        mock_runner_cls.return_value = mock_runner
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "sweep",
+                "ring",
+                "--out-dir",
+                str(tmp_path / "ring_out"),
+                "--clearing-ccp",
+                "--ccp-fund-share",
+                "0.1",
+            ],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        kwargs = mock_runner_cls.call_args[1]
+        assert kwargs["clearing_ccp"] is True
+        assert kwargs["ccp_fund_share"] == Decimal("0.1")
+        # ccp does NOT imply the netting block
+        assert kwargs["clearing_enabled"] is False
+        assert kwargs["clearing_certificates"] is False
+
+    @patch("bilancio.ui.cli.sweep.aggregate_runs")
+    @patch("bilancio.ui.cli.sweep.render_dashboard")
+    @patch("bilancio.ui.cli.sweep.RingSweepRunner")
+    @patch("bilancio.ui.cli.sweep.create_job_manager")
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-ccp-defaults")
+    def test_ccp_defaults_match_plan(
+        self,
+        mock_gen_id,
+        mock_create_jm,
+        mock_runner_cls,
+        mock_render,
+        mock_agg,
+        tmp_path,
+    ):
+        mock_create_jm.return_value = MagicMock()
+        mock_runner = MagicMock()
+        mock_runner.registry_dir = tmp_path / "registry"
+        mock_runner.aggregate_dir = tmp_path / "aggregate"
+        (tmp_path / "registry").mkdir()
+        (tmp_path / "aggregate").mkdir()
+        mock_runner_cls.return_value = mock_runner
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "sweep",
+                "ring",
+                "--out-dir",
+                str(tmp_path / "ring_out"),
+                "--clearing-ccp",
+            ],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        kwargs = mock_runner_cls.call_args[1]
+        assert kwargs["clearing_ccp"] is True
+        assert kwargs["ccp_fund_share"] == Decimal("0.05")
+
+    @patch("bilancio.ui.cli.sweep.aggregate_runs")
+    @patch("bilancio.ui.cli.sweep.render_dashboard")
+    @patch("bilancio.ui.cli.sweep.RingSweepRunner")
+    @patch("bilancio.ui.cli.sweep.create_job_manager")
+    @patch("bilancio.ui.cli.sweep.generate_job_id", return_value="test-ccp-off")
+    def test_ccp_off_by_default(
+        self,
+        mock_gen_id,
+        mock_create_jm,
+        mock_runner_cls,
+        mock_render,
+        mock_agg,
+        tmp_path,
+    ):
+        mock_create_jm.return_value = MagicMock()
+        mock_runner = MagicMock()
+        mock_runner.registry_dir = tmp_path / "registry"
+        mock_runner.aggregate_dir = tmp_path / "aggregate"
+        (tmp_path / "registry").mkdir()
+        (tmp_path / "aggregate").mkdir()
+        mock_runner_cls.return_value = mock_runner
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["sweep", "ring", "--out-dir", str(tmp_path / "ring_out")],
+        )
+
+        assert result.exit_code == 0, f"Failed with output:\n{result.output}"
+        kwargs = mock_runner_cls.call_args[1]
+        assert kwargs["clearing_ccp"] is False
+        assert kwargs["ccp_fund_share"] == Decimal("0.05")
+
+    @pytest.mark.parametrize(
+        "conflicting_flag",
+        ["--clearing", "--clearing-certificates"],
+    )
+    def test_ccp_mutually_exclusive_with_other_modes(self, tmp_path, conflicting_flag):
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "sweep",
+                "ring",
+                "--out-dir",
+                str(tmp_path / "ring_out"),
+                "--clearing-ccp",
+                conflicting_flag,
+            ],
+        )
+        assert result.exit_code != 0
+        assert "mutually exclusive" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Runner scenario block emission
+# ---------------------------------------------------------------------------
+
+
+class TestRunnerScenarioBlock:
+    """RingSweepRunner emits the ccp clearinghouse block."""
+
+    def _make_runner(self, tmp_path, **kwargs):
+        from bilancio.experiments.ring import RingSweepRunner
+
+        return RingSweepRunner(
+            out_dir=tmp_path,
+            name_prefix="CCPTest",
+            n_agents=4,
+            maturity_days=3,
+            Q_total=Decimal("100"),
+            liquidity_mode="uniform",
+            liquidity_agent=None,
+            base_seed=42,
+            **kwargs,
+        )
+
+    def test_ccp_block_in_prepared_scenario(self, tmp_path):
+        runner = self._make_runner(
+            tmp_path,
+            clearing_ccp=True,
+            ccp_fund_share=Decimal("0.05"),
+        )
+        prepared = runner._prepare_run(
+            "grid", Decimal("0.5"), Decimal("1"), Decimal("0.75"), Decimal("0"), 42
+        )
+        block = prepared.scenario_config.get("clearinghouse")
+        assert block == {
+            "enabled": True,
+            "mode": "ccp",
+            "ccp_fund_share": 0.05,
+        }
+
+    def test_ccp_does_not_set_clearing_enabled(self, tmp_path):
+        # The kernel runs netting automatically in ccp mode; the runner must
+        # not turn on the separate netting flag.
+        runner = self._make_runner(tmp_path, clearing_ccp=True)
+        assert runner.clearing_ccp is True
+        assert runner.clearing_enabled is False
+        assert runner.clearing_certificates is False
+
+    def test_ccp_fund_share_threaded_into_block(self, tmp_path):
+        runner = self._make_runner(
+            tmp_path, clearing_ccp=True, ccp_fund_share=Decimal("0.1")
+        )
+        prepared = runner._prepare_run(
+            "grid", Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), 42
+        )
+        assert prepared.scenario_config["clearinghouse"]["ccp_fund_share"] == 0.1
+
+    def test_no_block_when_ccp_off(self, tmp_path):
+        runner = self._make_runner(tmp_path)
+        prepared = runner._prepare_run(
+            "grid", Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), 42
+        )
+        assert "clearinghouse" not in prepared.scenario_config
+
+    def test_ccp_param_in_registry_base_params(self, tmp_path):
+        runner = self._make_runner(tmp_path, clearing_ccp=True)
+        prepared = runner._prepare_run(
+            "grid", Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), 42
+        )
+        assert prepared.base_params["clearing_ccp"] is True
+        assert prepared.base_params["clearing_enabled"] is False
+
+    @pytest.mark.parametrize(
+        "conflict_kwargs",
+        [
+            {"clearing_enabled": True},
+            {"clearing_certificates": True},
+        ],
+    )
+    def test_runner_rejects_ccp_combined_with_other_modes(self, tmp_path, conflict_kwargs):
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            self._make_runner(tmp_path, clearing_ccp=True, **conflict_kwargs)
+
+    def test_netting_block_unchanged_by_plan_061(self, tmp_path):
+        runner = self._make_runner(tmp_path, clearing_enabled=True)
+        prepared = runner._prepare_run(
+            "grid", Decimal("0.5"), Decimal("1"), Decimal("0"), Decimal("0"), 42
+        )
+        assert prepared.scenario_config.get("clearinghouse") == {
+            "enabled": True,
+            "mode": "netting",
+        }
+
+
+# ---------------------------------------------------------------------------
+# Aggregate results columns
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_runs_carries_ccp_columns(tmp_path):
+    registry_dir = tmp_path / "registry"
+    out_dir = tmp_path / "runs" / "grid_ccp1" / "out"
+    aggregate_dir = tmp_path / "aggregate"
+    registry_dir.mkdir()
+    out_dir.mkdir(parents=True)
+    aggregate_dir.mkdir()
+
+    metrics_csv = out_dir / "metrics.csv"
+    metrics_csv.write_text(
+        "day,S_t,phi_t,delta_t,face_netted_t\n"
+        "1,100,1,0,0\n"
+    )
+
+    registry_csv = registry_dir / "experiments.csv"
+    registry_csv.write_text(
+        "run_id,phase,seed,n_agents,kappa,concentration,mu,monotonicity,S1,L0,"
+        "metrics_csv,status,time_to_stability,n_defaults,cascade_fraction,"
+        "fund_drawdowns_total,vmgh_haircut_total,ccp_member_defaults,cascade_depth_max\n"
+        "grid_ccp1,grid,42,5,0.5,1,0.75,0,100,50,"
+        "../runs/grid_ccp1/out/metrics.csv,completed,2,1,,"
+        "60.0,24.0,1,1\n"
+    )
+
+    results_csv = aggregate_dir / "results.csv"
+    rows = aggregate_runs(registry_csv, results_csv)
+
+    assert rows
+    row = rows[0]
+    assert row["fund_drawdowns_total"] == "60.0"
+    assert row["vmgh_haircut_total"] == "24.0"
+    assert row["ccp_member_defaults"] == "1"
+    assert row["cascade_depth_max"] == "1"
+
+    header = results_csv.read_text().splitlines()[0]
+    assert "fund_drawdowns_total" in header
+    assert "vmgh_haircut_total" in header
+    assert "ccp_member_defaults" in header
+    assert "cascade_depth_max" in header
+
+
+def test_aggregate_runs_defaults_to_zero_for_legacy_registries(tmp_path):
+    """Registries written before Plan 061 lack the CCP columns."""
+    registry_dir = tmp_path / "registry"
+    out_dir = tmp_path / "runs" / "grid_old1" / "out"
+    aggregate_dir = tmp_path / "aggregate"
+    registry_dir.mkdir()
+    out_dir.mkdir(parents=True)
+    aggregate_dir.mkdir()
+
+    metrics_csv = out_dir / "metrics.csv"
+    metrics_csv.write_text("day,S_t,phi_t,delta_t\n1,100,1,0\n")
+
+    registry_csv = registry_dir / "experiments.csv"
+    registry_csv.write_text(
+        "run_id,phase,seed,n_agents,kappa,concentration,mu,monotonicity,S1,L0,"
+        "metrics_csv,status,time_to_stability,n_defaults,cascade_fraction\n"
+        "grid_old1,grid,42,5,0.5,1,0,0,100,50,"
+        "../runs/grid_old1/out/metrics.csv,completed,2,0,\n"
+    )
+
+    results_csv = aggregate_dir / "results.csv"
+    rows = aggregate_runs(registry_csv, results_csv)
+
+    assert rows
+    row = rows[0]
+    assert row["fund_drawdowns_total"] == 0.0
+    assert row["vmgh_haircut_total"] == 0.0
+    assert row["ccp_member_defaults"] == 0.0
+    assert row["cascade_depth_max"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# CCPProfile
+# ---------------------------------------------------------------------------
+
+
+class TestCCPProfile:
+    def test_defaults_match_plan(self):
+        from bilancio.decision import CCPProfile
+
+        profile = CCPProfile()
+        assert profile.ccp_fund_share == Decimal("0.05")
+        assert profile.vmgh_enabled is True
+        assert profile.replenishment_enabled is True
+        assert profile.ccp_can_fail is False
+
+    def test_vmgh_disabled_rejected(self):
+        from bilancio.decision.profiles import CCPProfile
+
+        with pytest.raises(ValueError, match="vmgh_enabled"):
+            CCPProfile(vmgh_enabled=False)
+
+    def test_ccp_can_fail_rejected(self):
+        from bilancio.decision.profiles import CCPProfile
+
+        with pytest.raises(ValueError, match="ccp_can_fail"):
+            CCPProfile(ccp_can_fail=True)
+
+    def test_invalid_fund_share_rejected(self):
+        from bilancio.decision.profiles import CCPProfile
+
+        with pytest.raises(ValueError, match="ccp_fund_share"):
+            CCPProfile(ccp_fund_share=Decimal("1.0"))
+        with pytest.raises(ValueError, match="ccp_fund_share"):
+            CCPProfile(ccp_fund_share=Decimal("-0.01"))
+
+    def test_frozen(self):
+        from bilancio.decision.profiles import CCPProfile
+
+        profile = CCPProfile()
+        with pytest.raises(AttributeError):
+            profile.ccp_fund_share = Decimal("0.1")
+
+
+# ---------------------------------------------------------------------------
+# Termination impact events
+# ---------------------------------------------------------------------------
+
+
+def test_ccp_events_counted_as_impactful():
+    from bilancio.engines.termination import IMPACT_EVENTS
+
+    assert "CCPFundDrawdown" in IMPACT_EVENTS
+    assert "VMGHHaircutApplied" in IMPACT_EVENTS
+
+
+# ---------------------------------------------------------------------------
+# Tiny end-to-end run (requires the kernel side of Plan 061)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not _kernel_supports_ccp(),
+    # KERNEL DEPENDENCY: the sibling Plan 061 kernel change widens
+    # ClearinghouseConfig.mode to include "ccp". Until it lands, scenario
+    # validation rejects the ccp block, so this end-to-end test is skipped.
+    # The orchestrator should unskip after integration.
+    reason="v2 kernel does not yet accept clearinghouse mode 'ccp'",
+)
+def test_end_to_end_tiny_ccp_run(tmp_path):
+    """Smallest possible local run: the ccp block flows through the runner,
+    the run completes, and the registry carries the four CCP metrics."""
+    import csv
+
+    from bilancio.experiments.ring import RingSweepRunner
+
+    runner = RingSweepRunner(
+        out_dir=tmp_path,
+        name_prefix="CCPE2E",
+        n_agents=4,
+        maturity_days=3,
+        Q_total=Decimal("100"),
+        liquidity_mode="uniform",
+        liquidity_agent=None,
+        base_seed=42,
+        default_handling="expel-agent",
+        clearing_ccp=True,
+    )
+    summaries = runner.run_grid(
+        [Decimal("0.5")], [Decimal("1")], [Decimal("0.75")], [Decimal("0")]
+    )
+    assert len(summaries) == 1
+    summary = summaries[0]
+    assert summary.fund_drawdowns_total >= 0.0
+    assert summary.vmgh_haircut_total >= 0.0
+    assert summary.ccp_member_defaults >= 0
+    assert summary.cascade_depth_max >= 0
+
+    registry_csv = tmp_path / "registry" / "experiments.csv"
+    with registry_csv.open() as fh:
+        rows = list(csv.DictReader(fh))
+    assert rows
+    assert rows[0]["status"] == "completed"
+    for column in (
+        "fund_drawdowns_total",
+        "vmgh_haircut_total",
+        "ccp_member_defaults",
+        "cascade_depth_max",
+    ):
+        assert column in rows[0]
+        assert rows[0][column] != ""
+
+
+class TestOriginAwareDeltaMetrics:
+    """Novated obligations count once, on the out-leg (end-creditor claim)."""
+
+    def _novated_pair(self, pid: str, debtor: str, creditor: str, amount: str, due_day: int):
+        return [
+            {
+                "kind": "PayableCreated",
+                "contract_id": pid,
+                "debtor": debtor,
+                "creditor": "CCP1",
+                "origin_debtor": debtor,
+                "origin_creditor": creditor,
+                "amount": amount,
+                "due_day": due_day,
+            },
+            {
+                "kind": "PayableCreated",
+                "contract_id": f"{pid}_out",
+                "debtor": "CCP1",
+                "creditor": creditor,
+                "origin_debtor": debtor,
+                "origin_creditor": creditor,
+                "amount": amount,
+                "due_day": due_day,
+            },
+        ]
+
+    def test_dues_count_each_novated_obligation_once(self):
+        from bilancio.analysis.metrics import dues_for_day
+
+        events = self._novated_pair("PAY_1", "H1", "H2", "100", 1)
+        dues = dues_for_day(events, 1)
+        assert len(dues) == 1
+        assert dues[0]["creditor"] == "H2"
+        assert dues[0]["pid"] == "PAY_1_out"
+
+    def test_gross_face_counts_each_novated_obligation_once(self):
+        from bilancio.analysis.metrics import netting_totals
+
+        events = self._novated_pair("PAY_1", "H1", "H2", "100", 1)
+        gross, netted = netting_totals(events)
+        assert gross == Decimal("100")
+        assert netted == Decimal("0")
+
+    def test_phi_credits_out_leg_settlement_only(self):
+        """In-leg default with fund-paid out-leg: the obligation counts as
+        honored — delta measures end-creditor losses."""
+        from bilancio.analysis.metrics import dues_for_day, phi_delta
+
+        events = self._novated_pair("PAY_1", "H1", "H2", "100", 1) + [
+            # in-leg defaulted (no settled event); out-leg paid by the CCP
+            {"kind": "PayableSettled", "day": 1, "pid": "PAY_1_out", "amount": "100"},
+        ]
+        dues = dues_for_day(events, 1)
+        phi, delta = phi_delta(events, dues, 1)
+        assert phi == Decimal("1")
+        assert delta == Decimal("0")
+
+    def test_non_novated_events_unaffected(self):
+        from bilancio.analysis.metrics import dues_for_day
+
+        events = [
+            {
+                "kind": "PayableCreated",
+                "contract_id": "PAY_9",
+                "debtor": "H1",
+                "creditor": "H2",
+                "amount": "50",
+                "due_day": 1,
+            }
+        ]
+        assert len(dues_for_day(events, 1)) == 1
+
+```
+
+---
+
 ### 🧪 tests/integration/test_clearing_phase_c.py
 
 ```python
@@ -207925,6 +209239,153 @@ class TestConsumeStock:
 ### 🧪 tests/property/__init__.py
 
 ```python
+
+```
+
+---
+
+### 🧪 tests/property/test_ccp_invariants.py
+
+```python
+"""Property-based tests for the central counterparty (Plan 061, criterion 9).
+
+Hypothesis drives random small rings (sizes, integer faces, integer cash,
+due days, rollover on/off) through the v2 kernel in ccp mode and asserts,
+on EVERY simulated day:
+
+* ``cash[CCP1] ≥ 0`` (the CCP never pays before collecting);
+* fund conservation (``fund_total == Σ contributions ≤ cash[CCP1]``);
+* the novation invariant (no live member↔member payable).
+
+Examples are deliberately small (few firms, short horizons, whole-unit
+amounts) so the suite stays fast.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
+from bilancio.config.models import ScenarioConfig
+from bilancio_v2 import prepare_scenario, run_until_stable
+from bilancio_v2.ledger import CCP_MEMBER_KINDS, ZERO
+
+D = Decimal
+
+
+@st.composite
+def ring_cases(draw):
+    n_firms = draw(st.integers(min_value=3, max_value=5))
+    cash = draw(st.lists(st.integers(min_value=0, max_value=150), min_size=n_firms, max_size=n_firms))
+    n_payables = draw(st.integers(min_value=2, max_value=6))
+    payables = []
+    for _ in range(n_payables):
+        debtor = draw(st.integers(min_value=1, max_value=n_firms))
+        creditor = draw(st.integers(min_value=1, max_value=n_firms).filter(lambda c, d=debtor: c != d))
+        amount = draw(st.integers(min_value=1, max_value=120))
+        due_day = draw(st.integers(min_value=1, max_value=4))
+        payables.append((f"F{debtor}", f"F{creditor}", amount, due_day))
+    rollover = draw(st.booleans())
+    fund_share = draw(st.sampled_from(["0", "0.05", "0.25"]))
+    return n_firms, cash, payables, rollover, fund_share
+
+
+def build_config(n_firms, cash, payables, rollover, fund_share) -> ScenarioConfig:
+    agents = [{"id": "CB", "kind": "central_bank", "name": "CB"}] + [
+        {"id": f"F{i + 1}", "kind": "firm", "name": f"Firm {i + 1}"} for i in range(n_firms)
+    ]
+    initial_actions = [
+        {"mint_cash": {"to": f"F{i + 1}", "amount": amount}} for i, amount in enumerate(cash) if amount
+    ]
+    initial_actions += [
+        {"create_payable": {"from": debtor, "to": creditor, "amount": amount, "due_day": due_day}}
+        for debtor, creditor, amount, due_day in payables
+    ]
+    return ScenarioConfig.model_validate(
+        {
+            "version": 1,
+            "name": "ccp-property",
+            "agents": agents,
+            "initial_actions": initial_actions,
+            "clearinghouse": {"enabled": True, "mode": "ccp", "ccp_fund_share": fund_share},
+            "run": {
+                "max_days": 6,
+                "quiet_days": 2,
+                "default_handling": "expel-agent",
+                "rollover_enabled": rollover,
+            },
+        }
+    )
+
+
+def assert_daily_invariants(runtime, day: int) -> None:
+    ledger = runtime.ledger
+    assert ledger.cash["CCP1"] >= ZERO, f"CCP cash negative on day {day}"
+    fund_sum = sum(ledger.ccp_fund_contribution.values(), ZERO)
+    assert fund_sum == ledger.ccp_fund_total, f"fund conservation broken on day {day}"
+    assert ledger.ccp_fund_total <= ledger.cash["CCP1"], f"fund exceeds CCP cash on day {day}"
+    for payable in ledger.payables:
+        if payable.settled:
+            continue
+        debtor = ledger.agents.get(payable.debtor)
+        creditor = ledger.agents.get(payable.creditor)
+        assert not (
+            debtor is not None
+            and creditor is not None
+            and debtor.kind in CCP_MEMBER_KINDS
+            and creditor.kind in CCP_MEMBER_KINDS
+        ), f"member↔member payable {payable.id} live on day {day}"
+
+
+class TestCCPInvariantsProperty:
+    @given(case=ring_cases())
+    @settings(max_examples=40, deadline=None)
+    def test_ccp_cash_fund_and_novation_invariants_hold_daily(self, case):
+        n_firms, cash, payables, rollover, fund_share = case
+        runtime = prepare_scenario(build_config(n_firms, cash, payables, rollover, fund_share))
+        result = run_until_stable(
+            runtime,
+            max_days=6,
+            quiet_days=2,
+            day_callback=assert_daily_invariants,
+        )
+        # The daily ledger invariant check ran every day without raising;
+        # close with the event-level VMGH reconciliation: each haircut
+        # payout splits its face exactly into paid + haircut.
+        for event in result.events:
+            if event["kind"] == "VMGHHaircutApplied":
+                assert event["paid"] + event["haircut"] == event["face"]
+                assert event["paid"] >= ZERO and event["haircut"] >= ZERO
+            if event["kind"] == "CCPFundDrawdown":
+                assert event["own_tranche"] >= ZERO
+                assert event["mutualized_tranche"] >= ZERO
+                assert event["vmgh_residual"] >= ZERO
+
+    @given(case=ring_cases())
+    @settings(max_examples=20, deadline=None)
+    def test_fund_never_exceeds_collected_minus_drawn(self, case):
+        n_firms, cash, payables, rollover, fund_share = case
+        runtime = prepare_scenario(build_config(n_firms, cash, payables, rollover, fund_share))
+        result = run_until_stable(runtime, max_days=6, quiet_days=2)
+        contributions = sum(
+            (event["amount"] for event in result.events if event["kind"] == "CCPFundContribution"),
+            ZERO,
+        )
+        replenished = sum(
+            (event["amount"] for event in result.events if event["kind"] == "CCPFundReplenished"),
+            ZERO,
+        )
+        drawn = sum(
+            (
+                event["own_tranche"] + event["mutualized_tranche"]
+                for event in result.events
+                if event["kind"] == "CCPFundDrawdown"
+            ),
+            ZERO,
+        )
+        assert result.ledger.ccp_fund_total == contributions + replenished - drawn
 
 ```
 
@@ -243917,6 +245378,1058 @@ def test_banking_scenarios_self_consistent(
 
 ---
 
+### 🧪 tests/v2/test_ccp_expel.py
+
+```python
+"""Expel-under-the-star tests for the central counterparty (Plan 061 §3).
+
+A defaulting member goes through the EXISTING default pipeline
+(``handle_payable_default → expel_agent → reassign_receivables``); under
+the novated star its receivables (all CCP1→m legs) must offset rather than
+re-link members, its future in-legs are written off, and the CCP1→B
+out-legs with ``origin_debtor == m`` stay OPEN — that openness *is* the
+mutualization. Includes the explicit regression test on the
+``reassign_receivables`` star guard (acceptance criterion 4).
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+
+from bilancio.config.models import ScenarioConfig
+from bilancio_v2 import prepare_scenario, run_scenario, run_until_stable
+from bilancio_v2.ledger import CCP_AGENT_KIND, CCP_MEMBER_KINDS, ZERO, InvariantViolation, Ledger, Payable
+from bilancio_v2.plugins.settlement import reassign_receivables
+from bilancio_v2.subsystem_config import CleanClearingConfig
+
+D = Decimal
+
+
+def ccp_scenario(
+    payables: list[tuple[str, str, int, int]],
+    *,
+    n_firms: int = 4,
+    cash: dict[str, int] | None = None,
+    max_days: int = 8,
+    quiet_days: int = 2,
+) -> ScenarioConfig:
+    agents = [{"id": "CB", "kind": "central_bank", "name": "CB"}] + [
+        {"id": f"F{i + 1}", "kind": "firm", "name": f"Firm {i + 1}"} for i in range(n_firms)
+    ]
+    initial_actions: list[dict] = []
+    for agent_id, amount in (cash or {}).items():
+        initial_actions.append({"mint_cash": {"to": agent_id, "amount": amount}})
+    for debtor, creditor, amount, due_day in payables:
+        initial_actions.append({"create_payable": {"from": debtor, "to": creditor, "amount": amount, "due_day": due_day}})
+    return ScenarioConfig.model_validate(
+        {
+            "version": 1,
+            "name": "ccp-expel-test",
+            "agents": agents,
+            "initial_actions": initial_actions,
+            "clearinghouse": {"enabled": True, "mode": "ccp"},
+            "run": {
+                "max_days": max_days,
+                "quiet_days": quiet_days,
+                "default_handling": "expel-agent",
+                "rollover_enabled": False,
+            },
+        }
+    )
+
+
+def events_of(result, kind: str) -> list[dict]:
+    return [event for event in result.events if event["kind"] == kind]
+
+
+def member_to_member(ledger) -> list[Payable]:
+    return [
+        payable
+        for payable in ledger.payables
+        if not payable.settled
+        and ledger.agents.get(payable.debtor) is not None
+        and ledger.agents.get(payable.creditor) is not None
+        and ledger.agents[payable.debtor].kind in CCP_MEMBER_KINDS
+        and ledger.agents[payable.creditor].kind in CCP_MEMBER_KINDS
+    ]
+
+
+# -- largest-member default (acceptance criterion 4) ----------------------------
+
+
+def test_largest_member_default_leaves_a_clean_star() -> None:
+    # F1 is the largest debtor (100 due day 1, 80 due day 3) with a day-2
+    # receivable from F4. It defaults on day 1.
+    config = ccp_scenario(
+        [("F1", "F2", 100, 1), ("F1", "F3", 80, 3), ("F4", "F1", 90, 2), ("F2", "F4", 50, 2)],
+        cash={"F1": 30, "F2": 100, "F3": 60, "F4": 100},
+        max_days=6,
+    )
+    runtime = prepare_scenario(config)
+    open_after_default: dict[int, list[Payable]] = {}
+
+    def snapshot(rt, day):
+        assert not member_to_member(rt.ledger), f"member↔member payable on day {day}"
+        open_after_default[day] = [p for p in rt.ledger.payables if not p.settled]
+
+    result = run_until_stable(runtime, max_days=6, quiet_days=2, day_callback=snapshot)
+    ledger = result.ledger
+    assert "F1" in ledger.defaulted_agent_ids
+
+    # (i) Zero member↔member payables on every day (checked in the callback).
+    # (ii) All CCP1→F1 legs settled (offset) the day F1 died: F1's day-2
+    # receivable never pays F1 and is never re-linked to another member.
+    day1_open = open_after_default[1]
+    assert not [p for p in day1_open if p.creditor == "F1"]
+    # (iii) The CCP1→F3 out-leg with origin_debtor == F1 is still OPEN after
+    # the default — that openness is the mutualization.
+    orphans = [p for p in day1_open if p.debtor == "CCP1" and p.origin_debtor == "F1"]
+    assert [(p.creditor, p.amount, p.due_day) for p in orphans] == [("F3", D(80), 3)]
+    # (iv) F1's future in-leg was written off at expulsion.
+    write_offs = events_of(result, "ObligationWrittenOff")
+    assert [(e["debtor"], e["creditor"], e["amount"]) for e in write_offs] == [("F1", "CCP1", D(80))]
+    # (v) No receivable reassignment ever created a payable.
+    assert not [
+        event for event in events_of(result, "PayableCreated") if event.get("reason") == "receivable_reassignment"
+    ]
+    assert not events_of(result, "ReceivableReassigned")
+
+
+def test_creditor_of_the_defaulter_is_paid_not_starved() -> None:
+    # Baseline contrast: F2's claim survives F1's death. On day 1 the CCP
+    # pays F2 from collections + the fund, possibly haircut — F2 is never
+    # starved by F1 directly.
+    config = ccp_scenario(
+        [("F1", "F2", 100, 1)],
+        n_firms=2,
+        cash={"F1": 20, "F2": 50},
+        max_days=4,
+    )
+    result = run_scenario(config)
+    ledger = result.ledger
+    assert "F1" in ledger.defaulted_agent_ids
+    haircuts = events_of(result, "VMGHHaircutApplied")
+    assert len(haircuts) == 1
+    event = haircuts[0]
+    assert event["creditor"] == "F2"
+    assert event["paid"] + event["haircut"] == event["face"] == D(100)
+    assert event["paid"] > ZERO  # paid (possibly haircut) rather than starved
+    # Arithmetic: contributions F1=1, F2=2 (5% of cash); F1 pays 19 of 100,
+    # waterfall draws own 1 + mutualized 2, pool = 19 + 3 = 22 → F2 paid 22;
+    # next day F2 replenishes its 2 back into the fund.
+    assert event["paid"] == D(22)
+    assert ledger.cash["F2"] == D(50) - D(2) + D(22) - D(2)
+    # The out-leg is settled either way and the CCP holds no negative cash.
+    assert all(p.settled for p in ledger.payables if p.debtor == "CCP1" and p.due_day == 1)
+    assert ledger.cash["CCP1"] >= ZERO
+
+
+def test_orphan_out_leg_is_funded_at_maturity_by_fund_and_vmgh() -> None:
+    # F1 dies on day 1; its day-3 in-leg is written off, but the CCP1→F3
+    # out-leg survives to maturity, funded by a structural fund draw (the
+    # CCPFundDrawdown with member=None) and/or VMGH.
+    config = ccp_scenario(
+        [("F1", "F2", 100, 1), ("F1", "F3", 80, 3)],
+        n_firms=3,
+        cash={"F1": 30, "F2": 200, "F3": 60},
+        max_days=6,
+    )
+    result = run_scenario(config)
+    ledger = result.ledger
+    assert "F1" in ledger.defaulted_agent_ids
+    # The orphan out-leg was resolved at maturity, not left hanging.
+    orphan = [p for p in ledger.payables if p.debtor == "CCP1" and p.origin_debtor == "F1" and p.due_day == 3]
+    assert orphan and all(p.settled for p in orphan)
+    day3 = [event for event in result.events if event["day"] == 3]
+    structural = [
+        event for event in day3 if event["kind"] == "CCPFundDrawdown" and event["member"] is None
+    ]
+    vmgh = [event for event in day3 if event["kind"] == "VMGHHaircutApplied" and event["creditor"] == "F3"]
+    paid_cash = [
+        event for event in day3 if event["kind"] == "CashTransferred" and event["frm"] == "CCP1" and event["to"] == "F3"
+    ]
+    assert structural or vmgh or paid_cash, "orphan out-leg neither funded nor haircut at maturity"
+    assert paid_cash, "F3 received nothing at maturity"
+
+
+# -- the reassign star guard (regression) ---------------------------------------
+
+
+def make_ccp_ledger() -> Ledger:
+    ledger = Ledger()
+    ledger.clearing_config = CleanClearingConfig(mode="ccp")
+    ledger.register_agent("CCP1", CCP_AGENT_KIND, "Central Counterparty")
+    for member in ("F1", "F2", "F3"):
+        ledger.register_agent(member, "firm", member)
+    return ledger
+
+
+def test_reassign_guard_raises_on_member_to_member_relink() -> None:
+    # Craft the buggy situation the guard exists for: a defaulted member
+    # holding a receivable on another MEMBER (impossible under novation)
+    # with member creditor weights — reassignment would re-link members.
+    ledger = make_ccp_ledger()
+    ledger.day = 1
+    ledger.defaulted_agent_ids.add("F1")
+    ledger.payables.append(
+        Payable(id="P_bug", debtor="F2", creditor="F1", amount=D(50), due_day=2, maturity_distance=1)
+    )
+    with pytest.raises(InvariantViolation, match="member↔member"):
+        reassign_receivables(ledger, "F1", {"F3": D(1)})
+
+
+def test_reassign_offsets_ccp_legs_without_creating_payables() -> None:
+    # The natural star case: the dead member's receivables are CCP1→m legs
+    # and CCP1 is the sole creditor weight — the skip rule offsets them.
+    ledger = make_ccp_ledger()
+    ledger.day = 1
+    ledger.defaulted_agent_ids.add("F1")
+    receivable = Payable(
+        id="P_out", debtor="CCP1", creditor="F1", amount=D(90), due_day=2, maturity_distance=1,
+        origin_debtor="F2", origin_creditor="F1",
+    )
+    ledger.payables.append(receivable)
+    payables_before = len(ledger.payables)
+    reassign_receivables(ledger, "F1", {"CCP1": D(1)})
+    assert receivable.settled
+    assert len(ledger.payables) == payables_before
+    assert not [event for event in ledger.journal.as_dicts() if event["kind"] == "ReceivableReassigned"]
+
+```
+
+---
+
+### 🧪 tests/v2/test_ccp_novation.py
+
+```python
+"""Novation tests for the central counterparty (Plan 061, Design §1).
+
+Covers the rewrite at every payable-creation site (setup actions, scheduled
+actions, rollover incl. the netted-rollover queue), the novation invariant
+at every day-end, the leg-face reconciliation (acceptance criterion 1),
+mode gating (ccp rejects dealer/lender/banking arms), and inertness when
+the block is absent or in netting mode. All amounts are whole integers.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+
+from bilancio.config.models import ClearinghouseConfig, ScenarioConfig
+from bilancio.core.errors import ConfigurationError
+from bilancio_v2 import prepare_scenario, run_scenario, run_until_stable
+from bilancio_v2.ledger import CCP_AGENT_KIND, CCP_MEMBER_KINDS, ZERO
+from bilancio_v2.plugins.clearinghouse_ccp import ccp_agent_id
+from bilancio_v2.scenario_gates import build_clearing_config
+
+D = Decimal
+
+
+def ccp_scenario(
+    payables: list[tuple[str, str, int, int]],
+    *,
+    n_firms: int = 4,
+    cash: dict[str, int] | None = None,
+    clearinghouse: dict | None | bool = None,
+    scheduled: list[tuple[int, dict]] | None = None,
+    extra_agents: list[dict] | None = None,
+    default_handling: str = "expel-agent",
+    rollover: bool = False,
+    max_days: int = 8,
+    quiet_days: int = 2,
+    **scenario_extras,
+) -> ScenarioConfig:
+    agents = [{"id": "CB", "kind": "central_bank", "name": "CB"}] + [
+        {"id": f"F{i + 1}", "kind": "firm", "name": f"Firm {i + 1}"} for i in range(n_firms)
+    ]
+    agents.extend(extra_agents or [])
+    initial_actions: list[dict] = []
+    for agent_id, amount in (cash or {}).items():
+        initial_actions.append({"mint_cash": {"to": agent_id, "amount": amount}})
+    for debtor, creditor, amount, due_day in payables:
+        initial_actions.append({"create_payable": {"from": debtor, "to": creditor, "amount": amount, "due_day": due_day}})
+    data: dict = {
+        "version": 1,
+        "name": "ccp-test",
+        "agents": agents,
+        "initial_actions": initial_actions,
+        "scheduled_actions": [{"day": day, "action": action} for day, action in (scheduled or [])],
+        "run": {
+            "max_days": max_days,
+            "quiet_days": quiet_days,
+            "default_handling": default_handling,
+            "rollover_enabled": rollover,
+        },
+        **scenario_extras,
+    }
+    if clearinghouse is not False:
+        data["clearinghouse"] = {"enabled": True, "mode": "ccp", **(clearinghouse or {})}
+    return ScenarioConfig.model_validate(data)
+
+
+def events_of(result, kind: str) -> list[dict]:
+    return [event for event in result.events if event["kind"] == kind]
+
+
+def unsettled(ledger):
+    return [payable for payable in ledger.payables if not payable.settled]
+
+
+def assert_novation_invariant(ledger) -> None:
+    for payable in unsettled(ledger):
+        debtor = ledger.agents.get(payable.debtor)
+        creditor = ledger.agents.get(payable.creditor)
+        assert not (
+            debtor is not None
+            and creditor is not None
+            and debtor.kind in CCP_MEMBER_KINDS
+            and creditor.kind in CCP_MEMBER_KINDS
+        ), f"member↔member payable {payable.id} live in ccp mode"
+
+
+# -- schema and gating --------------------------------------------------------
+
+
+def test_ccp_mode_accepted_by_schema_and_gate() -> None:
+    config = ccp_scenario([("F1", "F2", 100, 1)])
+    clearing = build_clearing_config(config)
+    assert clearing is not None and clearing.mode == "ccp"
+    assert clearing.ccp_fund_share == D("0.05")
+    assert clearing.vmgh_enabled and clearing.replenishment_enabled
+
+
+def test_vmgh_disabled_rejected_at_schema() -> None:
+    with pytest.raises(ValueError, match="vmgh_enabled=false is not supported"):
+        ClearinghouseConfig(enabled=True, mode="ccp", vmgh_enabled=False)
+
+
+def test_ccp_can_fail_rejected_at_schema() -> None:
+    with pytest.raises(ValueError, match="ccp_can_fail=true is not supported"):
+        ClearinghouseConfig(enabled=True, mode="ccp", ccp_can_fail=True)
+
+
+def test_ccp_rejects_lender_arm() -> None:
+    config = ccp_scenario([("F1", "F2", 100, 1)], lender={"enabled": True})
+    with pytest.raises(ConfigurationError, match="cannot be combined with a lender"):
+        build_clearing_config(config)
+
+
+def test_ccp_rejects_dealer_arm() -> None:
+    config = ccp_scenario([("F1", "F2", 100, 1)], dealer={"enabled": True})
+    with pytest.raises(ConfigurationError, match="cannot be combined with a dealer"):
+        build_clearing_config(config)
+
+
+def test_ccp_rejects_active_balanced_dealer() -> None:
+    config = ccp_scenario(
+        [("F1", "F2", 100, 1)],
+        balanced_dealer={"enabled": True, "mode": "active"},
+    )
+    with pytest.raises(ConfigurationError, match="active balanced dealer"):
+        build_clearing_config(config)
+
+
+def test_ccp_rejects_banking_config() -> None:
+    from bilancio_v2.subsystem_config import CleanBankingConfig
+
+    config = ccp_scenario([("F1", "F2", 100, 1)], cash={"F1": 100})
+    with pytest.raises(ConfigurationError, match="cannot be combined with banking"):
+        prepare_scenario(config, banking_config=CleanBankingConfig())
+
+
+# -- inertness when off -------------------------------------------------------
+
+
+def test_absent_block_emits_no_ccp_state_or_events() -> None:
+    config = ccp_scenario([("F1", "F2", 100, 1)], cash={"F1": 100}, clearinghouse=False)
+    result = run_scenario(config)
+    assert not any(event["kind"].startswith(("CCP", "VMGH")) for event in result.events)
+    assert not any(agent.kind == CCP_AGENT_KIND for agent in result.ledger.agents.values())
+    assert not any("origin_debtor" in event for event in result.events)
+    assert all(payable.origin_debtor is None for payable in result.ledger.payables)
+    assert result.ledger.ccp_fund_total == ZERO and not result.ledger.ccp_fund_contribution
+
+
+def test_netting_mode_unchanged_by_ccp_code() -> None:
+    config = ccp_scenario([("F1", "F2", 100, 1)], cash={"F1": 100}, clearinghouse={"mode": "netting"})
+    result = run_scenario(config)
+    assert not any(event["kind"].startswith(("CCP", "VMGH")) for event in result.events)
+    assert not any(agent.kind == CCP_AGENT_KIND for agent in result.ledger.agents.values())
+    assert all(payable.origin_debtor is None for payable in result.ledger.payables)
+
+
+# -- agent registration and phase order ---------------------------------------
+
+
+def test_ccp_mode_registers_agent_but_no_new_phase_slot() -> None:
+    runtime = prepare_scenario(ccp_scenario([("F1", "F2", 100, 1)], cash={"F1": 100}))
+    assert [phase.name for phase in runtime.phases] == ["SubphaseB1", "SubphaseB_Clearing", "SubphaseB2", "PhaseC"]
+    ccp = ccp_agent_id(runtime.ledger)
+    assert ccp == "CCP1"
+    assert runtime.ledger.agents[ccp].kind == CCP_AGENT_KIND
+    assert runtime.ledger.agents[ccp].name == "Central Counterparty"
+    assert runtime.ctx.policy.mop_order(CCP_AGENT_KIND) == ("cash",)
+    assert runtime.ctx.policy.rows[CCP_AGENT_KIND].can_default is False
+
+
+# -- novation at the creation sites --------------------------------------------
+
+
+def test_setup_action_is_novated_into_two_legs() -> None:
+    runtime = prepare_scenario(ccp_scenario([("F1", "F2", 100, 3)], cash={"F1": 100}))
+    ledger = runtime.ledger
+    assert len(ledger.payables) == 2
+    in_leg, out_leg = ledger.payables
+    assert (in_leg.debtor, in_leg.creditor) == ("F1", "CCP1")
+    assert (out_leg.debtor, out_leg.creditor) == ("CCP1", "F2")
+    for leg in (in_leg, out_leg):
+        assert leg.amount == D(100)
+        assert leg.due_day == 3
+        assert leg.maturity_distance == 3
+        assert (leg.origin_debtor, leg.origin_creditor) == ("F1", "F2")
+    assert out_leg.id == f"{in_leg.id}_out"
+    created = [event for event in ledger.journal.as_dicts() if event["kind"] == "PayableCreated"]
+    assert len(created) == 2
+    for event in created:
+        assert event["origin_debtor"] == "F1"
+        assert event["origin_creditor"] == "F2"
+
+
+def test_alias_goes_to_the_in_leg() -> None:
+    config = ccp_scenario([], cash={"F1": 100})
+    config.initial_actions.append(
+        {"create_payable": {"from": "F1", "to": "F2", "amount": 50, "due_day": 2, "alias": "ring_leg"}}
+    )
+    runtime = prepare_scenario(config)
+    in_leg, out_leg = runtime.ledger.payables
+    assert in_leg.alias == "ring_leg"
+    assert out_leg.alias is None
+    assert runtime.ledger.contract_id_for_alias("ring_leg") == in_leg.id
+
+
+def test_scheduled_action_is_novated() -> None:
+    config = ccp_scenario(
+        [],
+        cash={"F1": 100},
+        scheduled=[(1, {"create_payable": {"from": "F1", "to": "F2", "amount": 60, "due_day": 3}})],
+        max_days=2,
+        quiet_days=5,
+    )
+    runtime = prepare_scenario(config)
+    run_until_stable(runtime, max_days=2, quiet_days=5)
+    legs = [payable for payable in runtime.ledger.payables if payable.origin_debtor == "F1"]
+    assert {(leg.debtor, leg.creditor) for leg in legs} == {("F1", "CCP1"), ("CCP1", "F2")}
+    assert_novation_invariant(runtime.ledger)
+
+
+def test_member_to_nonmember_payable_is_rejected() -> None:
+    """Originally these passed through un-novated, but the PR #173 review
+    showed they leak the mutualized fund to non-members on expulsion
+    (reassignment creates a CCP1->non-member payable funded by members).
+    Stage 1 rejects them outright."""
+    config = ccp_scenario(
+        [],
+        cash={"F1": 100},
+        extra_agents=[{"id": "L1", "kind": "non_bank_lender", "name": "Lender"}],
+    )
+    config.initial_actions.append({"create_payable": {"from": "F1", "to": "L1", "amount": 40, "due_day": 2}})
+    with pytest.raises(ConfigurationError, match="member and a non-member"):
+        prepare_scenario(config)
+
+
+# -- novation invariant and leg-face reconciliation (acceptance criterion 1) ---
+
+
+def test_novation_invariant_and_leg_reconciliation_every_day() -> None:
+    # F1 defaults on day 1 (cash 40 vs 100 due); its day-3 in-leg is written
+    # off while the matching out-leg stays open, so the leg-face difference
+    # must reconcile exactly to the written-off in-legs of defaulted members.
+    config = ccp_scenario(
+        [("F1", "F2", 100, 1), ("F1", "F3", 80, 3), ("F2", "F4", 50, 2), ("F4", "F1", 90, 4)],
+        cash={"F1": 40, "F2": 120, "F3": 60, "F4": 100},
+        max_days=6,
+        quiet_days=2,
+    )
+    runtime = prepare_scenario(config)
+
+    def check_day(rt, day):
+        ledger = rt.ledger
+        assert_novation_invariant(ledger)
+        in_face = sum((p.amount for p in unsettled(ledger) if p.creditor == "CCP1"), ZERO)
+        out_face = sum((p.amount for p in unsettled(ledger) if p.debtor == "CCP1"), ZERO)
+        # Reconciliation: out-legs may exceed in-legs by exactly the open
+        # out-face whose origin debtor has defaulted (the mutualization),
+        # while offset receivables of dead members shrink the out side.
+        orphan_out = sum(
+            (p.amount for p in unsettled(ledger) if p.debtor == "CCP1" and p.origin_debtor in ledger.defaulted_agent_ids),
+            ZERO,
+        )
+        orphan_in = sum(
+            (p.amount for p in unsettled(ledger) if p.creditor == "CCP1" and p.origin_creditor in ledger.defaulted_agent_ids),
+            ZERO,
+        )
+        assert in_face - orphan_in == out_face - orphan_out, f"leg faces diverged on day {day}"
+        if not ledger.defaulted_agent_ids:
+            assert in_face == out_face
+
+    result = run_until_stable(runtime, max_days=6, quiet_days=2, day_callback=check_day)
+    ledger = result.ledger
+    assert "F1" in ledger.defaulted_agent_ids
+    # F1's day-3 in-leg was written off; the CCP1→F3 out-leg survived and
+    # was funded at maturity (possibly haircut) rather than starving F3.
+    write_offs = [
+        event
+        for event in result.events
+        if event["kind"] == "ObligationWrittenOff" and event["debtor"] == "F1" and event["creditor"] == "CCP1"
+    ]
+    assert sum(event["amount"] for event in write_offs) == D(80)
+    assert not [p for p in unsettled(ledger) if p.origin_debtor == "F1"]
+
+
+# -- rollover re-novation (Design §2.3) ----------------------------------------
+
+
+def test_rollover_re_novates_the_origin_pair() -> None:
+    config = ccp_scenario(
+        [("F1", "F2", 100, 1)],
+        cash={"F1": 120, "F2": 50},
+        rollover=True,
+        max_days=3,
+        quiet_days=10,
+    )
+    runtime = prepare_scenario(config)
+    run_until_stable(runtime, max_days=3, quiet_days=10)
+    ledger = runtime.ledger
+    assert_novation_invariant(ledger)
+    rolled = [payable for payable in ledger.payables if payable.id.startswith("PAY_rollover_")]
+    assert rolled, "rollover produced no payables"
+    assert len(rolled) % 2 == 0  # always novated pairs
+    for payable in rolled:
+        assert "CCP1" in (payable.debtor, payable.creditor)
+        assert payable.origin_debtor == "F1" and payable.origin_creditor == "F2"
+    # The rollover event shape is unchanged: it names the ORIGIN pair and
+    # the in-leg id, with the cash return-flow running B→A directly.
+    events = [event for event in runtime.ledger.journal.as_dicts() if event["kind"] in ("PayableRolledOver", "RolloverPartial")]
+    assert events
+    for event in events:
+        assert event["debtor"] == "F1" and event["creditor"] == "F2"
+
+
+def test_fully_netted_legs_roll_the_origin_pair_without_cash() -> None:
+    # F1↔F2 owe each other 100 due day 1: on the star both in-legs net
+    # against both out-legs, and the netted-rollover queue must carry the
+    # ORIGIN pairs (gross-roll, zero cash return) — never a CCP leg.
+    config = ccp_scenario(
+        [("F1", "F2", 100, 1), ("F2", "F1", 100, 1)],
+        cash={"F1": 50, "F2": 50},
+        rollover=True,
+        max_days=2,
+        quiet_days=10,
+    )
+    runtime = prepare_scenario(config)
+    run_until_stable(runtime, max_days=2, quiet_days=10)
+    ledger = runtime.ledger
+    assert_novation_invariant(ledger)
+    rolled_events = [event for event in ledger.journal.as_dicts() if event["kind"] == "PayableRolledOver"]
+    no_cash = [event for event in rolled_events if event["cash_transfer"] is False]
+    assert {(event["debtor"], event["creditor"]) for event in no_cash} == {("F1", "F2"), ("F2", "F1")}
+    for payable in ledger.payables:
+        if payable.id.startswith("PAY_rollover_"):
+            assert "CCP1" in (payable.debtor, payable.creditor)
+            assert payable.origin_debtor is not None
+
+
+def test_golden_example_matches_capture() -> None:
+    # ring_ccp.yaml is also pinned by the golden suite; this is a cheap
+    # guard that the example still runs to a stable star with one default.
+    from bilancio_v2 import load_scenario
+    from tests.v2.golden_io import SCENARIO_DIR
+
+    result = run_scenario(load_scenario(SCENARIO_DIR / "ring_ccp.yaml"))
+    assert result.reached_stable
+    assert sorted(result.ledger.defaulted_agent_ids) == ["F1"]
+    assert_novation_invariant(result.ledger)
+
+
+class TestReviewFixes:
+    """Regression tests for the PR #173 adversarial-review findings."""
+
+    def test_bank_agents_rejected_in_ccp_mode(self):
+        """Finding 1: deposit collections credit the CCP's deposit account,
+        invisible to the cash-only payout pool — banks are gated out."""
+        config = ccp_scenario(
+            [("F1", "F2", 50, 1)],
+            cash={"F1": 50},
+            extra_agents=[{"id": "B1", "kind": "bank", "name": "Bank"}],
+        )
+        with pytest.raises(ConfigurationError, match="bank agents"):
+            prepare_scenario(config)
+
+    def test_transfer_claim_of_novated_leg_rejected(self):
+        """Finding 2: moving a novated leg re-links the star."""
+        config = ccp_scenario(
+            [("F1", "F2", 50, 2)],
+            cash={"F1": 50},
+            scheduled=[(1, {"transfer_claim": {"contract_alias": None, "contract_id": "PAY_0", "to_agent": "F3"}})],
+        )
+        runtime = prepare_scenario(config)
+        # Resolve the actual in-leg id from the ledger (novation renames).
+        in_leg = next(p for p in runtime.ledger.payables if p.origin_debtor == "F1" and p.debtor == "F1")
+        config2 = ccp_scenario(
+            [("F1", "F2", 50, 2)],
+            cash={"F1": 50},
+            scheduled=[(1, {"transfer_claim": {"contract_id": in_leg.id, "to_agent": "F3"}})],
+        )
+        with pytest.raises(ConfigurationError, match="novated CCP leg"):
+            run_scenario(config2)
+
+    def test_member_to_nonmember_payable_rejected_in_ccp_mode(self):
+        """Finding 5: a member with a non-member payable creditor breaks the
+        star (mutualized fund would leak via reassignment)."""
+        config = ccp_scenario(
+            [("F1", "CB", 50, 1)],
+            cash={"F1": 50},
+        )
+        with pytest.raises(ConfigurationError, match="member and a non-member"):
+            prepare_scenario(config)
+
+    def test_reserved_ccp_id_collision_rejected(self):
+        """Finding 7: a scenario declaring CCP1 with another kind must not be
+        silently overwritten/merged."""
+        config = ccp_scenario(
+            [("F1", "F2", 50, 1)],
+            cash={"F1": 50},
+            extra_agents=[{"id": "CCP1", "kind": "firm", "name": "Impostor"}],
+        )
+        with pytest.raises(ConfigurationError, match="reserved"):
+            prepare_scenario(config)
+
+    def test_replenishment_reserves_due_today_payins(self):
+        """Finding 4: the fund top-up must not grab cash a member needs for
+        its pay-in due today (bookkeeping must not manufacture defaults)."""
+        # F1 contributes on day 0, F2 defaults day 1 draining the fund
+        # (mutualized tranche), F1 then owes a pay-in on day 2 while
+        # replenishment wants to top the fund back up the same day.
+        config = ccp_scenario(
+            [("F2", "F1", 80, 1), ("F1", "F3", 95, 2)],
+            cash={"F1": 100, "F2": 10, "F3": 10},
+            clearinghouse={"ccp_fund_share": "0.05"},
+            max_days=6,
+        )
+        result = run_scenario(config)
+        defaulted = {e.get("agent") or e.get("agent_id") for e in result.events if e["kind"] == "AgentDefaulted"}
+        assert "F1" not in defaulted, "replenishment took cash F1 needed for its due-today pay-in"
+
+    def test_ccp_totals_inert_for_non_ccp_runs(self):
+        from bilancio.analysis.metrics import ccp_totals
+
+        events = [
+            {"kind": "AgentDefaulted", "agent": "F1", "day": 1},
+            {"kind": "AgentDefaulted", "agent": "F2", "day": 2},
+        ]
+        assert ccp_totals(events) == (Decimal("0"), Decimal("0"), 0)
+        events.append({"kind": "CCPFundContribution", "member": "F1", "amount": "5", "day": 0})
+        assert ccp_totals(events)[2] == 2
+
+```
+
+---
+
+### 🧪 tests/v2/test_ccp_waterfall.py
+
+```python
+"""Default-fund and VMGH tests for the central counterparty (Plan 061).
+
+Covers the waterfall arithmetic (own/mutualized split with largest-remainder
+rounding, recovery credit, VMGH residual), the structural payout-gap draw,
+VMGH pro-rata payout conserving the pool exactly, fund collection and the
+end-of-day fund invariant, replenishment capped at member cash with
+carry-forward, and checkpoint/restore + fail-fast rollback of all new fund
+state. All amounts are whole integers.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+
+from bilancio.config.models import ScenarioConfig
+from bilancio.core.errors import DefaultError
+from bilancio_v2 import prepare_scenario, run_day, run_scenario, run_until_stable
+from bilancio_v2.ledger import CCP_AGENT_KIND, ZERO, InvariantViolation, Ledger, Payable
+from bilancio_v2.plugins.base import RunContext
+from bilancio_v2.plugins.clearinghouse_ccp import (
+    allocate_pro_rata,
+    apply_ccp_waterfall,
+    draw_fund_for_payout_gap,
+)
+from bilancio_v2.plugins.settlement import settle_ccp_payouts
+from bilancio_v2.policy import CapabilityMatrix
+from bilancio_v2.subsystem_config import CleanClearingConfig
+
+D = Decimal
+
+
+def ccp_scenario(
+    payables: list[tuple[str, str, int, int]],
+    *,
+    n_firms: int = 4,
+    cash: dict[str, int] | None = None,
+    clearinghouse: dict | None = None,
+    default_handling: str = "expel-agent",
+    rollover: bool = False,
+    max_days: int = 8,
+    quiet_days: int = 2,
+) -> ScenarioConfig:
+    agents = [{"id": "CB", "kind": "central_bank", "name": "CB"}] + [
+        {"id": f"F{i + 1}", "kind": "firm", "name": f"Firm {i + 1}"} for i in range(n_firms)
+    ]
+    initial_actions: list[dict] = []
+    for agent_id, amount in (cash or {}).items():
+        initial_actions.append({"mint_cash": {"to": agent_id, "amount": amount}})
+    for debtor, creditor, amount, due_day in payables:
+        initial_actions.append({"create_payable": {"from": debtor, "to": creditor, "amount": amount, "due_day": due_day}})
+    return ScenarioConfig.model_validate(
+        {
+            "version": 1,
+            "name": "ccp-waterfall-test",
+            "agents": agents,
+            "initial_actions": initial_actions,
+            "clearinghouse": {"enabled": True, "mode": "ccp", **(clearinghouse or {})},
+            "run": {
+                "max_days": max_days,
+                "quiet_days": quiet_days,
+                "default_handling": default_handling,
+                "rollover_enabled": rollover,
+            },
+        }
+    )
+
+
+def hand_ledger(contributions: dict[str, int], *, ccp_cash: int | None = None) -> Ledger:
+    """A bare ccp-mode ledger with the fund pre-seeded (cash backs it)."""
+    ledger = Ledger()
+    ledger.clearing_config = CleanClearingConfig(mode="ccp")
+    ledger.register_agent("CCP1", CCP_AGENT_KIND, "Central Counterparty")
+    for member in contributions:
+        ledger.register_agent(member, "firm", member)
+    total = sum(contributions.values())
+    ledger.mint_cash("CCP1", D(ccp_cash if ccp_cash is not None else total))
+    ledger.ccp_fund_contribution = {member: D(amount) for member, amount in contributions.items()}
+    ledger.ccp_fund_target = {member: D(amount) for member, amount in contributions.items()}
+    ledger.ccp_fund_total = D(total)
+    return ledger
+
+
+def events_of(result, kind: str) -> list[dict]:
+    return [event for event in result.events if event["kind"] == kind]
+
+
+# -- largest-remainder allocation ----------------------------------------------
+
+
+def test_allocate_pro_rata_worked_example() -> None:
+    # The plan's worked example: 35 drawn from three contributions of 25
+    # each → 12, 12, 11 (largest remainder, ties by sorted id).
+    shares = allocate_pro_rata([("B", D(25)), ("C", D(25)), ("D", D(25))], D(35))
+    assert shares == {"B": D(12), "C": D(12), "D": D(11)}
+    assert sum(shares.values()) == D(35)
+
+
+def test_allocate_pro_rata_conserves_and_caps() -> None:
+    shares = allocate_pro_rata([("A", D(7)), ("B", D(2)), ("C", D(1))], D(10))
+    assert shares == {"A": D(7), "B": D(2), "C": D(1)}
+    shares = allocate_pro_rata([("A", D(100)), ("B", D(1))], D(50))
+    assert sum(shares.values()) == D(50)
+    assert all(shares[key] <= cap for key, cap in (("A", D(100)), ("B", D(1))))
+    with pytest.raises(InvariantViolation):
+        allocate_pro_rata([("A", D(5))], D(6))
+
+
+# -- waterfall arithmetic (Design §2.5) -----------------------------------------
+
+
+def test_waterfall_own_then_mutualized_then_residual() -> None:
+    ledger = hand_ledger({"A": 25, "B": 25, "C": 25, "D": 25})
+    ledger.defaulted_agent_ids.add("A")
+    apply_ccp_waterfall(ledger, member="A", shortfall=D(60), recovery=ZERO)
+    assert ledger.ccp_fund_contribution == {"A": ZERO, "B": D(13), "C": D(13), "D": D(14)}
+    assert ledger.ccp_fund_total == D(40)
+    event = ledger.journal.as_dicts()[-1]
+    assert event["kind"] == "CCPFundDrawdown"
+    assert event["member"] == "A"
+    assert event["own_tranche"] == D(25)
+    assert event["mutualized_tranche"] == D(35)
+    assert event["vmgh_residual"] == ZERO
+    assert event["recovery_credit"] == ZERO
+
+
+def test_waterfall_vmgh_residual_when_fund_exhausted() -> None:
+    ledger = hand_ledger({"A": 10, "B": 5, "C": 5})
+    ledger.defaulted_agent_ids.add("A")
+    apply_ccp_waterfall(ledger, member="A", shortfall=D(30), recovery=ZERO)
+    assert ledger.ccp_fund_total == ZERO
+    event = ledger.journal.as_dicts()[-1]
+    assert event["own_tranche"] == D(10)
+    assert event["mutualized_tranche"] == D(10)
+    assert event["vmgh_residual"] == D(10)
+
+
+def test_waterfall_recovery_credits_against_the_drawdown() -> None:
+    ledger = hand_ledger({"A": 25, "B": 25, "C": 25, "D": 25})
+    ledger.defaulted_agent_ids.add("A")
+    apply_ccp_waterfall(ledger, member="A", shortfall=D(60), recovery=D(40))
+    # Recovery 40 covers the shortfall first: only 20 is drawn (all own).
+    assert ledger.ccp_fund_contribution == {"A": D(5), "B": D(25), "C": D(25), "D": D(25)}
+    assert ledger.ccp_fund_total == D(80)
+    event = ledger.journal.as_dicts()[-1]
+    assert event["recovery_credit"] == D(40)
+    assert event["own_tranche"] == D(20)
+    assert event["mutualized_tranche"] == ZERO
+    assert event["vmgh_residual"] == ZERO
+
+
+def test_waterfall_skips_defaulted_members_in_mutualized_tranche() -> None:
+    ledger = hand_ledger({"A": 10, "B": 20, "C": 20})
+    ledger.defaulted_agent_ids.update({"A", "B"})
+    apply_ccp_waterfall(ledger, member="A", shortfall=D(40), recovery=ZERO)
+    # B is dead: only C's contribution mutualizes.
+    assert ledger.ccp_fund_contribution == {"A": ZERO, "B": D(20), "C": ZERO}
+    event = ledger.journal.as_dicts()[-1]
+    assert event["mutualized_tranche"] == D(20)
+    assert event["vmgh_residual"] == D(10)
+
+
+def test_structural_payout_gap_draw() -> None:
+    ledger = hand_ledger({"A": 25, "B": 25, "C": 25})
+    drawn = draw_fund_for_payout_gap(ledger, D(35))
+    assert drawn == D(35)
+    assert ledger.ccp_fund_total == D(40)
+    event = ledger.journal.as_dicts()[-1]
+    assert event["kind"] == "CCPFundDrawdown"
+    assert event["member"] is None
+    assert event["mutualized_tranche"] == D(35)
+    assert event["vmgh_residual"] == ZERO
+
+
+# -- VMGH payout leg (Design §2.2) ----------------------------------------------
+
+
+def test_vmgh_payout_conserves_the_pool_exactly() -> None:
+    ledger = hand_ledger({}, ccp_cash=120)  # no fund: 120 free cash
+    ledger.register_agent("X", "firm", "X")
+    ledger.register_agent("Y", "firm", "Y")
+    ledger.day = 1
+    ledger.payables.append(
+        Payable(
+            id="P_out_1", debtor="CCP1", creditor="X", amount=D(120), due_day=1,
+            maturity_distance=1, origin_debtor="Z", origin_creditor="X",
+        )
+    )
+    ledger.payables.append(
+        Payable(
+            id="P_out_2", debtor="CCP1", creditor="Y", amount=D(30), due_day=1,
+            maturity_distance=1, origin_debtor="Z", origin_creditor="Y",
+        )
+    )
+    ctx = RunContext(policy=CapabilityMatrix.default(), default_mode="expel-agent")
+    assert settle_ccp_payouts(ledger, "CCP1", ctx) is True
+    haircuts = [event for event in ledger.journal.as_dicts() if event["kind"] == "VMGHHaircutApplied"]
+    assert len(haircuts) == 2
+    assert sum(event["paid"] for event in haircuts) == D(120)
+    for event in haircuts:
+        assert event["paid"] + event["haircut"] == event["face"]
+        assert event["haircut_factor"] == pytest.approx(0.8)
+    assert all(payable.settled for payable in ledger.payables)
+    assert ledger.cash["CCP1"] == ZERO
+    assert ledger.cash["X"] == D(96)
+    assert ledger.cash["Y"] == D(24)
+
+
+def test_payout_leg_full_payment_emits_no_haircut() -> None:
+    ledger = hand_ledger({}, ccp_cash=50)
+    ledger.register_agent("X", "firm", "X")
+    ledger.day = 1
+    ledger.payables.append(
+        Payable(
+            id="P_out", debtor="CCP1", creditor="X", amount=D(50), due_day=1,
+            maturity_distance=1, origin_debtor="Z", origin_creditor="X",
+        )
+    )
+    ctx = RunContext(policy=CapabilityMatrix.default(), default_mode="expel-agent")
+    assert settle_ccp_payouts(ledger, "CCP1", ctx) is True
+    events = ledger.journal.as_dicts()
+    assert not [event for event in events if event["kind"] == "VMGHHaircutApplied"]
+    assert [event for event in events if event["kind"] == "PayableSettled"]
+    assert ledger.cash["X"] == D(50)
+
+
+# -- integrated scenario: worked example from the plan/example yaml --------------
+
+
+def test_integrated_default_runs_contribution_waterfall_and_haircut() -> None:
+    result = run_scenario(
+        ccp_scenario(
+            [("F1", "F2", 100, 1), ("F2", "F3", 100, 2), ("F3", "F4", 100, 3), ("F4", "F1", 100, 4)],
+            cash={"F1": 80, "F2": 100, "F3": 100, "F4": 100},
+        )
+    )
+    ledger = result.ledger
+    assert sorted(ledger.defaulted_agent_ids) == ["F1"]
+    contributions = events_of(result, "CCPFundContribution")
+    assert [(event["member"], event["amount"]) for event in contributions] == [
+        ("F1", D(4)),
+        ("F2", D(5)),
+        ("F3", D(5)),
+        ("F4", D(5)),
+    ]
+    drawdowns = events_of(result, "CCPFundDrawdown")
+    assert len(drawdowns) == 1
+    assert drawdowns[0]["member"] == "F1"
+    assert drawdowns[0]["own_tranche"] == D(4)
+    assert drawdowns[0]["mutualized_tranche"] == D(15)
+    assert drawdowns[0]["vmgh_residual"] == D(5)
+    haircuts = events_of(result, "VMGHHaircutApplied")
+    assert len(haircuts) == 1
+    assert haircuts[0]["creditor"] == "F2"
+    assert haircuts[0]["paid"] == D(95)
+    assert haircuts[0]["haircut"] == D(5)
+    # Fund invariant held at every day-end (check_invariants ran daily);
+    # final state: replenished by survivors, conserved, cash-backed.
+    assert ledger.ccp_fund_total == sum(ledger.ccp_fund_contribution.values(), ZERO)
+    assert ledger.ccp_fund_total <= ledger.cash["CCP1"]
+    assert ledger.ccp_fund_total == D(15)
+
+
+# -- replenishment (Design §2.6) -------------------------------------------------
+
+
+def test_replenishment_capped_at_member_cash_with_carry_forward() -> None:
+    # Day 1: F1 defaults (cash 0 vs 30 due); waterfall drains F2/F3's
+    # contributions. F2 is left with 1 cash so its day-2 top-up is capped,
+    # and the residual gap carries to day 3 after F2 is paid by the CCP.
+    result = run_scenario(
+        ccp_scenario(
+            [("F1", "F2", 30, 1), ("F3", "F2", 40, 2)],
+            n_firms=3,
+            cash={"F1": 0, "F2": 120, "F3": 100},
+            max_days=6,
+        )
+    )
+    replenished = events_of(result, "CCPFundReplenished")
+    assert replenished, "no replenishment happened"
+    by_member: dict[str, list[dict]] = {}
+    for event in replenished:
+        by_member.setdefault(event["member"], []).append(event)
+    # Every top-up respects the cash cap (cash can never go negative — the
+    # daily invariant would catch it) and gaps shrink monotonically to zero.
+    for member_events in by_member.values():
+        gaps = [event["gap_remaining"] for event in member_events]
+        assert all(gaps[i] > gaps[i + 1] or gaps[i + 1] == ZERO for i in range(len(gaps) - 1))
+    ledger = result.ledger
+    for member, target in ledger.ccp_fund_target.items():
+        if member not in ledger.defaulted_agent_ids:
+            assert ledger.ccp_fund_contribution.get(member, ZERO) == target
+
+
+def test_replenishment_partial_when_cash_short() -> None:
+    ledger = hand_ledger({"A": 10, "B": 10})
+    ledger.ccp_fund_contribution["A"] = ZERO
+    ledger.ccp_fund_total = D(10)
+    ledger.mint_cash("A", D(4))
+    from bilancio_v2.plugins.clearinghouse_ccp import replenish_fund
+
+    replenish_fund(ledger, "CCP1")
+    event = ledger.journal.as_dicts()[-1]
+    assert event["kind"] == "CCPFundReplenished"
+    assert event["member"] == "A"
+    assert event["amount"] == D(4)
+    assert event["gap_remaining"] == D(6)
+    assert ledger.ccp_fund_contribution["A"] == D(4)
+    assert ledger.cash["A"] == ZERO
+
+
+def test_replenishment_disabled_skips_top_ups() -> None:
+    result = run_scenario(
+        ccp_scenario(
+            [("F1", "F2", 100, 1), ("F2", "F3", 50, 2)],
+            n_firms=3,
+            cash={"F1": 40, "F2": 100, "F3": 100},
+            clearinghouse={"replenishment_enabled": False},
+        )
+    )
+    assert events_of(result, "CCPFundDrawdown")
+    assert not events_of(result, "CCPFundReplenished")
+
+
+# -- checkpoint / restore and fail-fast rollback ----------------------------------
+
+
+def test_checkpoint_restores_all_fund_state() -> None:
+    ledger = hand_ledger({"A": 25, "B": 25})
+    checkpoint = ledger.checkpoint()
+    ledger.defaulted_agent_ids.add("A")
+    apply_ccp_waterfall(ledger, member="A", shortfall=D(40), recovery=ZERO)
+    ledger.ccp_fund_target["C"] = D(9)
+    assert ledger.ccp_fund_total == D(10)
+    ledger.restore(checkpoint)
+    assert ledger.ccp_fund_contribution == {"A": D(25), "B": D(25)}
+    assert ledger.ccp_fund_target == {"A": D(25), "B": D(25)}
+    assert ledger.ccp_fund_total == D(50)
+    assert not [event for event in ledger.journal.as_dicts() if event["kind"] == "CCPFundDrawdown"]
+
+
+def test_fail_fast_shortfall_rolls_back_atomically() -> None:
+    config = ccp_scenario(
+        [("F1", "F2", 100, 1)],
+        n_firms=2,
+        cash={"F1": 40, "F2": 50},
+        default_handling="fail-fast",
+        max_days=2,
+    )
+    runtime = prepare_scenario(config)
+    run_day(runtime, 0)  # contributions collected, nothing due
+    fund_before = dict(runtime.ledger.ccp_fund_contribution)
+    total_before = runtime.ledger.ccp_fund_total
+    cash_before = dict(runtime.ledger.cash)
+    with pytest.raises(DefaultError):
+        run_day(runtime, 1)
+    ledger = runtime.ledger
+    # The settlement attempt was rolled back atomically: cash and the whole
+    # fund state are exactly as they were before the failing day.
+    assert dict(ledger.ccp_fund_contribution) == fund_before
+    assert ledger.ccp_fund_total == total_before
+    assert {k: v for k, v in ledger.cash.items() if v} == {k: v for k, v in cash_before.items() if v}
+    assert not [event for event in ledger.journal.as_dicts() if event["kind"] == "CCPFundDrawdown"]
+    ledger.check_invariants()
+
+
+def test_run_until_stable_holds_fund_invariant_daily() -> None:
+    config = ccp_scenario(
+        [("F1", "F2", 100, 1), ("F2", "F3", 80, 2), ("F3", "F1", 90, 3)],
+        n_firms=3,
+        cash={"F1": 60, "F2": 70, "F3": 80},
+        max_days=6,
+    )
+    runtime = prepare_scenario(config)
+
+    def check_day(rt, day):
+        ledger = rt.ledger
+        assert ledger.ccp_fund_total == sum(ledger.ccp_fund_contribution.values(), ZERO)
+        assert ledger.ccp_fund_total <= ledger.cash["CCP1"]
+        assert ledger.cash["CCP1"] >= ZERO
+
+    run_until_stable(runtime, max_days=6, quiet_days=2, day_callback=check_day)
+
+```
+
+---
+
 ### 🧪 tests/v2/test_certificates.py
 
 ```python
@@ -244793,8 +247306,10 @@ def test_enabled_registers_phase_immediately_before_settlement() -> None:
 
 
 def test_unknown_mode_raises_configuration_error() -> None:
+    # "ccp" became a supported mode in Plan 061, so the unknown-mode probe
+    # (bypassing schema validation via model_construct) uses a made-up one.
     config = ring_scenario([100] * 5, clearing=False)
-    config = config.model_copy(update={"clearinghouse": ClearinghouseConfig.model_construct(enabled=True, mode="ccp")})
+    config = config.model_copy(update={"clearinghouse": ClearinghouseConfig.model_construct(enabled=True, mode="swaps")})
     with pytest.raises(ConfigurationError):
         build_clearing_config(config)
 
@@ -245401,6 +247916,7 @@ SUPPORTED = [
     "intraday_netting",
     "payment_demo",
     "rich_simulation",
+    "ring_ccp",
     "ring_with_action_specs",
     "sasa_scenario",
     "simple_bank",
@@ -245895,4 +248411,4 @@ def test_expel_default_recovers_pro_rata_and_writes_off() -> None:
 
 Generated from: /home/runner/work/bilancio/bilancio
 Total source files: 235
-Total test files: 291
+Total test files: 296
