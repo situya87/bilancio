@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -138,11 +139,12 @@ class ModalVolumeArtifactLoader:
         # Download from Modal Volume
         remote_path = f"{self.base_path}/{reference}" if self.base_path else reference
 
-        subprocess.run(
-            ["modal", "volume", "get", self.volume_name, remote_path, str(cache_path)],
-            check=True,
-            capture_output=True,
-        )
+        wrapper = Path(__file__).resolve().parents[3] / "scripts" / "modal_wrapper.py"
+        if wrapper.exists():
+            cmd = [sys.executable, str(wrapper), "volume", "get", self.volume_name, remote_path, str(cache_path)]
+        else:
+            cmd = ["modal", "volume", "get", self.volume_name, remote_path, str(cache_path)]
+        subprocess.run(cmd, check=True, capture_output=True)
 
         return cache_path
 

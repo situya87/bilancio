@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -68,10 +69,8 @@ class CloudExecutor:
         which allows calling it from outside the Modal app context.
         """
         if self._run_simulation is None:
-            # Apply proxy patch for environments with HTTP CONNECT proxy (e.g., Claude Code web)
-            import modal
-
             import bilancio.cloud.proxy_patch  # noqa: F401
+            import modal
 
             self._run_simulation = modal.Function.from_name(self.app_name, "run_simulation")
         return self._run_simulation
@@ -266,21 +265,13 @@ class CloudExecutor:
             # Ensure parent directory exists
             local_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Use Modal CLI to download
             try:
-                subprocess.run(
-                    [
-                        "modal",
-                        "volume",
-                        "get",
-                        self.volume_name,
-                        remote_path,
-                        str(local_path),
-                        "--force",  # Overwrite existing files
-                    ],
-                    check=True,
-                    capture_output=True,
-                )
+                wrapper = Path(__file__).resolve().parents[3] / "scripts" / "modal_wrapper.py"
+                if wrapper.exists():
+                    cmd = [sys.executable, str(wrapper), "volume", "get", self.volume_name, remote_path, str(local_path), "--force"]
+                else:
+                    cmd = ["modal", "volume", "get", self.volume_name, remote_path, str(local_path), "--force"]
+                subprocess.run(cmd, check=True, capture_output=True)
             except subprocess.CalledProcessError as e:
                 # Log but don't fail - artifact might be optional
                 print(f"Warning: Failed to download {artifact_name}: {e.stderr.decode()}")
@@ -297,10 +288,8 @@ class CloudExecutor:
         Returns:
             Dict with aggregate metrics and status.
         """
-        # Apply proxy patch for environments with HTTP CONNECT proxy
-        import modal
-
         import bilancio.cloud.proxy_patch  # noqa: F401
+        import modal
 
         # Get reference to deployed function (same pattern as run_simulation)
         modal_aggregate = modal.Function.from_name(self.app_name, "compute_aggregate_metrics")

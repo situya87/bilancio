@@ -1,11 +1,13 @@
-"""Patch grpclib and Modal's HTTP client for HTTP CONNECT proxy with TLS inspection.
+"""Patch grpclib and Modal's HTTP client for TLS-inspecting proxies.
 
 This module patches:
 1. grpclib's connection handling to work through HTTP CONNECT proxy
-2. Modal's HTTP client to use custom CA for TLS inspection
+2. grpclib's SSL context to trust the proxy/egress gateway CA
+3. Modal's HTTP client to use custom CA for TLS inspection
 
-Required in environments where outbound connections go through an HTTP CONNECT
-proxy that performs TLS inspection (MITM) with a custom CA certificate.
+Required in environments where outbound connections go through either:
+- An explicit HTTP CONNECT proxy with TLS inspection (MITM)
+- A transparent egress gateway that re-signs TLS certificates
 
 Usage:
     import bilancio.cloud.proxy_patch  # Apply patch before importing modal
@@ -28,20 +30,37 @@ import grpclib.client
 _original_create_connection = grpclib.client.Channel._create_connection
 _original_http_client_with_tls = None  # Set lazily when modal is imported
 
-# Custom CA certificate path for TLS inspection proxy
+# CA certificate paths (in priority order)
+EGRESS_GATEWAY_CA = "/usr/local/share/ca-certificates/egress-gateway-ca.crt"
 PROXY_CA_CERT = "/usr/local/share/ca-certificates/swp-ca-production.crt"
 
 
+def _get_proxy_ca_path() -> str | None:
+    """Find the appropriate proxy/egress CA certificate."""
+    if os.path.exists(EGRESS_GATEWAY_CA):
+        return EGRESS_GATEWAY_CA
+    if os.path.exists(PROXY_CA_CERT):
+        return PROXY_CA_CERT
+    return None
+
+
 def _should_use_proxy() -> bool:
-    """Check if proxy should be used."""
+    """Check if explicit HTTP CONNECT proxy should be used."""
     proxy_url = os.environ.get("https_proxy", "") or os.environ.get("HTTPS_PROXY", "")
-    return bool(proxy_url) and os.path.exists(PROXY_CA_CERT)
+    return bool(proxy_url) and _get_proxy_ca_path() is not None
+
+
+def _should_patch_ssl() -> bool:
+    """Check if SSL patching is needed (transparent proxy or explicit proxy)."""
+    return _get_proxy_ca_path() is not None
 
 
 def _create_proxy_ssl_context() -> ssl.SSLContext:
     """Create SSL context that trusts the proxy's CA certificate."""
     ctx = ssl.create_default_context()
-    ctx.load_verify_locations(PROXY_CA_CERT)
+    ca_path = _get_proxy_ca_path()
+    if ca_path:
+        ctx.load_verify_locations(ca_path)
     return ctx
 
 
@@ -51,9 +70,15 @@ def _create_proxy_ssl_context() -> ssl.SSLContext:
 
 
 async def _proxied_create_connection(self: Any) -> Any:
-    """Create connection through HTTP CONNECT proxy if proxy is configured."""
+    """Create connection through HTTP CONNECT proxy or with custom CA."""
     if not _should_use_proxy():
-        # No proxy configured or no custom CA - use original method
+        # No explicit proxy - but may still need custom CA for transparent proxy
+        ca_path = _get_proxy_ca_path()
+        if ca_path and _should_patch_ssl():
+            if self._ssl is True or self._ssl is None:
+                self._ssl = _create_proxy_ssl_context()
+            elif isinstance(self._ssl, ssl.SSLContext):
+                self._ssl.load_verify_locations(ca_path)
         return await _original_create_connection(self)
 
     proxy_url = os.environ.get("https_proxy", "") or os.environ.get("HTTPS_PROXY", "")
@@ -159,8 +184,8 @@ def is_patched() -> bool:
     return grpclib.client.Channel._create_connection is _proxied_create_connection
 
 
-# Auto-apply patch on import if proxy is configured
-if _should_use_proxy():
+# Auto-apply patch on import if proxy or transparent egress gateway is detected
+if _should_use_proxy() or _should_patch_ssl():
     apply_proxy_patch()
     _patched = True
 else:
